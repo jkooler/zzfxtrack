@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ZzFXM Composer</title>
+    <style>
+        body { background: #0a0a0a; color: #00ff66; font-family: 'Courier New', Courier, monospace; padding: 40px; line-height: 1.6; }
+        h1 { border-bottom: 2px solid #00ff66; padding-bottom: 10px; margin-bottom: 30px; letter-spacing: 2px; }
+        .controls { background: #151515; padding: 25px; border-radius: 8px; border-left: 5px solid #00ff66; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 20px; }
+        .select-group { display: flex; align-items: center; gap: 15px; font-size: 18px; }
+        select { background: #222; color: #00ff66; border: 1px solid #00ff66; padding: 8px 15px; border-radius: 4px; font-family: inherit; font-size: 16px; cursor: pointer; }
+        button { background: #222; color: #00ff66; border: 1px solid #00ff66; padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: bold; text-transform: uppercase; transition: all 0.2s; border-radius: 4px; }
+        button:hover { background: #00ff66; color: #000; box-shadow: 0 0 15px rgba(0,255,102,0.4); }
+        button.accent { border-color: #ff00ff; color: #ff00ff; }
+        button.accent:hover { background: #ff00ff; color: #000; box-shadow: 0 0 15px rgba(255,0,255,0.4); }
+        #status { margin-top: 30px; padding: 15px; background: rgba(0,255,102,0.05); border-radius: 4px; min-height: 1.5em; }
+        .info-panel { margin-top: 40px; color: #666; font-size: 12px; }
+        code { color: #aaa; background: #222; padding: 2px 5px; border-radius: 3px; }
+        .visualizer { margin-top: 30px; background: #000; border: 1px solid #333; height: 100px; width: 100%; border-radius: 4px; display: block; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="select-group">
+            <label for="songSelect">Song:</label>
+            <select id="songSelect">
+                <!-- Populated by preview.js -->
+            </select>
+        </div>
+        
+        <div class="button-group">
+            <button id="playBtn">▶ PLAY / RELOAD</button>
+            <button id="stopBtn">⏹ STOP</button>
+            <button id="bakeBtn" class="accent">🍞 BAKE JSON</button>
+        </div>
+    </div>
+
+    <div id="status">Waiting for input...</div>
+    <canvas id="visualizer" class="visualizer"></canvas>
+
+    <div class="info-panel">
+        <p>Edit songs in <code>/songs/</code> folder.</p>
+        <p>Baking produces a <strong>ZzFXM</strong> compatible array.</p>
+    </div>
+
+    <script type="module" src="/preview.js"></script>
+</body>
+</html>

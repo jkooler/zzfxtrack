@@ -1,0 +1,23 @@
+{
+  "name": "strudel-to-zzfxfm-baker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "bake": "node bake.js",
+    "bake:all": "node bake.js --all"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@strudel/core": "^1.2.5",
+    "@strudel/mini": "^1.2.5",
+    "@strudel/webaudio": "^1.2.6"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  }
+}
