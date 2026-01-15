@@ -66,6 +66,9 @@ export const buildSong = (song) => {
                     let params = instruments[instIndex];
                     if (params) {
                         let p = [...params];
+
+                        // Pad parameters to prevent NaN in ZzFXG
+                        while (p.length < 20) p.push(0);
                         
                         // Pitch shift logic
                         // ZzFXFreq = param[2]
@@ -80,12 +83,14 @@ export const buildSong = (song) => {
                         // 10: Pitch Jump
                         // 14: Modulation (Frequency)
                         
-                        // Scale ALL frequency components to match WebAudio playbackRate behavior
+                        // Scale frequency components for pitch shifting
+                        // Note: Slide, deltaSlide, pitchJump, and modulation are NOT scaled - they remain absolute
+                        // Only the base frequency is scaled to achieve the target pitch
                         p[2] *= ratio;  // Freq
-                        p[8] *= ratio;  // Slide
-                        p[9] *= ratio;  // Delta Slide
-                        p[10] *= ratio; // Pitch Jump
-                        p[14] *= ratio; // Modulation Rate
+                        // p[8] *= ratio;  // Slide - REMOVED: should be absolute
+                        // p[9] *= ratio;  // Delta Slide - REMOVED: should be absolute
+                        // p[10] *= ratio; // Pitch Jump - REMOVED: should be absolute
+                        // p[14] *= ratio; // Modulation Rate - REMOVED: should be absolute
                         
                         // Volume Attenuation
                         // vol = vol * (1 - atten/MAX)

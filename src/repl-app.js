@@ -38,6 +38,13 @@ const dom = {
 async function init() {
     setStatus('Initializing...', 'normal');
     
+    // Disable default samples (TidalCycles/Dirt) to ensure only ZzFX instruments are used
+    dom.repl.prelude = `
+// ZzFXM Baker Environment
+// Default samples are disabled.
+// Only ZzFX instruments defined in instruments.js are available.
+`;
+    
     // 1. Initialize Strudel Core
     await initStrudel();
     

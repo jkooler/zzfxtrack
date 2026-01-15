@@ -8,10 +8,17 @@ import { instrumentMapping } from '../instruments.js';
 const ROWS_PER_CYCLE = 16;
 const MAX_ATTENUATION = 20;
 
-export function bakePattern(pattern, bpm, instrumentArray, cycles = 4) {
+export function bakePattern(pattern, bpm, instrumentArray, cycles = 8) {
     const totalRows = cycles * ROWS_PER_CYCLE;
     const events = pattern.queryArc(0, cycles);
     const tracks = {};
+
+    console.log("Baker Stats:", {
+        instrCount: instrumentArray?.length,
+        mappingKeys: Object.keys(instrumentMapping).length,
+        u_test_trem: instrumentMapping['test_trem'],
+        u_test_crush: instrumentMapping['test_crush']
+    });
 
     events.forEach((e) => {
         let instIndex = 0;

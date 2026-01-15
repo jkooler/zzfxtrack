@@ -10,5 +10,5 @@ export const pattern = stack(
   note("~ ~ e2 g2 [b2 c2] ~ ~ ~").s("ld"),
   
   // HiHats
-  note("[c c] [c c*3] c [c c]").s("hh")
+  note("[c c] [c c*3] c [c c]").s("zzfx_hh")
 );

@@ -39,12 +39,12 @@ export function zzfxG(
     tremolo = 0,
     filter = 0
 ) {
-    // ZzFXMicro treats 0 as default for some params
-    if (!volume) volume = 1;
-    if (!frequency) frequency = 220;
-    if (!sustainVolume) sustainVolume = 1;
-    if (!shapeCurve) shapeCurve = 1;
-    if (!release) release = 0.1;
+    // init parameters
+    if (volume == null) volume = 1;
+    if (frequency == null) frequency = 220;
+    if (sustainVolume == null) sustainVolume = 1;
+    if (shapeCurve == null) shapeCurve = 1;
+    if (release == null) release = 0.1;
 
     // init parameters
     const sampleRate = zzfxR;
@@ -170,14 +170,42 @@ export function loadZzFXInstruments(instrumentMap) {
         registerSound(id, (time, value, onEnded) => {
             const startTime = Math.max(time, audioCtx.currentTime + 0.01);
 
-            // Dynamic Generation!
-            // We use the original params
-            // Note: Strudel allows passing params in 'value' to override defaults?
-            // For now, stick to fixed params to match ZzFXM static instrument defs.
+            // Dynamic Generation with True Pitch Shifting!
+            // We mimic the ZzFXM Player logic exactly to ensure parity.
             
-            const samples = zzfxG(...params);
+            // 1. Determine Target Pitch
+            let targetMidi = 60;
+            if (value.n) targetMidi = value.n;
+            else if (value.note) targetMidi = noteToMidi(value.note);
             
-            // Normalize (Fast)
+            // 2. Calculate Ratio
+            const ratio = Math.pow(2, (targetMidi - baseMidi) / 12);
+            
+            // Debug Log to verify Synthesis vs Resampling
+            // console.log(`ZzFX Syn: ${id} | Tgt:${targetMidi} | Ratio:${ratio.toFixed(2)} | Freq:${p[2].toFixed(1)} | Crush:${params[15]}`);
+
+            // 3. Clone and Scale Params
+            const p = [...params]; // Clone
+            
+            // Pad parameters with 0 to ensure BitCrush and other tail params are defined
+            // Otherwise undefined * value = NaN, silencing the instrument.
+            while (p.length < 20) p.push(0);
+            
+            // Scale frequency components for pitch shifting
+            // Note: Slide, deltaSlide, pitchJump, and modulation are NOT scaled - they remain absolute
+            // Only the base frequency is scaled to achieve the target pitch
+            p[2] *= ratio;  // Freq
+            // p[8] *= ratio;  // Slide - REMOVED: should be absolute
+            // p[9] *= ratio;  // Delta Slide - REMOVED: should be absolute
+            // p[10] *= ratio; // Pitch Jump - REMOVED: should be absolute
+            // p[14] *= ratio; // Modulation - REMOVED: should be absolute
+
+            console.log(`ZzFX Syn: ${id} | Tgt:${targetMidi} | Ratio:${ratio.toFixed(2)} | Freq:${p[2].toFixed(1)} | Crush:${p[15]}`);
+            
+            // 4. Generate
+            const samples = zzfxG(...p);
+            
+            // Normalize (Fast) to 0.5 peak
             let maxAmp = 0;
             for(let i=0; i<samples.length; i++) {
                 const abs = Math.abs(samples[i]);
@@ -195,13 +223,8 @@ export function loadZzFXInstruments(instrumentMap) {
             const source = audioCtx.createBufferSource();
             source.buffer = buffer;
             
-            // Pitch shift
-            let targetMidi = 60;
-            if (value.n) targetMidi = value.n;
-            else if (value.note) targetMidi = noteToMidi(value.note);
-
-            // Calculate rate
-            source.playbackRate.value = Math.pow(2, (targetMidi - baseMidi) / 12);
+            // Playback rate is now 1.0 because we baked the pitch in!
+            source.playbackRate.value = 1.0;
 
             const gainNode = audioCtx.createGain();
             // Default gain 0.5 to match normalization headroom

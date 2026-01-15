@@ -4,7 +4,7 @@ export const bpm = 110;
 
 export const pattern = stack(
   // Bass drum-ish
-  note("c1(3,8)").s("bd"),
+  note("c1(3,8)").s("kick"),
   
   // HiHats
   note("~ c2 ~ c2").s("hh"),

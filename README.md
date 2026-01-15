@@ -44,6 +44,15 @@ export const bpm = 125;
 export const pattern = note("c3 e3 g3").s("0"); // "0" refers to the instrument ID
 ```
 
+### 🎯 Best Practices
+
+**Instrument Naming**: Avoid common drum pattern names (like `hh`, `bd`, `sn`, `cp`) as they may conflict with Strudel's built-in shortcuts. Use prefixes or descriptive names:
+
+- ✅ Good: `zzfx_hh`, `z_kick`, `bass_synth`, `lead_1`
+- ❌ Avoid: `hh`, `bd`, `sn` (these are Strudel pattern shortcuts)
+
+This ensures your ZzFX instruments are always used instead of falling back to samples.
+
 ## 🎮 PixiJS Integration
 
 Use the `--combined` flag to generate `songs-bundle.json`. This format is optimized for loading all game music in one go:
