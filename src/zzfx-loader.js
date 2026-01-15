@@ -1,4 +1,5 @@
 import { registerSound, getAudioContext, connectToDestination, getAnalyserById } from "@strudel/webaudio";
+import { noteToMidi } from "@strudel/core";
 
 /**
  * ZzFXMicro-compatible Sample Generator
@@ -12,9 +13,10 @@ import { registerSound, getAudioContext, connectToDestination, getAnalyserById }
  *  bitCrush, delay, sustainVolume, decay, tremolo, filter]
  */
 
+
 const zzfxR = 44100; // sample rate
 
-function zzfxG(
+export function zzfxG(
     volume = 1, 
     randomness = 0.05,
     frequency = 220,
@@ -161,26 +163,49 @@ export function loadZzFXInstruments(instrumentMap) {
     console.log("🔊 Generating ZzFX previews (ZzFXMicro v1.3.2 compatible)...");
 
     for (const [id, params] of Object.entries(instrumentMap)) {
-        // Generate samples using ZzFXMicro-compatible function
-        const samples = zzfxG(...params);
-        const buffer = samplesToBuffer(samples, audioCtx);
-        
-        // Log amplitude for debugging
-        const maxAmp = samples.reduce((max, s) => Math.max(max, Math.abs(s)), 0);
-        console.log(` Instrument ${id}: ${samples.length} samples, max amplitude: ${maxAmp.toFixed(4)}`);
+        // Pre-calculate base info
+        const baseFreq = params[2] || 220;
+        const baseMidi = 12 * Math.log2(baseFreq / 440) + 69;
 
         registerSound(id, (time, value, onEnded) => {
             const startTime = Math.max(time, audioCtx.currentTime + 0.01);
 
+            // Dynamic Generation!
+            // We use the original params
+            // Note: Strudel allows passing params in 'value' to override defaults?
+            // For now, stick to fixed params to match ZzFXM static instrument defs.
+            
+            const samples = zzfxG(...params);
+            
+            // Normalize (Fast)
+            let maxAmp = 0;
+            for(let i=0; i<samples.length; i++) {
+                const abs = Math.abs(samples[i]);
+                if (abs > maxAmp) maxAmp = abs;
+            }
+            if (maxAmp > 0) {
+                 const scale = 0.5 / maxAmp;
+                 for(let i=0; i<samples.length; i++) samples[i] *= scale;
+            }
+            
+            // Create buffer
+            const buffer = audioCtx.createBuffer(1, samples.length, zzfxR);
+            buffer.getChannelData(0).set(samples);
+
             const source = audioCtx.createBufferSource();
             source.buffer = buffer;
             
-            // Pitch shift based on note
-            const note = value.n || 0;
-            source.playbackRate.value = Math.pow(2, note / 12);
+            // Pitch shift
+            let targetMidi = 60;
+            if (value.n) targetMidi = value.n;
+            else if (value.note) targetMidi = noteToMidi(value.note);
+
+            // Calculate rate
+            source.playbackRate.value = Math.pow(2, (targetMidi - baseMidi) / 12);
 
             const gainNode = audioCtx.createGain();
-            gainNode.gain.value = value.gain ?? 1.0;
+            // Default gain 0.5 to match normalization headroom
+            gainNode.gain.value = (value.gain ?? 1.0) * 0.5;
 
             source.connect(gainNode);
             connectToDestination(gainNode);

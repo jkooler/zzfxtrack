@@ -2,47 +2,307 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ZzFXM Composer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZzFXM Live Composer</title>
+    
+    <!-- Load Strudel REPL Web Component -->
+    <!-- Strudel REPL imported in module -->
+    
     <style>
-        body { background: #0a0a0a; color: #00ff66; font-family: 'Courier New', Courier, monospace; padding: 40px; line-height: 1.6; }
-        h1 { border-bottom: 2px solid #00ff66; padding-bottom: 10px; margin-bottom: 30px; letter-spacing: 2px; }
-        .controls { background: #151515; padding: 25px; border-radius: 8px; border-left: 5px solid #00ff66; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 20px; }
-        .select-group { display: flex; align-items: center; gap: 15px; font-size: 18px; }
-        select { background: #222; color: #00ff66; border: 1px solid #00ff66; padding: 8px 15px; border-radius: 4px; font-family: inherit; font-size: 16px; cursor: pointer; }
-        button { background: #222; color: #00ff66; border: 1px solid #00ff66; padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: bold; text-transform: uppercase; transition: all 0.2s; border-radius: 4px; }
-        button:hover { background: #00ff66; color: #000; box-shadow: 0 0 15px rgba(0,255,102,0.4); }
-        button.accent { border-color: #ff00ff; color: #ff00ff; }
-        button.accent:hover { background: #ff00ff; color: #000; box-shadow: 0 0 15px rgba(255,0,255,0.4); }
-        #status { margin-top: 30px; padding: 15px; background: rgba(0,255,102,0.05); border-radius: 4px; min-height: 1.5em; }
-        .info-panel { margin-top: 40px; color: #666; font-size: 12px; }
-        code { color: #aaa; background: #222; padding: 2px 5px; border-radius: 3px; }
-        .visualizer { margin-top: 30px; background: #000; border: 1px solid #333; height: 100px; width: 100%; border-radius: 4px; display: block; }
+        :root {
+            --bg-color: #0a0a0a;
+            --sidebar-bg: #111;
+            --border-color: #333;
+            --accent-color: #00ff66;
+            --text-color: #eee;
+            --danger-color: #ff3333;
+        }
+
+        body { 
+            margin: 0; 
+            font-family: 'Courier New', Courier, monospace; 
+            background: var(--bg-color); 
+            color: var(--text-color); 
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-header h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: var(--accent-color);
+            letter-spacing: 1px;
+        }
+
+        .song-list {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .song-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #222;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .song-item:hover { background: #222; }
+        .song-item.active { 
+            background: #1a3322; 
+            border-left: 3px solid var(--accent-color);
+        }
+
+        .sidebar-footer {
+            padding: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .toolbar {
+            height: 60px;
+            background: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 15px;
+        }
+
+        /* Split View */
+        .editor-split-view {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .editor-pane {
+            flex: 1;
+            /* Container for Strudel Editor */
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 
+           The strudel-editor web component appends the editor DOM 
+           as a SIBLING to itself. This targets that injected div.
+        */
+        .editor-pane > div:last-child {
+            flex: 1;
+            height: 100%;
+            overflow: hidden; /* Let CodeMirror handle scrolling */
+        }
+        
+        .preview-pane {
+            width: 350px;
+            background: #0d0d0d;
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            font-size: 12px;
+        }
+        
+        .preview-header {
+            padding: 10px;
+            background: #111;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .preview-header h3 { margin: 0; color: #888; font-size: 0.9rem; }
+        
+        #previewJson {
+            flex: 1;
+            overflow: auto;
+            margin: 0;
+            padding: 10px;
+            color: #77cc88;
+            font-family: monospace;
+            white-space: pre-wrap;       /* wrap text */
+            word-break: break-all;
+        }
+
+        /* CodeMirror Styles */
+        .cm-editor {
+            height: 100% !important;
+            font-size: 16px;
+        }
+
+        /* Variables used by Strudel themes */
+        .cm-editor {
+            --background: #111;
+            --foreground: #eee; 
+        }
+
+        /* Common Elements */
+        button {
+            background: #222;
+            border: 1px solid #444;
+            color: var(--text-color);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        button.primary {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+            font-weight: bold;
+        }
+        button.primary:hover {
+            background: #00cc52;
+        }
+
+        button.danger {
+            border-color: #662222;
+            color: #cc4444;
+        }
+        button.danger:hover {
+            background: #330000;
+            border-color: var(--danger-color);
+            color: var(--danger-color);
+        }
+
+        .status-msg {
+            margin-left: auto;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .modal-overlay.open { opacity: 1; pointer-events: auto; }
+        .modal {
+            background: #151515;
+            padding: 25px;
+            border: 1px solid var(--accent-color);
+            border-radius: 8px;
+            width: 300px;
+        }
+        .modal h2 { margin-top: 0; color: var(--accent-color); }
+        .modal input {
+            width: 100%;
+            padding: 8px;
+            background: #000;
+            border: 1px solid #444;
+            color: #fff;
+            margin: 15px 0;
+            box-sizing: border-box;
+        }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
     </style>
 </head>
 <body>
-    <div class="controls">
-        <div class="select-group">
-            <label for="songSelect">Song:</label>
-            <select id="songSelect">
-                <!-- Populated by preview.js -->
-            </select>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1>ZzFXM BAKER</h1>
         </div>
-        
-        <div class="button-group">
-            <button id="playBtn">▶ PLAY / RELOAD</button>
-            <button id="stopBtn">⏹ STOP</button>
-            <button id="bakeBtn" class="accent">🍞 BAKE JSON</button>
+        <ul class="song-list" id="songList">
+            <!-- Populated by JS -->
+        </ul>
+        <div class="sidebar-footer">
+            <button id="newSongBtn" style="width: 100%">+ NEW SONG</button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="toolbar">
+            <button id="playBtn" style="margin-right: 15px; width: 40px; text-align: center;">▶</button>
+            <h2 id="currentSongTitle" style="margin: 0; font-size: 1rem; color: #888;">Select a song...</h2>
+            
+            <div style="flex: 1"></div>
+            
+            <button id="saveBtn" disabled>💾 SAVE</button>
+            <button id="bakeBtn" class="primary" disabled>🍞 BAKE</button>
+            <button id="deleteBtn" class="danger" disabled>🗑️</button>
+            
+            <span id="statusMsg" class="status-msg"></span>
+        </header>
+
+        <div class="editor-split-view" id="editorContainer">
+            <div class="editor-pane">
+                <!-- Strudel Editor injected here -->
+                <strudel-editor id="repl"></strudel-editor>
+            </div>
+            
+            <div class="preview-pane" id="previewPane">
+                <div class="preview-header">
+                    <h3>BAKED OUTPUT</h3>
+                    <div>
+                        <button id="previewPlayBtn" title="Play ZzFXM">▶</button>
+                        <button id="previewStopBtn" title="Stop">⏹</button>
+                    </div>
+                </div>
+                <pre id="previewJson">// Click BAKE to generate...</pre>
+            </div>
+        </div>
+    </main>
+
+    <!-- New Song Modal -->
+    <div id="newSongModal" class="modal-overlay">
+        <div class="modal">
+            <h2>New Song</h2>
+            <input type="text" id="newSongName" placeholder="song-name (e.g. boss-theme)">
+            <div class="modal-actions">
+                <button id="cancelNewSong">Cancel</button>
+                <button id="confirmNewSong" class="primary">Create</button>
+            </div>
         </div>
     </div>
 
-    <div id="status">Waiting for input...</div>
-    <canvas id="visualizer" class="visualizer"></canvas>
+    <!-- Application Logic -->
+    <script type="module" src="/src/repl-app.js"></script>
 
-    <div class="info-panel">
-        <p>Edit songs in <code>/songs/</code> folder.</p>
-        <p>Baking produces a <strong>ZzFXM</strong> compatible array.</p>
-    </div>
-
-    <script type="module" src="/preview.js"></script>
 </body>
 </html>

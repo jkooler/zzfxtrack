@@ -40,7 +40,29 @@ export function bakePattern(pattern, bpm, instrumentArray, cycles = 4) {
             const midiNote = typeof rawNote === 'string' ? noteToMidi(rawNote) : rawNote;
             
             if (typeof midiNote === 'number' && !isNaN(midiNote)) {
-                semitone = Math.round(midiNote) - 60;
+                // Calculate Base MIDI of the instrument
+                // ZzFX Freq is param index 2
+                // instrumentArray passed to function
+                let baseFreq = 440;
+                if (instrumentArray && instrumentArray[instIndex]) {
+                    baseFreq = instrumentArray[instIndex][2] || 440;
+                }
+                
+                // Formula: 12 * log2(freq / 440) + 69
+                const baseMidi = 12 * Math.log2(baseFreq / 440) + 69;
+                
+                // Shift = Target - Base
+                semitone = midiNote - baseMidi;
+                
+                // Round to integer for ZzFXM format?
+                // ZzFXM player usually handles floats?
+                // Standard ZzFXM is integers (semitones).
+                // But my player uses float math: Math.pow(2, semitone/12).
+                // So keeping precision is good!
+                // But ZzFXM format might expect int. 
+                // Let's keep it float for accuracy.
+                // Wait, tracks[instIndex][gridIndex] = [inst, atten, semi].
+                // If I put float, JSON stringify keeps it.
             }
             
             // Velocity (Mapped to Attenuation)
@@ -52,11 +74,36 @@ export function bakePattern(pattern, bpm, instrumentArray, cycles = 4) {
         }
     });
 
-    // Flatten to Channel Arrays
-    const patternData = Object.keys(tracks).sort((a,b) => parseInt(a)-parseInt(b)).map(k => tracks[k]);
+    // Flatten to Channel Arrays (Must preserve index alignment!)
+    // If we have instrument 7, we need channels 0-7.
+    // Find max index
+    const maxIndex = Object.keys(tracks).length > 0 ? Math.max(...Object.keys(tracks).map(Number)) : -1;
+    
+    const patternData = [];
+    if (maxIndex >= 0) {
+        for(let i=0; i<=maxIndex; i++) {
+            if (tracks[i]) {
+                patternData.push(tracks[i]);
+            } else {
+                // Empty channel (Silence)
+                // ZzFXM expects [0, 0, 0] entries usually.
+                // Our loop above fills existing tracks with 0.
+                // So we just need a new array of 0s?
+                // Wait, tracks[i][gridIndex] = [inst, atten, semi].
+                // 0 means silence/no note?
+                // Usually [0,0,0] is a 'no op' or treated as rest?
+                // ZzFXM player: "if (n)" (note exists).
+                // If the array is full of 0s. 0 is falsy.
+                // But wait, n is an array? [inst, atten, semi].
+                // If element is 0 (number), it's not an array.
+                patternData.push(Array(totalRows).fill(0));
+            }
+        }
+    }
 
-    // Pad channels
-    const maxLen = Math.max(...patternData.map(c => c.length), 0);
+    // Pad channels (Optional, as all are equal length now due to Array(totalRows))
+    // But good to be safe.
+    const maxLen = totalRows;
     patternData.forEach(ch => {
         while(ch.length < maxLen) ch.push(0);
     });
