@@ -1,7 +1,7 @@
 import { note, s } from "@strudel/core";
 
-export const bpm = 120;
+export const bpm = 140;
 
-// Minimal Test: Single note, Volume=1, Decay=1, all else 0
+export const pattern = // Minimal Test: Single note, Volume=1, Decay=1, all else 0
 // This tests the most basic ZzFX envelope behavior
-export const pattern = note("c3").s("minimal");
+note("c3").s("z-minimal");

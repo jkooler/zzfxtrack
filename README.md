@@ -1,4 +1,4 @@
-# 🎹 Strudel-to-ZzFXM Baker
+# 🎹 Strudel to ZzFXM
 
 A workflow tool for composing music with [Strudel](https://strudel.cc/) and exporting it to the compact [ZzFXM](https://keithclark.github.io/ZzFXM/) format.
 
@@ -17,6 +17,8 @@ A workflow tool for composing music with [Strudel](https://strudel.cc/) and expo
    ```
 
    Open the URL (usually http://localhost:5173) to live-preview your songs.
+
+   > **Note for AI Agents**: If the dev server is already running, do not attempt to start it again. Simply navigate to http://localhost:5173 in the browser. The Vite config is set to use the next available port if 5173 is occupied.
 
 3. **Bake songs**:
    - **From UI**: Select a song and click **"BAKE JSON"** to download it.

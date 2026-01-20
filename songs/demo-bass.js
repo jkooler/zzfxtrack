@@ -1,14 +1,14 @@
 import { stack, note, s } from "@strudel/core";
 
-export const bpm = 90;
+export const bpm = 122;
 
 export const pattern = stack(
-  // Bass
-  note("c5 ~ [c5 g5] ~ f5 ~ ~ ~").s("blip"),
-  
-  // Lead
-  note("~ ~ e2 g2 [b2 c2] ~ ~ ~").s("ld"),
+  // Bass drum-ish
+  note("c1(3,8)").s("z-kick"),
   
   // HiHats
-  note("[c c] [c c*3] c [c c]").s("zzfx_hh")
+  note("~ c2 ~ c2").s("z-hh"),
+  
+  // Funky Lead
+  note("g3 [bb3 c4] ~ [f4 eb4]").s("z-blur")
 );

@@ -147,6 +147,9 @@ export default defineConfig({
     }
   },
   server: {
+    port: 5173,
+    strictPort: false, // Allow using next available port if 5173 is taken
+    host: true, // Listen on all network interfaces for better accessibility
     watch: {
       ignored: ['**/songs/**', '**/output/**']
     }

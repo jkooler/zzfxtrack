@@ -8,7 +8,9 @@ import { getAudioContext } from '@strudel/webaudio';
 
 // --- Global State ---
 let currentSongFilename = null;
+let currentSongDisplayName = ''; // Store the display name for restoration
 let lastBakedData = null;
+let autoSaveTimeout = null; // Debounce timer for auto-save
 
 // --- DOM Elements ---
 const dom = {
@@ -16,9 +18,7 @@ const dom = {
     songList: document.getElementById('songList'),
     currentSongTitle: document.getElementById('currentSongTitle'),
     playBtn: document.getElementById('playBtn'),
-    saveBtn: document.getElementById('saveBtn'),
     bakeBtn: document.getElementById('bakeBtn'),
-    deleteBtn: document.getElementById('deleteBtn'),
     newSongBtn: document.getElementById('newSongBtn'),
     statusMsg: document.getElementById('statusMsg'),
     
@@ -27,11 +27,17 @@ const dom = {
     previewPlayBtn: document.getElementById('previewPlayBtn'),
     previewStopBtn: document.getElementById('previewStopBtn'),
     
-    // Modal
+    // Modals
     newSongModal: document.getElementById('newSongModal'),
     newSongName: document.getElementById('newSongName'),
     confirmNewSong: document.getElementById('confirmNewSong'),
     cancelNewSong: document.getElementById('cancelNewSong'),
+    
+    // Delete Confirmation
+    deleteConfirmModal: document.getElementById('deleteConfirmModal'),
+    deleteConfirmText: document.getElementById('deleteConfirmText'),
+    confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
+    cancelDeleteBtn: document.getElementById('cancelDeleteBtn'),
 };
 
 // --- Initialization ---
@@ -40,7 +46,7 @@ async function init() {
     
     // Disable default samples (TidalCycles/Dirt) to ensure only ZzFX instruments are used
     dom.repl.prelude = `
-// ZzFXM Baker Environment
+// Strudel to ZzFXM Environment
 // Default samples are disabled.
 // Only ZzFX instruments defined in instruments.js are available.
 `;
@@ -54,8 +60,104 @@ async function init() {
     // 3. Load Songs List
     await refreshSongList();
     
-    setStatus('Ready', 'normal');
+    // 4. Setup auto-save on input
+    setupAutoSave();
+    
+    // Ensure buttons are disabled when no song is loaded
+    dom.bakeBtn.disabled = true;
+    dom.previewPlayBtn.disabled = true;
+    dom.previewStopBtn.disabled = true;
+    
+    // Clear preview area
+    dom.previewJson.innerText = '';
+    
+    // Clear status - no song loaded yet
+    setStatus('');
 }
+
+// --- Auto-Save Setup ---
+function setupAutoSave() {
+    console.log('setupAutoSave() called');
+    let checkCount = 0;
+    
+    // Wait for editor to be ready
+    const checkEditor = setInterval(() => {
+        checkCount++;
+        
+        // dom.repl.editor.editor IS the CodeMirror EditorView
+        if (dom.repl.editor && dom.repl.editor.editor) {
+            clearInterval(checkEditor);
+            console.log('✅ Editor found! Setting up auto-save...');
+            
+            const view = dom.repl.editor.editor; // This IS the EditorView
+            
+            // Use CodeMirror's update listener - this is event-driven, not polling!
+            // We'll add a listener to the view's DOM that triggers on updates
+            let lastCode = view.state.doc.toString();
+            
+            // Listen to the view's update events via DOM observation
+            // CodeMirror updates the DOM on every change, so we can detect that
+            const observer = new MutationObserver(() => {
+                // Only process if editor is focused and a song is loaded
+                if (!currentSongFilename || !view.hasFocus) return;
+                
+                const currentCode = view.state.doc.toString();
+                
+                // Check if code actually changed
+                if (currentCode !== lastCode) {
+                    lastCode = currentCode;
+                    
+                    // IMMEDIATELY save to localStorage as backup
+                    localStorage.setItem(`unsaved_${currentSongFilename}`, currentCode);
+                    
+                    // Clear existing timeout
+                    if (autoSaveTimeout) {
+                        clearTimeout(autoSaveTimeout);
+                    }
+                    
+                    // Set new timeout for 1 second (debounced server save)
+                    autoSaveTimeout = setTimeout(() => {
+                        saveCurrentSong();
+                        // Clear localStorage after successful server save
+                        localStorage.removeItem(`unsaved_${currentSongFilename}`);
+                    }, 1000);
+                }
+            });
+            
+            // Observe the content area for changes
+            observer.observe(view.contentDOM, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                characterDataOldValue: false
+            });
+            
+            console.log('✅ Auto-save enabled with 1s debounce (event-driven via MutationObserver)');
+        } else if (checkCount > 50) {
+            // Stop checking after 5 seconds (50 * 100ms)
+            clearInterval(checkEditor);
+            console.error('❌ Editor not found after 5 seconds. Auto-save disabled.');
+        }
+    }, 100);
+}
+
+// Save pending changes before page unload
+window.addEventListener('beforeunload', (e) => {
+    if (autoSaveTimeout && currentSongFilename) {
+        // There's a pending save - try to save synchronously
+        clearTimeout(autoSaveTimeout);
+        
+        const editorCode = dom.repl.editor.code;
+        const fileCode = editorToFile(editorCode);
+        
+        // Use sendBeacon for reliable delivery even as page closes
+        const blob = new Blob([fileCode], { type: 'text/plain' });
+        navigator.sendBeacon(`/api/song/${currentSongFilename}`, blob);
+        
+        // Also keep in localStorage as backup
+        localStorage.setItem(`unsaved_${currentSongFilename}`, editorCode);
+    }
+});
 
 // --- API Interactions ---
 
@@ -67,10 +169,30 @@ async function refreshSongList() {
         
         dom.songList.innerHTML = '';
         files.forEach(file => {
+            const fileName = file.replace('.js', '');
             const li = document.createElement('li');
             li.className = `song-item ${file === currentSongFilename ? 'active' : ''}`;
-            li.innerText = file.replace('.js', '');
+            
+            li.innerHTML = `
+                <span>${fileName}</span>
+                <div class="song-item-actions">
+                    <button class="sidebar-del-btn" title="Delete ${fileName}">🗑️</button>
+                </div>
+            `;
+
+            // Click on text loads song
+            li.querySelector('span').onclick = (e) => {
+                e.stopPropagation();
+                loadSong(file);
+            };
             li.onclick = () => loadSong(file);
+
+            // Delete button
+            li.querySelector('.sidebar-del-btn').onclick = (e) => {
+                e.stopPropagation();
+                showDeleteConfirmation(file);
+            };
+
             dom.songList.appendChild(li);
         });
     } catch (e) {
@@ -141,15 +263,37 @@ export const pattern = ${cleanCode};
 
 async function loadSong(filename) {
     setStatus(`Loading ${filename}...`);
+    
+    // IMPORTANT: Clear any pending auto-save from the previous song
+    // This prevents saving the new song's content to the old song's file
+    if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+        autoSaveTimeout = null;
+    }
+    
     try {
         const res = await fetch(`/api/song/${filename}`);
         if (!res.ok) throw new Error('Failed to load song');
         const fileCode = await res.text();
         
         // Transform for Editor
-        const editorCode = fileToEditor(fileCode);
+        let editorCode = fileToEditor(fileCode);
+        
+        // Check if there's an unsaved version in localStorage
+        const unsavedCode = localStorage.getItem(`unsaved_${filename}`);
+        if (unsavedCode) {
+            // Recover from localStorage
+            editorCode = unsavedCode;
+            setStatus('⚠️ Recovered unsaved changes from cache', 'error');
+            setTimeout(() => {
+                // Auto-save the recovered content
+                saveCurrentSong();
+                localStorage.removeItem(`unsaved_${filename}`);
+            }, 500);
+        }
         
         currentSongFilename = filename;
+        currentSongDisplayName = filename; // Store for later restoration
         dom.currentSongTitle.innerText = filename;
         
         Array.from(dom.songList.children).forEach(li => {
@@ -162,13 +306,12 @@ async function loadSong(filename) {
             dom.repl.setAttribute('code', editorCode);
         }
         
-        dom.saveBtn.disabled = false;
         dom.bakeBtn.disabled = false;
-        dom.deleteBtn.disabled = false;
         
-        // Clear preview
+        // Clear preview and save status
         lastBakedData = null;
         dom.previewJson.innerText = "// Click BAKE to generate...";
+        hideSaveStatus();
         
         setStatus('Loaded', 'success');
     } catch (e) {
@@ -179,7 +322,6 @@ async function loadSong(filename) {
 
 async function saveCurrentSong() {
     if (!currentSongFilename) return;
-    setStatus('Saving...');
     
     try {
         const editorCode = dom.repl.editor.code;
@@ -191,8 +333,7 @@ async function saveCurrentSong() {
         });
         
         if (!res.ok) throw new Error('Save failed');
-        setStatus('Saved!', 'success');
-        setTimeout(() => setStatus(''), 2000); // Wait 2s then clear
+        showSaveStatus('✅ Saved changes');
     } catch (e) {
         console.error(e);
         setStatus('Error saving', 'error');
@@ -229,32 +370,7 @@ export const pattern = note("c3 e3 g3").s("bd");
     }
 }
 
-async function deleteCurrentSong() {
-    if (!currentSongFilename) return;
-    if (!confirm(`Permanently delete ${currentSongFilename}?`)) return;
-    
-    setStatus('Deleting...');
-    try {
-        const res = await fetch(`/api/song/${currentSongFilename}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Delete failed');
-        
-        currentSongFilename = null;
-        dom.currentSongTitle.innerText = 'Select a song...';
-        dom.repl.editor.setCode('');
-        dom.saveBtn.disabled = true;
-        dom.bakeBtn.disabled = true;
-        dom.deleteBtn.disabled = true;
-        
-        await refreshSongList();
-        setStatus('Deleted', 'success');
-        
-        lastBakedData = null;
-        dom.previewJson.innerText = "";
-    } catch (e) {
-        console.error(e);
-        setStatus('Error deleting content', 'error');
-    }
-}
+// async function deleteCurrentSong() removed for new custom modal implementation below
 
 // --- BAKING LOGIC ---
 
@@ -308,6 +424,10 @@ async function bakeCurrentSong() {
         
         if (!res.ok) throw new Error('Server failed to save JSON');
         
+        // Enable preview playback buttons
+        dom.previewPlayBtn.disabled = false;
+        dom.previewStopBtn.disabled = false;
+        
         setStatus(`Baked to /output/${jsonFilename}`, 'success');
         
     } catch (e) {
@@ -352,6 +472,47 @@ function setStatus(msg, type = 'normal') {
     dom.statusMsg.style.color = type === 'error' ? '#ff3333' : (type === 'success' ? '#00ff66' : '#888');
 }
 
+function showSaveStatus(message = '✅ Saved changes', duration = 2000) {
+    const originalText = dom.currentSongTitle.innerText;
+    const originalColor = dom.currentSongTitle.style.color;
+    
+    // Fade out
+    dom.currentSongTitle.style.transition = 'opacity 0.2s ease-out';
+    dom.currentSongTitle.style.opacity = '0';
+    
+    // Change text and color after fade out
+    setTimeout(() => {
+        dom.currentSongTitle.innerText = message;
+        dom.currentSongTitle.style.color = '#00ff66';
+        
+        // Fade in
+        dom.currentSongTitle.style.opacity = '1';
+        
+        // After duration, fade out and restore filename
+        setTimeout(() => {
+            dom.currentSongTitle.style.opacity = '0';
+            
+            setTimeout(() => {
+                dom.currentSongTitle.innerText = currentSongDisplayName;
+                dom.currentSongTitle.style.color = originalColor;
+                dom.currentSongTitle.style.opacity = '1';
+            }, 200); // Wait for fade out
+        }, duration);
+    }, 200); // Wait for fade out
+}
+
+function hideSaveStatus() {
+    // Restore the filename immediately with fade
+    dom.currentSongTitle.style.transition = 'opacity 0.2s ease-out';
+    dom.currentSongTitle.style.opacity = '0';
+    
+    setTimeout(() => {
+        dom.currentSongTitle.innerText = currentSongDisplayName;
+        dom.currentSongTitle.style.color = '#888';
+        dom.currentSongTitle.style.opacity = '1';
+    }, 200);
+}
+
 function openModal() {
     dom.newSongModal.classList.add('open');
     dom.newSongName.focus();
@@ -364,8 +525,8 @@ function closeModal() {
 
 // --- Event Listeners ---
 
-dom.saveBtn.addEventListener('click', saveCurrentSong);
-dom.deleteBtn.addEventListener('click', deleteCurrentSong);
+// Event Listeners ---
+
 dom.bakeBtn.addEventListener('click', bakeCurrentSong);
 
 dom.newSongBtn.addEventListener('click', openModal);
@@ -374,6 +535,65 @@ dom.confirmNewSong.addEventListener('click', () => {
     const name = dom.newSongName.value.trim();
     if (name) createNewSong(name);
 });
+
+// Delete Confirmation
+let songToDelete = null;
+
+function showDeleteConfirmation(filename) {
+    songToDelete = filename;
+    dom.deleteConfirmText.innerHTML = `File: <strong>${filename}</strong><br>This action is irreversible.`;
+    dom.deleteConfirmModal.classList.add('open');
+}
+
+function closeDeleteModal() {
+    dom.deleteConfirmModal.classList.remove('open');
+    songToDelete = null;
+}
+
+
+
+dom.cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+
+dom.confirmDeleteBtn.addEventListener('click', async () => {
+    if (songToDelete) {
+        await deleteSong(songToDelete);
+        closeDeleteModal();
+    }
+});
+
+async function deleteSong(filename) {
+    setStatus('Deleting...');
+    try {
+        const res = await fetch(`/api/song/${filename}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        
+        const wasCurrentSong = (filename === currentSongFilename);
+        
+        if (wasCurrentSong) {
+            currentSongFilename = null;
+            dom.currentSongTitle.innerText = 'Select a song...';
+            if (dom.repl.editor) dom.repl.editor.setCode('');
+            dom.bakeBtn.disabled = true;
+            dom.previewPlayBtn.disabled = true;
+            dom.previewStopBtn.disabled = true;
+            dom.previewJson.innerText = "";
+            lastBakedData = null;
+        }
+        
+        await refreshSongList();
+        
+        // Clear status after a moment if we deleted the current song
+        if (wasCurrentSong) {
+            setTimeout(() => setStatus(''), 1500);
+        } else {
+            setStatus('Deleted', 'success');
+            setTimeout(() => setStatus(''), 2000);
+        }
+    } catch (e) {
+        console.error(e);
+        setStatus('Error deleting song', 'error');
+    }
+}
 
 // Preview Panel Listeners
 dom.previewPlayBtn.addEventListener('click', () => {
