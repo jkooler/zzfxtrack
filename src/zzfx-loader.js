@@ -1,5 +1,6 @@
 import { registerSound, getAudioContext, connectToDestination, getAnalyserById } from "@strudel/webaudio";
 import { noteToMidi } from "@strudel/core";
+import { getVisualizerAnalyser } from "./visualizer.js";
 
 /**
  * ZzFXMicro-compatible Sample Generator
@@ -203,16 +204,23 @@ export function loadZzFXInstruments(instrumentMap) {
             console.log(`ZzFX Syn: ${id} | Tgt:${targetMidi} | Ratio:${ratio.toFixed(2)} | Freq:${p[2].toFixed(1)} | Crush:${p[15]}`);
             
             // 4. Generate
+            // IMPORTANT: We ignore the ZzFX volume param (p[0]) during generation because 
+            // we normalize afterwards. We apply the volume SCALING after normalization.
+            const intendedVol = (p[0] !== undefined) ? p[0] : 1;
+            p[0] = 1; // Generate at full volume so we have good signal for normalization
+
             const samples = zzfxG(...p);
             
-            // Normalize (Fast) to 0.5 peak
+            // Normalize (Fast) to 1.0 peak first to standardize the wave
             let maxAmp = 0;
             for(let i=0; i<samples.length; i++) {
                 const abs = Math.abs(samples[i]);
                 if (abs > maxAmp) maxAmp = abs;
             }
             if (maxAmp > 0) {
-                 const scale = 0.5 / maxAmp;
+                 // Scale relative to intended volume.
+                 // We use 0.5 as the "standard" max volume to leave headroom for polyphony
+                 const scale = (0.5 / maxAmp) * intendedVol;
                  for(let i=0; i<samples.length; i++) samples[i] *= scale;
             }
             
@@ -234,8 +242,13 @@ export function loadZzFXInstruments(instrumentMap) {
             connectToDestination(gainNode);
 
             // Connect to analyser for visualization
+            // Connect to analyser for visualization
             const analyser = getAnalyserById(0);
             if (analyser) gainNode.connect(analyser);
+
+            // Connect to our custom sidebar visualizer
+            const vizAnalyser = getVisualizerAnalyser(audioCtx);
+            if (vizAnalyser) gainNode.connect(vizAnalyser);
 
             source.start(startTime);
             source.onended = () => {

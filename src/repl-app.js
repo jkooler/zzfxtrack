@@ -4,6 +4,7 @@ import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
 import { bakePattern } from './baker-logic.js';
 import { playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
+import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 
 // --- Global State ---
@@ -11,6 +12,8 @@ let currentSongFilename = null;
 let currentSongDisplayName = ''; // Store the display name for restoration
 let lastBakedData = null;
 let autoSaveTimeout = null; // Debounce timer for auto-save
+let isPreviewPlaying = false;
+let playingSongFilename = null;
 
 // --- DOM Elements ---
 const dom = {
@@ -22,10 +25,13 @@ const dom = {
     newSongBtn: document.getElementById('newSongBtn'),
     statusMsg: document.getElementById('statusMsg'),
     
+    // Views
+    welcomeView: document.getElementById('welcomeView'),
+    editorContainer: document.getElementById('editorContainer'),
+    
     // Preview Panel
     previewJson: document.getElementById('previewJson'),
     previewPlayBtn: document.getElementById('previewPlayBtn'),
-    previewStopBtn: document.getElementById('previewStopBtn'),
     
     // Modals
     newSongModal: document.getElementById('newSongModal'),
@@ -39,6 +45,34 @@ const dom = {
     confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
     cancelDeleteBtn: document.getElementById('cancelDeleteBtn'),
 };
+
+// --- View State Helpers ---
+function showWelcome() {
+    dom.welcomeView.style.display = 'flex';
+    dom.editorContainer.style.display = 'none';
+    dom.playBtn.style.visibility = 'hidden';
+    dom.bakeBtn.disabled = true;
+    dom.previewPlayBtn.disabled = true;
+    
+    // Clear state
+    currentSongFilename = null;
+    playingSongFilename = null;
+    dom.currentSongTitle.innerText = 'Select a song...';
+    if(dom.repl.editor) dom.repl.editor.stop();
+    renderPlayButton();
+    updateSongListVisualizer();
+    
+    // Clear preview
+    dom.previewJson.innerText = '';
+    lastBakedData = null;
+}
+
+function showEditor() {
+    dom.welcomeView.style.display = 'none';
+    dom.editorContainer.style.display = 'flex';
+    dom.playBtn.style.visibility = 'visible';
+    dom.bakeBtn.disabled = false;
+}
 
 // --- Initialization ---
 async function init() {
@@ -63,19 +97,16 @@ async function init() {
     // 4. Setup auto-save on input
     setupAutoSave();
     
-    // Ensure buttons are disabled when no song is loaded
-    dom.bakeBtn.disabled = true;
-    dom.previewPlayBtn.disabled = true;
-    dom.previewStopBtn.disabled = true;
-    
-    // Clear preview area
-    dom.previewJson.innerText = '';
+    // Start in Welcome State
+    showWelcome();
     
     // Clear status - no song loaded yet
     setStatus('');
 }
 
-// --- Auto-Save Setup ---
+// --- Auto-Save and Hot-Reload Setup ---
+let hotReloadTimeout = null;
+
 function setupAutoSave() {
     console.log('setupAutoSave() called');
     let checkCount = 0;
@@ -87,7 +118,7 @@ function setupAutoSave() {
         // dom.repl.editor.editor IS the CodeMirror EditorView
         if (dom.repl.editor && dom.repl.editor.editor) {
             clearInterval(checkEditor);
-            console.log('✅ Editor found! Setting up auto-save...');
+            console.log('✅ Editor found! Setting up auto-save and hot-reload...');
             
             const view = dom.repl.editor.editor; // This IS the EditorView
             
@@ -110,7 +141,7 @@ function setupAutoSave() {
                     // IMMEDIATELY save to localStorage as backup
                     localStorage.setItem(`unsaved_${currentSongFilename}`, currentCode);
                     
-                    // Clear existing timeout
+                    // Clear existing auto-save timeout
                     if (autoSaveTimeout) {
                         clearTimeout(autoSaveTimeout);
                     }
@@ -121,6 +152,24 @@ function setupAutoSave() {
                         // Clear localStorage after successful server save
                         localStorage.removeItem(`unsaved_${currentSongFilename}`);
                     }, 1000);
+                    
+                    // HOT-RELOAD: Auto-evaluate if REPL is playing
+                    if (dom.repl.editor.repl.scheduler.started) {
+                        // Clear existing hot-reload timeout
+                        if (hotReloadTimeout) {
+                            clearTimeout(hotReloadTimeout);
+                        }
+                        
+                        // Debounce hot-reload to 500ms (faster than save for responsive live coding)
+                        hotReloadTimeout = setTimeout(() => {
+                            try {
+                                dom.repl.editor.evaluate();
+                                console.log('🔥 Hot-reloaded code changes');
+                            } catch (e) {
+                                console.error('Hot-reload evaluation error:', e);
+                            }
+                        }, 500);
+                    }
                 }
             });
             
@@ -195,9 +244,47 @@ async function refreshSongList() {
 
             dom.songList.appendChild(li);
         });
+        
+        updateSongListVisualizer();
     } catch (e) {
         console.error(e);
         setStatus('Error loading songs', 'error');
+    }
+}
+
+function updateSongListVisualizer() {
+    const listItems = Array.from(dom.songList.children);
+    let visualizerAttached = false;
+    
+    listItems.forEach(li => {
+        const span = li.querySelector('span');
+        // Visualizer should track the PLAYING song, not necessarily the selected one
+        const isPlayingTarget = span && playingSongFilename && span.innerText === playingSongFilename.replace('.js', '');
+        
+        let canvas = li.querySelector('canvas.song-visualizer');
+
+        if (isPlayingTarget) {
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.className = 'song-visualizer';
+                // Set internal resolution to match element size
+                canvas.width = li.clientWidth;
+                canvas.height = li.clientHeight;
+                
+                // Insert as first child to be behind everything (z-index handles it properly though)
+                li.insertBefore(canvas, li.firstChild);
+            }
+            attachVisualizer(canvas);
+            visualizerAttached = true;
+        } else {
+            if (canvas) {
+                canvas.remove();
+            }
+        }
+    });
+    
+    if (!visualizerAttached) {
+        attachVisualizer(null);
     }
 }
 
@@ -292,13 +379,18 @@ async function loadSong(filename) {
             }, 500);
         }
         
+        showEditor();
         currentSongFilename = filename;
         currentSongDisplayName = filename; // Store for later restoration
         dom.currentSongTitle.innerText = filename;
         
         Array.from(dom.songList.children).forEach(li => {
-            li.classList.toggle('active', li.innerText === filename.replace('.js', ''));
+            const span = li.querySelector('span');
+            const isActive = span && span.innerText === filename.replace('.js', '');
+            li.classList.toggle('active', isActive);
         });
+        
+        updateSongListVisualizer();
         
         if (dom.repl.editor) {
             dom.repl.editor.setCode(editorCode);
@@ -310,8 +402,10 @@ async function loadSong(filename) {
         
         // Clear preview and save status
         lastBakedData = null;
-        dom.previewJson.innerText = "// Click BAKE to generate...";
+        dom.previewJson.innerText = "// Click GENERATE to create ZzFXM song";
         hideSaveStatus();
+        
+        renderPlayButton(); // Update play button context (Stop vs Play)
         
         setStatus('Loaded', 'success');
     } catch (e) {
@@ -426,9 +520,8 @@ async function bakeCurrentSong() {
         
         // Enable preview playback buttons
         dom.previewPlayBtn.disabled = false;
-        dom.previewStopBtn.disabled = false;
         
-        setStatus(`Baked to /output/${jsonFilename}`, 'success');
+        setStatus(`/output/${jsonFilename}`, 'success');
         
     } catch (e) {
         console.error(e);
@@ -567,17 +660,15 @@ async function deleteSong(filename) {
         const res = await fetch(`/api/song/${filename}`, { method: 'DELETE' });
         if (!res.ok) throw new Error('Delete failed');
         
+        if (filename === playingSongFilename) {
+             if (dom.repl.editor) dom.repl.editor.stop();
+             updatePlayState(false);
+        }
+
         const wasCurrentSong = (filename === currentSongFilename);
         
         if (wasCurrentSong) {
-            currentSongFilename = null;
-            dom.currentSongTitle.innerText = 'Select a song...';
-            if (dom.repl.editor) dom.repl.editor.setCode('');
-            dom.bakeBtn.disabled = true;
-            dom.previewPlayBtn.disabled = true;
-            dom.previewStopBtn.disabled = true;
-            dom.previewJson.innerText = "";
-            lastBakedData = null;
+            showWelcome();
         }
         
         await refreshSongList();
@@ -597,21 +688,35 @@ async function deleteSong(filename) {
 
 // Preview Panel Listeners
 dom.previewPlayBtn.addEventListener('click', () => {
+    if (isPreviewPlaying) {
+        stopZzfxmSong();
+        updatePreviewPlayButton(false);
+        return;
+    }
+
     if (!lastBakedData) {
         setStatus('Nothing to play. Bake a song first.', 'error');
         return;
     }
+    
     // Stop Strudel playback to avoid overlap
     const editor = dom.repl.editor;
     if (editor && editor.repl.scheduler.started) {
         editor.stop();
-        updatePlayButton(false);
+        updatePlayState(false);
     }
     
-    playZzfxmSong(lastBakedData, getAudioContext());
+    playZzfxmSong(lastBakedData, getAudioContext(), () => {
+        updatePreviewPlayButton(false);
+    });
+    updatePreviewPlayButton(true);
 });
 
-dom.previewStopBtn.addEventListener('click', stopZzfxmSong);
+function updatePreviewPlayButton(playing) {
+    isPreviewPlaying = playing;
+    dom.previewPlayBtn.innerText = playing ? '⏹' : '▶';
+    dom.previewPlayBtn.style.color = playing ? '#ff3333' : '#eee';
+}
 
 
 // Shortcut: Ctrl+S to save
@@ -631,30 +736,50 @@ function togglePlay() {
     
     validateCode(editor.code);
     
-    // Access internal scheduler state
     const scheduler = editor.repl.scheduler;
     const isRunning = scheduler.started;
+    const isPlayingCurrent = isRunning && playingSongFilename === currentSongFilename;
     
-    if (isRunning) {
+    if (isPlayingCurrent) {
+        // Stop current song
         editor.stop();
-        // UI update happens via event listener or manual
-        updatePlayButton(false);
+        // UI update happens via state helper
+        updatePlayState(false);
     } else {
+        // Start new song (implicitly replaces old one if running)
         editor.evaluate();
-        updatePlayButton(true);
+        updatePlayState(true);
     }
 }
 
-function updatePlayButton(isPlaying) {
-    dom.playBtn.innerText = isPlaying ? '⏹' : '▶';
-    dom.playBtn.style.color = isPlaying ? '#ff3333' : '#eee';
+function updatePlayState(isPlaying) {
+    // Sync visualizer location and playing state context
+    if (isPlaying) {
+        playingSongFilename = currentSongFilename;
+    } else {
+        playingSongFilename = null;
+    }
+    updateSongListVisualizer();
+    renderPlayButton();
+}
+
+function renderPlayButton() {
+    const editor = dom.repl.editor;
+    // Use playingSongFilename logic: Show STOP only if running AND playing current song
+    // Note: editor.repl.scheduler.started might be true (if playing another song)
+    // But we only show STOP if matches current filename.
+    const isRunning = editor && editor.repl.scheduler.started;
+    const showStop = isRunning && playingSongFilename === currentSongFilename;
+    
+    dom.playBtn.innerText = showStop ? '⏹' : '▶';
+    dom.playBtn.style.color = showStop ? '#ff3333' : '#eee';
 }
 
 // Listen for global Strudel events to keep UI in sync (e.g. Ctrl+Enter)
 document.addEventListener('start-repl', (e) => {
     // If our repl started, update button
     if (dom.repl.editor && e.detail === dom.repl.editor.id) {
-        updatePlayButton(true);
+        updatePlayState(true);
     }
 });
 

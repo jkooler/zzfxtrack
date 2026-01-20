@@ -156,13 +156,14 @@ export const buildSong = (song) => {
 // Playback State
 let playingSource = null;
 
-export function playZzfxmSong(songData, audioCtx) {
+export function playZzfxmSong(songData, audioCtx, onEnded) {
     stopZzfxmSong();
     
     console.log("[ZzFXM] Building song...", songData);
     const pcm = buildSong(songData);
     if (!pcm) {
         console.error("[ZzFXM] Failed to build song");
+        if (onEnded) onEnded();
         return;
     }
     
@@ -182,6 +183,7 @@ export function playZzfxmSong(songData, audioCtx) {
         if (playingSource === source) {
             playingSource = null;
             console.log("[ZzFXM] Ended.");
+            if (onEnded) onEnded();
         }
     };
 }

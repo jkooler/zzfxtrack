@@ -5,7 +5,9 @@ import { instrumentMapping } from '../instruments.js';
  * Shared logic for converting a Strudel pattern into ZzFXM format.
  */
 
-const ROWS_PER_CYCLE = 16;
+// Resolution increased to 48 (LCM of 16 and 12) to support triplets and 16th notes
+const ROWS_PER_CYCLE = 48;
+const BASE_RESOLUTION = 16; 
 const MAX_ATTENUATION = 20;
 
 export function bakePattern(pattern, bpm, instrumentArray, cycles = 8) {
@@ -115,11 +117,15 @@ export function bakePattern(pattern, bpm, instrumentArray, cycles = 8) {
         while(ch.length < maxLen) ch.push(0);
     });
 
+    // Scale BPM based on resolution increase
+    // 48 / 16 = 3
+    const bpmScale = ROWS_PER_CYCLE / BASE_RESOLUTION;
+
     // --- THE ZzFXMicro SONG STRUCTURE ---
     return [
         instrumentArray, // 0: Instruments
         [patternData],   // 1: Patterns
         [0],             // 2: Sequence
-        bpm              // 3: BPM
+        bpm * bpmScale   // 3: BPM
     ];
 }

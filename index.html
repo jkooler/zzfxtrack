@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Strudel to ZzFXM</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Gothic+Condensed+One&display=swap" rel="stylesheet">
+
     <!-- Load Strudel REPL Web Component -->
     <!-- Strudel REPL imported in module -->
 
@@ -44,7 +48,9 @@
 
       .sidebar h1 {
         margin: 0;
-        font-size: 1.2rem;
+        font-family: 'Special Gothic Condensed One', sans-serif;
+        font-size: 1.5rem;
+        font-weight: 400;
         color: var(--accent-color);
         letter-spacing: 1px;
         text-align: center;
@@ -59,6 +65,7 @@
       }
 
       .song-item {
+        position: relative;
         padding: 12px 20px;
         cursor: pointer;
         border-bottom: 1px solid #222;
@@ -66,6 +73,23 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        overflow: hidden; /* Ensure canvas doesn't spill out */
+      }
+
+      .song-item > span, .song-item > .song-item-actions {
+        position: relative;
+        z-index: 2; /* Sit on top of visualizer */
+      }
+
+      .song-visualizer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        pointer-events: none; /* Let clicks pass through */
+        opacity: 0.5; /* Subtle background effect */
       }
 
       .song-item:hover {
@@ -99,10 +123,50 @@
         gap: 15px;
       }
 
-      /* Split View */
-      .editor-split-view {
+      /* Welcome View */
+      .welcome-view {
         flex: 1;
         display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: #888;
+        padding: 40px;
+      }
+      .welcome-content {
+        max-width: 500px;
+      }
+      .welcome-content h1 {
+        color: var(--accent-color);
+        margin-bottom: 20px;
+        font-family: 'Special Gothic Condensed One', sans-serif;
+        font-size: 4rem; /* 2x bigger */
+        /* text-transform: uppercase; REVERTED */
+        letter-spacing: 2px;
+        line-height: 1; /* Tighten line height for large text */
+        font-weight: 400;
+      }
+      .welcome-content p {
+        line-height: 1.6;
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+      }
+      .welcome-content a {
+        color: var(--accent-color);
+        text-decoration: none;
+        border-bottom: 1px dotted var(--accent-color);
+        transition: all 0.2s;
+      }
+      .welcome-content a:hover {
+        background: rgba(0, 255, 102, 0.1);
+        border-bottom-style: solid;
+      }
+
+      /* Editor Split View */
+      .editor-split-view {
+        flex: 1;
+        display: none; /* Hidden by default */
+        flex-direction: row;
         overflow: hidden;
         position: relative;
       }
@@ -351,6 +415,19 @@
         <div style="flex: 1"></div>
       </header>
 
+      <div class="welcome-view" id="welcomeView">
+        <div class="welcome-content">
+          <h1>Welcome to<br>STRUDEL TO ZZFXM</h1>
+          <p>With this app you can create songs using <a href="https://github.com/KilledByAPixel/ZzFX" target="_blank">ZzFXMicro.js</a> synthesis and <a href="https://codeberg.org/uzu/strudel" target="_blank">Strudel</a>.</p>
+          <p>After creating your song, export it to JSON format and use it in your games or demo projects that use <a href="https://codeberg.org/uzu/zzfxm" target="_blank">ZzFXM</a>.</p>
+          
+          <div style="margin-top: 30px; font-size: 0.9rem; opacity: 0.7; border-top: 1px solid #333; padding-top: 20px;">
+            <strong>NOTE:</strong> Ensure your project uses <strong>ZzFXMicro</strong> (standard for ZzFXM).<br>
+            The parameter mapping differs from the full ZzFX library.
+          </div>
+        </div>
+      </div>
+
       <div class="editor-split-view" id="editorContainer">
         <div class="editor-pane">
           <!-- Strudel Editor injected here -->
@@ -363,9 +440,8 @@
     <aside class="preview-pane" id="previewPane">
       <div class="preview-header">
         <div style="display: flex; gap: 10px; align-items: center;">
-          <button id="bakeBtn" class="primary" disabled>🍞 BAKE</button>
+          <button id="bakeBtn" class="primary" disabled style="font-family: 'Special Gothic Condensed One', sans-serif; font-size: 1.1rem; letter-spacing: 1px;">EXPORT</button>
           <button id="previewPlayBtn" title="Play ZzFXM" disabled>▶</button>
-          <button id="previewStopBtn" title="Stop" disabled>⏹</button>
           <span id="statusMsg" class="status-msg" style="margin-left: 10px;"></span>
         </div>
       </div>
