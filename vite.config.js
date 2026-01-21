@@ -125,8 +125,35 @@ const apiPlugin = () => ({
   }
 });
 
+// Add update-instruments endpoint
+const updateInstrumentsPlugin = () => ({
+  name: 'update-instruments-api',
+  configureServer(server) {
+    server.middlewares.use('/api/update-instruments', (req, res, next) => {
+      if (req.method === 'POST') {
+        const filePath = path.resolve(__dirname, 'instruments.js');
+        
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+          try {
+            fs.writeFileSync(filePath, body);
+            console.log('[API] Updated instruments.js');
+            res.end('instruments.js updated');
+          } catch (e) {
+            res.statusCode = 500;
+            res.end(`Error writing instruments.js: ${e.message}`);
+          }
+        });
+        return;
+      }
+      next();
+    });
+  }
+});
+
 export default defineConfig({
-  plugins: [apiPlugin()],
+  plugins: [apiPlugin(), updateInstrumentsPlugin()],
   // Ensure we can import from src/
   resolve: {
     dedupe: [
@@ -151,7 +178,7 @@ export default defineConfig({
     strictPort: false, // Allow using next available port if 5173 is taken
     host: true, // Listen on all network interfaces for better accessibility
     watch: {
-      ignored: ['**/songs/**', '**/output/**']
+      ignored: ['**/songs/**', '**/output/**', '**/instruments.js']
     }
   }
 });

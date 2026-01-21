@@ -1,5 +1,4 @@
 import { noteToMidi } from '@strudel/core';
-import { instrumentMapping } from '../instruments.js';
 
 /**
  * Shared logic for converting a Strudel pattern into ZzFXM format.
@@ -10,16 +9,15 @@ const ROWS_PER_CYCLE = 48;
 const BASE_RESOLUTION = 16; 
 const MAX_ATTENUATION = 20;
 
-export function bakePattern(pattern, bpm, instrumentArray, cycles = 8) {
+export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8) {
     const totalRows = cycles * ROWS_PER_CYCLE;
     const events = pattern.queryArc(0, cycles);
     const tracks = {};
 
     console.log("Baker Stats:", {
         instrCount: instrumentArray?.length,
-        mappingKeys: Object.keys(instrumentMapping).length,
-        u_test_trem: instrumentMapping['test_trem'],
-        u_test_crush: instrumentMapping['test_crush']
+        mappingKeys: Object.keys(instrumentMapping || {}).length,
+        mappingPreview: instrumentMapping
     });
 
     events.forEach((e) => {

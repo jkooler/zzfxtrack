@@ -46,6 +46,38 @@
         border-bottom: 1px solid var(--border-color);
       }
 
+      /* Sidebar Tabs */
+      .sidebar-tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 12px;
+      }
+
+      .sidebar-tab {
+        flex: 1;
+        padding: 8px 12px;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: #666;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        transition: all 0.2s;
+      }
+
+      .sidebar-tab:hover {
+        color: #999;
+        border-bottom-color: #444;
+      }
+
+      .sidebar-tab.active {
+        color: var(--accent-color);
+        border-bottom-color: var(--accent-color);
+      }
+
       .sidebar h1 {
         margin: 0;
         font-family: 'Special Gothic Condensed One', sans-serif;
@@ -62,6 +94,65 @@
         list-style: none;
         padding: 0;
         margin: 0;
+      }
+
+      /* Instrument List (shares styles with song-list) */
+      .instrument-list {
+        flex: 1;
+        overflow-y: auto;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: none; /* Hidden by default */
+      }
+
+      .instrument-list.active {
+        display: block;
+      }
+
+      .instrument-item {
+        position: relative;
+        padding: 12px 20px;
+        cursor: pointer;
+        border-bottom: 1px solid #222;
+        transition: background 0.2s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .instrument-item:hover {
+        background: #222;
+      }
+
+      .instrument-item.active {
+        background: #1a3322;
+        border-left: 3px solid var(--accent-color);
+      }
+
+      .instrument-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .instrument-name {
+        font-weight: bold;
+        color: var(--text-color);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .instrument-alias {
+        font-size: 0.75rem;
+        color: #666;
+        margin-top: 2px;
+      }
+
+      .instrument-channel {
+        font-size: 0.7rem;
+        color: #555;
+        font-family: monospace;
       }
 
       .song-item {
@@ -98,6 +189,103 @@
       .song-item.active {
         background: #1a3322;
         border-left: 3px solid var(--accent-color);
+      }
+
+      .sidebar-footer {
+        padding: 15px;
+        border-top: 1px solid var(--border-color);
+      }
+
+      /* Instrument Editor Drawer */
+      .instrument-drawer {
+        width: 400px;
+        background: #0d0d0d;
+        border-left: 1px solid var(--border-color);
+        display: none;
+        flex-direction: column;
+        font-size: 12px;
+        height: 100vh;
+        overflow-y: auto;
+      }
+
+      .instrument-drawer.active {
+        display: flex;
+      }
+
+      .instrument-drawer-header {
+        padding: 15px;
+        background: #111;
+        border-bottom: 1px solid #333;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .instrument-drawer-header h3 {
+        margin: 0 0 10px 0;
+        color: var(--accent-color);
+        font-size: 1rem;
+      }
+
+      .instrument-drawer-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .instrument-drawer-content {
+        padding: 15px;
+        flex: 1;
+      }
+
+      .param-group {
+        margin-bottom: 20px;
+      }
+
+      .param-group h4 {
+        margin: 0 0 10px 0;
+        color: #888;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .param-field {
+        margin-bottom: 12px;
+      }
+
+      .param-field label {
+        display: block;
+        color: #999;
+        font-size: 0.8rem;
+        margin-bottom: 4px;
+      }
+
+      .param-field input[type="text"],
+      .param-field input[type="number"] {
+        width: 100%;
+        padding: 8px;
+        background: #000;
+        border: 1px solid #444;
+        color: #fff;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+        box-sizing: border-box;
+      }
+
+      .param-field input[type="number"] {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .param-field input:focus {
+        outline: none;
+        border-color: var(--accent-color);
+      }
+
+      .param-field .param-hint {
+        font-size: 0.7rem;
+        color: #555;
+        margin-top: 2px;
       }
 
       .sidebar-footer {
@@ -376,13 +564,176 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
+        <!-- Tabs -->
+        <div class="sidebar-tabs">
+          <button class="sidebar-tab active" id="songsTab">Songs</button>
+          <button class="sidebar-tab" id="instrumentsTab">Instruments</button>
+        </div>
+        
+        <!-- New Song Button -->
         <button id="newSongBtn" style="width: 100%">+ NEW SONG</button>
+        
+        <!-- New Instrument Button (hidden by default) -->
+        <button id="newInstrumentBtn" style="width: 100%; display: none">+ NEW INSTRUMENT</button>
+        
+        <!-- Download Instruments Button (hidden by default) -->
+        <button id="downloadInstrumentsBtn" style="width: 100%; display: none; margin-top: 8px; background: #1a472a; border-color: #2d7a4a">📥 DOWNLOAD INSTRUMENTS.JS</button>
       </div>
+      
+      <!-- Song List -->
       <ul class="song-list" id="songList">
         <!-- Populated by JS -->
       </ul>
+      
+      <!-- Instrument List -->
+      <ul class="instrument-list" id="instrumentList">
+        <!-- Populated by JS -->
+      </ul>
+      
       <div class="sidebar-footer">
         <h1>STRUDEL TO ZZFXM</h1>
+      </div>
+    </aside>
+
+    <!-- Instrument Editor Drawer -->
+    <aside class="instrument-drawer" id="instrumentDrawer">
+      <div class="instrument-drawer-header">
+        <h3 id="drawerTitle">Edit Instrument</h3>
+        
+        <div class="param-group">
+          <div class="param-field">
+            <label>Export Name</label>
+            <input type="text" id="instExportName" placeholder="INST_KICKDRUM" />
+          </div>
+          
+          <div class="param-field">
+            <label>Strudel Alias</label>
+            <input type="text" id="instStrudelAlias" placeholder="z-kickdrum" />
+          </div>
+          
+          <div class="param-field">
+            <label>Channel</label>
+            <input type="number" id="instChannel" readonly style="background: #111; color: #666;" />
+            <div class="param-hint">Auto-assigned based on order</div>
+          </div>
+        </div>
+        
+        <div class="instrument-drawer-actions">
+          <button id="testInstrumentBtn" class="primary">▶ Test</button>
+          <button id="closeDrawerBtn">Close</button>
+        </div>
+      </div>
+      
+      <div class="instrument-drawer-content">
+        <div class="param-group">
+          <h4>ZzFX Parameters</h4>
+          
+          <div class="param-field">
+            <label>0: Volume</label>
+            <input type="number" id="param0" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>1: Randomness</label>
+            <input type="number" id="param1" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>2: Frequency (Hz)</label>
+            <input type="number" id="param2" step="0.1" />
+          </div>
+          
+          <div class="param-field">
+            <label>3: Attack (s)</label>
+            <input type="number" id="param3" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>4: Sustain (s)</label>
+            <input type="number" id="param4" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>5: Release (s)</label>
+            <input type="number" id="param5" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>6: Shape</label>
+            <input type="number" id="param6" step="1" min="0" max="5" />
+            <div class="param-hint">0=sine, 1=tri, 2=saw, 3=tan, 4=noise, 5=square</div>
+          </div>
+          
+          <div class="param-field">
+            <label>7: Shape Curve</label>
+            <input type="number" id="param7" step="0.1" />
+          </div>
+          
+          <div class="param-field">
+            <label>8: Slide (Hz/s)</label>
+            <input type="number" id="param8" step="0.1" />
+          </div>
+          
+          <div class="param-field">
+            <label>9: Delta Slide</label>
+            <input type="number" id="param9" step="0.1" />
+          </div>
+          
+          <div class="param-field">
+            <label>10: Pitch Jump (Hz)</label>
+            <input type="number" id="param10" step="1" />
+          </div>
+          
+          <div class="param-field">
+            <label>11: Pitch Jump Time (s)</label>
+            <input type="number" id="param11" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>12: Repeat Time (s)</label>
+            <input type="number" id="param12" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>13: Noise (detune)</label>
+            <input type="number" id="param13" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>14: Modulation (Hz)</label>
+            <input type="number" id="param14" step="1" />
+          </div>
+          
+          <div class="param-field">
+            <label>15: Bit Crush</label>
+            <input type="number" id="param15" step="0.1" />
+          </div>
+          
+          <div class="param-field">
+            <label>16: Delay (s)</label>
+            <input type="number" id="param16" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>17: Sustain Volume</label>
+            <input type="number" id="param17" step="0.01" />
+          </div>
+          
+          <div class="param-field">
+            <label>18: Decay</label>
+            <input type="number" id="param18" step="0.1" />
+          </div>
+          
+          <div class="param-field">
+            <label>19: Tremolo (Hz)</label>
+            <input type="number" id="param19" step="0.1" />
+          </div>
+          
+          <div class="param-field">
+            <label>20: Filter (Hz)</label>
+            <input type="number" id="param20" step="1" />
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -472,6 +823,40 @@
         <div class="modal-actions">
           <button id="cancelDeleteBtn">No! Abort.</button>
           <button id="confirmDeleteBtn" class="danger">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Instrument Modal -->
+    <div id="newInstrumentModal" class="modal-overlay">
+      <div class="modal">
+        <h2>New Instrument</h2>
+        <input
+          type="text"
+          id="newInstrumentName"
+          placeholder="Export name (e.g. INST_BASS)"
+        />
+        <input
+          type="text"
+          id="newInstrumentAlias"
+          placeholder="Strudel alias (e.g. z-bass)"
+          style="margin-top: 10px"
+        />
+        <div class="modal-actions">
+          <button id="cancelNewInstrument">Cancel</button>
+          <button id="confirmNewInstrument" class="primary">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Instrument Confirmation Modal -->
+    <div id="deleteInstrumentModal" class="modal-overlay">
+      <div class="modal danger">
+        <h2>Delete instrument?</h2>
+        <p id="deleteInstrumentText">This action cannot be undone.</p>
+        <div class="modal-actions">
+          <button id="cancelDeleteInstrument">No! Abort.</button>
+          <button id="confirmDeleteInstrument" class="danger">Delete</button>
         </div>
       </div>
     </div>

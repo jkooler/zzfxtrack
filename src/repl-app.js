@@ -1,11 +1,12 @@
 import '@strudel/repl/index.mjs'; 
-import { instruments, instrumentArray } from '../instruments.js';
+import { instruments } from '../instruments.js';
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
 import { bakePattern } from './baker-logic.js';
 import { playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
+import { initInstrumentUI, getInstrumentsForBaker } from './instrument-ui.js';
 
 // --- Global State ---
 let currentSongFilename = null;
@@ -94,7 +95,10 @@ async function init() {
     // 3. Load Songs List
     await refreshSongList();
     
-    // 4. Setup auto-save on input
+    // 4. Initialize Instrument UI
+    await initInstrumentUI();
+    
+    // 5. Setup auto-save on input
     setupAutoSave();
     
     // Start in Welcome State
@@ -501,8 +505,11 @@ async function bakeCurrentSong() {
         const match = code.match(/(?:const|let|var)\s+bpm\s*=\s*(\d+)/);
         if (match) bpm = Number(match[1]);
         
-        // 3. Bake!
-        const songData = bakePattern(pattern, bpm, instrumentArray);
+        // 3. Get dynamic instruments from manager
+        const { array: instrumentArray, mapping: instrumentMapping } = await getInstrumentsForBaker();
+        
+        // 4. Bake!
+        const songData = bakePattern(pattern, bpm, instrumentArray, instrumentMapping);
         
         // Store for preview
         lastBakedData = songData;
