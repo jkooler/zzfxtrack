@@ -6,7 +6,7 @@ export const pattern = // Plays C3-C8 arpeggios on each diagnostic wave shape
 // Uses 16 notes to align perfectly with ZzFXM 16-row grid (prevents quantization swing)
 cat(
     // Reference Kick (Channel 0) - Confirms Audio Engine is working
-    note("c3").s("z-kickdrum"),
+    note("c3").s("kickdrum"),
 
     // Sine Wave
     note("c1 e3 g3 c4 e4 g4 c5 e5 g5 c6 e6 g6 c7 e7 g7").s("z-sine"),

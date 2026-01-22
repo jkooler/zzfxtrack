@@ -14,6 +14,7 @@ import {
 } from './instrument-manager.js';
 import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
+import { reloadInstruments } from './repl-app.js';
 
 // State
 let currentInstrumentId = null;
@@ -48,7 +49,6 @@ const dom = {
     // Modals
     newInstrumentModal: document.getElementById('newInstrumentModal'),
     newInstrumentName: document.getElementById('newInstrumentName'),
-    newInstrumentAlias: document.getElementById('newInstrumentAlias'),
     confirmNewInstrument: document.getElementById('confirmNewInstrument'),
     cancelNewInstrument: document.getElementById('cancelNewInstrument'),
     
@@ -180,7 +180,8 @@ function setupParameterOrdering() {
  * Reorganize parameters based on ordering mode
  */
 function reorganizeParameters(useArrayOrder) {
-    const paramGroup = document.querySelector('.param-group');
+    // Target specifically the param-group in the content area, not the header
+    const paramGroup = document.querySelector('.instrument-drawer-content .param-group');
     if (!paramGroup) return;
     
     // Parameter groups and ordering
@@ -305,12 +306,12 @@ function renderInstrumentList() {
         
         li.innerHTML = `
             <div class="instrument-info" style="cursor: move;">
-                <div class="instrument-name">⋮⋮ ${inst.exportName}</div>
-                <div class="instrument-alias">${inst.strudelAlias}</div>
+                <div class="instrument-name">⋮⋮ ${inst.strudelAlias}</div>
+                <div class="instrument-alias">${inst.exportName}</div>
                 <div class="instrument-channel">ch: ${inst.channel}</div>
             </div>
             <div class="song-item-actions">
-                <button class="sidebar-del-btn" title="Delete ${inst.exportName}">🗑️</button>
+                <button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}">🗑️</button>
             </div>
         `;
         
@@ -432,6 +433,7 @@ function handleDrop(e) {
                 saveInstruments(reordered);
                 renderInstrumentList();
                 autoUpdateInstrumentsFile();
+                reloadInstruments(); // Reload instruments into Strudel
                 console.log('[InstrumentUI] Reordered instruments');
             });
         }
@@ -463,7 +465,7 @@ function openDrawer(instrumentId) {
     currentInstrumentId = instrumentId;
     
     // Populate fields
-    dom.drawerTitle.textContent = `Edit: ${instrument.exportName}`;
+    dom.drawerTitle.textContent = `Edit: ${instrument.strudelAlias}`;
     dom.instExportName.value = instrument.exportName;
     dom.instStrudelAlias.value = instrument.strudelAlias;
     dom.instChannel.value = instrument.channel;
@@ -495,19 +497,27 @@ function closeDrawer() {
 }
 
 /**
- * Handle drawer field changes (export name, alias)
+ * Handle drawer field changes (Strudel alias)
+ * Auto-generates export name from alias
  */
 function handleDrawerChange() {
     if (!currentInstrumentId) return;
     
+    const strudelAlias = dom.instStrudelAlias.value.trim();
+    const exportName = generateExportName(strudelAlias);
+    
+    // Update the display of the auto-generated export name
+    dom.instExportName.value = exportName;
+    
     const changes = {
-        exportName: dom.instExportName.value,
-        strudelAlias: dom.instStrudelAlias.value
+        exportName: exportName,
+        strudelAlias: strudelAlias
     };
     
     updateInstrument(currentInstrumentId, changes);
     renderInstrumentList();
     autoUpdateInstrumentsFile();
+    reloadInstruments(); // Reload instruments into Strudel
 }
 
 /**
@@ -525,6 +535,7 @@ function handleParamChange(paramIndex) {
     
     updateInstrument(currentInstrumentId, { params: newParams });
     autoUpdateInstrumentsFile();
+    reloadInstruments(); // Reload instruments into Strudel
     
     // Play test note (debounced)
     playTestNoteDebounced(newParams);
@@ -557,20 +568,35 @@ function openNewInstrumentModal() {
 function closeNewInstrumentModal() {
     dom.newInstrumentModal.classList.remove('open');
     dom.newInstrumentName.value = '';
-    dom.newInstrumentAlias.value = '';
+}
+
+/**
+ * Generate export name from instrument name
+ * e.g., "bass" -> "zzfxm-bass", "fart-01-smelly" -> "zzfxm-fart-01-smelly"
+ */
+function generateExportName(instrumentName) {
+    // Convert to safe variable name: replace non-alphanumeric chars with underscore
+    let safeName = instrumentName.replace(/[^a-zA-Z0-9]/g, '_');
+    // Ensure it doesn't start with a number
+    if (/^[0-9]/.test(safeName)) safeName = '_' + safeName;
+    return `zzfxm_${safeName}`;
 }
 
 /**
  * Handle create new instrument
  */
 function handleCreateInstrument() {
-    const exportName = dom.newInstrumentName.value.trim();
-    const strudelAlias = dom.newInstrumentAlias.value.trim();
+    const instrumentName = dom.newInstrumentName.value.trim();
     
-    if (!exportName || !strudelAlias) {
-        alert('Please provide both export name and Strudel alias');
+    if (!instrumentName) {
+        alert('Please provide an instrument name');
         return;
     }
+    
+    // The name IS the Strudel alias
+    const strudelAlias = instrumentName;
+    // Auto-generate export name with zzfxm- prefix
+    const exportName = generateExportName(instrumentName);
     
     const instruments = loadInstruments();
     const channel = instruments.length; // Auto-assign next channel
@@ -580,6 +606,7 @@ function handleCreateInstrument() {
     closeNewInstrumentModal();
     renderInstrumentList();
     autoUpdateInstrumentsFile();
+    reloadInstruments(); // Reload instruments into Strudel
     
     // Open drawer to edit
     openDrawer(newInst.id);
@@ -622,6 +649,7 @@ function handleDeleteInstrument() {
     closeDeleteInstrumentModal();
     renderInstrumentList();
     autoUpdateInstrumentsFile();
+    reloadInstruments(); // Reload instruments into Strudel
 }
 
 /**

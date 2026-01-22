@@ -20,7 +20,8 @@ let playingSongFilename = null;
 const dom = {
     repl: document.getElementById('repl'),
     songList: document.getElementById('songList'),
-    currentSongTitle: document.getElementById('currentSongTitle'),
+    songNameInput: document.getElementById('songNameInput'),
+    saveSongNameBtn: document.getElementById('saveSongNameBtn'),
     playBtn: document.getElementById('playBtn'),
     bakeBtn: document.getElementById('bakeBtn'),
     newSongBtn: document.getElementById('newSongBtn'),
@@ -58,7 +59,10 @@ function showWelcome() {
     // Clear state
     currentSongFilename = null;
     playingSongFilename = null;
-    dom.currentSongTitle.innerText = 'Select a song...';
+    dom.songNameInput.value = '';
+    dom.songNameInput.placeholder = 'Select a song...';
+    dom.songNameInput.readOnly = true;
+    dom.saveSongNameBtn.style.display = 'none';
     if(dom.repl.editor) dom.repl.editor.stop();
     renderPlayButton();
     updateSongListVisualizer();
@@ -98,7 +102,10 @@ async function init() {
     // 4. Initialize Instrument UI
     await initInstrumentUI();
     
-    // 5. Setup auto-save on input
+    // 5. Reload instruments from localStorage (in case they differ from static file)
+    await reloadInstruments();
+    
+    // 6. Setup auto-save on input
     setupAutoSave();
     
     // Start in Welcome State
@@ -106,6 +113,27 @@ async function init() {
     
     // Clear status - no song loaded yet
     setStatus('');
+}
+
+/**
+ * Reload instruments into Strudel
+ * Call this after instruments are modified to update the sound registry
+ */
+export async function reloadInstruments() {
+    const { getInstrumentMapping } = await import('./instrument-manager.js');
+    const mapping = getInstrumentMapping();
+    
+    // Build instruments object from mapping
+    const instruments = {};
+    const defragged = (await import('./instrument-manager.js')).getDefragmentedInstruments();
+    
+    defragged.forEach(inst => {
+        instruments[inst.strudelAlias] = inst.params;
+    });
+    
+    // Reload into Strudel
+    loadZzFXInstruments(instruments);
+    console.log('[ReplApp] Reloaded', Object.keys(instruments).length, 'instruments into Strudel');
 }
 
 // --- Auto-Save and Hot-Reload Setup ---
@@ -385,8 +413,12 @@ async function loadSong(filename) {
         
         showEditor();
         currentSongFilename = filename;
-        currentSongDisplayName = filename; // Store for later restoration
-        dom.currentSongTitle.innerText = filename;
+        currentSongDisplayName = filename.replace('.js', ''); // Store without extension
+        originalSongName = currentSongDisplayName; // Track for rename detection
+        dom.songNameInput.value = currentSongDisplayName;
+        dom.songNameInput.readOnly = false; // Make editable
+        dom.songNameInput.placeholder = '';
+        dom.saveSongNameBtn.style.display = 'none'; // Hide save button initially
         
         Array.from(dom.songList.children).forEach(li => {
             const span = li.querySelector('span');
@@ -573,44 +605,23 @@ function setStatus(msg, type = 'normal') {
 }
 
 function showSaveStatus(message = '✅ Saved changes', duration = 2000) {
-    const originalText = dom.currentSongTitle.innerText;
-    const originalColor = dom.currentSongTitle.style.color;
+    // Use the saveStatus span for temporary messages
+    const saveStatus = document.getElementById('saveStatus');
+    if (!saveStatus) return;
     
-    // Fade out
-    dom.currentSongTitle.style.transition = 'opacity 0.2s ease-out';
-    dom.currentSongTitle.style.opacity = '0';
+    saveStatus.innerText = message;
+    saveStatus.style.opacity = '1';
     
-    // Change text and color after fade out
     setTimeout(() => {
-        dom.currentSongTitle.innerText = message;
-        dom.currentSongTitle.style.color = '#00ff66';
-        
-        // Fade in
-        dom.currentSongTitle.style.opacity = '1';
-        
-        // After duration, fade out and restore filename
-        setTimeout(() => {
-            dom.currentSongTitle.style.opacity = '0';
-            
-            setTimeout(() => {
-                dom.currentSongTitle.innerText = currentSongDisplayName;
-                dom.currentSongTitle.style.color = originalColor;
-                dom.currentSongTitle.style.opacity = '1';
-            }, 200); // Wait for fade out
-        }, duration);
-    }, 200); // Wait for fade out
+        saveStatus.style.opacity = '0';
+    }, duration);
 }
 
 function hideSaveStatus() {
-    // Restore the filename immediately with fade
-    dom.currentSongTitle.style.transition = 'opacity 0.2s ease-out';
-    dom.currentSongTitle.style.opacity = '0';
-    
-    setTimeout(() => {
-        dom.currentSongTitle.innerText = currentSongDisplayName;
-        dom.currentSongTitle.style.color = '#888';
-        dom.currentSongTitle.style.opacity = '1';
-    }, 200);
+    const saveStatus = document.getElementById('saveStatus');
+    if (saveStatus) {
+        saveStatus.style.opacity = '0';
+    }
 }
 
 function openModal() {
@@ -653,6 +664,106 @@ function closeDeleteModal() {
 
 
 dom.cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+
+// Song Rename Functionality
+let originalSongName = '';
+
+// Track changes to song name input
+dom.songNameInput.addEventListener('input', () => {
+    if (!currentSongFilename) return;
+    
+    const newName = dom.songNameInput.value.trim();
+    const hasChanged = newName !== originalSongName && newName !== '';
+    
+    // Show/hide save button based on whether name changed
+    dom.saveSongNameBtn.style.display = hasChanged ? 'block' : 'none';
+});
+
+// Save song name on button click
+dom.saveSongNameBtn.addEventListener('click', () => {
+    renameSong();
+});
+
+// Save song name on Enter key
+dom.songNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        renameSong();
+    }
+});
+
+async function renameSong() {
+    if (!currentSongFilename) return;
+    
+    const newName = dom.songNameInput.value.trim();
+    if (!newName || newName === originalSongName) {
+        dom.saveSongNameBtn.style.display = 'none';
+        return;
+    }
+    
+    // Validate name (no special characters that would break filenames)
+    if (!/^[a-zA-Z0-9_-]+$/.test(newName)) {
+        setStatus('Invalid name. Use only letters, numbers, hyphens, and underscores.', 'error');
+        return;
+    }
+    
+    const newFilename = newName + '.js';
+    
+    // Check if name already exists
+    try {
+        const res = await fetch('/api/songs');
+        if (!res.ok) throw new Error('Failed to check existing songs');
+        const files = await res.json();
+        
+        if (files.includes(newFilename) && newFilename !== currentSongFilename) {
+            setStatus('A song with that name already exists', 'error');
+            return;
+        }
+    } catch (e) {
+        console.error(e);
+        setStatus('Error checking song names', 'error');
+        return;
+    }
+    
+    setStatus('Renaming...');
+    
+    try {
+        // Rename via API
+        const res = await fetch('/api/rename-song', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                oldName: currentSongFilename,
+                newName: newFilename
+            })
+        });
+        
+        if (!res.ok) throw new Error('Rename failed');
+        
+        // Update local state
+        const wasPlaying = playingSongFilename === currentSongFilename;
+        currentSongFilename = newFilename;
+        currentSongDisplayName = newName;
+        originalSongName = newName;
+        if (wasPlaying) playingSongFilename = newFilename;
+        
+        // Hide save button
+        dom.saveSongNameBtn.style.display = 'none';
+        
+        // Refresh song list
+        await refreshSongList();
+        
+        setStatus('Renamed successfully', 'success');
+        showSaveStatus('✅ Song renamed');
+        
+    } catch (e) {
+        console.error(e);
+        setStatus('Error renaming song', 'error');
+        // Restore original name on error
+        dom.songNameInput.value = originalSongName;
+        dom.saveSongNameBtn.style.display = 'none';
+    }
+}
 
 dom.confirmDeleteBtn.addEventListener('click', async () => {
     if (songToDelete) {

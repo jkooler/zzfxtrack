@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Strudel to ZzFXM</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Special+Gothic+Condensed+One&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Special+Gothic+Condensed+One&display=swap"
+      rel="stylesheet"
+    />
 
     <!-- Load Strudel REPL Web Component -->
     <!-- Strudel REPL imported in module -->
@@ -80,7 +83,7 @@
 
       .sidebar h1 {
         margin: 0;
-        font-family: 'Special Gothic Condensed One', sans-serif;
+        font-family: "Special Gothic Condensed One", sans-serif;
         font-size: 1.5rem;
         font-weight: 400;
         color: var(--accent-color);
@@ -167,7 +170,8 @@
         overflow: hidden; /* Ensure canvas doesn't spill out */
       }
 
-      .song-item > span, .song-item > .song-item-actions {
+      .song-item > span,
+      .song-item > .song-item-actions {
         position: relative;
         z-index: 2; /* Sit on top of visualizer */
       }
@@ -268,7 +272,7 @@
         background: #000;
         border: 1px solid #444;
         color: #fff;
-        font-family: 'Courier New', monospace;
+        font-family: "Courier New", monospace;
         font-size: 0.9rem;
         box-sizing: border-box;
       }
@@ -327,7 +331,7 @@
       .welcome-content h1 {
         color: var(--accent-color);
         margin-bottom: 20px;
-        font-family: 'Special Gothic Condensed One', sans-serif;
+        font-family: "Special Gothic Condensed One", sans-serif;
         font-size: 4rem; /* 2x bigger */
         /* text-transform: uppercase; REVERTED */
         letter-spacing: 2px;
@@ -478,6 +482,22 @@
         color: #666;
       }
 
+      /* Song Name Input */
+      #songNameInput:not([readonly]) {
+        background: #1a1a1a;
+        border-color: var(--accent-color);
+        color: var(--text-color);
+        cursor: text;
+      }
+      
+      #songNameInput:focus {
+        outline: none;
+        background: #1a1a1a;
+        border-color: var(--accent-color);
+        color: var(--text-color);
+      }
+
+
       /* Modal */
       .modal-overlay {
         position: fixed;
@@ -569,27 +589,40 @@
           <button class="sidebar-tab active" id="songsTab">Songs</button>
           <button class="sidebar-tab" id="instrumentsTab">Instruments</button>
         </div>
-        
+
         <!-- New Song Button -->
         <button id="newSongBtn" style="width: 100%">+ NEW SONG</button>
-        
+
         <!-- New Instrument Button (hidden by default) -->
-        <button id="newInstrumentBtn" style="width: 100%; display: none">+ NEW INSTRUMENT</button>
-        
+        <button id="newInstrumentBtn" style="width: 100%; display: none">
+          + NEW INSTRUMENT
+        </button>
+
         <!-- Download Instruments Button (hidden by default) -->
-        <button id="downloadInstrumentsBtn" style="width: 100%; display: none; margin-top: 8px; background: #1a472a; border-color: #2d7a4a">📥 DOWNLOAD INSTRUMENTS.JS</button>
+        <button
+          id="downloadInstrumentsBtn"
+          style="
+            width: 100%;
+            display: none;
+            margin-top: 8px;
+            background: #1a472a;
+            border-color: #2d7a4a;
+          "
+        >
+          📥 DOWNLOAD INSTRUMENTS.JS
+        </button>
       </div>
-      
+
       <!-- Song List -->
       <ul class="song-list" id="songList">
         <!-- Populated by JS -->
       </ul>
-      
+
       <!-- Instrument List -->
       <ul class="instrument-list" id="instrumentList">
         <!-- Populated by JS -->
       </ul>
-      
+
       <div class="sidebar-footer">
         <h1>STRUDEL TO ZZFXM</h1>
       </div>
@@ -599,136 +632,152 @@
     <aside class="instrument-drawer" id="instrumentDrawer">
       <div class="instrument-drawer-header">
         <h3 id="drawerTitle">Edit Instrument</h3>
-        
+
         <div class="param-group">
           <div class="param-field">
-            <label>Export Name</label>
-            <input type="text" id="instExportName" placeholder="INST_KICKDRUM" />
+            <label>Instrument Name</label>
+            <input type="text" id="instStrudelAlias" placeholder="my-bass" />
+            <div class="param-hint">
+              This is the name you use in Strudel to play this instrument
+            </div>
           </div>
-          
+
           <div class="param-field">
-            <label>Strudel Alias</label>
-            <input type="text" id="instStrudelAlias" placeholder="z-kickdrum" />
+            <label>Export Name</label>
+            <input
+              type="text"
+              id="instExportName"
+              readonly
+              style="background: #111; color: #666"
+            />
+            <div class="param-hint">Auto-generated for ZzFXM export</div>
           </div>
-          
+
           <div class="param-field">
             <label>Channel</label>
-            <input type="number" id="instChannel" readonly style="background: #111; color: #666;" />
+            <input
+              type="number"
+              id="instChannel"
+              readonly
+              style="background: #111; color: #666"
+            />
             <div class="param-hint">Auto-assigned based on order</div>
           </div>
         </div>
-        
+
         <div class="instrument-drawer-actions">
           <button id="testInstrumentBtn" class="primary">▶ Test</button>
           <button id="closeDrawerBtn">Close</button>
         </div>
       </div>
-      
+
       <div class="instrument-drawer-content">
         <div class="param-group">
           <h4>ZzFX Parameters</h4>
-          
+
           <div class="param-field">
             <label>0: Volume</label>
             <input type="number" id="param0" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>1: Randomness</label>
             <input type="number" id="param1" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>2: Frequency (Hz)</label>
             <input type="number" id="param2" step="0.1" />
           </div>
-          
+
           <div class="param-field">
             <label>3: Attack (s)</label>
             <input type="number" id="param3" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>4: Sustain (s)</label>
             <input type="number" id="param4" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>5: Release (s)</label>
             <input type="number" id="param5" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>6: Shape</label>
             <input type="number" id="param6" step="1" min="0" max="5" />
-            <div class="param-hint">0=sine, 1=tri, 2=saw, 3=tan, 4=noise, 5=square</div>
+            <div class="param-hint">
+              0=sine, 1=tri, 2=saw, 3=tan, 4=noise, 5=square
+            </div>
           </div>
-          
+
           <div class="param-field">
             <label>7: Shape Curve</label>
             <input type="number" id="param7" step="0.1" />
           </div>
-          
+
           <div class="param-field">
             <label>8: Slide (Hz/s)</label>
             <input type="number" id="param8" step="0.1" />
           </div>
-          
+
           <div class="param-field">
             <label>9: Delta Slide</label>
             <input type="number" id="param9" step="0.1" />
           </div>
-          
+
           <div class="param-field">
             <label>10: Pitch Jump (Hz)</label>
             <input type="number" id="param10" step="1" />
           </div>
-          
+
           <div class="param-field">
             <label>11: Pitch Jump Time (s)</label>
             <input type="number" id="param11" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>12: Repeat Time (s)</label>
             <input type="number" id="param12" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>13: Noise (detune)</label>
             <input type="number" id="param13" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>14: Modulation (Hz)</label>
             <input type="number" id="param14" step="1" />
           </div>
-          
+
           <div class="param-field">
             <label>15: Bit Crush</label>
             <input type="number" id="param15" step="0.1" />
           </div>
-          
+
           <div class="param-field">
             <label>16: Delay (s)</label>
             <input type="number" id="param16" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>17: Sustain Volume</label>
             <input type="number" id="param17" step="0.01" />
           </div>
-          
+
           <div class="param-field">
             <label>18: Decay</label>
             <input type="number" id="param18" step="0.1" />
           </div>
-          
+
           <div class="param-field">
             <label>19: Tremolo (Hz)</label>
             <input type="number" id="param19" step="0.1" />
           </div>
-          
+
           <div class="param-field">
             <label>20: Filter (Hz)</label>
             <input type="number" id="param20" step="1" />
@@ -746,12 +795,42 @@
         >
           ▶
         </button>
-        <h2
-          id="currentSongTitle"
-          style="margin: 0; font-size: 1rem; color: #888"
-        >
-          Select a song...
-        </h2>
+
+        <!-- Song Name Editor -->
+        <div style="display: flex; align-items: center; gap: 8px">
+          <button
+            id="saveSongNameBtn"
+            title="Save song name"
+            style="
+              width: 32px;
+              height: 32px;
+              padding: 0;
+              display: none;
+              font-size: 16px;
+              background: #1a472a;
+              border-color: #2d7a4a;
+            "
+          >
+            💾
+          </button>
+          <input
+            type="text"
+            id="songNameInput"
+            placeholder="Select a song..."
+            readonly
+            style="
+              background: transparent;
+              border: 1px solid transparent;
+              color: #888;
+              font-size: 1rem;
+              font-family: inherit;
+              padding: 6px 10px;
+              width: 250px;
+              transition: all 0.2s;
+            "
+          />
+        </div>
+
         <span
           id="saveStatus"
           style="
@@ -768,12 +847,34 @@
 
       <div class="welcome-view" id="welcomeView">
         <div class="welcome-content">
-          <h1>Welcome to<br>STRUDEL TO ZZFXM</h1>
-          <p>With this app you can create songs using <a href="https://github.com/KilledByAPixel/ZzFX" target="_blank">ZzFXMicro.js</a> synthesis and <a href="https://codeberg.org/uzu/strudel" target="_blank">Strudel</a>.</p>
-          <p>After creating your song, export it to JSON format and use it in your games or demo projects that use <a href="https://codeberg.org/uzu/zzfxm" target="_blank">ZzFXM</a>.</p>
-          
-          <div style="margin-top: 30px; font-size: 0.9rem; opacity: 0.7; border-top: 1px solid #333; padding-top: 20px;">
-            <strong>NOTE:</strong> Ensure your project uses <strong>ZzFXMicro</strong> (standard for ZzFXM).<br>
+          <h1>Welcome to<br />STRUDEL TO ZZFXM</h1>
+          <p>
+            With this app you can create songs using
+            <a href="https://github.com/KilledByAPixel/ZzFX" target="_blank"
+              >ZzFXMicro.js</a
+            >
+            synthesis and
+            <a href="https://codeberg.org/uzu/strudel" target="_blank"
+              >Strudel</a
+            >.
+          </p>
+          <p>
+            After creating your song, export it to JSON format and use it in
+            your games or demo projects that use
+            <a href="https://codeberg.org/uzu/zzfxm" target="_blank">ZzFXM</a>.
+          </p>
+
+          <div
+            style="
+              margin-top: 30px;
+              font-size: 0.9rem;
+              opacity: 0.7;
+              border-top: 1px solid #333;
+              padding-top: 20px;
+            "
+          >
+            <strong>NOTE:</strong> Ensure your project uses
+            <strong>ZzFXMicro</strong> (standard for ZzFXM).<br />
             The parameter mapping differs from the full ZzFX library.
           </div>
         </div>
@@ -790,10 +891,25 @@
     <!-- Preview Pane (Full Height) -->
     <aside class="preview-pane" id="previewPane">
       <div class="preview-header">
-        <div style="display: flex; gap: 10px; align-items: center;">
-          <button id="bakeBtn" class="primary" disabled style="font-family: 'Special Gothic Condensed One', sans-serif; font-size: 1.1rem; letter-spacing: 1px;">EXPORT</button>
+        <div style="display: flex; gap: 10px; align-items: center">
+          <button
+            id="bakeBtn"
+            class="primary"
+            disabled
+            style="
+              font-family: &quot;Special Gothic Condensed One&quot;, sans-serif;
+              font-size: 1.1rem;
+              letter-spacing: 1px;
+            "
+          >
+            EXPORT
+          </button>
           <button id="previewPlayBtn" title="Play ZzFXM" disabled>▶</button>
-          <span id="statusMsg" class="status-msg" style="margin-left: 10px;"></span>
+          <span
+            id="statusMsg"
+            class="status-msg"
+            style="margin-left: 10px"
+          ></span>
         </div>
       </div>
       <pre id="previewJson"></pre>
@@ -831,16 +947,14 @@
     <div id="newInstrumentModal" class="modal-overlay">
       <div class="modal">
         <h2>New Instrument</h2>
+        <p style="margin: 0 0 15px 0; font-size: 0.85rem">
+          Enter a name for your instrument. This will be the name you use in
+          Strudel.
+        </p>
         <input
           type="text"
           id="newInstrumentName"
-          placeholder="Export name (e.g. INST_BASS)"
-        />
-        <input
-          type="text"
-          id="newInstrumentAlias"
-          placeholder="Strudel alias (e.g. z-bass)"
-          style="margin-top: 10px"
+          placeholder="Instrument name (e.g. bass, kick, lead)"
         />
         <div class="modal-actions">
           <button id="cancelNewInstrument">Cancel</button>

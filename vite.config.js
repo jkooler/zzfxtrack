@@ -122,6 +122,59 @@ const apiPlugin = () => ({
         
         next();
      });
+     
+     // API: Rename Song
+     // POST /api/rename-song
+     server.middlewares.use('/api/rename-song', (req, res, next) => {
+       if (req.method === 'POST') {
+         let body = '';
+         req.on('data', chunk => body += chunk);
+         req.on('end', () => {
+           try {
+             const { oldName, newName } = JSON.parse(body);
+             
+             // Validate filenames
+             if (!oldName || !newName || 
+                 oldName.includes('..') || newName.includes('..') ||
+                 !oldName.endsWith('.js') || !newName.endsWith('.js')) {
+               res.statusCode = 400;
+               res.end('Invalid filename');
+               return;
+             }
+             
+             const oldPath = path.join(SONGS_DIR, oldName);
+             const newPath = path.join(SONGS_DIR, newName);
+             
+             // Check if old file exists
+             if (!fs.existsSync(oldPath)) {
+               res.statusCode = 404;
+               res.end('Song not found');
+               return;
+             }
+             
+             // Check if new name already exists
+             if (fs.existsSync(newPath) && oldPath !== newPath) {
+               res.statusCode = 409;
+               res.end('A song with that name already exists');
+               return;
+             }
+             
+             // Rename the file
+             fs.renameSync(oldPath, newPath);
+             
+             console.log(`[API] Renamed song: ${oldName} -> ${newName}`);
+             res.end('Song renamed successfully');
+             
+           } catch (e) {
+             console.error('[API] Rename error:', e);
+             res.statusCode = 500;
+             res.end(`Error renaming song: ${e.message}`);
+           }
+         });
+         return;
+       }
+       next();
+     });
   }
 });
 
