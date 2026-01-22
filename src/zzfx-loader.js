@@ -154,6 +154,9 @@ function samplesToBuffer(samples, audioCtx) {
     return buffer;
 }
 
+// Track registered instruments to handle cleanups/renames
+let registeredAliases = new Set();
+
 /**
  * Load ZzFX instruments into Strudel's sound system
  */
@@ -162,6 +165,27 @@ export function loadZzFXInstruments(instrumentMap) {
 
     const audioCtx = getAudioContext();
     console.log("🔊 Generating ZzFX previews (ZzFXMicro v1.3.2 compatible)...");
+
+    const newAliases = new Set(Object.keys(instrumentMap));
+
+    // Cleanup: Find aliases that no longer exist and disable them
+    for (const alias of registeredAliases) {
+        if (!newAliases.has(alias)) {
+            console.log(`[ZzFX] invalidating removed instrument: ${alias}`);
+            // Overwrite with a silent handler that warns
+            registerSound(alias, (time, value) => {
+                console.warn(`⚠️ Instrument "${alias}" has been removed or renamed. Please update your code.`);
+                // Return no-op node
+                return {
+                    node: audioCtx.createGain(), // dummy node
+                    stop: () => {}
+                };
+            });
+        }
+    }
+    
+    // Update our registry
+    registeredAliases = newAliases;
 
     for (const [id, params] of Object.entries(instrumentMap)) {
         // Pre-calculate base info
