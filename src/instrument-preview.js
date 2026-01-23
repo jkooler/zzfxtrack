@@ -38,15 +38,20 @@ export function stopTestNote() {
  * @param {Array} params - ZzFX parameters (21 numbers)
  * @param {number} frequency - Test frequency in Hz (default: 440)
  */
-export function playTestNote(params, frequency = 440) {
+export function playTestNote(params, frequency = null) {
     stopTestNote();
     
     try {
         const ctx = getPreviewAudioContext();
         
-        // Clone params and set frequency
+        // Clone params
         const testParams = [...params];
-        testParams[2] = frequency; // Set test frequency
+        
+        // Only override frequency if explicitly provided
+        if (frequency !== null) {
+            testParams[2] = frequency;
+        }
+        // Otherwise use the instrument's own frequency (params[2])
         
         // Ensure we have all 21 parameters
         while (testParams.length < 21) testParams.push(0);
@@ -78,7 +83,7 @@ export function playTestNote(params, frequency = 440) {
             }
         };
         
-        console.log('[InstrumentPreview] Playing test note at', frequency, 'Hz');
+        console.log('[InstrumentPreview] Playing test note at', testParams[2], 'Hz');
     } catch (e) {
         console.error('[InstrumentPreview] Failed to play test note:', e);
     }
@@ -90,7 +95,7 @@ export function playTestNote(params, frequency = 440) {
  * @param {number} frequency - Test frequency
  * @param {number} debounceMs - Debounce delay in milliseconds (default: 300)
  */
-export function playTestNoteDebounced(params, frequency = 440, debounceMs = 300) {
+export function playTestNoteDebounced(params, frequency = null, debounceMs = 300) {
     // Clear existing timeout
     if (previewTimeout) {
         clearTimeout(previewTimeout);

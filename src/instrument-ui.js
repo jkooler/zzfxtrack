@@ -550,8 +550,8 @@ function handleTestInstrument() {
     const instrument = getInstrumentById(currentInstrumentId);
     if (!instrument) return;
     
-    // Play immediately (no debounce)
-    playTestNoteDebounced(instrument.params, 440, 0);
+    // Play immediately (no debounce), using instrument's own frequency
+    playTestNoteDebounced(instrument.params, null, 0);
 }
 
 /**
