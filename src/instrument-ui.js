@@ -56,6 +56,13 @@ const dom = {
     deleteInstrumentText: document.getElementById('deleteInstrumentText'),
     confirmDeleteInstrument: document.getElementById('confirmDeleteInstrument'),
     cancelDeleteInstrument: document.getElementById('cancelDeleteInstrument'),
+
+    // Import ZzFX
+    importZzFXInput: document.getElementById('importZzFXInput'),
+    importZzFXBtn: document.getElementById('importZzFXBtn'),
+    importConfirmationModal: document.getElementById('importConfirmationModal'),
+    confirmImportBtn: document.getElementById('confirmImportBtn'),
+    cancelImportBtn: document.getElementById('cancelImportBtn'),
 };
 
 // Get all parameter inputs (0-20)
@@ -113,6 +120,11 @@ function setupEventListeners() {
     // Delete instrument
     dom.cancelDeleteInstrument.addEventListener('click', closeDeleteInstrumentModal);
     dom.confirmDeleteInstrument.addEventListener('click', handleDeleteInstrument);
+
+    // Import ZzFX
+    if(dom.importZzFXBtn) dom.importZzFXBtn.addEventListener('click', handleImportZzFX);
+    if(dom.confirmImportBtn) dom.confirmImportBtn.addEventListener('click', handleConfirmImport);
+    if(dom.cancelImportBtn) dom.cancelImportBtn.addEventListener('click', closeImportModal);
     
     // Drawer
     dom.closeDrawerBtn.addEventListener('click', closeDrawer);
@@ -650,6 +662,84 @@ function handleDeleteInstrument() {
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
+}
+
+/**
+ * Handle Import ZzFX button click
+ */
+let pendingImportParams = null;
+
+function handleImportZzFX() {
+    const inputVal = dom.importZzFXInput.value.trim();
+    if (!inputVal) return;
+
+    // Parse params
+    // Example: .5,.05,140,0,.02,.28,3,1.4,30,98,477,0,0,1,172,0,0,.9,.13,0,-1403
+    // Remove brackets if any, split by comma
+    const cleanStr = inputVal.replace(/[\[\]]/g, '');
+    const parts = cleanStr.split(',').map(s => s.trim()).filter(s => s !== '');
+    
+    // Validate
+    if (parts.length === 0) {
+        alert('Invalid format. Please paste comma-separated numbers.');
+        return;
+    }
+
+    const params = parts.map(p => parseFloat(p));
+    if (params.some(isNaN)) {
+        alert('Invalid data. Some values are not numbers.');
+        return;
+    }
+
+    // Store for confirmation
+    pendingImportParams = params;
+    
+    // Show confirmation modal
+    dom.importConfirmationModal.classList.add('open');
+}
+
+function closeImportModal() {
+    dom.importConfirmationModal.classList.remove('open');
+    pendingImportParams = null;
+}
+
+function handleConfirmImport() {
+    if (!pendingImportParams || !currentInstrumentId) {
+        closeImportModal();
+        return;
+    }
+
+    // Pad array with zeros if shorter than 21 (optional, but good for safety)
+    // or just rely on updateInstrument handling it. 
+    // ZzFX params can be variable length, but our UI expects up to index 20 (21 items).
+    // Let's ensure it has at least enough items for the standard ZzFXMicro.
+    
+    // Update instrument
+    updateInstrument(currentInstrumentId, { params: pendingImportParams });
+    
+    // Update inputs in drawer
+    const instrument = getInstrumentById(currentInstrumentId);
+    if (instrument) {
+        instrument.params.forEach((value, index) => {
+            if (paramInputs[index]) {
+                paramInputs[index].value = value !== undefined ? value : 0;
+            }
+        });
+    }
+
+    autoUpdateInstrumentsFile();
+    reloadInstruments();
+    
+    // Visual feedback
+    console.log('[InstrumentUI] Imported ZzFX params:', pendingImportParams);
+    
+    // Clear input
+    dom.importZzFXInput.value = '';
+    
+    closeImportModal();
+    
+    // Play test note
+    playTestNoteDebounced(pendingImportParams, null, 0);
 }
 
 /**

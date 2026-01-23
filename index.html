@@ -628,6 +628,18 @@
       </div>
     </aside>
 
+    <!-- Import Confirmation Modal -->
+    <div class="modal-overlay" id="importConfirmationModal">
+      <div class="modal">
+        <h2>Importing ZzFX sound</h2>
+        <p>Are you sure you want to import this sound to the current instrument? This will overwrite existing parameters.</p>
+        <div class="modal-actions">
+          <button id="cancelImportBtn">Cancel</button>
+          <button id="confirmImportBtn" class="primary">Yes, import</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Instrument Editor Drawer -->
     <aside class="instrument-drawer" id="instrumentDrawer">
       <div class="instrument-drawer-header">
@@ -662,6 +674,16 @@
               style="background: #111; color: #666"
             />
             <div class="param-hint">Auto-assigned based on order</div>
+          </div>
+
+          <!-- Import ZzFX Section -->
+          <div class="param-field" style="border-top: 1px solid #333; padding-top: 10px; margin-top: 10px;">
+            <label>Import ZzFX Data</label>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="importZzFXInput" placeholder=".5,.05,140,0..." style="flex: 1;" />
+                <button id="importZzFXBtn" style="padding: 8px 12px;">Import</button>
+            </div>
+            <div class="param-hint">Paste comma-separated values</div>
           </div>
         </div>
 

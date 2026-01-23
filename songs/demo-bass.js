@@ -4,11 +4,14 @@ export const bpm = 122;
 
 export const pattern = stack(
   // Kick
-  note("c2(3,8)").s("test-kick"),
+  note("bb1(3,8)").s("test-kick"),
   
   // Snare
   note("~ c2 ~ c2").s("test-clap"),
   
   // Funky Lead
-  note("g4 [bb3 c4] f3 [f4 eb4]").s("test-lead")
+  note("g4 [bb3 c4] f3 [f4 eb4]").s("test-lead"),
+
+  // Test pad
+  sound("<bd bd hh bd>")
 );
