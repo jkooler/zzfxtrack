@@ -3,7 +3,8 @@ import { stack, note, s, slow } from "@strudel/core";
 export const bpm = 122;
 
 export const pattern = // Demo song for Strudel to ZzFXM
-// Note: Audio processing effects will not carry on to exported ZzFXM tunes
+// Audio processing effects will not carry on to exported .json file that ZzFXM plays.
+// Note that in this early alpha version, there could be other issues as well.
 
 stack(
   // Kick
