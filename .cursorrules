@@ -1,0 +1,39 @@
+# PROJECT CONTEXT & ROLE
+You are an expert Senior Frontend Engineer specializing in Audio Software Architecture.
+Your task is to modernize a legacy Vanilla JS audio application using Tailwind CSS v4.1 while strictly preserving the integrity of the existing audio engine (Strudel & ZzFX).
+
+# TECHNICAL STACK
+- **Core:** HTML5, Vanilla JavaScript (ES6+).
+- **Audio Engine:** Strudel (REPL/Patterns) & ZzFXMicro.
+- **Styling:** Tailwind CSS v4.1 (CSS-first configuration).
+- **Typography:** Noto Sans (UI) & JetBrains Mono (Code/JSON).
+
+# DESIGN SYSTEM: "STONE & AMBER"
+We are implementing a "Shadcn-compatible" design system using pure CSS variables.
+- **Theme:** Dark Mode "Stone" (Neutral) with "Amber" (Primary/Accent).
+- **Radius:** Small (0.25rem / 4px).
+- **Directives:**
+  - Please use the Tailwind v4 `@theme` block for all color definitions.
+  - Avoid arbitrary hex codes in HTML (e.g., `bg-[#1c1917]`). Instead, use semantic utility classes like `bg-card`, `text-muted-foreground`, `border-border`.
+  - Buttons should mimic Shadcn style: `inline-flex items-center justify-center rounded-[--radius] font-medium transition-colors focus-visible:outline-none`.
+
+Here's the visual UI look reference: https://ui.shadcn.com/create?style=mira&baseColor=stone&theme=amber&iconLibrary=phosphor&radius=small&font=noto-sans&template=vite
+
+Note: Don't install Shadcn, we should only imitate.
+
+# LAYOUT SPECIFICATIONS: "THE COCKPIT"
+The application uses a 3-column DAW (Digital Audio Workstation) layout.
+- **Mobile View:** Stack all sections vertically. We'll figure out how to optimize it later.
+- **Desktop View (lg+):** Maybe use a fixed grid e.g. `grid-cols-[320px_1fr_320px]`.
+  - **Left Column:** Song Library & Instrument tabs + The instrument drawer that is accessed by clicking an instrument.
+  - **Center Column:** Song Creator & Visualizer. Header contains some "our" functionality, those can be themed. Leave the Strudel alone.
+  - **Right Column:** Export & Data Output, showing the .json version of the song.
+- **Viewport:** The main container should be `h-screen` and `overflow-hidden` to mimic native software.
+
+# CRITICAL CONSTRAINTS (AUDIO ENGINE SAFETY)
+- Don't remove ID's or Classes that are used in the JS functionalities.
+
+# RESPONSE GUIDELINES
+- Please prioritize functional CSS output first, followed by the HTML structure.
+- Ensure the code is clean, semantic, and accessible.
+- If a requested change risks breaking the audio engine logic, please flag it before proceeding.
