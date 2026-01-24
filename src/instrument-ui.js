@@ -5,6 +5,7 @@
 
 import {
     loadInstruments,
+    saveInstruments,
     createInstrument,
     updateInstrument,
     deleteInstrument,
@@ -57,6 +58,14 @@ const dom = {
     confirmDeleteInstrument: document.getElementById('confirmDeleteInstrument'),
     cancelDeleteInstrument: document.getElementById('cancelDeleteInstrument'),
 
+    // Sync UI
+    initOverlay: document.getElementById('initOverlay'),
+    instrumentSyncModal: document.getElementById('instrumentSyncModal'),
+    syncLocalList: document.getElementById('syncLocalList'),
+    syncFileList: document.getElementById('syncFileList'),
+    syncKeepLocalBtn: document.getElementById('syncKeepLocalBtn'),
+    syncLoadFileBtn: document.getElementById('syncLoadFileBtn'),
+
     // Import ZzFX
     importZzFXInput: document.getElementById('importZzFXInput'),
     importZzFXBtn: document.getElementById('importZzFXBtn'),
@@ -76,28 +85,23 @@ for (let i = 0; i <= 20; i++) {
  */
 export async function initInstrumentUI() {
     console.log('[InstrumentUI] Initializing...');
-    
-    // Check if migration is needed
-    if (needsMigration()) {
-        console.log('[InstrumentUI] Migration needed, importing from instruments.js');
-        try {
-            // Import the current instruments
-            const { instruments: instrumentsObj, instrumentMapping } = await import('../instruments.js');
-            migrateFromFile({ instruments: instrumentsObj, instrumentMapping });
-        } catch (e) {
-            console.error('[InstrumentUI] Migration failed:', e);
-        }
-    }
-    
+
+    showInitOverlay();
+
     // Setup event listeners
     setupEventListeners();
-    
+
+    // Resolve initial sync (local vs file)
+    await syncInstrumentSources();
+
+    // Normalize existing aliases in localStorage
+    normalizeLocalInstruments();
+
     // Render instrument list
     renderInstrumentList();
-    
-    // Generate initial instruments.js file
-    autoUpdateInstrumentsFile();
-    
+
+    hideInitOverlay();
+
     console.log('[InstrumentUI] Initialized');
 }
 
@@ -143,6 +147,256 @@ function setupEventListeners() {
     
     // Parameter ordering toggle
     setupParameterOrdering();
+}
+
+function showInitOverlay() {
+    if (dom.initOverlay) {
+        dom.initOverlay.classList.add('active');
+    }
+}
+
+function hideInitOverlay() {
+    if (dom.initOverlay) {
+        dom.initOverlay.classList.remove('active');
+    }
+}
+
+function getInstrumentDisplayName(instrument) {
+    return instrument?.strudelAlias || instrument?.exportName || 'unnamed';
+}
+
+function sanitizeExportName(value) {
+    let safe = String(value || '');
+    safe = safe.replace(/[^a-zA-Z0-9_$]/g, '_');
+    if (/^[0-9]/.test(safe)) safe = `_${safe}`;
+    return safe || 'UNTITLED';
+}
+
+function sanitizeStrudelAlias(value) {
+    let safe = String(value || '')
+        .trim()
+        .replace(/[^a-zA-Z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    if (!safe) safe = 'untitled';
+    if (/^[0-9]/.test(safe)) safe = `z-${safe}`;
+    return safe;
+}
+
+function normalizeLocalInstruments() {
+    const instruments = loadInstruments();
+    let didChange = false;
+
+    const normalized = instruments.map((inst) => {
+        const safeAlias = sanitizeStrudelAlias(inst.strudelAlias);
+        const safeExport = generateExportName(safeAlias);
+        const updated = { ...inst };
+
+        if (safeAlias !== inst.strudelAlias) {
+            updated.strudelAlias = safeAlias;
+            didChange = true;
+        }
+        if (safeExport !== inst.exportName) {
+            updated.exportName = safeExport;
+            didChange = true;
+        }
+        return updated;
+    });
+
+    if (didChange) {
+        saveInstruments(normalized);
+        autoUpdateInstrumentsFile();
+        reloadInstruments();
+    }
+}
+
+function getFingerprint(instruments = []) {
+    return JSON.stringify(
+        instruments
+            .map((inst) => ({
+                name: getInstrumentDisplayName(inst),
+                params: Array.isArray(inst.params) ? inst.params : []
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+    );
+}
+
+async function fetchServerInstruments() {
+    try {
+        const response = await fetch('/api/instruments', { cache: 'no-store' });
+        if (!response.ok) {
+            return null;
+        }
+        return await response.json();
+    } catch (e) {
+        console.warn('[InstrumentUI] Could not fetch instruments from server:', e);
+        return null;
+    }
+}
+
+function buildServerInstrumentList(serverData) {
+    const list = [];
+    const instruments = serverData?.instruments || {};
+
+    if (serverData?.instrumentMapping) {
+        Object.entries(serverData.instrumentMapping).forEach(([alias]) => {
+            let params = instruments?.[alias];
+            if (!params) {
+                const aliasUpper = alias.toUpperCase();
+                const aliasLower = alias.toLowerCase();
+                params = instruments?.[aliasUpper] || instruments?.[aliasLower];
+            }
+            if (Array.isArray(params)) {
+                list.push({
+                    strudelAlias: alias,
+                    params
+                });
+            }
+        });
+        return list;
+    }
+
+    Object.entries(instruments).forEach(([alias, params]) => {
+        if (Array.isArray(params)) {
+            list.push({
+                strudelAlias: alias,
+                params
+            });
+        }
+    });
+
+    return list;
+}
+
+function renderSyncList(listEl, names, highlightSet, paramConflictSet) {
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    if (!names.length) {
+        const li = document.createElement('li');
+        li.textContent = '(empty)';
+        listEl.appendChild(li);
+        return;
+    }
+
+    names.forEach((name) => {
+        const li = document.createElement('li');
+        if (paramConflictSet?.has(name)) {
+            li.textContent = `${name} (Parameter conflict)`;
+        } else {
+            li.textContent = name;
+        }
+        li.classList.add('sync-list-item');
+        if (highlightSet?.has(name)) {
+            li.classList.add('highlight');
+        }
+        listEl.appendChild(li);
+    });
+}
+
+function showSyncModal(localInstruments, fileInstruments) {
+    if (!dom.instrumentSyncModal) {
+        return Promise.resolve('local');
+    }
+
+    const localNames = localInstruments.map(getInstrumentDisplayName).sort();
+    const fileNames = fileInstruments.map(getInstrumentDisplayName).sort();
+    const localSet = new Set(localNames);
+    const fileSet = new Set(fileNames);
+    const localOnly = new Set(localNames.filter((name) => !fileSet.has(name)));
+    const fileOnly = new Set(fileNames.filter((name) => !localSet.has(name)));
+
+    const localParamMap = new Map();
+    const fileParamMap = new Map();
+
+    localInstruments.forEach((inst) => {
+        const name = getInstrumentDisplayName(inst);
+        const params = Array.isArray(inst.params) ? inst.params : [];
+        localParamMap.set(name, JSON.stringify(params));
+    });
+    fileInstruments.forEach((inst) => {
+        const name = getInstrumentDisplayName(inst);
+        const params = Array.isArray(inst.params) ? inst.params : [];
+        fileParamMap.set(name, JSON.stringify(params));
+    });
+
+    const paramConflicts = new Set();
+    localNames.forEach((name) => {
+        if (fileParamMap.has(name) && localParamMap.get(name) !== fileParamMap.get(name)) {
+            paramConflicts.add(name);
+        }
+    });
+
+    const localHighlight = new Set([...localOnly, ...paramConflicts]);
+    const fileHighlight = new Set([...fileOnly, ...paramConflicts]);
+
+    renderSyncList(dom.syncLocalList, localNames, localHighlight, paramConflicts);
+    renderSyncList(dom.syncFileList, fileNames, fileHighlight, paramConflicts);
+
+    dom.instrumentSyncModal.classList.add('open');
+
+    return new Promise((resolve) => {
+        const handleLocal = () => {
+            cleanup();
+            resolve('local');
+        };
+        const handleFile = () => {
+            cleanup();
+            resolve('file');
+        };
+        const cleanup = () => {
+            dom.instrumentSyncModal.classList.remove('open');
+            dom.syncKeepLocalBtn?.removeEventListener('click', handleLocal);
+            dom.syncLoadFileBtn?.removeEventListener('click', handleFile);
+        };
+
+        dom.syncKeepLocalBtn?.addEventListener('click', handleLocal);
+        dom.syncLoadFileBtn?.addEventListener('click', handleFile);
+    });
+}
+
+async function syncInstrumentSources() {
+    const localInstruments = loadInstruments();
+    const serverData = await fetchServerInstruments();
+
+    if (!serverData) {
+        if (needsMigration()) {
+            console.log('[InstrumentUI] Migration needed, importing from instruments.js');
+            try {
+                const cacheBust = `?t=${Date.now()}`;
+                const { instruments: instrumentsObj, instrumentMapping } = await import(`../instruments.js${cacheBust}`);
+                migrateFromFile({ instruments: instrumentsObj, instrumentMapping });
+            } catch (e) {
+                console.error('[InstrumentUI] Migration failed:', e);
+            }
+        }
+        return;
+    }
+
+    const fileInstruments = buildServerInstrumentList(serverData);
+    const localFingerprint = getFingerprint(localInstruments);
+    const fileFingerprint = getFingerprint(fileInstruments);
+
+    if (localFingerprint === fileFingerprint) {
+        if (fileInstruments.length > 0 || localInstruments.length > 0) {
+            migrateFromFile(serverData);
+        }
+        return;
+    }
+
+    if (localInstruments.length === 0 && fileInstruments.length > 0) {
+        migrateFromFile(serverData);
+        return;
+    }
+
+    hideInitOverlay();
+    const choice = await showSyncModal(localInstruments, fileInstruments);
+
+    if (choice === 'file') {
+        migrateFromFile(serverData);
+    } else {
+        await autoUpdateInstrumentsFile();
+    }
 }
 
 /**
@@ -515,7 +769,11 @@ function closeDrawer() {
 function handleDrawerChange() {
     if (!currentInstrumentId) return;
     
-    const strudelAlias = dom.instStrudelAlias.value.trim();
+    const rawAlias = dom.instStrudelAlias.value;
+    const strudelAlias = sanitizeStrudelAlias(rawAlias);
+    if (rawAlias !== strudelAlias) {
+        dom.instStrudelAlias.value = strudelAlias;
+    }
     const exportName = generateExportName(strudelAlias);
     
     // Update the display of the auto-generated export name
@@ -587,10 +845,7 @@ function closeNewInstrumentModal() {
  * e.g., "bass" -> "zzfxm-bass", "fart-01-smelly" -> "zzfxm-fart-01-smelly"
  */
 function generateExportName(instrumentName) {
-    // Convert to safe variable name: replace non-alphanumeric chars with underscore
-    let safeName = instrumentName.replace(/[^a-zA-Z0-9]/g, '_');
-    // Ensure it doesn't start with a number
-    if (/^[0-9]/.test(safeName)) safeName = '_' + safeName;
+    const safeName = sanitizeExportName(instrumentName);
     return `zzfxm_${safeName}`;
 }
 
@@ -606,9 +861,9 @@ function handleCreateInstrument() {
     }
     
     // The name IS the Strudel alias
-    const strudelAlias = instrumentName;
+    const strudelAlias = sanitizeStrudelAlias(instrumentName);
     // Auto-generate export name with zzfxm- prefix
-    const exportName = generateExportName(instrumentName);
+    const exportName = generateExportName(strudelAlias);
     
     const instruments = loadInstruments();
     const channel = instruments.length; // Auto-assign next channel

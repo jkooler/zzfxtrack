@@ -558,6 +558,76 @@
         justify-content: flex-end;
         gap: 12px;
       }
+      .modal.modal-wide {
+        width: 720px;
+        max-width: 90vw;
+      }
+      .sync-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 12px;
+      }
+      .sync-column {
+        background: #121212;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 12px;
+      }
+      .sync-column-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .sync-badge {
+        font-size: 0.75rem;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid #333;
+        color: #aaa;
+      }
+      .sync-badge.local {
+        border-color: #5a3b00;
+        color: #f2a854;
+      }
+      .sync-badge.file {
+        border-color: #2a2a2a;
+        color: #9aa0a6;
+      }
+      .sync-list {
+        max-height: 240px;
+        overflow-y: auto;
+        margin: 0;
+        padding-left: 16px;
+        color: #ccc;
+        font-size: 0.85rem;
+        line-height: 1.4;
+      }
+      .sync-list-item.highlight {
+        font-weight: 600;
+        color: #fff;
+      }
+      .init-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1100;
+      }
+      .init-overlay.active {
+        display: flex;
+      }
+      .init-overlay-content {
+        background: #181818;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 16px 20px;
+        color: #ddd;
+        font-size: 1rem;
+      }
 
       /* Sidebar Item Delete */
       .song-item-actions {
@@ -936,6 +1006,41 @@
       </div>
       <pre id="previewJson"></pre>
     </aside>
+
+    <!-- Initializing Overlay -->
+    <div id="initOverlay" class="init-overlay">
+      <div class="init-overlay-content">Initializing...</div>
+    </div>
+
+    <!-- Instrument Sync Modal -->
+    <div id="instrumentSyncModal" class="modal-overlay">
+      <div class="modal modal-wide">
+        <h2>Instrument Conflict Detected</h2>
+        <p>Choose which set to load. This will overwrite the other source.</p>
+        <div class="sync-columns">
+          <div class="sync-column">
+            <div class="sync-column-header">
+              <strong>Browser (Local)</strong>
+              <span class="sync-badge local">Browser</span>
+            </div>
+            <ol id="syncLocalList" class="sync-list"></ol>
+          </div>
+          <div class="sync-column">
+            <div class="sync-column-header">
+              <strong>File (Disk)</strong>
+              <span class="sync-badge file">On Disk</span>
+            </div>
+            <ol id="syncFileList" class="sync-list"></ol>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="syncKeepLocalBtn">Keep Browser Data (Overwrite File)</button>
+          <button id="syncLoadFileBtn" class="primary">
+            Load File Data (Overwrite Browser)
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- New Song Modal -->
     <div id="newSongModal" class="modal-overlay">

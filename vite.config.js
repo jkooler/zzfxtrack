@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import fs from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'url';
 
 // Helper to resolve paths
 const SONGS_DIR = path.resolve(__dirname, 'songs');
@@ -182,6 +183,35 @@ const apiPlugin = () => ({
 const updateInstrumentsPlugin = () => ({
   name: 'update-instruments-api',
   configureServer(server) {
+    server.middlewares.use('/api/instruments', async (req, res, next) => {
+      if (req.method !== 'GET') {
+        return next();
+      }
+
+      const filePath = path.resolve(__dirname, 'instruments.js');
+
+      if (!fs.existsSync(filePath)) {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
+
+      try {
+        const moduleUrl = `${pathToFileURL(filePath).href}?t=${Date.now()}`;
+        const moduleData = await import(moduleUrl);
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          instruments: moduleData.instruments || {},
+          instrumentMapping: moduleData.instrumentMapping || {},
+          instrumentArray: moduleData.instrumentArray || []
+        }));
+      } catch (e) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+
     server.middlewares.use('/api/update-instruments', (req, res, next) => {
       if (req.method === 'POST') {
         const filePath = path.resolve(__dirname, 'instruments.js');

@@ -7,12 +7,34 @@ import { getDefragmentedInstruments, getInstrumentMapping } from './instrument-m
 
 /**
  * Format a single instrument export
- * @param {Object} instrument - Instrument object
+ * @param {string} exportName - Safe export name
+ * @param {Array} params - ZzFX params
  * @returns {string} Formatted export line
  */
-function formatInstrumentExport(instrument) {
-    const paramsStr = JSON.stringify(instrument.params).replace(/"/g, '');
-    return `export const ${instrument.exportName} = ${paramsStr};`;
+function formatInstrumentExport(exportName, params) {
+    const paramsStr = JSON.stringify(params).replace(/"/g, '');
+    return `export const ${exportName} = ${paramsStr};`;
+}
+
+function toSafeExportName(name) {
+    let safe = String(name || 'INST_UNTITLED');
+    safe = safe.replace(/[^a-zA-Z0-9_$]/g, '_');
+    if (/^[0-9]/.test(safe)) safe = `_${safe}`;
+    if (!safe) safe = 'INST_UNTITLED';
+    return safe;
+}
+
+function toSafeAlias(alias) {
+    let safe = String(alias || 'unnamed');
+    safe = safe
+        .trim()
+        .replace(/[^a-zA-Z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    if (!safe) safe = 'unnamed';
+    if (/^[0-9]/.test(safe)) safe = `z-${safe}`;
+    if (!safe) safe = 'unnamed';
+    return safe;
 }
 
 /**
@@ -20,7 +42,10 @@ function formatInstrumentExport(instrument) {
  * @returns {string} File content
  */
 export function generateInstrumentsFile() {
-    const defragged = getDefragmentedInstruments();
+    const defragged = getDefragmentedInstruments().map((inst) => ({
+        ...inst,
+        safeExportName: toSafeExportName(inst.exportName)
+    }));
     const mapping = getInstrumentMapping();
     
     let content = `// instruments.js\n`;
@@ -36,7 +61,7 @@ export function generateInstrumentsFile() {
     
     // Export individual instruments
     defragged.forEach(inst => {
-        content += formatInstrumentExport(inst) + '\n';
+        content += formatInstrumentExport(inst.safeExportName, inst.params) + '\n';
     });
     
     content += '\n';
@@ -51,7 +76,8 @@ export function generateInstrumentsFile() {
     
     Object.entries(mapping).forEach(([alias, channel], index, arr) => {
         const comma = index < arr.length - 1 ? ',' : '';
-        content += `    "${alias}": ${channel}${comma}\n`;
+        const safeAlias = toSafeAlias(alias);
+        content += `    "${safeAlias}": ${channel}${comma}\n`;
     });
     
     content += `};\n\n`;
@@ -62,7 +88,8 @@ export function generateInstrumentsFile() {
     
     defragged.forEach((inst, index, arr) => {
         const comma = index < arr.length - 1 ? ',' : '';
-        content += `    "${inst.strudelAlias}": ${inst.exportName}${comma}\n`;
+        const safeAlias = toSafeAlias(inst.strudelAlias);
+        content += `    "${safeAlias}": ${inst.safeExportName}${comma}\n`;
     });
     
     content += `};\n\n`;
@@ -73,7 +100,7 @@ export function generateInstrumentsFile() {
     
     defragged.forEach((inst, index, arr) => {
         const comma = index < arr.length - 1 ? ',' : '';
-        content += `    ${inst.exportName}${comma}\n`;
+        content += `    ${inst.safeExportName}${comma}\n`;
     });
     
     content += `];\n`;
