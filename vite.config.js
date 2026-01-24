@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import tailwindcss from '@tailwindcss/vite';
 
 // Helper to resolve paths
 const SONGS_DIR = path.resolve(__dirname, 'songs');
@@ -236,7 +237,7 @@ const updateInstrumentsPlugin = () => ({
 });
 
 export default defineConfig({
-  plugins: [apiPlugin(), updateInstrumentsPlugin()],
+  plugins: [tailwindcss(), apiPlugin(), updateInstrumentsPlugin()],
   // Ensure we can import from src/
   resolve: {
     dedupe: [

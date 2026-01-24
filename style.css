@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans:wght@300;400;500;700&display=swap");
+
+@theme {
+  --font-sans: "Noto Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+
+  /* Map Shadcn semantic colors to variables */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  /* Dark Mode Default (Stone & Amber) */
+  /* Stone 950 ~ #0c0a09 -> hsl(24, 5.7%, 8.2%) */
+  --background: hsl(24 5.7% 8.2%);
+  /* Stone 50 ~ #fafaf9 -> hsl(60, 9.1%, 97.8%) */
+  --foreground: hsl(60 9.1% 97.8%);
+
+  /* Stone 900 ~ #1c1917 -> hsl(24 5.4% 10.9%) - Adjusted for Card */
+  --card: hsl(24 5.4% 10.9%);
+  --card-foreground: hsl(60 9.1% 97.8%);
+
+  /* Popover same as background or slightly lighter */
+  --popover: hsl(24 5.7% 8.2%);
+  --popover-foreground: hsl(60 9.1% 97.8%);
+
+  /* Amber 500 ~ #f59e0b -> hsl(45 93% 47%) */
+  --primary: hsl(45 93% 47%);
+  --primary-foreground: hsl(24 9.8% 10%); /* Dark text on amber */
+
+  /* Stone 800 ~ #292524 -> hsl(24 5.4% 15.1%) */
+  --secondary: hsl(24 5.4% 15.1%);
+  --secondary-foreground: hsl(60 9.1% 97.8%);
+
+  /* Stone 800ish */
+  --muted: hsl(24 5.4% 15.1%);
+  --muted-foreground: hsl(24 5.4% 63.9%); /* Stone 400 */
+
+  /* Stone 800 for accent */
+  --accent: hsl(24 5.4% 15.1%);
+  --accent-foreground: hsl(60 9.1% 97.8%);
+
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(60 9.1% 97.8%);
+
+  /* Stone 800 for borders */
+  --border: hsl(24 5.4% 15.1%);
+
+  /* Stone 800 for inputs */
+  --input: hsl(24 5.4% 15.1%);
+
+  /* Amber 500 ring */
+  --ring: hsl(45 93% 47%);
+
+  --radius: 0.125rem; /* small */
+}
+
+/* Base style resets and global defaults */
+body {
+  @apply bg-background text-foreground font-sans antialiased overflow-hidden h-screen;
+  display: grid;
+  grid-template-columns: 260px auto 1fr auto; /* Sidebar | Drawer | Main | Preview */
+  grid-template-rows: 100vh;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+
+/* Dynamic Classes used by JS */
+.song-list {
+  @apply list-none m-0 p-2 space-y-1;
+}
+
+.instrument-list {
+  @apply list-none m-0 p-2 space-y-1;
+}
+.instrument-list.active {
+    @apply block;
+}
+
+.song-item {
+  @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 relative overflow-hidden text-sm;
+}
+.song-item.active {
+  @apply bg-accent text-accent-foreground border-l-2 border-primary;
+}
+
+.song-item-actions {
+  @apply opacity-0 transition-opacity flex items-center gap-1;
+}
+.song-item:hover .song-item-actions {
+  @apply opacity-100;
+}
+
+.instrument-item {
+    @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 text-sm;
+}
+.instrument-item.active {
+    @apply bg-accent text-accent-foreground border-l-2 border-primary;
+}
+
+.instrument-info {
+    @apply flex-1 min-w-0 mr-2;
+}
+.instrument-name {
+    @apply font-bold truncate text-foreground text-sm block;
+}
+.instrument-alias {
+    @apply text-xs text-muted-foreground truncate block;
+}
+.instrument-channel {
+    @apply text-[10px] font-mono text-muted-foreground block opacity-70;
+}
+
+.sidebar-del-btn {
+    @apply text-muted-foreground hover:text-destructive transition-colors p-1 bg-transparent border-0 cursor-pointer;
+}
+
+.song-visualizer {
+    @apply absolute inset-0 z-0 opacity-20 pointer-events-none w-full h-full;
+}
+
+.sync-list-item {
+    @apply p-2 border-b border-border/50 last:border-0 text-sm;
+}
+.sync-list-item.highlight {
+    @apply font-bold text-primary;
+}

@@ -91,9 +91,12 @@ export async function initInstrumentUI() {
     // Setup event listeners
     setupEventListeners();
 
+    // Set initial view state
+    switchView('songs');
+
     // Resolve initial sync (local vs file)
     await syncInstrumentSources();
-
+    
     // Normalize existing aliases in localStorage
     normalizeLocalInstruments();
 
@@ -537,20 +540,27 @@ function switchView(view) {
     if (view === 'songs') {
         dom.songsTab.classList.add('active');
         dom.instrumentsTab.classList.remove('active');
-        dom.songList.style.display = 'block';
+        
+        dom.songList.classList.remove('hidden');
+        dom.instrumentList.classList.add('hidden');
         dom.instrumentList.classList.remove('active');
-        dom.newSongBtn.style.display = 'block';
-        dom.newInstrumentBtn.style.display = 'none';
-        dom.downloadInstrumentsBtn.style.display = 'none';
+        
+        dom.newSongBtn.classList.remove('hidden');
+        dom.newInstrumentBtn.classList.add('hidden');
+        dom.downloadInstrumentsBtn.classList.add('hidden');
+        
         closeDrawer();
     } else {
         dom.songsTab.classList.remove('active');
         dom.instrumentsTab.classList.add('active');
-        dom.songList.style.display = 'none';
+        
+        dom.songList.classList.add('hidden');
+        dom.instrumentList.classList.remove('hidden');
         dom.instrumentList.classList.add('active');
-        dom.newSongBtn.style.display = 'none';
-        dom.newInstrumentBtn.style.display = 'block';
-        dom.downloadInstrumentsBtn.style.display = 'block';
+        
+        dom.newSongBtn.classList.add('hidden');
+        dom.newInstrumentBtn.classList.remove('hidden');
+        dom.downloadInstrumentsBtn.classList.remove('hidden');
     }
 }
 

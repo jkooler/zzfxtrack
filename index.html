@@ -1,1108 +1,263 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Strudel to ZzFXM</title>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Special+Gothic+Condensed+One&display=swap"
-      rel="stylesheet"
-    />
-
+    <link rel="stylesheet" href="./style.css" />
     <!-- Load Strudel REPL Web Component -->
     <!-- Strudel REPL imported in module -->
-
-    <style>
-      :root {
-        --bg-color: #0a0a0a;
-        --sidebar-bg: #111;
-        --border-color: #333;
-        --accent-color: #00ff66;
-        --text-color: #eee;
-        --danger-color: #ff3333;
-      }
-
-      body {
-        margin: 0;
-        font-family: "Courier New", Courier, monospace;
-        background: var(--bg-color);
-        color: var(--text-color);
-        height: 100vh;
-        display: flex;
-        overflow: hidden;
-      }
-
-      /* Sidebar */
-      .sidebar {
-        width: 250px;
-        background: var(--sidebar-bg);
-        border-right: 1px solid var(--border-color);
-        display: flex;
-        flex-direction: column;
-      }
-
-      .sidebar-header {
-        padding: 12px 20px;
-        border-bottom: 1px solid var(--border-color);
-      }
-
-      /* Sidebar Tabs */
-      .sidebar-tabs {
-        display: flex;
-        gap: 0;
-        margin-bottom: 12px;
-      }
-
-      .sidebar-tab {
-        flex: 1;
-        padding: 8px 12px;
-        background: transparent;
-        border: none;
-        border-bottom: 2px solid transparent;
-        color: #666;
-        cursor: pointer;
-        font-size: 0.85rem;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        transition: all 0.2s;
-      }
-
-      .sidebar-tab:hover {
-        color: #999;
-        border-bottom-color: #444;
-      }
-
-      .sidebar-tab.active {
-        color: var(--accent-color);
-        border-bottom-color: var(--accent-color);
-      }
-
-      .sidebar h1 {
-        margin: 0;
-        font-family: "Special Gothic Condensed One", sans-serif;
-        font-size: 1.5rem;
-        font-weight: 400;
-        color: var(--accent-color);
-        letter-spacing: 1px;
-        text-align: center;
-      }
-
-      .song-list {
-        flex: 1;
-        overflow-y: auto;
-        list-style: none;
-        padding: 0;
-        margin: 0;
-      }
-
-      /* Instrument List (shares styles with song-list) */
-      .instrument-list {
-        flex: 1;
-        overflow-y: auto;
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: none; /* Hidden by default */
-      }
-
-      .instrument-list.active {
-        display: block;
-      }
-
-      .instrument-item {
-        position: relative;
-        padding: 12px 20px;
-        cursor: pointer;
-        border-bottom: 1px solid #222;
-        transition: background 0.2s;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .instrument-item:hover {
-        background: #222;
-      }
-
-      .instrument-item.active {
-        background: #1a3322;
-        border-left: 3px solid var(--accent-color);
-      }
-
-      .instrument-info {
-        flex: 1;
-        min-width: 0;
-      }
-
-      .instrument-name {
-        font-weight: bold;
-        color: var(--text-color);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .instrument-alias {
-        font-size: 0.75rem;
-        color: #666;
-        margin-top: 2px;
-      }
-
-      .instrument-channel {
-        font-size: 0.7rem;
-        color: #555;
-        font-family: monospace;
-      }
-
-      .song-item {
-        position: relative;
-        padding: 12px 20px;
-        cursor: pointer;
-        border-bottom: 1px solid #222;
-        transition: background 0.2s;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        overflow: hidden; /* Ensure canvas doesn't spill out */
-      }
-
-      .song-item > span,
-      .song-item > .song-item-actions {
-        position: relative;
-        z-index: 2; /* Sit on top of visualizer */
-      }
-
-      .song-visualizer {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 1;
-        pointer-events: none; /* Let clicks pass through */
-        opacity: 0.5; /* Subtle background effect */
-      }
-
-      .song-item:hover {
-        background: #222;
-      }
-      .song-item.active {
-        background: #1a3322;
-        border-left: 3px solid var(--accent-color);
-      }
-
-      .sidebar-footer {
-        padding: 15px;
-        border-top: 1px solid var(--border-color);
-      }
-
-      /* Instrument Editor Drawer */
-      .instrument-drawer {
-        width: 400px;
-        background: #0d0d0d;
-        border-left: 1px solid var(--border-color);
-        display: none;
-        flex-direction: column;
-        font-size: 12px;
-        height: 100vh;
-        overflow-y: auto;
-      }
-
-      .instrument-drawer.active {
-        display: flex;
-      }
-
-      .instrument-drawer-header {
-        padding: 15px;
-        background: #111;
-        border-bottom: 1px solid #333;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-      }
-
-      .instrument-drawer-header h3 {
-        margin: 0 0 10px 0;
-        color: var(--accent-color);
-        font-size: 1rem;
-      }
-
-      .instrument-drawer-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 12px;
-      }
-
-      .instrument-drawer-content {
-        padding: 15px;
-        flex: 1;
-      }
-
-      .param-group {
-        margin-bottom: 20px;
-      }
-
-      .param-group h4 {
-        margin: 0 0 10px 0;
-        color: #888;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .param-field {
-        margin-bottom: 12px;
-      }
-
-      .param-field label {
-        display: block;
-        color: #999;
-        font-size: 0.8rem;
-        margin-bottom: 4px;
-      }
-
-      .param-field input[type="text"],
-      .param-field input[type="number"] {
-        width: 100%;
-        padding: 8px;
-        background: #000;
-        border: 1px solid #444;
-        color: #fff;
-        font-family: "Courier New", monospace;
-        font-size: 0.9rem;
-        box-sizing: border-box;
-      }
-
-      .param-field input[type="number"] {
-        font-variant-numeric: tabular-nums;
-      }
-
-      .param-field input:focus {
-        outline: none;
-        border-color: var(--accent-color);
-      }
-
-      .param-field .param-hint {
-        font-size: 0.7rem;
-        color: #555;
-        margin-top: 2px;
-      }
-
-      .sidebar-footer {
-        padding: 15px;
-        border-top: 1px solid var(--border-color);
-      }
-
-      /* Main Content */
-      .main-content {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-      }
-
-      .toolbar {
-        height: 60px;
-        background: var(--bg-color);
-        border-bottom: 1px solid var(--border-color);
-        display: flex;
-        align-items: center;
-        padding: 0 20px;
-        gap: 15px;
-      }
-
-      /* Welcome View */
-      .welcome-view {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        color: #888;
-        padding: 40px;
-      }
-      .welcome-content {
-        max-width: 500px;
-      }
-      .welcome-content h1 {
-        color: var(--accent-color);
-        margin-bottom: 20px;
-        font-family: "Special Gothic Condensed One", sans-serif;
-        font-size: 4rem; /* 2x bigger */
-        /* text-transform: uppercase; REVERTED */
-        letter-spacing: 2px;
-        line-height: 1; /* Tighten line height for large text */
-        font-weight: 400;
-      }
-      .welcome-content p {
-        line-height: 1.6;
-        margin-bottom: 15px;
-        font-size: 1.1rem;
-      }
-      .welcome-content a {
-        color: var(--accent-color);
-        text-decoration: none;
-        border-bottom: 1px dotted var(--accent-color);
-        transition: all 0.2s;
-      }
-      .welcome-content a:hover {
-        background: rgba(0, 255, 102, 0.1);
-        border-bottom-style: solid;
-      }
-
-      /* Editor Split View */
-      .editor-split-view {
-        flex: 1;
-        display: none; /* Hidden by default */
-        flex-direction: row;
-        overflow: hidden;
-        position: relative;
-      }
-
-      .editor-pane {
-        flex: 1;
-        /* Container for Strudel Editor */
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-
-      /* 
-           The strudel-editor web component appends the editor DOM 
-           as a SIBLING to itself. This targets that injected div.
-        */
-      .editor-pane > div:last-child {
-        flex: 1;
-        height: 100%;
-        overflow: hidden; /* Let CodeMirror handle scrolling */
-      }
-
-      .preview-pane {
-        width: 350px;
-        background: #0d0d0d;
-        border-left: 1px solid var(--border-color);
-        display: flex;
-        flex-direction: column;
-        font-size: 12px;
-        height: 100vh; /* Full viewport height */
-      }
-
-      .preview-header {
-        padding: 10px;
-        background: #111;
-        border-bottom: 1px solid #333;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .preview-header h3 {
-        margin: 0;
-        color: #888;
-        font-size: 0.9rem;
-      }
-
-      #previewJson {
-        flex: 1;
-        overflow: auto;
-        margin: 0;
-        padding: 10px;
-        color: #77cc88;
-        font-family: monospace;
-        white-space: pre-wrap; /* wrap text */
-        word-break: break-all;
-      }
-
-      /* CodeMirror Styles */
-      .cm-editor {
-        height: 100% !important;
-        font-size: 16px;
-      }
-
-      /* Variables used by Strudel themes */
-      .cm-editor {
-        --background: #111;
-        --foreground: #eee;
-      }
-
-      /* Common Elements */
-      button {
-        background: #222;
-        border: 1px solid #444;
-        color: var(--text-color);
-        padding: 8px 16px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 14px;
-        transition: all 0.2s;
-      }
-
-      button:hover {
-        border-color: var(--accent-color);
-        color: var(--accent-color);
-      }
-
-      button.primary {
-        background: var(--accent-color);
-        color: #000;
-        border-color: var(--accent-color);
-        font-weight: bold;
-      }
-      button.primary:hover {
-        background: #00cc52;
-      }
-
-      button.danger {
-        border-color: #662222;
-        color: #cc4444;
-      }
-      button.danger:hover {
-        background: #330000;
-        border-color: var(--danger-color);
-        color: var(--danger-color);
-      }
-
-      button:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-        pointer-events: none;
-        background: #222 !important;
-        border-color: #444 !important;
-        color: #888 !important;
-      }
-
-      .status-msg {
-        margin-left: auto;
-        font-size: 0.9rem;
-        color: #666;
-      }
-
-      /* Song Name Input */
-      #songNameInput:not([readonly]) {
-        background: #1a1a1a;
-        border-color: var(--accent-color);
-        color: var(--text-color);
-        cursor: text;
-      }
-      
-      #songNameInput:focus {
-        outline: none;
-        background: #1a1a1a;
-        border-color: var(--accent-color);
-        color: var(--text-color);
-      }
-
-
-      /* Modal */
-      .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.75);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.2s;
-      }
-      .modal-overlay.open {
-        opacity: 1;
-        pointer-events: auto;
-      }
-      .modal {
-        background: #181818;
-        padding: 24px;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        width: 320px;
-      }
-      .modal.danger {
-        border-color: #444;
-      }
-      .modal h2 {
-        margin-top: 0;
-        color: var(--accent-color);
-        font-size: 1.2rem;
-      }
-      .modal.danger h2 {
-        color: #888;
-      }
-      .modal p {
-        line-height: 1.5;
-        color: #999;
-        margin-bottom: 24px;
-        font-size: 0.9rem;
-      }
-
-      .modal input {
-        width: 100%;
-        padding: 10px;
-        background: #000;
-        border: 1px solid #444;
-        color: #fff;
-        margin: 15px 0;
-        box-sizing: border-box;
-        font-family: inherit;
-      }
-      .modal-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-      }
-      .modal.modal-wide {
-        width: 720px;
-        max-width: 90vw;
-      }
-      .sync-columns {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        margin-top: 12px;
-      }
-      .sync-column {
-        background: #121212;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        padding: 12px;
-      }
-      .sync-column-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8px;
-      }
-      .sync-badge {
-        font-size: 0.75rem;
-        padding: 2px 6px;
-        border-radius: 999px;
-        border: 1px solid #333;
-        color: #aaa;
-      }
-      .sync-badge.local {
-        border-color: #5a3b00;
-        color: #f2a854;
-      }
-      .sync-badge.file {
-        border-color: #2a2a2a;
-        color: #9aa0a6;
-      }
-      .sync-list {
-        max-height: 240px;
-        overflow-y: auto;
-        margin: 0;
-        padding-left: 16px;
-        color: #ccc;
-        font-size: 0.85rem;
-        line-height: 1.4;
-      }
-      .sync-list-item.highlight {
-        font-weight: 600;
-        color: #fff;
-      }
-      .init-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.85);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 1100;
-      }
-      .init-overlay.active {
-        display: flex;
-      }
-      .init-overlay-content {
-        background: #181818;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        padding: 16px 20px;
-        color: #ddd;
-        font-size: 1rem;
-      }
-
-      /* Sidebar Item Delete */
-      .song-item-actions {
-        opacity: 0;
-        transition: opacity 0.2s;
-      }
-      .song-item:hover .song-item-actions {
-        opacity: 1;
-      }
-      .sidebar-del-btn {
-        background: transparent;
-        border: none;
-        color: #666;
-        padding: 4px 8px;
-        font-size: 14px;
-      }
-      .sidebar-del-btn:hover {
-        color: var(--danger-color);
-        border: none;
-      }
-    </style>
   </head>
-  <body>
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <!-- Tabs -->
-        <div class="sidebar-tabs">
-          <button class="sidebar-tab active" id="songsTab">Songs</button>
-          <button class="sidebar-tab" id="instrumentsTab">Instruments</button>
+  <body class="bg-background text-foreground font-sans antialiased overflow-hidden h-screen grid grid-cols-[260px_auto_1fr_auto] grid-rows-1">
+    
+    <!-- LEFT SIDEBAR (Col 1) -->
+    <aside class="sidebar bg-card border-r border-border flex flex-col h-full overflow-hidden w-[260px] col-start-1">
+        <div class="sidebar-header p-4 border-b border-border space-y-4">
+             <!-- Tabs -->
+             <div class="sidebar-tabs grid grid-cols-2 p-1 bg-muted rounded-md gap-1">
+                <button id="songsTab" class="sidebar-tab active inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-background [&.active]:text-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground">Songs</button>
+                <button id="instrumentsTab" class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-background [&.active]:text-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground">Instruments</button>
+             </div>
+             
+             <!-- Buttons -->
+             <button id="newSongBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 w-full shadow-sm">+ NEW SONG</button>
+             
+             <button id="newInstrumentBtn" class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 w-full">+ NEW INSTRUMENT</button>
+             
+             <button id="downloadInstrumentsBtn" class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 w-full mt-2">📥 DOWNLOAD INSTRUMENTS</button>
         </div>
 
-        <!-- New Song Button -->
-        <button id="newSongBtn" style="width: 100%">+ NEW SONG</button>
+        <!-- Lists -->
+        <ul id="songList" class="song-list flex-1 overflow-y-auto p-2 space-y-1"></ul>
+        <ul id="instrumentList" class="instrument-list flex-1 overflow-y-auto p-2 space-y-1"></ul>
 
-        <!-- New Instrument Button (hidden by default) -->
-        <button id="newInstrumentBtn" style="width: 100%; display: none">
-          + NEW INSTRUMENT
-        </button>
-
-        <!-- Download Instruments Button (hidden by default) -->
-        <button
-          id="downloadInstrumentsBtn"
-          style="
-            width: 100%;
-            display: none;
-            margin-top: 8px;
-            background: #1a472a;
-            border-color: #2d7a4a;
-          "
-        >
-          📥 DOWNLOAD INSTRUMENTS.JS
-        </button>
-      </div>
-
-      <!-- Song List -->
-      <ul class="song-list" id="songList">
-        <!-- Populated by JS -->
-      </ul>
-
-      <!-- Instrument List -->
-      <ul class="instrument-list" id="instrumentList">
-        <!-- Populated by JS -->
-      </ul>
-
-      <div class="sidebar-footer">
-        <h1>STRUDEL TO ZZFXM</h1>
-      </div>
+        <!-- Footer -->
+        <div class="sidebar-footer p-4 border-t border-border bg-card">
+            <h1 class="text-xl font-bold tracking-tight text-primary font-mono text-center">STRUDEL TO ZZFXM</h1>
+        </div>
     </aside>
 
-    <!-- Import Confirmation Modal -->
-    <div class="modal-overlay" id="importConfirmationModal">
-      <div class="modal">
-        <h2>Importing ZzFX sound</h2>
-        <p>Are you sure you want to import this sound to the current instrument? This will overwrite existing parameters.</p>
-        <div class="modal-actions">
-          <button id="cancelImportBtn">Cancel</button>
-          <button id="confirmImportBtn" class="primary">Yes, import</button>
-        </div>
-      </div>
-    </div>
+    <!-- INSTRUMENT DRAWER (Col 2) -->
+    <aside id="instrumentDrawer" class="instrument-drawer hidden w-[400px] border-r border-border bg-card flex-col h-full overflow-y-auto [&.active]:flex shadow-xl absolute right-0 top-0 bottom-0 z-20 md:static md:z-auto col-start-2">
+      <div class="instrument-drawer-header p-4 bg-muted/50 border-b border-border sticky top-0 z-10 backdrop-blur">
+        <h3 id="drawerTitle" class="text-lg font-semibold text-primary mb-3">Edit Instrument</h3>
 
-    <!-- Instrument Editor Drawer -->
-    <aside class="instrument-drawer" id="instrumentDrawer">
-      <div class="instrument-drawer-header">
-        <h3 id="drawerTitle">Edit Instrument</h3>
-
-        <div class="param-group">
-          <div class="param-field">
-            <label>Instrument Name</label>
-            <input type="text" id="instStrudelAlias" placeholder="my-bass" />
-            <div class="param-hint">
-              This is the name you use in Strudel to play this instrument
+        <div class="param-group space-y-4">
+          <div class="param-field space-y-1.5">
+            <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground">Instrument Name</label>
+            <input type="text" id="instStrudelAlias" placeholder="my-bass" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" />
+            <div class="param-hint text-[0.8rem] text-muted-foreground">
+              Strudel alias for this instrument
             </div>
           </div>
 
-          <div class="param-field">
-            <label>Export Name</label>
-            <input
-              type="text"
-              id="instExportName"
-              readonly
-              style="background: #111; color: #666"
-            />
-            <div class="param-hint">Auto-generated for ZzFXM export</div>
+          <div class="param-field space-y-1.5">
+            <label class="text-sm font-medium leading-none text-muted-foreground">Export Name</label>
+            <input type="text" id="instExportName" readonly class="flex h-9 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm shadow-sm opacity-50 cursor-not-allowed" />
+            <div class="param-hint text-[0.8rem] text-muted-foreground">Auto-generated for ZzFXM</div>
           </div>
 
-          <div class="param-field">
-            <label>Channel</label>
-            <input
-              type="number"
-              id="instChannel"
-              readonly
-              style="background: #111; color: #666"
-            />
-            <div class="param-hint">Auto-assigned based on order</div>
+          <div class="param-field space-y-1.5">
+            <label class="text-sm font-medium leading-none text-muted-foreground">Channel</label>
+            <input type="number" id="instChannel" readonly class="flex h-9 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm shadow-sm opacity-50 cursor-not-allowed" />
+            <div class="param-hint text-[0.8rem] text-muted-foreground">Auto-assigned</div>
           </div>
 
           <!-- Import ZzFX Section -->
-          <div class="param-field" style="border-top: 1px solid #333; padding-top: 10px; margin-top: 10px;">
-            <label>Import ZzFX Data</label>
-            <div style="display: flex; gap: 8px;">
-                <input type="text" id="importZzFXInput" placeholder=".5,.05,140,0..." style="flex: 1;" />
-                <button id="importZzFXBtn" style="padding: 8px 12px;">Import</button>
+          <div class="param-field pt-4 mt-2 border-t border-border space-y-1.5">
+            <label class="text-sm font-medium leading-none text-muted-foreground">Import ZzFX Data</label>
+            <div class="flex gap-2">
+                <input type="text" id="importZzFXInput" placeholder=".5,.05,140,0..." class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                <button id="importZzFXBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">Import</button>
             </div>
-            <div class="param-hint">Paste comma-separated values</div>
+            <!-- <div class="param-hint">Paste comma-separated values</div> -->
           </div>
         </div>
 
-        <div class="instrument-drawer-actions">
-          <button id="testInstrumentBtn" class="primary">▶ Test</button>
-          <button id="closeDrawerBtn">Close</button>
+        <div class="instrument-drawer-actions flex gap-2 mt-4">
+          <button id="testInstrumentBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 flex-1 shadow-sm">▶ Test</button>
+          <button id="closeDrawerBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Close</button>
         </div>
       </div>
 
-      <div class="instrument-drawer-content">
+      <div class="instrument-drawer-content p-4 space-y-6">
         <div class="param-group">
-          <h4>ZzFX Parameters</h4>
-
-          <div class="param-field">
-            <label>0: Volume</label>
-            <input type="number" id="param0" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>1: Randomness</label>
-            <input type="number" id="param1" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>2: Frequency (Hz)</label>
-            <input type="number" id="param2" step="0.1" />
-          </div>
-
-          <div class="param-field">
-            <label>3: Attack (s)</label>
-            <input type="number" id="param3" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>4: Sustain (s)</label>
-            <input type="number" id="param4" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>5: Release (s)</label>
-            <input type="number" id="param5" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>6: Shape</label>
-            <input type="number" id="param6" step="1" min="0" max="5" />
-            <div class="param-hint">
-              0=sine, 1=tri, 2=saw, 3=tan, 4=noise, 5=square
-            </div>
-          </div>
-
-          <div class="param-field">
-            <label>7: Shape Curve</label>
-            <input type="number" id="param7" step="0.1" />
-          </div>
-
-          <div class="param-field">
-            <label>8: Slide (Hz/s)</label>
-            <input type="number" id="param8" step="0.1" />
-          </div>
-
-          <div class="param-field">
-            <label>9: Delta Slide</label>
-            <input type="number" id="param9" step="0.1" />
-          </div>
-
-          <div class="param-field">
-            <label>10: Pitch Jump (Hz)</label>
-            <input type="number" id="param10" step="1" />
-          </div>
-
-          <div class="param-field">
-            <label>11: Pitch Jump Time (s)</label>
-            <input type="number" id="param11" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>12: Repeat Time (s)</label>
-            <input type="number" id="param12" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>13: Noise (detune)</label>
-            <input type="number" id="param13" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>14: Modulation (Hz)</label>
-            <input type="number" id="param14" step="1" />
-          </div>
-
-          <div class="param-field">
-            <label>15: Bit Crush</label>
-            <input type="number" id="param15" step="0.1" />
-          </div>
-
-          <div class="param-field">
-            <label>16: Delay (s)</label>
-            <input type="number" id="param16" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>17: Sustain Volume</label>
-            <input type="number" id="param17" step="0.01" />
-          </div>
-
-          <div class="param-field">
-            <label>18: Decay</label>
-            <input type="number" id="param18" step="0.1" />
-          </div>
-
-          <div class="param-field">
-            <label>19: Tremolo (Hz)</label>
-            <input type="number" id="param19" step="0.1" />
-          </div>
-
-          <div class="param-field">
-            <label>20: Filter (Hz)</label>
-            <input type="number" id="param20" step="1" />
+          <h4 class="text-sm font-semibold tracking-wide text-muted-foreground uppercase mb-3">ZzFX Parameters</h4>
+          
+          <div class="space-y-3">
+              <!-- Generating All 20 Param Fields -->
+              <!-- Param 0 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">0: Volume</label><input type="number" id="param0" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 1 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">1: Randomness</label><input type="number" id="param1" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 2 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">2: Frequency (Hz)</label><input type="number" id="param2" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 3 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">3: Attack (s)</label><input type="number" id="param3" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 4 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">4: Sustain (s)</label><input type="number" id="param4" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 5 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">5: Release (s)</label><input type="number" id="param5" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 6 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">6: Shape</label><input type="number" id="param6" step="1" min="0" max="5" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/><div class="text-[0.65rem] text-muted-foreground">0=sine, 1=tri, 2=saw, 3=tan, 4=noise, 5=square</div></div>
+              <!-- Param 7 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">7: Shape Curve</label><input type="number" id="param7" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 8 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">8: Slide (Hz/s)</label><input type="number" id="param8" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 9 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">9: Delta Slide</label><input type="number" id="param9" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 10 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">10: Pitch Jump (Hz)</label><input type="number" id="param10" step="1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 11 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">11: Pitch Jump Time (s)</label><input type="number" id="param11" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 12 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">12: Repeat Time (s)</label><input type="number" id="param12" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 13 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">13: Noise (detune)</label><input type="number" id="param13" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 14 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">14: Modulation (Hz)</label><input type="number" id="param14" step="1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 15 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">15: Bit Crush</label><input type="number" id="param15" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 16 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">16: Delay (s)</label><input type="number" id="param16" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 17 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">17: Sustain Volume</label><input type="number" id="param17" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 18 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">18: Decay</label><input type="number" id="param18" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 19 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">19: Tremolo (Hz)</label><input type="number" id="param19" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 20 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">20: Filter (Hz)</label><input type="number" id="param20" step="1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
           </div>
         </div>
       </div>
     </aside>
 
-    <!-- Main Content -->
-    <main class="main-content">
-      <header class="toolbar">
-        <button
-          id="playBtn"
-          style="margin-right: 15px; width: 40px; text-align: center"
-        >
-          ▶
-        </button>
+    <!-- MAIN CONTENT (Col 3) -->
+    <main class="main-content flex flex-col h-full min-w-0 bg-background relative z-0 col-start-3">
+        <!-- Toolbar -->
+        <header class="toolbar h-14 border-b border-border flex items-center px-4 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+             <button id="playBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm">▶</button>
+             
+             <div class="flex items-center gap-2 flex-1">
+                 <button id="saveSongNameBtn" class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 w-8 h-8 p-0">💾</button>
+                 <input type="text" id="songNameInput" placeholder="Select a song..." readonly class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 max-w-sm" />
+                 <span id="saveStatus" class="ml-2 text-sm text-primary font-medium opacity-0 transition-opacity">Saved</span>
+             </div>
+        </header>
 
-        <!-- Song Name Editor -->
-        <div style="display: flex; align-items: center; gap: 8px">
-          <button
-            id="saveSongNameBtn"
-            title="Save song name"
-            style="
-              width: 32px;
-              height: 32px;
-              padding: 0;
-              display: none;
-              font-size: 16px;
-              background: #1a472a;
-              border-color: #2d7a4a;
-            "
-          >
-            💾
-          </button>
-          <input
-            type="text"
-            id="songNameInput"
-            placeholder="Select a song..."
-            readonly
-            style="
-              background: transparent;
-              border: 1px solid transparent;
-              color: #888;
-              font-size: 1rem;
-              font-family: inherit;
-              padding: 6px 10px;
-              width: 250px;
-              transition: all 0.2s;
-            "
-          />
+        <!-- Welcome View -->
+        <div id="welcomeView" class="welcome-view flex-1 flex-col items-center justify-center text-center p-10 text-muted-foreground animate-in fade-in zoom-in-95 duration-500 flex">
+             <div class="max-w-lg space-y-6">
+                 <h1 class="text-5xl font-extrabold tracking-tight text-primary drop-shadow-sm font-mono">Welcome to<br/>STRUDEL TO ZZFXM</h1>
+                 <p class="text-lg leading-relaxed text-foreground/80">With this app you can create songs using <a href="https://github.com/KilledByAPixel/ZzFX" target="_blank" class="font-medium text-primary underline underline-offset-4 hover:no-underline">ZzFXMicro.js</a> synthesis and <a href="https://codeberg.org/uzu/strudel" target="_blank" class="font-medium text-primary underline underline-offset-4 hover:no-underline">Strudel</a>.</p>
+                 <p class="text-base text-muted-foreground">After creating your song, export it to JSON format and use it in your games or demo projects that use <a href="https://codeberg.org/uzu/zzfxm" target="_blank" class="text-primary hover:underline">ZzFXM</a>.</p>
+                 <div class="mt-8 pt-6 border-t border-border text-sm opacity-80">
+                      <strong class="text-foreground">NOTE:</strong> Ensure your project uses <strong>ZzFXMicro</strong> (standard for ZzFXM).<br/>The parameter mapping differs from the full ZzFX library.
+                 </div>
+             </div>
         </div>
 
-        <span
-          id="saveStatus"
-          style="
-            margin-left: 10px;
-            font-size: 0.85rem;
-            color: #00ff66;
-            opacity: 0;
-            transition: opacity 0.3s;
-          "
-        ></span>
-
-        <div style="flex: 1"></div>
-      </header>
-
-      <div class="welcome-view" id="welcomeView">
-        <div class="welcome-content">
-          <h1>Welcome to<br />STRUDEL TO ZZFXM</h1>
-          <p>
-            With this app you can create songs using
-            <a href="https://github.com/KilledByAPixel/ZzFX" target="_blank"
-              >ZzFXMicro.js</a
-            >
-            synthesis and
-            <a href="https://codeberg.org/uzu/strudel" target="_blank"
-              >Strudel</a
-            >.
-          </p>
-          <p>
-            After creating your song, export it to JSON format and use it in
-            your games or demo projects that use
-            <a href="https://codeberg.org/uzu/zzfxm" target="_blank">ZzFXM</a>.
-          </p>
-
-          <div
-            style="
-              margin-top: 30px;
-              font-size: 0.9rem;
-              opacity: 0.7;
-              border-top: 1px solid #333;
-              padding-top: 20px;
-            "
-          >
-            <strong>NOTE:</strong> Ensure your project uses
-            <strong>ZzFXMicro</strong> (standard for ZzFXM).<br />
-            The parameter mapping differs from the full ZzFX library.
-          </div>
+        <!-- Editor Container -->
+        <div id="editorContainer" class="editor-split-view hidden flex-1 flex-row relative overflow-hidden">
+             <!-- Strudel Editor Wrapper -->
+             <div class="editor-pane flex-1 flex flex-col overflow-hidden relative">
+                  <strudel-editor id="repl" class="h-full w-full"></strudel-editor>
+             </div>
         </div>
-      </div>
-
-      <div class="editor-split-view" id="editorContainer">
-        <div class="editor-pane">
-          <!-- Strudel Editor injected here -->
-          <strudel-editor id="repl"></strudel-editor>
-        </div>
-      </div>
     </main>
-
-    <!-- Preview Pane (Full Height) -->
-    <aside class="preview-pane" id="previewPane">
-      <div class="preview-header">
-        <div style="display: flex; gap: 10px; align-items: center">
-          <button
-            id="bakeBtn"
-            class="primary"
-            disabled
-            style="
-              font-family: &quot;Special Gothic Condensed One&quot;, sans-serif;
-              font-size: 1.1rem;
-              letter-spacing: 1px;
-            "
-          >
-            EXPORT
-          </button>
-          <button id="previewPlayBtn" title="Play ZzFXM" disabled>▶</button>
-          <span
-            id="statusMsg"
-            class="status-msg"
-            style="margin-left: 10px"
-          ></span>
-        </div>
+    
+    <!-- PREVIEW PANE (Col 4) -->
+    <aside id="previewPane" class="preview-pane w-[350px] border-l border-border bg-card/50 flex flex-col h-full overflow-hidden col-start-4">
+      <div class="preview-header p-2 bg-muted/30 border-b border-border flex justify-between items-center">
+         <div class="flex gap-2 items-center">
+             <button id="bakeBtn" class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 font-mono tracking-wide shadow-sm" disabled>EXPORT</button>
+             <button id="previewPlayBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0" title="Play ZzFXM" disabled>▶</button>
+             <span id="statusMsg" class="text-xs text-muted-foreground ml-2"></span>
+         </div>
       </div>
-      <pre id="previewJson"></pre>
+      <pre id="previewJson" class="flex-1 overflow-auto p-4 text-xs font-mono text-green-400/90 whitespace-pre-wrap break-all selection:bg-green-900/50"></pre>
     </aside>
 
-    <!-- Initializing Overlay -->
-    <div id="initOverlay" class="init-overlay">
-      <div class="init-overlay-content">Initializing...</div>
+    <!-- MODALS -->
+
+    <!-- Import Confirmation Modal -->
+    <div id="importConfirmationModal" class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto">
+      <div class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg">
+        <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">Import ZzFX sound</h2>
+        <p class="text-sm text-muted-foreground">Are you sure you want to import this sound to the current instrument? This will overwrite existing parameters.</p>
+        <div class="flex justify-end gap-2">
+          <button id="cancelImportBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Cancel</button>
+          <button id="confirmImportBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Yes, import</button>
+        </div>
+      </div>
     </div>
 
     <!-- Instrument Sync Modal -->
-    <div id="instrumentSyncModal" class="modal-overlay">
-      <div class="modal modal-wide">
-        <h2>Instrument Conflict Detected</h2>
-        <p>Choose which set to load. This will overwrite the other source.</p>
-        <div class="sync-columns">
-          <div class="sync-column">
-            <div class="sync-column-header">
-              <strong>Browser (Local)</strong>
-              <span class="sync-badge local">Browser</span>
+    <div id="instrumentSyncModal" class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto">
+      <div class="modal fixed z-50 grid w-full max-w-3xl gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg">
+        <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">Instrument Conflict Detected</h2>
+        <p class="text-sm text-muted-foreground">Choose which set to load. This will overwrite the other source.</p>
+        <div class="sync-columns grid grid-cols-2 gap-4 mt-2">
+          <div class="sync-column bg-muted/50 border border-border rounded-md p-4">
+            <div class="sync-column-header flex items-center justify-between mb-2">
+              <strong class="text-sm">Browser (Local)</strong>
+              <span class="sync-badge local text-[0.65rem] px-2 py-0.5 rounded-full border border-yellow-900/50 text-yellow-500 bg-yellow-900/20">Browser</span>
             </div>
-            <ol id="syncLocalList" class="sync-list"></ol>
+            <ol id="syncLocalList" class="sync-list max-h-60 overflow-y-auto pl-4 text-xs text-muted-foreground space-y-1 list-decimal marker:text-muted-foreground"></ol>
           </div>
-          <div class="sync-column">
-            <div class="sync-column-header">
-              <strong>File (Disk)</strong>
-              <span class="sync-badge file">On Disk</span>
+          <div class="sync-column bg-muted/50 border border-border rounded-md p-4">
+            <div class="sync-column-header flex items-center justify-between mb-2">
+              <strong class="text-sm">File (Disk)</strong>
+              <span class="sync-badge file text-[0.65rem] px-2 py-0.5 rounded-full border border-zinc-800 text-zinc-400 bg-zinc-900">On Disk</span>
             </div>
-            <ol id="syncFileList" class="sync-list"></ol>
+            <ol id="syncFileList" class="sync-list max-h-60 overflow-y-auto pl-4 text-xs text-muted-foreground space-y-1 list-decimal marker:text-muted-foreground"></ol>
           </div>
         </div>
-        <div class="modal-actions">
-          <button id="syncKeepLocalBtn">Keep Browser Data (Overwrite File)</button>
-          <button id="syncLoadFileBtn" class="primary">
-            Load File Data (Overwrite Browser)
-          </button>
+        <div class="flex justify-end gap-2 mt-4">
+          <button id="syncKeepLocalBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Keep Browser Data (Overwrite File)</button>
+          <button id="syncLoadFileBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Load File Data (Overwrite Browser)</button>
         </div>
       </div>
     </div>
 
     <!-- New Song Modal -->
-    <div id="newSongModal" class="modal-overlay">
-      <div class="modal">
-        <h2>New Song</h2>
-        <input
-          type="text"
-          id="newSongName"
-          placeholder="song-name (e.g. boss-theme)"
-        />
-        <div class="modal-actions">
-          <button id="cancelNewSong">Cancel</button>
-          <button id="confirmNewSong" class="primary">Create</button>
+    <div id="newSongModal" class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto">
+      <div class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg">
+        <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">New Song</h2>
+        <input type="text" id="newSongName" placeholder="song-name (e.g. boss-theme)" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        <div class="flex justify-end gap-2">
+          <button id="cancelNewSong" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Cancel</button>
+          <button id="confirmNewSong" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Create</button>
         </div>
       </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
-    <div id="deleteConfirmModal" class="modal-overlay">
-      <div class="modal danger">
-        <h2>Delete song?</h2>
-        <p id="deleteConfirmText">This action cannot be undone.</p>
-        <div class="modal-actions">
-          <button id="cancelDeleteBtn">No! Abort.</button>
-          <button id="confirmDeleteBtn" class="danger">Delete</button>
+    <!-- Delete Song Modal -->
+    <div id="deleteConfirmModal" class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto">
+      <div class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-destructive/20 bg-background p-6 shadow-lg sm:rounded-lg">
+        <h2 class="text-lg font-semibold leading-none tracking-tight text-destructive-foreground">Delete song?</h2>
+        <p id="deleteConfirmText" class="text-sm text-muted-foreground">This action cannot be undone.</p>
+        <div class="flex justify-end gap-2">
+          <button id="cancelDeleteBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">No! Abort.</button>
+          <button id="confirmDeleteBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-destructive text-destructive-foreground hover:bg-destructive/90 h-9 px-4 py-2 shadow-sm">Delete</button>
         </div>
       </div>
     </div>
 
     <!-- New Instrument Modal -->
-    <div id="newInstrumentModal" class="modal-overlay">
-      <div class="modal">
-        <h2>New Instrument</h2>
-        <p style="margin: 0 0 15px 0; font-size: 0.85rem">
-          Enter a name for your instrument. This will be the name you use in
-          Strudel.
-        </p>
-        <input
-          type="text"
-          id="newInstrumentName"
-          placeholder="Instrument name (e.g. bass, kick, lead)"
-        />
-        <div class="modal-actions">
-          <button id="cancelNewInstrument">Cancel</button>
-          <button id="confirmNewInstrument" class="primary">Create</button>
+    <div id="newInstrumentModal" class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto">
+      <div class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg">
+        <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">New Instrument</h2>
+         <p class="text-xs text-muted-foreground">Enter a name for your instrument. This will be the name you use in Strudel.</p>
+        <input type="text" id="newInstrumentName" placeholder="Instrument name (e.g. bass, kick, lead)" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        <div class="flex justify-end gap-2">
+          <button id="cancelNewInstrument" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Cancel</button>
+          <button id="confirmNewInstrument" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Create</button>
         </div>
       </div>
     </div>
 
-    <!-- Delete Instrument Confirmation Modal -->
-    <div id="deleteInstrumentModal" class="modal-overlay">
-      <div class="modal danger">
-        <h2>Delete instrument?</h2>
-        <p id="deleteInstrumentText">This action cannot be undone.</p>
-        <div class="modal-actions">
-          <button id="cancelDeleteInstrument">No! Abort.</button>
-          <button id="confirmDeleteInstrument" class="danger">Delete</button>
+     <!-- Delete Instrument Modal -->
+    <div id="deleteInstrumentModal" class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto">
+      <div class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-destructive/20 bg-background p-6 shadow-lg sm:rounded-lg">
+        <h2 class="text-lg font-semibold leading-none tracking-tight text-destructive-foreground">Delete instrument?</h2>
+        <p id="deleteInstrumentText" class="text-sm text-muted-foreground">This action cannot be undone.</p>
+        <div class="flex justify-end gap-2">
+          <button id="cancelDeleteInstrument" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">No! Abort.</button>
+          <button id="confirmDeleteInstrument" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-destructive text-destructive-foreground hover:bg-destructive/90 h-9 px-4 py-2 shadow-sm">Delete</button>
         </div>
       </div>
     </div>
 
-    <!-- Application Logic -->
+    <!-- Initializing Overlay -->
+    <div id="initOverlay" class="init-overlay fixed inset-0 z-[100] bg-background flex items-center justify-center hidden [&.active]:flex">
+      <div class="init-overlay-content flex flex-col items-center gap-4">
+          <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <div class="text-lg font-medium text-foreground">Initializing...</div>
+      </div>
+    </div>
+
+    <!-- Logic -->
     <script type="module" src="/src/repl-app.js"></script>
   </body>
 </html>
