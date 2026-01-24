@@ -545,9 +545,15 @@ function switchView(view) {
         dom.instrumentList.classList.add('hidden');
         dom.instrumentList.classList.remove('active');
         
+        // Show Song stuff
         dom.newSongBtn.classList.remove('hidden');
+        dom.newSongBtn.classList.add('inline-flex');
+        
         dom.newInstrumentBtn.classList.add('hidden');
+        dom.newInstrumentBtn.classList.remove('inline-flex');
+        
         dom.downloadInstrumentsBtn.classList.add('hidden');
+        dom.downloadInstrumentsBtn.classList.remove('inline-flex');
         
         closeDrawer();
     } else {
@@ -558,9 +564,15 @@ function switchView(view) {
         dom.instrumentList.classList.remove('hidden');
         dom.instrumentList.classList.add('active');
         
+        // Show Instrument stuff
         dom.newSongBtn.classList.add('hidden');
+        dom.newSongBtn.classList.remove('inline-flex');
+        
         dom.newInstrumentBtn.classList.remove('hidden');
+        dom.newInstrumentBtn.classList.add('inline-flex');
+        
         dom.downloadInstrumentsBtn.classList.remove('hidden');
+        dom.downloadInstrumentsBtn.classList.add('inline-flex');
     }
 }
 

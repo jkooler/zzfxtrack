@@ -55,7 +55,7 @@ function draw() {
     canvasCtx.clearRect(0, 0, width, height);
     
     canvasCtx.lineWidth = 2;
-    canvasCtx.strokeStyle = '#00ff66'; // Accent color
+    canvasCtx.strokeStyle = '#ffffff'; // White oscilloscope
     canvasCtx.beginPath();
     
     const sliceWidth = width * 1.0 / bufferLength;

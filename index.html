@@ -5,6 +5,61 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Strudel to ZzFXM</title>
     <link rel="stylesheet" href="./style.css" />
+    
+    <!-- Development Mode: Tailwind Play CDN for Inspector Prototyping
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              border: "var(--border)",
+              input: "var(--input)",
+              ring: "var(--ring)",
+              background: "var(--background)",
+              foreground: "var(--foreground)",
+              primary: {
+                DEFAULT: "var(--primary)",
+                foreground: "var(--primary-foreground)",
+              },
+              secondary: {
+                DEFAULT: "var(--secondary)",
+                foreground: "var(--secondary-foreground)",
+              },
+              destructive: {
+                DEFAULT: "var(--destructive)",
+                foreground: "var(--destructive-foreground)",
+              },
+              muted: {
+                DEFAULT: "var(--muted)",
+                foreground: "var(--muted-foreground)",
+              },
+              accent: {
+                DEFAULT: "var(--accent)",
+                foreground: "var(--accent-foreground)",
+              },
+              popover: {
+                DEFAULT: "var(--popover)",
+                foreground: "var(--popover-foreground)",
+              },
+              card: {
+                DEFAULT: "var(--card)",
+                foreground: "var(--card-foreground)",
+              },
+              // Bind input-bg token
+              "input-bg": "var(--input-bg)",
+            },
+            borderRadius: {
+              lg: "var(--radius)",
+              md: "calc(var(--radius) - 2px)",
+              sm: "calc(var(--radius) - 4px)",
+            },
+          }
+        }
+      }
+    </script> -->
+
     <!-- Load Strudel REPL Web Component -->
     <!-- Strudel REPL imported in module -->
   </head>
@@ -12,15 +67,15 @@
     
     <!-- LEFT SIDEBAR (Col 1) -->
     <aside class="sidebar bg-card border-r border-border flex flex-col h-full overflow-hidden w-[260px] col-start-1">
-        <div class="sidebar-header p-4 border-b border-border space-y-4">
+        <div class="sidebar-header p-2 border-b border-border space-y-4">
              <!-- Tabs -->
-             <div class="sidebar-tabs grid grid-cols-2 p-1 bg-muted rounded-md gap-1">
-                <button id="songsTab" class="sidebar-tab active inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-background [&.active]:text-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground">Songs</button>
-                <button id="instrumentsTab" class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-background [&.active]:text-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground">Instruments</button>
+             <div class="sidebar-tabs grid grid-cols-2 rounded-md gap-1">
+                <button id="songsTab" class="sidebar-tab active inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground">Songs</button>
+                <button id="instrumentsTab" class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground">Instruments</button>
              </div>
              
              <!-- Buttons -->
-             <button id="newSongBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 w-full shadow-sm">+ NEW SONG</button>
+             <button id="newSongBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 w-full shadow-sm">+ NEW SONG</button>
              
              <button id="newInstrumentBtn" class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 w-full">+ NEW INSTRUMENT</button>
              
@@ -44,30 +99,30 @@
 
         <div class="param-group space-y-4">
           <div class="param-field space-y-1.5">
-            <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground">Instrument Name</label>
-            <input type="text" id="instStrudelAlias" placeholder="my-bass" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" />
+            <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground">Instrument Name</label>
+            <input type="text" id="instStrudelAlias" placeholder="my-bass" class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" />
             <div class="param-hint text-[0.8rem] text-muted-foreground">
               Strudel alias for this instrument
             </div>
           </div>
 
           <div class="param-field space-y-1.5">
-            <label class="text-sm font-medium leading-none text-muted-foreground">Export Name</label>
+            <label class="text-sm font-medium leading-none text-foreground">Export Name</label>
             <input type="text" id="instExportName" readonly class="flex h-9 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm shadow-sm opacity-50 cursor-not-allowed" />
             <div class="param-hint text-[0.8rem] text-muted-foreground">Auto-generated for ZzFXM</div>
           </div>
 
           <div class="param-field space-y-1.5">
-            <label class="text-sm font-medium leading-none text-muted-foreground">Channel</label>
+            <label class="text-sm font-medium leading-none text-foreground">Channel</label>
             <input type="number" id="instChannel" readonly class="flex h-9 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm shadow-sm opacity-50 cursor-not-allowed" />
             <div class="param-hint text-[0.8rem] text-muted-foreground">Auto-assigned</div>
           </div>
 
           <!-- Import ZzFX Section -->
           <div class="param-field pt-4 mt-2 border-t border-border space-y-1.5">
-            <label class="text-sm font-medium leading-none text-muted-foreground">Import ZzFX Data</label>
+            <label class="text-sm font-medium leading-none text-foreground">Import ZzFX Data</label>
             <div class="flex gap-2">
-                <input type="text" id="importZzFXInput" placeholder=".5,.05,140,0..." class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                <input type="text" id="importZzFXInput" placeholder=".5,.05,140,0..." class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                 <button id="importZzFXBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">Import</button>
             </div>
             <!-- <div class="param-hint">Paste comma-separated values</div> -->
@@ -75,38 +130,38 @@
         </div>
 
         <div class="instrument-drawer-actions flex gap-2 mt-4">
-          <button id="testInstrumentBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 flex-1 shadow-sm">▶ Test</button>
+          <button id="testInstrumentBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 flex-1 shadow-sm">▶ Test</button>
           <button id="closeDrawerBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Close</button>
         </div>
       </div>
 
       <div class="instrument-drawer-content p-4 space-y-6">
-        <div class="param-group">
-          <h4 class="text-sm font-semibold tracking-wide text-muted-foreground uppercase mb-3">ZzFX Parameters</h4>
+        <div class="param-group space-y-4">
+          <h4 class="text-sm font-semibold tracking-wide text-foreground uppercase mb-3">ZzFX Parameters</h4>
           
           <div class="space-y-3">
               <!-- Generating All 20 Param Fields -->
-              <!-- Param 0 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">0: Volume</label><input type="number" id="param0" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 1 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">1: Randomness</label><input type="number" id="param1" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 2 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">2: Frequency (Hz)</label><input type="number" id="param2" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 3 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">3: Attack (s)</label><input type="number" id="param3" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 4 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">4: Sustain (s)</label><input type="number" id="param4" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 5 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">5: Release (s)</label><input type="number" id="param5" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 6 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">6: Shape</label><input type="number" id="param6" step="1" min="0" max="5" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/><div class="text-[0.65rem] text-muted-foreground">0=sine, 1=tri, 2=saw, 3=tan, 4=noise, 5=square</div></div>
-              <!-- Param 7 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">7: Shape Curve</label><input type="number" id="param7" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 8 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">8: Slide (Hz/s)</label><input type="number" id="param8" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 9 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">9: Delta Slide</label><input type="number" id="param9" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 10 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">10: Pitch Jump (Hz)</label><input type="number" id="param10" step="1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 11 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">11: Pitch Jump Time (s)</label><input type="number" id="param11" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 12 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">12: Repeat Time (s)</label><input type="number" id="param12" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 13 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">13: Noise (detune)</label><input type="number" id="param13" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 14 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">14: Modulation (Hz)</label><input type="number" id="param14" step="1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 15 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">15: Bit Crush</label><input type="number" id="param15" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 16 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">16: Delay (s)</label><input type="number" id="param16" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 17 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">17: Sustain Volume</label><input type="number" id="param17" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 18 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">18: Decay</label><input type="number" id="param18" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 19 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">19: Tremolo (Hz)</label><input type="number" id="param19" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
-              <!-- Param 20 --> <div class="space-y-1"><label class="text-xs text-muted-foreground">20: Filter (Hz)</label><input type="number" id="param20" step="1" class="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 0 --> <div class="space-y-1"><label class="text-xs text-foreground">0: Volume</label><input type="number" id="param0" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 1 --> <div class="space-y-1"><label class="text-xs text-foreground">1: Randomness</label><input type="number" id="param1" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 2 --> <div class="space-y-1"><label class="text-xs text-foreground">2: Frequency (Hz)</label><input type="number" id="param2" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 3 --> <div class="space-y-1"><label class="text-xs text-foreground">3: Attack (s)</label><input type="number" id="param3" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 4 --> <div class="space-y-1"><label class="text-xs text-foreground">4: Sustain (s)</label><input type="number" id="param4" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 5 --> <div class="space-y-1"><label class="text-xs text-foreground">5: Release (s)</label><input type="number" id="param5" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 6 --> <div class="space-y-1"><label class="text-xs text-foreground">6: Shape</label><input type="number" id="param6" step="1" min="0" max="5" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/><div class="text-[0.65rem] text-muted-foreground">0=sine, 1=tri, 2=saw, 3=tan, 4=noise, 5=square</div></div>
+              <!-- Param 7 --> <div class="space-y-1"><label class="text-xs text-foreground">7: Shape Curve</label><input type="number" id="param7" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 8 --> <div class="space-y-1"><label class="text-xs text-foreground">8: Slide (Hz/s)</label><input type="number" id="param8" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 9 --> <div class="space-y-1"><label class="text-xs text-foreground">9: Delta Slide</label><input type="number" id="param9" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 10 --> <div class="space-y-1"><label class="text-xs text-foreground">10: Pitch Jump (Hz)</label><input type="number" id="param10" step="1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 11 --> <div class="space-y-1"><label class="text-xs text-foreground">11: Pitch Jump Time (s)</label><input type="number" id="param11" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 12 --> <div class="space-y-1"><label class="text-xs text-foreground">12: Repeat Time (s)</label><input type="number" id="param12" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 13 --> <div class="space-y-1"><label class="text-xs text-foreground">13: Noise (detune)</label><input type="number" id="param13" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 14 --> <div class="space-y-1"><label class="text-xs text-foreground">14: Modulation (Hz)</label><input type="number" id="param14" step="1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 15 --> <div class="space-y-1"><label class="text-xs text-foreground">15: Bit Crush</label><input type="number" id="param15" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 16 --> <div class="space-y-1"><label class="text-xs text-foreground">16: Delay (s)</label><input type="number" id="param16" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 17 --> <div class="space-y-1"><label class="text-xs text-foreground">17: Sustain Volume</label><input type="number" id="param17" step="0.01" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 18 --> <div class="space-y-1"><label class="text-xs text-foreground">18: Decay</label><input type="number" id="param18" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 19 --> <div class="space-y-1"><label class="text-xs text-foreground">19: Tremolo (Hz)</label><input type="number" id="param19" step="0.1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
+              <!-- Param 20 --> <div class="space-y-1"><label class="text-xs text-foreground">20: Filter (Hz)</label><input type="number" id="param20" step="1" class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/></div>
           </div>
         </div>
       </div>
@@ -150,7 +205,7 @@
     <aside id="previewPane" class="preview-pane w-[350px] border-l border-border bg-card/50 flex flex-col h-full overflow-hidden col-start-4">
       <div class="preview-header p-2 bg-muted/30 border-b border-border flex justify-between items-center">
          <div class="flex gap-2 items-center">
-             <button id="bakeBtn" class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 font-mono tracking-wide shadow-sm" disabled>EXPORT</button>
+             <button id="bakeBtn" class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 font-mono tracking-wide shadow-sm" disabled>EXPORT</button>
              <button id="previewPlayBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0" title="Play ZzFXM" disabled>▶</button>
              <span id="statusMsg" class="text-xs text-muted-foreground ml-2"></span>
          </div>
@@ -167,7 +222,7 @@
         <p class="text-sm text-muted-foreground">Are you sure you want to import this sound to the current instrument? This will overwrite existing parameters.</p>
         <div class="flex justify-end gap-2">
           <button id="cancelImportBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Cancel</button>
-          <button id="confirmImportBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Yes, import</button>
+          <button id="confirmImportBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Yes, import</button>
         </div>
       </div>
     </div>
@@ -195,7 +250,7 @@
         </div>
         <div class="flex justify-end gap-2 mt-4">
           <button id="syncKeepLocalBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Keep Browser Data (Overwrite File)</button>
-          <button id="syncLoadFileBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Load File Data (Overwrite Browser)</button>
+          <button id="syncLoadFileBtn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Load File Data (Overwrite Browser)</button>
         </div>
       </div>
     </div>
@@ -204,10 +259,10 @@
     <div id="newSongModal" class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto">
       <div class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg">
         <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">New Song</h2>
-        <input type="text" id="newSongName" placeholder="song-name (e.g. boss-theme)" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        <input type="text" id="newSongName" placeholder="song-name (e.g. boss-theme)" class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
         <div class="flex justify-end gap-2">
           <button id="cancelNewSong" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Cancel</button>
-          <button id="confirmNewSong" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Create</button>
+          <button id="confirmNewSong" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Create</button>
         </div>
       </div>
     </div>
@@ -229,10 +284,10 @@
       <div class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg">
         <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">New Instrument</h2>
          <p class="text-xs text-muted-foreground">Enter a name for your instrument. This will be the name you use in Strudel.</p>
-        <input type="text" id="newInstrumentName" placeholder="Instrument name (e.g. bass, kick, lead)" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+        <input type="text" id="newInstrumentName" placeholder="Instrument name (e.g. bass, kick, lead)" class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
         <div class="flex justify-end gap-2">
           <button id="cancelNewInstrument" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">Cancel</button>
-          <button id="confirmNewInstrument" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Create</button>
+          <button id="confirmNewInstrument" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm">Create</button>
         </div>
       </div>
     </div>

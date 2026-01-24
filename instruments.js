@@ -29,6 +29,7 @@ export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,
 export const zzfxm_demo_kickdrum = [1,0,130,0,0.08,0.05,1,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
 export const zzfxm_baldrick = [1,0,130,0,0.08,0.05,1,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
 export const zzfxm_lost_turnips = [0.6,0,440,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_another_test = [0.2,0,440,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
 
 /**
  * Strudel Sound Names to ZzFXM Channel Indices
@@ -55,7 +56,8 @@ export const instrumentMapping = {
     "demo-hh-open": 16,
     "demo-kickdrum": 17,
     "baldrick": 18,
-    "lost-turnips": 19
+    "lost-turnips": 19,
+    "another-test": 20
 };
 
 // Map them to IDs you want to use in Strudel
@@ -79,7 +81,8 @@ export const instruments = {
     "demo-hh-open": zzfxm_demo_hh_open,
     "demo-kickdrum": zzfxm_demo_kickdrum,
     "baldrick": zzfxm_baldrick,
-    "lost-turnips": zzfxm_lost_turnips
+    "lost-turnips": zzfxm_lost_turnips,
+    "another-test": zzfxm_another_test
 };
 
 // Also export as array for the baker (ordered by channel index)
@@ -103,5 +106,6 @@ export const instrumentArray = [
     zzfxm_demo_hh_open,
     zzfxm_demo_kickdrum,
     zzfxm_baldrick,
-    zzfxm_lost_turnips
+    zzfxm_lost_turnips,
+    zzfxm_another_test
 ];
