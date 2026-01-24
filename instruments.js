@@ -28,7 +28,7 @@ export const zzfxm_demo_bass = [0.7,0,55,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,0.3,0,
 export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
 export const zzfxm_demo_kickdrum = [1,0,130,0,0.08,0.05,1,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
 export const zzfxm_baldrick = [1,0,130,0,0.08,0.05,1,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
-export const zzfxm_lost_turnips = [0.8,0,440,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_lost_turnips = [0.6,0,440,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
 
 /**
  * Strudel Sound Names to ZzFXM Channel Indices
