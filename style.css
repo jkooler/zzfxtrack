@@ -143,11 +143,11 @@ input:disabled:focus-visible, input[readonly]:focus-visible {
 
 /* Dynamic Classes used by JS */
 .song-list {
-  @apply list-none m-0 p-2 space-y-1;
+  @apply list-none m-0 p-3 space-y-1;
 }
 
 .instrument-list {
-  @apply list-none m-0 p-2 space-y-1;
+  @apply list-none m-0 p-3 space-y-1;
 }
 .instrument-list.active {
     @apply block;
@@ -175,7 +175,7 @@ input:disabled:focus-visible, input[readonly]:focus-visible {
     @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 text-sm;
 }
 .instrument-item.active {
-    @apply bg-accent text-accent-foreground border-l-2 border-primary;
+    @apply bg-accent text-accent-foreground;
 }
 
 .instrument-info {

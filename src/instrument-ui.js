@@ -510,9 +510,10 @@ function reorganizeParameters(useArrayOrder) {
  */
 function createParamField(index, label, hint, showIndex) {
     const field = document.createElement('div');
-    field.className = 'param-field';
+    field.className = 'param-field flex flex-col gap-2';
     
     const labelEl = document.createElement('label');
+    labelEl.className = 'text-sm pb-1 font-medium leading-none text-foreground';
     labelEl.textContent = label;
     field.appendChild(labelEl);
     
@@ -522,7 +523,7 @@ function createParamField(index, label, hint, showIndex) {
         
         if (hint || showIndex) {
             const hintEl = document.createElement('div');
-            hintEl.className = 'param-hint';
+            hintEl.className = 'param-hint text-xs text-muted-foreground';
             hintEl.textContent = hint ? `Index ${index} • ${hint}` : `Index ${index}`;
             field.appendChild(hintEl);
         }
