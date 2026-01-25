@@ -8,7 +8,7 @@ const ARRAY_ORDER = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1
 // Parameter labels for musician view
 const PARAM_LABELS = {
     0: { group: 'General', label: 'Volume' },
-    1: { group: 'General', label: 'Randomness' },
+    1: { group: 'General', label: 'Rand.' },
     2: { group: 'General', label: 'Frequency (Hz)' },
     3: { group: 'Envelope (ADSR)', label: 'Attack (s)' },
     4: { group: 'Envelope (ADSR)', label: 'Sustain (s)' },
@@ -26,7 +26,7 @@ const PARAM_LABELS = {
     16: { group: 'Effects', label: 'Delay (s)' },
     17: { group: 'Envelope (ADSR)', label: 'Sustain Volume' },
     18: { group: 'Envelope (ADSR)', label: 'Decay' },
-    19: { group: 'LFO (Volume)', label: 'Tremolo (Hz)' },
+    19: { group: 'LFO (Volume)', label: 'Tremolo' },
     20: { group: 'General', label: 'Filter (Hz)' }
 };
 

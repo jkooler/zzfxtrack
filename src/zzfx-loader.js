@@ -20,7 +20,7 @@ const zzfxR = 44100; // sample rate
 export function zzfxG(
     volume = 1, 
     randomness = 0.05,
-    frequency = 220,
+    frequency = 232,
     attack = 0,
     sustain = 0,
     release = 0.1,
@@ -42,7 +42,7 @@ export function zzfxG(
 ) {
     // init parameters
     if (volume == null) volume = 1;
-    if (frequency == null) frequency = 220;
+    if (frequency == null) frequency = 232;
     if (sustainVolume == null) sustainVolume = 1;
     if (shapeCurve == null) shapeCurve = 1;
     if (release == null) release = 0.1;
@@ -189,7 +189,7 @@ export function loadZzFXInstruments(instrumentMap) {
 
     for (const [id, params] of Object.entries(instrumentMap)) {
         // Pre-calculate base info
-        const baseFreq = params[2] || 220;
+        const baseFreq = params[2] || 232;
         const baseMidi = 12 * Math.log2(baseFreq / 440) + 69;
 
         registerSound(id, (time, value, onEnded) => {

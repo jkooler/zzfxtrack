@@ -1,6 +1,5 @@
-@import "tailwindcss";
-
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans:wght@300;400;500;700&display=swap");
+@import "tailwindcss";
 
 @theme {
   --font-sans: "Noto Sans", sans-serif;
@@ -25,6 +24,9 @@
 
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-foreground: var(--tertiary-foreground);
 
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -66,6 +68,10 @@
   --secondary: hsl(178.29deg 13.08% 27.01%) !important;
   --secondary-foreground: hsl(60 9.1% 97.8%) !important;
 
+  /* Pale Blue Tertiary */
+  --tertiary: hsl(180deg 100% 16.57%) !important;
+  --tertiary-foreground: hsl(0, 0%, 100%) !important;
+
   /* Stone 800ish */
   --muted: hsl(24 5.4% 15.1%) !important;
   --muted-foreground: hsl(60 9.1% 97.8% / 50%) !important;
@@ -94,7 +100,7 @@
 body {
   @apply bg-background text-foreground font-sans antialiased overflow-hidden h-screen;
   display: grid;
-  grid-template-columns: 260px auto 1fr auto; /* Sidebar | Drawer | Main | Preview */
+  grid-template-columns: 260px auto 1fr; /* Sidebar | Drawer | Main */
   grid-template-rows: 100vh;
 }
 
@@ -219,4 +225,46 @@ strudel-editor {
 }
 .sync-list-item.highlight {
     @apply font-bold text-primary;
+}
+
+/* Multislider Styles */
+.multislider-container {
+    @apply flex justify-between items-end h-32 rounded-md p-0 mb-2 gap-1;
+}
+
+/* Input inside slider */
+.multislider-input {
+    @apply w-full h-5 text-sm font-mono text-center bg-input-bg border border-border rounded-[3px] text-foreground mt-1 p-0 focus:border-primary focus:outline-none;
+    -moz-appearance: textfield;
+    appearance: none;
+}
+
+.scrub-input {
+    cursor: ns-resize !important;
+}
+
+.multislider-input::-webkit-outer-spin-button,
+.multislider-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.multislider-track {
+    @apply flex-1 flex flex-col items-center justify-end h-full relative bg-input-bg rounded border border-border pt-1 pb-1 transition-colors;
+}
+
+/* Active track highlight */
+.multislider-track:focus-within {
+    @apply border-primary bg-input-bg;
+}
+
+/* Vertical Slider Styling */
+.multislider-range {
+    -webkit-appearance: slider-vertical; /* Standard for vertical sliders in WebKit */
+    appearance: slider-vertical;
+    @apply w-full h-auto flex-1 min-h-0 m-0 cursor-ns-resize bg-transparent opacity-80 transition-opacity hover:opacity-100;
+}
+
+.multislider-label {
+    @apply h-4 flex items-center justify-center text-[0.7rem] font-bold text-muted-foreground mt-1.5 uppercase w-full text-center border-t border-border pt-1 select-none cursor-pointer transition-colors hover:text-primary;
 }

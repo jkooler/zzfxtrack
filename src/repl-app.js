@@ -7,6 +7,7 @@ import { playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, getInstrumentsForBaker } from './instrument-ui.js';
+import { createIcons, icons } from 'lucide';
 
 // --- Global State ---
 let currentSongFilename = null;
@@ -45,7 +46,16 @@ const dom = {
     deleteConfirmModal: document.getElementById('deleteConfirmModal'),
     deleteConfirmText: document.getElementById('deleteConfirmText'),
     confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
+    deleteConfirmText: document.getElementById('deleteConfirmText'),
+    confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
     cancelDeleteBtn: document.getElementById('cancelDeleteBtn'),
+    
+    // JSON Modal
+    showJsonBtn: document.getElementById('showJsonBtn'),
+    jsonPreviewModal: document.getElementById('jsonPreviewModal'),
+    closeJsonModalBtn: document.getElementById('closeJsonModalBtn'),
+    closeJsonModalBottomBtn: document.getElementById('closeJsonModalBottomBtn'),
+    copyJsonBtn: document.getElementById('copyJsonBtn'),
 };
 
 // --- View State Helpers ---
@@ -54,7 +64,9 @@ function showWelcome() {
     dom.editorContainer.style.display = 'none';
     dom.playBtn.style.visibility = 'hidden';
     dom.bakeBtn.disabled = true;
+    dom.bakeBtn.disabled = true;
     dom.previewPlayBtn.disabled = true;
+    if(dom.showJsonBtn) dom.showJsonBtn.disabled = true;
     
     // Clear state
     currentSongFilename = null;
@@ -113,6 +125,10 @@ async function init() {
     
     // Clear status - no song loaded yet
     setStatus('');
+
+    // 7. Initialize Icons
+    // 7. Initialize Icons
+    createIcons({ icons });
 }
 
 /**
@@ -257,7 +273,7 @@ async function refreshSongList() {
             li.innerHTML = `
                 <span>${fileName}</span>
                 <div class="song-item-actions">
-                    <button class="sidebar-del-btn" title="Delete ${fileName}">🗑️</button>
+                    <button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                 </div>
             `;
 
@@ -278,6 +294,9 @@ async function refreshSongList() {
         });
         
         updateSongListVisualizer();
+        updateSongListVisualizer();
+        updateSongListVisualizer();
+        createIcons({ icons });
     } catch (e) {
         console.error(e);
         setStatus('Error loading songs', 'error');
@@ -558,7 +577,9 @@ async function bakeCurrentSong() {
         if (!res.ok) throw new Error('Server failed to save JSON');
         
         // Enable preview playback buttons
+        // Enable preview playback buttons
         dom.previewPlayBtn.disabled = false;
+        if(dom.showJsonBtn) dom.showJsonBtn.disabled = false;
         
         setStatus(`/output/${jsonFilename}`, 'success');
         
@@ -832,8 +853,9 @@ dom.previewPlayBtn.addEventListener('click', () => {
 
 function updatePreviewPlayButton(playing) {
     isPreviewPlaying = playing;
-    dom.previewPlayBtn.innerText = playing ? '⏹' : '▶';
+    dom.previewPlayBtn.innerHTML = playing ? '<i data-lucide="square" class="w-4 h-4 fill-current"></i>' : '<i data-lucide="play" class="w-4 h-4"></i>';
     dom.previewPlayBtn.style.color = playing ? '#ff3333' : '#eee';
+    createIcons({ icons });
 }
 
 
@@ -889,8 +911,9 @@ function renderPlayButton() {
     const isRunning = editor && editor.repl.scheduler.started;
     const showStop = isRunning && playingSongFilename === currentSongFilename;
     
-    dom.playBtn.innerText = showStop ? '⏹' : '▶';
+    dom.playBtn.innerHTML = showStop ? '<i data-lucide="square" class="w-5 h-5 fill-current"></i>' : '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
     dom.playBtn.style.color = showStop ? '#ff3333' : '#eee';
+    createIcons({ icons });
 }
 
 // Listen for global Strudel events to keep UI in sync (e.g. Ctrl+Enter)
@@ -903,6 +926,43 @@ document.addEventListener('start-repl', (e) => {
 
 // Add listener
 dom.playBtn.addEventListener('click', togglePlay);
+
+// --- JSON Preview Modal Logic ---
+
+function openJsonModal() {
+    dom.jsonPreviewModal.classList.add('open');
+}
+
+function closeJsonModal() {
+    dom.jsonPreviewModal.classList.remove('open');
+}
+
+async function copyJsonToClipboard() {
+    const text = dom.previewJson.innerText;
+    if (!text) return;
+    
+    try {
+        await navigator.clipboard.writeText(text);
+        
+        const originalText = dom.copyJsonBtn.innerText;
+        dom.copyJsonBtn.innerText = 'Copied!';
+        dom.copyJsonBtn.disabled = true;
+        
+        setTimeout(() => {
+            dom.copyJsonBtn.innerText = originalText;
+            dom.copyJsonBtn.disabled = false;
+        }, 2000);
+    } catch (err) {
+        console.error('Failed to copy: ', err);
+        setStatus('Failed to copy to clipboard', 'error');
+    }
+}
+
+// JSON Modal Listeners
+if(dom.showJsonBtn) dom.showJsonBtn.addEventListener('click', openJsonModal);
+if(dom.closeJsonModalBtn) dom.closeJsonModalBtn.addEventListener('click', closeJsonModal);
+if(dom.closeJsonModalBottomBtn) dom.closeJsonModalBottomBtn.addEventListener('click', closeJsonModal);
+if(dom.copyJsonBtn) dom.copyJsonBtn.addEventListener('click', copyJsonToClipboard);
 
 // Start
 init();

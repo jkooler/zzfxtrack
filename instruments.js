@@ -11,13 +11,13 @@
 
 export const zzfxm_test_cp = [1,0,110,0.55,1.4,3,1,11,0,0,0,0,0,0.45,0,0,0.9,0.21,0,0,-2964];
 export const zzfxm_test_enterprise = [1,0,523.2511,0.14,1,1,1,1,0,0,0,0,0,0.1,0,0,0.25,0,0.08,0,0];
-export const zzfxm_test_sine = [0.2,0,220,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_tri = [0.2,0,220,0.01,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_saw = [0.2,0,220,0.01,0,0,2,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_tan = [0.2,0,220,0.01,0,0,3,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_minimal = [1,6,220,0.2,3,1,0,20,-1,1,155,10,1,0,5,0,0.3,0.1,1,1,-500];
-export const zzfxm_test_noise = [0.2,0,220,0.01,0,0,4,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_square = [0.2,0,220,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_test_sine = [0.2,0,232,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_test_tri = [0.2,0,232,0.01,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_test_saw = [0.2,0,232,0.01,0,0,2,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_test_tan = [0.2,0,232,0.01,0,0,3,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_test_minimal = [1,6,232,0.2,3,1,0,20,-1,1,155,10,1,0,5,0,0.3,0.1,1,1,-500];
+export const zzfxm_test_noise = [0.2,0,232,0.01,0,0,4,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_test_square = [0.2,0,232,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
 export const zzfxm_test_kick = [1,0,72,0,0.01,0.08,0,1,0,0,0,0,0,0,0,0,0,0.57,0.01,0,0];
 export const zzfxm_demo_snare = [1.3,0.05,240,0,0.01,0.28,4,1.4,38,98,477,0,0,0,172,0,0,0.4,0.03,0,-1203];
 export const zzfxm_demo_synth_stab = [0.7,0,440,0.01,0,0,1,3,0,0,0,0,2,0.4,0,0,0.625,0,0.5,3,-920];
@@ -26,7 +26,8 @@ export const zzfxm_demo_pad = [0.3,0,440,0.5,1,0,2,3,0,0,0,0,0.4,0.2,0,0,0,0.2,0
 export const zzfxm_demo_cowbell = [0.7,0,440,0,0.1,0,0,0,50,50,0,0,0,0,34121,0,0,0,0.4,0,-1255];
 export const zzfxm_demo_bass = [0.7,0,55,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,0.3,0,-555];
 export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
-export const zzfxm_demo_kickdrum = [1,0,130,0,0.08,0.05,1,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
+export const zzfxm_demo_kickdrum = [1,0,130,0,0.08,0.05,0,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
+export const zzfxm_aa = [0.2,0,220,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
 
 /**
  * Strudel Sound Names to ZzFXM Channel Indices
@@ -51,7 +52,8 @@ export const instrumentMapping = {
     "demo-cowbell": 14,
     "demo-bass": 15,
     "demo-hh-open": 16,
-    "demo-kickdrum": 17
+    "demo-kickdrum": 17,
+    "aa": 18
 };
 
 // Map them to IDs you want to use in Strudel
@@ -73,7 +75,8 @@ export const instruments = {
     "demo-cowbell": zzfxm_demo_cowbell,
     "demo-bass": zzfxm_demo_bass,
     "demo-hh-open": zzfxm_demo_hh_open,
-    "demo-kickdrum": zzfxm_demo_kickdrum
+    "demo-kickdrum": zzfxm_demo_kickdrum,
+    "aa": zzfxm_aa
 };
 
 // Also export as array for the baker (ordered by channel index)
@@ -95,5 +98,6 @@ export const instrumentArray = [
     zzfxm_demo_cowbell,
     zzfxm_demo_bass,
     zzfxm_demo_hh_open,
-    zzfxm_demo_kickdrum
+    zzfxm_demo_kickdrum,
+    zzfxm_aa
 ];

@@ -254,7 +254,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       '@strudel/core': path.resolve(__dirname, 'node_modules/@strudel/core'),
       '@strudel/webaudio': path.resolve(__dirname, 'node_modules/@strudel/webaudio'),
-      '@strudel/repl': path.resolve(__dirname, 'node_modules/@strudel/repl')
+      '@strudel/repl': path.resolve(__dirname, 'node_modules/@strudel/repl'),
+      'lucide': path.resolve(__dirname, 'node_modules/lucide/dist/esm/lucide/src/lucide.js')
     }
   },
   server: {

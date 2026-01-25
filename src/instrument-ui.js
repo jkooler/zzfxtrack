@@ -15,7 +15,9 @@ import {
 } from './instrument-manager.js';
 import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
+
 import { reloadInstruments } from './repl-app.js';
+import { createIcons, icons } from 'lucide';
 
 // State
 let currentInstrumentId = null;
@@ -145,6 +147,7 @@ function setupEventListeners() {
     paramInputs.forEach((input, index) => {
         if (input) {
             input.addEventListener('input', () => handleParamChange(index));
+            setupScrubInteraction(input);
         }
     });
     
@@ -455,7 +458,7 @@ function reorganizeParameters(useArrayOrder) {
     
     // Parameter groups and ordering
     const musicianOrder = {
-        'General': [0, 6, 7, 2, 1, 20],
+        'General': [6, [0, 7], 2, [1, 20]],
         'Envelope (ADSR)': [3, 18, 4, 17, 5],
         'Effects': [13, 15, 16],
         'LFO (Volume)': [19, 12],
@@ -463,17 +466,41 @@ function reorganizeParameters(useArrayOrder) {
     };
     
     const paramLabels = {
-        0: 'Volume', 1: 'Randomness', 2: 'Frequency (Hz)', 3: 'Attack (s)',
-        4: 'Sustain (s)', 5: 'Release (s)', 6: 'Wave Shape', 7: 'Shape Curve',
+        0: 'Volume', 1: 'Rand.', 2: 'Frequency (Hz)', 3: 'Attack (s)',
+        4: 'Sustain (s)', 5: 'Release (s)', 6: 'Wave Shape', 7: 'Sh. Curve',
         8: 'Slide (Hz/s)', 9: 'Delta Slide', 10: 'Pitch Jump (Hz)',
         11: 'Pitch Jump Time (s)', 12: 'Repeat Time (s)', 13: 'Noise (detune)',
         14: 'Modulation (Hz)', 15: 'Bit Crush', 16: 'Delay (s)',
-        17: 'Sustain Volume', 18: 'Decay', 19: 'Tremolo (Hz)', 20: 'Filter (Hz)'
+        17: 'Sustain Volume', 18: 'Decay', 19: 'Tremolo', 20: 'Filter (Hz)'
     };
     
     const paramHints = {
         6: '0=sine, 1=tri, 2=saw, 3=tan, 4=noise, 5=square'
     };
+    
+    // Cleanup inputs from previous custom modes to restore clean state
+    paramInputs.forEach(input => {
+        if (!input) return;
+        
+        if (input._originalClass) {
+            input.className = input._originalClass;
+        } else {
+            input.classList.remove('multislider-input');
+        }
+        input.style.display = ''; // Reset visibility
+        
+        // Remove slider sync listeners
+        if (input._sliderSyncHandler) {
+            input.removeEventListener('input', input._sliderSyncHandler);
+            delete input._sliderSyncHandler;
+        }
+        
+        // Remove wave shape sync listeners
+        if (input._waveSyncHandler) {
+             input.removeEventListener('input', input._waveSyncHandler);
+             delete input._waveSyncHandler;
+        }
+    });
     
     // Clear existing params (keep toggle)
     const toggle = paramGroup.querySelector('#arrayOrderToggle')?.parentElement?.parentElement;
@@ -489,6 +516,7 @@ function reorganizeParameters(useArrayOrder) {
             const field = createParamField(i, `${i}: ${paramLabels[i]}`, paramHints[i], true);
             paramGroup.appendChild(field);
         }
+        createIcons({ icons });
     } else {
         // Musician-friendly order with groups
         Object.entries(musicianOrder).forEach(([groupName, indices]) => {
@@ -497,12 +525,174 @@ function reorganizeParameters(useArrayOrder) {
             groupHeader.style.cssText = 'margin: 20px 0 10px 0; color: #888; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;';
             paramGroup.appendChild(groupHeader);
             
-            indices.forEach(i => {
-                const field = createParamField(i, paramLabels[i], paramHints[i], false);
+            if (groupName === 'Envelope (ADSR)') {
+                // Multislider Container
+                const container = document.createElement('div');
+                container.className = 'multislider-container';
+                
+                // Define sliders: A(3), D(18), S(4), R(5)
+                const sliders = [
+                   { idx: 3, label: 'Atk', max: 3, defaultValue: 0.01 },
+                   { idx: 18, label: 'Dec', max: 3, defaultValue: 1 },
+                   { idx: 4, label: 'Sus', max: 5, defaultValue: 0 },
+                   { idx: 5, label: 'Rel', max: 5, defaultValue: 0 }
+                ];
+                
+                sliders.forEach(({ idx, label, max, defaultValue }) => {
+                    const input = paramInputs[idx];
+                    
+                    // Create Slider UI
+                    const track = document.createElement('div');
+                    track.className = 'multislider-track';
+                    
+                    const range = document.createElement('input');
+                    range.type = 'range';
+                    range.className = 'multislider-range';
+                    range.setAttribute('orient', 'vertical'); // Firefox legacy support
+                    range.min = 0;
+                    range.max = max;
+                    range.step = 0.01;
+                    range.title = ''; // Suppress native tooltip
+                    
+                    const labelEl = document.createElement('div');
+                    labelEl.className = 'multislider-label group flex items-center justify-center';
+                    labelEl.innerHTML = `
+                        <span class="group-hover:hidden">${label}</span>
+                        <i data-lucide="refresh-ccw" class="hidden group-hover:block w-3 h-3"></i>
+                    `;
+                    
+                    // Reset on click
+                    labelEl.addEventListener('click', () => {
+                        input.value = defaultValue;
+                        input.dispatchEvent(new Event('input'));
+                    });
+                    
+                    // Logic to sync
+                    const updateSlider = () => {
+                        const val = parseFloat(input.value) || 0;
+                        range.value = val;
+                    };
+                    
+                    // Initial sync
+                    updateSlider();
+                    
+                    // Slider -> Input
+                    range.addEventListener('input', () => {
+                        input.value = range.value;
+                        // Trigger change for preview
+                        input.dispatchEvent(new Event('input'));
+                    });
+                    
+                    // Input -> Slider (Cleanup old listener)
+                    if (input._sliderSyncHandler) {
+                        input.removeEventListener('input', input._sliderSyncHandler);
+                    }
+                    input._sliderSyncHandler = updateSlider;
+                    input.addEventListener('input', updateSlider);
+                    
+                    // Input styling override
+                    if (!input._originalClass) input._originalClass = input.className;
+                    input.className = 'multislider-input'; // Reset classes
+                    
+                    track.appendChild(range);
+                    track.appendChild(input);
+                    track.appendChild(labelEl);
+                    container.appendChild(track);
+                });
+                
+                paramGroup.appendChild(container);
+
+                // Add separate Sustain Volume (17)
+                const volIdx = 17;
+                const field = createParamField(volIdx, paramLabels[volIdx], paramHints[volIdx], false);
                 paramGroup.appendChild(field);
-            });
+                
+            } else {
+                indices.forEach(item => {
+                    if (Array.isArray(item)) {
+                        const row = document.createElement('div');
+                        row.className = 'flex gap-3';
+                        item.forEach(i => {
+                             const field = createParamField(i, paramLabels[i], paramHints[i], false);
+                             field.className += ' flex-1 min-w-0';
+                             row.appendChild(field);
+                        });
+                        paramGroup.appendChild(row);
+                        return;
+                    }
+
+                    const i = item;
+                    if (i === 6) {
+                        // Custom Wave Shape UI
+                        const container = document.createElement('div');
+                        container.className = 'param-field space-y-1.5 py-1';
+                        
+                        const label = document.createElement('label');
+                        label.className = 'text-sm font-medium leading-none text-foreground block mb-2';
+                        label.textContent = paramLabels[i];
+                        container.appendChild(label);
+                        
+                        const toggleGroup = document.createElement('div');
+                        toggleGroup.className = 'flex w-full items-center rounded-md h-10';
+                        
+                        const options = [
+                             { val: 0, label: 'Sin' },
+                             { val: 1, label: 'Tri' },
+                             { val: 2, label: 'Saw' },
+                             { val: 3, label: 'Tan' },
+                             { val: 4, label: 'N' },
+                             { val: 5, label: 'Sq' }
+                        ];
+                        
+                        const input = paramInputs[i];
+                        
+                        const updateActive = () => {
+                             const currentVal = parseInt(input.value) || 0;
+                             toggleGroup.querySelectorAll('button').forEach(btn => {
+                                 const btnVal = parseInt(btn.dataset.value);
+                                 if (btnVal === currentVal) {
+                                     btn.className = 'flex-1 h-full text-sm font-medium rounded-md bg-input-bg border border-border text-foreground shadow-sm transition-all';
+                                 } else {
+                                     btn.className = 'flex-1 h-full text-sm font-medium rounded-md border border-card text-muted-foreground hover:text-foreground hover:bg-background/50 transition-all';
+                                 }
+                             });
+                        };
+                        
+                        options.forEach(opt => {
+                             const btn = document.createElement('button');
+                             btn.dataset.value = opt.val;
+                             btn.textContent = opt.label;
+                             btn.addEventListener('click', () => {
+                                 input.value = opt.val;
+                                 input.dispatchEvent(new Event('input'));
+                             });
+                             toggleGroup.appendChild(btn);
+                        });
+                        
+                        // Sync listener cleanup
+                        if (input._waveSyncHandler) input.removeEventListener('input', input._waveSyncHandler);
+                        input._waveSyncHandler = updateActive;
+                        input.addEventListener('input', updateActive);
+                        
+                        updateActive();
+                        
+                        container.appendChild(toggleGroup);
+                        container.appendChild(input);
+                        input.style.display = 'none';
+                        
+                        paramGroup.appendChild(container);
+                        
+                    } else {
+                        const field = createParamField(i, paramLabels[i], paramHints[i], false);
+                        paramGroup.appendChild(field);
+                    }
+                });
+            }
         });
     }
+    
+    // Ensure icons render for everything
+    createIcons({ icons });
 }
 
 /**
@@ -512,14 +702,133 @@ function createParamField(index, label, hint, showIndex) {
     const field = document.createElement('div');
     field.className = 'param-field flex flex-col gap-2';
     
+    // Header (Label + Reset)
+    const header = document.createElement('div');
+    header.className = 'flex items-center justify-between gap-2';
+    
     const labelEl = document.createElement('label');
-    labelEl.className = 'text-sm pb-1 font-medium leading-none text-foreground';
+    labelEl.className = 'text-sm font-medium leading-none text-foreground';
     labelEl.textContent = label;
-    field.appendChild(labelEl);
+    header.appendChild(labelEl);
+    
+    const defaults = [0.2, 0, 440, 0.01, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0];
+    
+    // Add reset buttons (exclude ADSR sliders 3,4,5,18 UNLESS in Array Order)
+    if (![3, 4, 5, 18].includes(index) || showIndex) {
+        const resetBtn = document.createElement('button');
+        resetBtn.className = 'h-4 w-4 flex items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors opacity-70 hover:opacity-100';
+        resetBtn.innerHTML = '<i data-lucide="refresh-ccw" class="w-3 h-3"></i>';
+        resetBtn.title = 'Reset to default';
+        resetBtn.addEventListener('click', () => {
+             const input = paramInputs[index];
+             if (input) {
+                 input.value = defaults[index];
+                 input.dispatchEvent(new Event('input'));
+             }
+        });
+        header.appendChild(resetBtn);
+    }
+    field.appendChild(header);
     
     const input = paramInputs[index];
     if (input) {
-        field.appendChild(input);
+        if (index === 2) {
+            // Frequency Note Selector
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex items-center gap-2';
+            
+            // Layout adjust
+            if (input._originalClass) input.className = input._originalClass;
+            input.classList.remove('w-full');
+            input.classList.add('flex-1');
+            input.classList.add('min-w-0');
+            
+            wrapper.appendChild(input);
+            
+            const noteSelect = document.createElement('select');
+            noteSelect.className = 'h-8 rounded-md border border-input bg-muted px-1 py-1 text-xs shadow-sm font-mono w-14 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+            
+            // Populate notes C0 (12) to B8 (119)
+            const notes = ['C', 'c#', 'D', 'd#', 'E', 'F', 'f#', 'G', 'g#', 'A', 'a#', 'B'];
+            for (let m = 12; m <= 119; m++) {
+                 const noteName = notes[m % 12];
+                 const octave = Math.floor(m / 12) - 1;
+                 const fullNote = `${noteName}${octave}`;
+                 const freq = 440 * Math.pow(2, (m - 69) / 12);
+                 
+                 const option = document.createElement('option');
+                 option.value = freq.toFixed(2);
+                 option.textContent = fullNote;
+                 noteSelect.appendChild(option);
+            }
+            
+            // Sync Select -> Input
+            noteSelect.addEventListener('change', () => {
+                input.value = noteSelect.value;
+                input.dispatchEvent(new Event('input'));
+            });
+            
+            // Sync Input -> Select
+            const syncSelect = () => {
+                const currentFreq = parseFloat(input.value);
+                if (isNaN(currentFreq)) return;
+                
+                let minDiff = Infinity;
+                let closestVal = '';
+                
+                 Array.from(noteSelect.options).forEach(opt => {
+                     const optFreq = parseFloat(opt.value);
+                     const diff = Math.abs(currentFreq - optFreq);
+                     if (diff < minDiff) {
+                         minDiff = diff;
+                         closestVal = opt.value;
+                     }
+                 });
+                 noteSelect.value = closestVal;
+            };
+            
+            // Prev Button
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'h-8 w-6 flex items-center justify-center rounded-md border border-input bg-muted hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+            prevBtn.innerHTML = '<i data-lucide="chevron-left" class="w-4 h-4"></i>';
+            prevBtn.addEventListener('click', () => {
+                if (noteSelect.selectedIndex > 0) {
+                    noteSelect.selectedIndex--;
+                    noteSelect.dispatchEvent(new Event('change'));
+                }
+            });
+
+            // Next Button
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'h-8 w-6 flex items-center justify-center rounded-md border border-input bg-muted hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+            nextBtn.innerHTML = '<i data-lucide="chevron-right" class="w-4 h-4"></i>';
+            nextBtn.addEventListener('click', () => {
+                 if (noteSelect.selectedIndex < noteSelect.options.length - 1) {
+                     noteSelect.selectedIndex++;
+                     noteSelect.dispatchEvent(new Event('change'));
+                 }
+            });
+
+            // Cleanup and Attach Sync
+            if (input._noteSyncHandler) {
+                input.removeEventListener('input', input._noteSyncHandler);
+            }
+            input._noteSyncHandler = syncSelect;
+            input.addEventListener('input', syncSelect);
+            
+            // Initial sync
+            syncSelect();
+            
+            wrapper.appendChild(prevBtn);
+            wrapper.appendChild(noteSelect);
+            wrapper.appendChild(nextBtn);
+            field.appendChild(wrapper);
+            
+        } else {
+            // Restore input class in case it was modified
+            if (input._originalClass) input.className = input._originalClass;
+            field.appendChild(input);
+        }
         
         if (hint || showIndex) {
             const hintEl = document.createElement('div');
@@ -575,6 +884,8 @@ function switchView(view) {
         dom.downloadInstrumentsBtn.classList.remove('hidden');
         dom.downloadInstrumentsBtn.classList.add('inline-flex');
     }
+    
+    createIcons({ icons });
 }
 
 /**
@@ -594,18 +905,24 @@ function renderInstrumentList() {
         li.dataset.instrumentId = inst.id;
         
         li.innerHTML = `
-            <div class="instrument-info" style="cursor: move;">
-                <div class="instrument-name">⋮⋮ ${inst.strudelAlias}</div>
-                <div class="instrument-alias">${inst.exportName}</div>
-                <div class="instrument-channel">ch: ${inst.channel}</div>
+            <div class="instrument-info" style="cursor: move; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="grip-vertical" class="w-4 h-4 text-muted-foreground"></i>
+                <div>
+                    <div class="instrument-name">${inst.strudelAlias}</div>
+                    <div class="instrument-alias">${inst.exportName}</div>
+                    <div class="instrument-channel">ch: ${inst.channel}</div>
+                </div>
             </div>
             <div class="song-item-actions">
-                <button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}">🗑️</button>
+                <button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
             </div>
         `;
         
         // Click to edit
-        li.querySelector('.instrument-info').addEventListener('click', () => openDrawer(inst.id));
+        li.querySelector('.instrument-info').addEventListener('click', () => {
+             openDrawer(inst.id);
+             playTestNoteDebounced(inst.params, null, 0);
+        });
         
         // Delete button
         li.querySelector('.sidebar-del-btn').addEventListener('click', (e) => {
@@ -622,6 +939,8 @@ function renderInstrumentList() {
         
         dom.instrumentList.appendChild(li);
     });
+    
+    createIcons({ icons });
 }
 
 // Drag and drop state
@@ -774,6 +1093,10 @@ function openDrawer(instrumentId) {
     
     // Resume audio context (needed for user interaction)
     resumePreviewAudio();
+
+    // Refresh parameters UI (especially important for Multislider sync)
+    const toggle = document.getElementById('arrayOrderToggle');
+    reorganizeParameters(toggle ? toggle.checked : false);
 }
 
 /**
@@ -1057,4 +1380,88 @@ export async function getInstrumentsForBaker() {
         mapping: getInstrumentMapping(),
         array: getInstrumentArray()
     };
+}
+/**
+ * Enable drag-to-change (scrub) interaction on an input
+ */
+function setupScrubInteraction(input) {
+    if (input._scrubInitialized) return;
+    input._scrubInitialized = true;
+    
+    input.classList.add('scrub-input');
+    
+    let startY = 0;
+    let startValue = 0;
+    let isDragging = false;
+    
+    const onMouseDown = (e) => {
+        // Only left click
+        if (e.button !== 0) return;
+        
+        // Allow normal interaction if focusing (don't prevent default yet)
+        startY = e.clientY;
+        startValue = parseFloat(input.value) || 0;
+        isDragging = false;
+        
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        
+        // Prevent text selection cursor flicker
+        document.body.classList.add('scrubbing');
+    };
+    
+    const onMouseMove = (e) => {
+        // Threshold to start dragging (3px) to distinguish from simple click-to-focus
+        const deltaY = startY - e.clientY;
+        if (!isDragging && Math.abs(deltaY) < 3) return;
+        
+        if (!isDragging) {
+            isDragging = true;
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+        }
+        
+        e.preventDefault();
+        
+        // Determine step size
+        let step = parseFloat(input.step);
+        if (isNaN(step)) {
+            step = input.value.includes('.') ? 0.01 : 1;
+        }
+        
+        // Modifiers
+        const sensitivity = e.shiftKey ? 0.1 : 1.0;
+        
+        // Scale: 1px = 1 step is often too fast for small ranges (like 0-1) but fine if step is 0.01
+        // Actually, for ZzFX where range is 0-1 and step is 0.01, 100px = full range. That feels right.
+        // For Frequency (0-2000), step might be 1? 2000px drag is long. 
+        // Maybe dynamic scaling? No, simple strict "pixels * step" is standard and predictable.
+        
+        let newValue = startValue + (deltaY * step * sensitivity);
+        
+        // Clamping
+        if (input.min !== '' && !isNaN(parseFloat(input.min))) {
+            newValue = Math.max(parseFloat(input.min), newValue);
+        }
+        if (input.max !== '' && !isNaN(parseFloat(input.max))) {
+            newValue = Math.min(parseFloat(input.max), newValue);
+        }
+        
+        // Rounding
+        const decimals = (step.toString().split('.')[1] || '').length;
+        input.value = newValue.toFixed(decimals);
+        
+        input.dispatchEvent(new Event('input'));
+    };
+    
+    const onMouseUp = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        isDragging = false;
+    };
+    
+    input.addEventListener('mousedown', onMouseDown);
 }
