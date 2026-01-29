@@ -46,54 +46,54 @@
 @layer base {
   /* Use html:root for higher specificity (0-1-1) to beat Strudel's inline :root (0-1-0) */
   html:root {
-  /* Dark Mode Default (Stone & Amber) */
-  /* Stone 950 ~ #0c0a09 -> hsl(24, 5.7%, 8.2%) */
-  --background: hsl(24 5.7% 8.2%) !important;
-  /* Stone 50 ~ #fafaf9 -> hsl(60, 9.1%, 97.8%) */
-  --foreground: hsl(60 9.1% 97.8%) !important;
+    /* Dark Mode Default (Stone & Amber) */
+    /* Stone 950 ~ #0c0a09 -> hsl(24, 5.7%, 8.2%) */
+    --background: hsl(24 5.7% 8.2%) !important;
+    /* Stone 50 ~ #fafaf9 -> hsl(60, 9.1%, 97.8%) */
+    --foreground: hsl(60 9.1% 97.8%) !important;
 
-  /* Stone 900 ~ #1c1917 -> hsl(24 5.4% 10.9%) - Adjusted for Card */
-  --card: hsl(24 5.4% 10.9%) !important;
-  --card-foreground: hsl(60 9.1% 97.8%) !important;
+    /* Stone 900 ~ #1c1917 -> hsl(24 5.4% 10.9%) - Adjusted for Card */
+    --card: hsl(24 5.4% 10.9%) !important;
+    --card-foreground: hsl(60 9.1% 97.8%) !important;
 
-  /* Popover same as background or slightly lighter */
-  --popover: hsl(24 5.7% 8.2%) !important;
-  --popover-foreground: hsl(60 9.1% 97.8%) !important;
+    /* Popover same as background or slightly lighter */
+    --popover: hsl(24 5.7% 8.2%) !important;
+    --popover-foreground: hsl(60 9.1% 97.8%) !important;
 
-  /* Amber 500 ~ #f59e0b -> hsl(45 93% 47%) */
-  --primary: hsl(45deg 62.76% 60.43%) !important;
-  --primary-foreground: hsl(24 9.8% 10%) !important; /* Dark text on amber */
+    /* Amber 500 ~ #f59e0b -> hsl(45 93% 47%) */
+    --primary: hsl(45deg 62.76% 60.43%) !important;
+    --primary-foreground: hsl(24 9.8% 10%) !important; /* Dark text on amber */
 
-  /* Stone 800 ~ #292524 -> hsl(24 5.4% 15.1%) */
-  --secondary: hsl(178.29deg 13.08% 27.01%) !important;
-  --secondary-foreground: hsl(60 9.1% 97.8%) !important;
+    /* Stone 800 ~ #292524 -> hsl(24 5.4% 15.1%) */
+    --secondary: hsl(178.29deg 13.08% 27.01%) !important;
+    --secondary-foreground: hsl(60 9.1% 97.8%) !important;
 
-  /* Pale Blue Tertiary */
-  --tertiary: hsl(180deg 100% 16.57%) !important;
-  --tertiary-foreground: hsl(0, 0%, 100%) !important;
+    /* Pale Blue Tertiary */
+    --tertiary: hsl(180deg 100% 16.57%) !important;
+    --tertiary-foreground: hsl(0, 0%, 100%) !important;
 
-  /* Stone 800ish */
-  --muted: hsl(24 5.4% 15.1%) !important;
-  --muted-foreground: hsl(60 9.1% 97.8% / 50%) !important;
+    /* Stone 800ish */
+    --muted: hsl(24 5.4% 15.1%) !important;
+    --muted-foreground: hsl(60 9.1% 97.8% / 50%) !important;
 
-  /* Amber 600 ~ #d97706 -> hsl(45 93% 41%) */
-  --accent: hsl(40.97deg 100% 50% / 15%) !important;
-  --accent-foreground: hsl(60 9.1% 97.8%) !important;
+    /* Amber 600 ~ #d97706 -> hsl(45 93% 41%) */
+    --accent: hsl(40.97deg 100% 50% / 15%) !important;
+    --accent-foreground: hsl(60 9.1% 97.8%) !important;
 
-  /* Red 500 */
-  --destructive: hsl(0 84.2% 60.2%) !important;
-  --destructive-foreground: hsl(60 9.1% 97.8%) !important;
+    /* Red 500 */
+    --destructive: hsl(0 84.2% 60.2%) !important;
+    --destructive-foreground: hsl(60 9.1% 97.8%) !important;
 
-  /* Stone 700 ~ #44403c -> hsl(24 5.4% 23.9%) */
-  --border: hsl(24 5.4% 23.9%) !important; 
-  --input: hsl(24 5.4% 23.9%) !important;
-  --ring: hsl(45 93% 47% / 50%) !important;
+    /* Stone 700 ~ #44403c -> hsl(24 5.4% 23.9%) */
+    --border: hsl(24 5.4% 23.9%) !important;
+    --input: hsl(24 5.4% 23.9%) !important;
+    --ring: hsl(45 93% 47% / 50%) !important;
 
-  --radius: 0.5rem;
+    --radius: 0.5rem;
 
     /* Dedicated Input Background Token */
-  --input-bg: hsl(180deg 13.24% 26.67% / 36%) !important;
-}
+    --input-bg: hsl(180deg 13.24% 26.67% / 36%) !important;
+  }
 }
 
 /* Base style resets and global defaults */
@@ -105,24 +105,38 @@ body {
 }
 
 /* Global Cursor Styles */
-button, select, input[type="button"], input[type="submit"], input[type="checkbox"], input[type="radio"], input[type="range"] {
+button,
+select,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
   cursor: pointer;
 }
 
-input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not(
+    [type="radio"]
+  ):not([type="range"]) {
   cursor: text;
 }
 
-button:disabled, input:disabled, select:disabled, 
-button[disabled], input[readonly], input[disabled] {
+button:disabled,
+input:disabled,
+select:disabled,
+button[disabled],
+input[readonly],
+input[disabled] {
   cursor: default;
   outline: none !important;
   box-shadow: none !important;
   @apply border-border;
 }
 
-input:disabled:focus, input[readonly]:focus,
-input:disabled:focus-visible, input[readonly]:focus-visible {
+input:disabled:focus,
+input[readonly]:focus,
+input:disabled:focus-visible,
+input[readonly]:focus-visible {
   outline: none !important;
   box-shadow: none !important;
   border-color: var(--border) !important;
@@ -130,7 +144,6 @@ input:disabled:focus-visible, input[readonly]:focus-visible {
 
 /* Specific override for text/number inputs if you want them to feel like DAW controls, 
    but user asked for 'pointer' for all inputs. Added readonly check above for consistency. */
-
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
@@ -156,7 +169,7 @@ input:disabled:focus-visible, input[readonly]:focus-visible {
   @apply list-none m-0 p-3 space-y-1;
 }
 .instrument-list.active {
-    @apply block;
+  @apply block;
 }
 
 #drawerTitle {
@@ -178,93 +191,101 @@ input:disabled:focus-visible, input[readonly]:focus-visible {
 }
 
 .instrument-item {
-    @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 text-sm;
+  @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 text-sm;
 }
 .instrument-item.active {
-    @apply bg-accent text-accent-foreground;
+  @apply bg-accent text-accent-foreground;
 }
 
 .instrument-info {
-    @apply flex-1 min-w-0 mr-2;
+  @apply flex-1 min-w-0 mr-2;
 }
 .instrument-name {
-    @apply font-bold truncate text-foreground text-sm block;
+  @apply font-bold truncate text-foreground text-sm block;
 }
 .instrument-alias {
-    @apply text-xs text-muted-foreground truncate block;
+  @apply text-xs text-muted-foreground truncate block;
 }
 .instrument-channel {
-    @apply text-[10px] font-mono text-muted-foreground block opacity-70;
+  @apply text-[10px] font-mono text-muted-foreground block opacity-70;
 }
 
 .sidebar-del-btn {
-    @apply text-muted-foreground hover:text-destructive transition-colors p-1 bg-transparent border-0 cursor-pointer;
+  @apply text-muted-foreground hover:text-destructive transition-colors p-1 bg-transparent border-0 cursor-pointer;
 }
 
 .song-visualizer {
-    @apply absolute inset-0 z-0 opacity-50 pointer-events-none w-full h-full;
+  @apply absolute inset-0 z-0 opacity-50 pointer-events-none w-full h-full;
 }
 
 strudel-editor {
-    display: none !important;
+  display: none !important;
 }
 
 /* The actual editor generated by Strudel is a sibling div */
 .editor-pane > div:not(.strudel-editor):not(#strudel-editor) {
-    height: 100% !important;
-    width: 100% !important;
+  height: 100% !important;
+  width: 100% !important;
 }
 
 /* Specific CodeMirror overrides if needed */
 .cm-editor {
-    height: 100% !important;
+  height: 100% !important;
 }
 
 .sync-list-item {
-    @apply p-2 border-b border-border/50 last:border-0 text-sm;
+  @apply p-2 border-b border-border/50 last:border-0 text-sm;
 }
 .sync-list-item.highlight {
-    @apply font-bold text-primary;
+  @apply font-bold text-primary;
 }
 
 /* Multislider Styles */
 .multislider-container {
-    @apply flex justify-between items-end h-32 rounded-md p-0 mb-2 gap-1;
+  @apply flex justify-between items-end h-32 rounded-md p-0 mb-2 gap-1;
 }
 
 /* Input inside slider */
 .multislider-input {
-    @apply w-full h-5 text-sm font-mono text-center bg-input-bg border border-border rounded-[3px] text-foreground mt-1 p-0 focus:border-primary focus:outline-none;
-    -moz-appearance: textfield;
-    appearance: none;
+  @apply w-full h-5 text-sm font-mono text-center bg-input-bg border border-border rounded-[3px] text-foreground mt-1 p-0 focus:border-primary focus:outline-none;
+  -moz-appearance: textfield;
+  appearance: none;
 }
 
 .scrub-input {
-    cursor: ns-resize !important;
+  cursor: ns-resize !important;
 }
 
 .multislider-input::-webkit-outer-spin-button,
 .multislider-input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .multislider-track {
-    @apply flex-1 flex flex-col items-center justify-end h-full relative bg-input-bg rounded border border-border pt-1 pb-1 transition-colors;
+  @apply flex-1 flex flex-col items-center justify-end h-full relative bg-input-bg rounded border border-border pt-1 pb-1 transition-colors;
 }
 
 /* Active track highlight */
 .multislider-track:focus-within {
-    @apply border-primary bg-input-bg;
+  @apply border-primary bg-input-bg;
 }
 
 /* Vertical Slider Styling */
 .multislider-range {
-    -webkit-appearance: slider-vertical; /* Standard for vertical sliders in WebKit */
-    appearance: slider-vertical;
-    @apply w-full h-auto flex-1 min-h-0 m-0 cursor-ns-resize bg-transparent opacity-80 transition-opacity hover:opacity-100;
+  -webkit-appearance: slider-vertical; /* Standard for vertical sliders in WebKit */
+  appearance: slider-vertical;
+  @apply w-full h-auto flex-1 min-h-0 m-0 cursor-ns-resize bg-transparent opacity-80 transition-opacity hover:opacity-100;
 }
 
-.multislider-label {
-    @apply h-4 flex items-center justify-center text-[0.7rem] font-bold text-muted-foreground mt-1.5 uppercase w-full text-center border-t border-border pt-1 select-none cursor-pointer transition-colors hover:text-primary;
+.param-label {
+  @apply block text-sm font-medium leading-none text-foreground mb-1.5;
+}
+
+.param-group-header {
+  @apply text-[10px] font-bold tracking-widest text-muted-foreground uppercase mt-8 mb-4 border-b border-border/30 pb-1;
+}
+
+.param-field label {
+  @apply block text-sm font-medium leading-none text-foreground mb-1.5;
 }

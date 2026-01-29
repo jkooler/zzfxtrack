@@ -460,18 +460,24 @@ function reorganizeParameters(useArrayOrder) {
     const musicianOrder = {
         'General': [6, [0, 7], 2, [1, 20]],
         'Envelope (ADSR)': [3, 18, 4, 17, 5],
-        'Effects': [13, 15, 16],
-        'LFO (Volume)': [19, 12],
-        'Pitch': [8, 9, 10, 11, 14]
+        'Effects': [[13, 15, 16]],
+        'LFO (Volume)': [[19, 12]],
+        'Pitch': [[8, 9], [10, 11], 14]
     };
     
     const paramLabels = {
-        0: 'Volume', 1: 'Rand.', 2: 'Frequency (Hz)', 3: 'Attack (s)',
-        4: 'Sustain (s)', 5: 'Release (s)', 6: 'Wave Shape', 7: 'Sh. Curve',
+        0: 'Volume', 1: 'Randomness', 2: 'Frequency (Hz)', 3: 'Attack (s)',
+        4: 'Sustain (s)', 5: 'Release (s)', 6: 'Wave Shape', 7: 'Shape Curve',
         8: 'Slide (Hz/s)', 9: 'Delta Slide', 10: 'Pitch Jump (Hz)',
         11: 'Pitch Jump Time (s)', 12: 'Repeat Time (s)', 13: 'Noise (detune)',
         14: 'Modulation (Hz)', 15: 'Bit Crush', 16: 'Delay (s)',
         17: 'Sustain Volume', 18: 'Decay', 19: 'Tremolo', 20: 'Filter (Hz)'
+    };
+
+    const musicianLabels = {
+        ...paramLabels,
+        1: 'Rand.', 7: 'Sh. Curve', 8: 'Slide', 10: 'Pitch Jump',
+        11: 'P.J. Time', 12: 'Rep. Time', 13: 'Noise', 15: 'BitCr', 16: 'Delay'
     };
     
     const paramHints = {
@@ -522,7 +528,7 @@ function reorganizeParameters(useArrayOrder) {
         Object.entries(musicianOrder).forEach(([groupName, indices]) => {
             const groupHeader = document.createElement('h4');
             groupHeader.textContent = groupName;
-            groupHeader.style.cssText = 'margin: 20px 0 10px 0; color: #888; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;';
+            groupHeader.className = 'param-group-header';
             paramGroup.appendChild(groupHeader);
             
             if (groupName === 'Envelope (ADSR)') {
@@ -613,10 +619,10 @@ function reorganizeParameters(useArrayOrder) {
                         const row = document.createElement('div');
                         row.className = 'flex gap-3';
                         item.forEach(i => {
-                             const field = createParamField(i, paramLabels[i], paramHints[i], false);
-                             field.className += ' flex-1 min-w-0';
-                             row.appendChild(field);
-                        });
+                         const field = createParamField(i, musicianLabels[i], paramHints[i], false);
+                         field.className += ' flex-1 min-w-0';
+                         row.appendChild(field);
+                     });
                         paramGroup.appendChild(row);
                         return;
                     }
@@ -628,7 +634,7 @@ function reorganizeParameters(useArrayOrder) {
                         container.className = 'param-field space-y-1.5 py-1';
                         
                         const label = document.createElement('label');
-                        label.className = 'text-sm font-medium leading-none text-foreground block mb-2';
+                        label.className = 'param-label';
                         label.textContent = paramLabels[i];
                         container.appendChild(label);
                         
@@ -683,7 +689,7 @@ function reorganizeParameters(useArrayOrder) {
                         paramGroup.appendChild(container);
                         
                     } else {
-                        const field = createParamField(i, paramLabels[i], paramHints[i], false);
+                        const field = createParamField(i, musicianLabels[i], paramHints[i], false);
                         paramGroup.appendChild(field);
                     }
                 });
