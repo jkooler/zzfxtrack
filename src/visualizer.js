@@ -1,79 +1,86 @@
 
-let analyser = null;
-let animationFrameId = null;
-let currentCanvas = null;
-let canvasCtx = null;
+export class ScopeVisualizer {
+    constructor(analyser) {
+        this.analyser = analyser;
+        this.canvas = null;
+        this.ctx = null;
+        this.animationId = null;
+        this.draw = this.draw.bind(this);
+    }
+
+    attach(canvas) {
+        if (this.canvas === canvas) return;
+        
+        // Cleanup old
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+
+        this.canvas = canvas;
+        
+        if (canvas) {
+            this.ctx = canvas.getContext('2d');
+            this.draw();
+        }
+    }
+
+    draw() {
+        if (!this.canvas) return;
+        this.animationId = requestAnimationFrame(this.draw);
+
+        if (!this.analyser) return;
+
+        const bufferLength = this.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        this.analyser.getByteTimeDomainData(dataArray);
+
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        const ctx = this.ctx;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffffff'; 
+        ctx.beginPath();
+
+        const sliceWidth = width * 1.0 / bufferLength;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+            const v = dataArray[i] / 128.0; 
+            const y = v * height / 2;
+
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+
+            x += sliceWidth;
+        }
+
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+    }
+}
+
+// Global singleton for backward compatibility (Songs List)
+let globalVisualizer = null;
+let globalAnalyser = null;
 
 export function getVisualizerAnalyser(audioCtx) {
-    if (!analyser) {
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256; // Smaller FFT for smoother, faster bars
-        analyser.smoothingTimeConstant = 0.5; // Smooth out jitter
+    if (!globalAnalyser) {
+        globalAnalyser = audioCtx.createAnalyser();
+        globalAnalyser.fftSize = 256;
+        globalAnalyser.smoothingTimeConstant = 0.5;
+        globalVisualizer = new ScopeVisualizer(globalAnalyser);
     }
-    return analyser;
+    return globalAnalyser;
 }
 
 export function attachVisualizer(canvas) {
-    // If attaching to same canvas, do nothing
-    if (currentCanvas === canvas) return;
-    
-    // Stop old animation
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
+    if (globalVisualizer) {
+        globalVisualizer.attach(canvas);
     }
-    
-    currentCanvas = canvas;
-    
-    if (canvas) {
-        canvasCtx = canvas.getContext('2d');
-        draw();
-    }
-}
-
-function draw() {
-    if (!currentCanvas) return;
-    
-    animationFrameId = requestAnimationFrame(draw);
-    
-    if (!analyser) return;
-    
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteTimeDomainData(dataArray);
-    
-    // Debug: Check if we have any signal
-    // let hasSignal = false;
-    // for(let i=0; i<bufferLength; i++) {
-    //    if (dataArray[i] !== 128) { hasSignal = true; break; }
-    // }
-    // if (hasSignal) console.log("Visualizer Signal Detected!");
-    
-    const width = currentCanvas.width;
-    const height = currentCanvas.height;
-    
-    canvasCtx.clearRect(0, 0, width, height);
-    
-    canvasCtx.lineWidth = 2;
-    canvasCtx.strokeStyle = '#ffffff'; // White oscilloscope
-    canvasCtx.beginPath();
-    
-    const sliceWidth = width * 1.0 / bufferLength;
-    let x = 0;
-    
-    for(let i = 0; i < bufferLength; i++) {
-        const v = dataArray[i] / 128.0; // Normalizing to 0..2
-        const y = v * height / 2; // Scaling to canvas height
-        
-        if(i === 0) {
-            canvasCtx.moveTo(x, y);
-        } else {
-            canvasCtx.lineTo(x, y);
-        }
-        
-        x += sliceWidth;
-    }
-    
-    canvasCtx.lineTo(currentCanvas.width, currentCanvas.height/2);
-    canvasCtx.stroke();
 }

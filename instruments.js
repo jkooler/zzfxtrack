@@ -28,6 +28,7 @@ export const zzfxm_demo_bass = [0.7,0,55,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,0.3,0,
 export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
 export const zzfxm_demo_kickdrum = [1,0,130,0,0.08,0.05,0,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
 export const zzfxm_aa = [0.2,0,220,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_adad = [0.2,0,440,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
 
 /**
  * Strudel Sound Names to ZzFXM Channel Indices
@@ -53,7 +54,8 @@ export const instrumentMapping = {
     "demo-bass": 15,
     "demo-hh-open": 16,
     "demo-kickdrum": 17,
-    "aa": 18
+    "aa": 18,
+    "adad": 19
 };
 
 // Map them to IDs you want to use in Strudel
@@ -76,7 +78,8 @@ export const instruments = {
     "demo-bass": zzfxm_demo_bass,
     "demo-hh-open": zzfxm_demo_hh_open,
     "demo-kickdrum": zzfxm_demo_kickdrum,
-    "aa": zzfxm_aa
+    "aa": zzfxm_aa,
+    "adad": zzfxm_adad
 };
 
 // Also export as array for the baker (ordered by channel index)
@@ -99,5 +102,6 @@ export const instrumentArray = [
     zzfxm_demo_bass,
     zzfxm_demo_hh_open,
     zzfxm_demo_kickdrum,
-    zzfxm_aa
+    zzfxm_aa,
+    zzfxm_adad
 ];

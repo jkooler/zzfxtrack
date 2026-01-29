@@ -6,7 +6,7 @@ import { bakePattern } from './baker-logic.js';
 import { playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
-import { initInstrumentUI, getInstrumentsForBaker } from './instrument-ui.js';
+import { initInstrumentUI, getInstrumentsForBaker, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
 import { createIcons, icons } from 'lucide';
 
 // --- Global State ---
@@ -16,6 +16,7 @@ let lastBakedData = null;
 let autoSaveTimeout = null; // Debounce timer for auto-save
 let isPreviewPlaying = false;
 let playingSongFilename = null;
+let pendingExternalUrl = null;
 
 // --- DOM Elements ---
 const dom = {
@@ -56,6 +57,11 @@ const dom = {
     closeJsonModalBtn: document.getElementById('closeJsonModalBtn'),
     closeJsonModalBottomBtn: document.getElementById('closeJsonModalBottomBtn'),
     copyJsonBtn: document.getElementById('copyJsonBtn'),
+
+    // External Link Modal
+    externalLinkModal: document.getElementById('externalLinkModal'),
+    confirmExternalLink: document.getElementById('confirmExternalLink'),
+    cancelExternalLink: document.getElementById('cancelExternalLink'),
 };
 
 // --- View State Helpers ---
@@ -64,16 +70,15 @@ function showWelcome() {
     dom.editorContainer.style.display = 'none';
     dom.playBtn.style.visibility = 'hidden';
     dom.bakeBtn.disabled = true;
-    dom.bakeBtn.disabled = true;
+    
+    updateSongSelectionState(false);
     dom.previewPlayBtn.disabled = true;
     if(dom.showJsonBtn) dom.showJsonBtn.disabled = true;
     
     // Clear state
     currentSongFilename = null;
     playingSongFilename = null;
-    dom.songNameInput.value = '';
-    dom.songNameInput.placeholder = 'Select a song...';
-    dom.songNameInput.readOnly = true;
+    dom.songNameInput.classList.add('hidden');
     dom.saveSongNameBtn.style.display = 'none';
     if(dom.repl.editor) dom.repl.editor.stop();
     renderPlayButton();
@@ -89,6 +94,7 @@ function showEditor() {
     dom.editorContainer.style.display = 'flex';
     dom.playBtn.style.visibility = 'visible';
     dom.bakeBtn.disabled = false;
+    dom.songNameInput.classList.remove('hidden');
 }
 
 // --- Initialization ---
@@ -120,6 +126,9 @@ async function init() {
     // 6. Setup auto-save on input
     setupAutoSave();
     
+    // 6b. Intercept external links
+    setupExternalLinkInterception();
+    
     // Start in Welcome State
     showWelcome();
     
@@ -129,6 +138,59 @@ async function init() {
     // 7. Initialize Icons
     // 7. Initialize Icons
     createIcons({ icons });
+
+    // 8. Sync Theme Colors from CodeMirror to Sidebar
+    setTimeout(syncThemeColors, 1000); // Wait for editor render
+}
+
+/**
+ * Extract Strudel/CodeMirror theme colors (specifically .ͼ11 / string color)
+ * and apply them to the sidebar instrument highlights.
+ */
+function syncThemeColors() {
+    // Try to find an element with the .ͼ11 class (created by Strudel/CM)
+    // or a string token in the editor
+    const stringSpan = document.querySelector('.cm-content span[class*="ͼ11"], .cm-content span[class*="Accepted"]'); 
+    // Note: The class name ͼ11 is generated and might vary, but user specified it.
+    // Ideally we look for a span that IS a string.
+    
+    // Fallback: Check for ANY span that looks like a string (e.g. green in OneDark)
+    // We scan spans in the editor
+    let color = null;
+    
+    // 1. Direct class lookup (High specificity based on user request)
+    const exactMatch = document.querySelector('.ͼ11');
+    if (exactMatch) {
+       color = getComputedStyle(exactMatch).color;
+    } 
+    
+    // 2. Token lookup (More robust)
+    if (!color) {
+        const spans = document.querySelectorAll('.cm-content span');
+        // Look for a span that contains a known string delimiter like "
+        for (const span of spans) {
+             const text = span.innerText;
+             // Strudel strings usually start with " or '
+             if (text.match(/^["'].*["']$/) || span.classList.contains('ͼ11')) {
+                 color = getComputedStyle(span).color;
+                 break;
+             }
+        }
+    }
+
+    if (color) {
+        console.log('[ThemeSync] Found Strudel string color:', color);
+        document.documentElement.style.setProperty('--strudel-inst-color', color);
+        
+        // Calculate glow (same color, lower opacity)
+        // Convert rgb(r, g, b) to rgba(r, g, b, alpha)
+        if (color.startsWith('rgb')) {
+             const rgbValues = color.match(/\d+/g).join(', ');
+             const glowColor = `rgba(${rgbValues}, 0.4)`;
+             const dimColor = `rgba(${rgbValues}, 0.5)`;
+             document.documentElement.style.setProperty('--strudel-inst-color-glow', glowColor);
+        }
+    }
 }
 
 /**
@@ -185,6 +247,9 @@ function setupAutoSave() {
                 // Check if code actually changed
                 if (currentCode !== lastCode) {
                     lastCode = currentCode;
+                    
+                    // Update indicators in sidebar
+                    updateInstrumentUsage(currentCode);
                     
                     // IMMEDIATELY save to localStorage as backup
                     localStorage.setItem(`unsaved_${currentSongFilename}`, currentCode);
@@ -462,6 +527,10 @@ async function loadSong(filename) {
         
         renderPlayButton(); // Update play button context (Stop vs Play)
         
+        // Update indicators in sidebar
+        updateInstrumentUsage(editorCode);
+        updateSongSelectionState(true);
+
         setStatus('Loaded', 'success');
     } catch (e) {
         console.error(e);
@@ -963,6 +1032,57 @@ if(dom.showJsonBtn) dom.showJsonBtn.addEventListener('click', openJsonModal);
 if(dom.closeJsonModalBtn) dom.closeJsonModalBtn.addEventListener('click', closeJsonModal);
 if(dom.closeJsonModalBottomBtn) dom.closeJsonModalBottomBtn.addEventListener('click', closeJsonModal);
 if(dom.copyJsonBtn) dom.copyJsonBtn.addEventListener('click', copyJsonToClipboard);
+
+/**
+ * Handle confirmation of external links
+ */
+function setupExternalLinkInterception() {
+    // Intercept all link clicks
+    document.addEventListener('click', (e) => {
+        // Find the nearest anchor tag
+        const link = e.target.closest('a');
+        if (!link) return;
+
+        const href = link.getAttribute('href');
+        if (!href) return;
+
+        // Check if it's an external link
+        const isExternal = href.startsWith('http') || href.startsWith('//');
+        
+        // Also check if it's pointing to the same origin
+        const isSameOrigin = href.startsWith(window.location.origin) || (href.startsWith('/') && !href.startsWith('//'));
+
+        if (isExternal && !isSameOrigin) {
+            e.preventDefault();
+            pendingExternalUrl = href;
+            dom.externalLinkModal.classList.add('open');
+        }
+    });
+
+    // Handle modal buttons
+    dom.confirmExternalLink.addEventListener('click', () => {
+        if (pendingExternalUrl) {
+            window.open(pendingExternalUrl, '_blank', 'noopener,noreferrer');
+        }
+        closeExternalLinkModal();
+    });
+
+    dom.cancelExternalLink.addEventListener('click', () => {
+        closeExternalLinkModal();
+    });
+
+    // Close on overlay click
+    dom.externalLinkModal.addEventListener('click', (e) => {
+        if (e.target === dom.externalLinkModal) {
+            closeExternalLinkModal();
+        }
+    });
+}
+
+function closeExternalLinkModal() {
+    dom.externalLinkModal.classList.remove('open');
+    pendingExternalUrl = null;
+}
 
 // Start
 init();

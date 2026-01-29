@@ -18,10 +18,13 @@ import { autoUpdateInstrumentsFile } from './file-generator.js';
 
 import { reloadInstruments } from './repl-app.js';
 import { createIcons, icons } from 'lucide';
+import { getInstrumentAnalyser } from './zzfx-loader.js';
+import { ScopeVisualizer } from './visualizer.js';
 
 // State
 let currentInstrumentId = null;
 let currentView = 'songs'; // 'songs' or 'instruments'
+let hasSelectedSong = false;
 
 // DOM Elements
 const dom = {
@@ -37,6 +40,8 @@ const dom = {
     newSongBtn: document.getElementById('newSongBtn'),
     newInstrumentBtn: document.getElementById('newInstrumentBtn'),
     downloadInstrumentsBtn: document.getElementById('downloadInstrumentsBtn'),
+    instrumentControls: document.getElementById('instrumentControls'),
+    usedInstrumentsOnly: document.getElementById('usedInstrumentsOnly'),
     
     // Drawer
     instrumentDrawer: document.getElementById('instrumentDrawer'),
@@ -117,6 +122,34 @@ function setupEventListeners() {
     // Tab switching
     dom.songsTab.addEventListener('click', () => switchView('songs'));
     dom.instrumentsTab.addEventListener('click', () => switchView('instruments'));
+
+    // Instrument Controls
+    if (dom.usedInstrumentsOnly) {
+        dom.usedInstrumentsOnly.addEventListener('change', () => {
+            renderInstrumentList();
+        });
+    }
+
+    // Listen for instrument triggers (highlighting)
+    if (typeof window !== 'undefined') {
+        window.addEventListener('strudel:instrument-trigger', (e) => {
+            const { id, duration } = e.detail;
+            const li = dom.instrumentList.querySelector(`li[data-alias="${id}"]`);
+            if (li) {
+                li.classList.add('playing');
+                
+                if (li._playingTimeout) clearTimeout(li._playingTimeout);
+                
+                // Keep highlighted for duration, but at least 100ms for visibility
+                const flashDuration = Math.max(duration * 1000, 100);
+                
+                li._playingTimeout = setTimeout(() => {
+                    li.classList.remove('playing');
+                    li._playingTimeout = null;
+                }, flashDuration);
+            }
+        });
+    }
     
     // New instrument
     dom.newInstrumentBtn.addEventListener('click', openNewInstrumentModal);
@@ -848,6 +881,28 @@ function createParamField(index, label, hint, showIndex) {
 }
 
 /**
+ * Refresh visibility of instrument-specific controls (like 'Used in song' checkbox)
+ */
+function refreshInstrumentControlsVisibility() {
+    if (!dom.instrumentControls) return;
+    
+    // Only show if we are in instruments view AND a song is actually selected/loaded
+    if (currentView === 'instruments' && hasSelectedSong) {
+        dom.instrumentControls.classList.remove('hidden');
+    } else {
+        dom.instrumentControls.classList.add('hidden');
+    }
+}
+
+/**
+ * Handle song selection state from main app
+ */
+export function updateSongSelectionState(isLoaded) {
+    hasSelectedSong = isLoaded;
+    refreshInstrumentControlsVisibility();
+}
+
+/**
  * Switch between songs and instruments view
  */
 function switchView(view) {
@@ -870,8 +925,6 @@ function switchView(view) {
         
         dom.downloadInstrumentsBtn.classList.add('hidden');
         dom.downloadInstrumentsBtn.classList.remove('inline-flex');
-        
-        closeDrawer();
     } else {
         dom.songsTab.classList.remove('active');
         dom.instrumentsTab.classList.add('active');
@@ -891,32 +944,51 @@ function switchView(view) {
         dom.downloadInstrumentsBtn.classList.add('inline-flex');
     }
     
+    refreshInstrumentControlsVisibility();
+    
     createIcons({ icons });
 }
 
 /**
  * Render instrument list
  */
+
+let activeVisualizers = [];
+
 function renderInstrumentList() {
+    // Cleanup old visualizers
+    activeVisualizers.forEach(v => v.attach(null));
+    activeVisualizers = [];
+
     const instruments = loadInstruments();
     dom.instrumentList.innerHTML = '';
+    
+    const filterUsed = dom.usedInstrumentsOnly && dom.usedInstrumentsOnly.checked;
     
     // Reverse order so newest (highest channel) appears first
     const reversed = [...instruments].reverse();
     
     reversed.forEach((inst, index) => {
+        // Filter if needed
+        if (filterUsed && lastKnownCode) {
+            const regex = new RegExp(`["']${inst.strudelAlias}["']|\\b${inst.strudelAlias}\\b`, 'g');
+            if (!regex.test(lastKnownCode)) return;
+        }
+
         const li = document.createElement('li');
         li.className = `instrument-item ${inst.id === currentInstrumentId ? 'active' : ''}`;
         li.draggable = true;
         li.dataset.instrumentId = inst.id;
+        li.dataset.alias = inst.strudelAlias; // For DOM lookups
         
         li.innerHTML = `
+            <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
             <div class="instrument-info" style="cursor: move; display: flex; align-items: center; gap: 8px;">
-                <i data-lucide="grip-vertical" class="w-4 h-4 text-muted-foreground"></i>
-                <div>
-                    <div class="instrument-name">${inst.strudelAlias}</div>
-                    <div class="instrument-alias">${inst.exportName}</div>
-                    <div class="instrument-channel">ch: ${inst.channel}</div>
+                <canvas class="instrument-scope w-8 h-8 rounded bg-black/20 border border-border/20 hidden md:block opacity-50 transition-opacity" width="64" height="64"></canvas>
+                <div class="min-w-0">
+                    <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
+                    <div class="instrument-alias opacity-70">${inst.exportName}</div>
+                    <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">CH: ${inst.channel}</div>
                 </div>
             </div>
             <div class="song-item-actions">
@@ -924,6 +996,17 @@ function renderInstrumentList() {
             </div>
         `;
         
+        // Attach Visualizer
+        const canvas = li.querySelector('canvas');
+        if (canvas) {
+            const analyser = getInstrumentAnalyser(inst.strudelAlias);
+            if (analyser) {
+                const viz = new ScopeVisualizer(analyser);
+                viz.attach(canvas);
+                activeVisualizers.push(viz);
+            }
+        }
+
         // Click to edit
         li.querySelector('.instrument-info').addEventListener('click', () => {
              openDrawer(inst.id);
@@ -947,7 +1030,47 @@ function renderInstrumentList() {
     });
     
     createIcons({ icons });
+
+    // Refresh usage indicators (dots)
+    updateInstrumentUsage();
 }
+
+let lastKnownCode = '';
+
+/**
+ * Update instrument usage indicators based on song code
+ */
+export function updateInstrumentUsage(code) {
+    if (code !== undefined) {
+        lastKnownCode = code;
+    }
+    
+    if (!lastKnownCode) return;
+    
+    // Get all instrument items
+    const items = dom.instrumentList.querySelectorAll('.instrument-item');
+    
+    items.forEach(item => {
+        const alias = item.dataset.alias;
+        if (!alias) return;
+        
+        // Check if alias is used in code
+        // We look for the alias in quotes or as a separate word
+        // Regex \b (word boundary) is tricky with escapes
+        const regex = new RegExp(`["']${alias}["']|\\b${alias}\\b`, 'g');
+        const isUsed = regex.test(lastKnownCode);
+        
+        const indicator = item.querySelector('.usage-indicator');
+        if (indicator) {
+            if (isUsed) {
+                indicator.classList.remove('hidden');
+            } else {
+                indicator.classList.add('hidden');
+            }
+        }
+    });
+}
+
 
 // Drag and drop state
 let draggedElement = null;

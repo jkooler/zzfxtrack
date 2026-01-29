@@ -2,6 +2,23 @@ import { registerSound, getAudioContext, connectToDestination, getAnalyserById }
 import { noteToMidi } from "@strudel/core";
 import { getVisualizerAnalyser } from "./visualizer.js";
 
+
+const instrumentAnalysers = new Map();
+
+export function getInstrumentAnalyser(id) {
+    if (instrumentAnalysers.has(id)) return instrumentAnalysers.get(id);
+
+    const ctx = getAudioContext();
+    if (!ctx) return null;
+
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.5;
+    
+    instrumentAnalysers.set(id, analyser);
+    return analyser;
+}
+
 /**
  * ZzFXMicro-compatible Sample Generator
  * 
@@ -270,9 +287,20 @@ export function loadZzFXInstruments(instrumentMap) {
             const analyser = getAnalyserById(0);
             if (analyser) gainNode.connect(analyser);
 
-            // Connect to our custom sidebar visualizer
+            // Connect to our custom global visualizer (Songs list)
             const vizAnalyser = getVisualizerAnalyser(audioCtx);
             if (vizAnalyser) gainNode.connect(vizAnalyser);
+
+            // Connect to Per-Instrument Analyser (Instrument List)
+            const instAnalyser = getInstrumentAnalyser(id);
+            if (instAnalyser) gainNode.connect(instAnalyser);
+
+            // Dispatch Trigger Event for UI highlighting
+            if (typeof window !== 'undefined') {
+                 window.dispatchEvent(new CustomEvent('strudel:instrument-trigger', {
+                    detail: { id: id, time: startTime, duration: (samples.length / zzfxR) }
+                }));
+            }
 
             source.start(startTime);
             source.onended = () => {
