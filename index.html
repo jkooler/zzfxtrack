@@ -906,14 +906,13 @@
           <label class="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
-              id="unlimitedChannels"
-              checked
+              id="limitChannels"
               class="w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
             />
-            <span class="text-sm font-medium text-foreground">Unlimited channels</span>
+            <span class="text-sm font-medium text-foreground">Limit channel usage</span>
           </label>
           
-          <div id="channelLimitGroup" class="space-y-2 opacity-50 pointer-events-none">
+          <div id="channelLimitGroup" class="space-y-2 hidden">
             <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
               Max Channels
             </label>
@@ -923,10 +922,25 @@
               value="16"
               min="1"
               max="64"
+              disabled
               class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             />
             <p class="text-xs text-muted-foreground/80 italic">
               Note: Some notes can be cut out, especially if you're using chords in Strudel.
+            </p>
+          </div>
+
+          <div class="border-t border-border pt-4">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                id="normalizeLayers"
+                class="w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
+              />
+              <span class="text-sm font-medium text-foreground">Normalize Layers</span>
+            </label>
+            <p class="text-xs text-muted-foreground/80 italic mt-2 ml-7">
+              Reduce gain when the same note plays multiple times simultaneously (1/√n scaling)
             </p>
           </div>
         </div>

@@ -96,11 +96,16 @@ export const buildSong = (song) => {
                         // vol = vol * (1 - atten/MAX)
                         p[0] *= (1 - (attenuation / MAX_ATTENUATION));
                         
+                        // Store intended volume for normalization
+                        // This preserves relative volume differences between instruments
+                        const intendedVol = p[0];
+                        
                         // Generate Samples
                         let sound = zzfxG(...p);
                         
                         // Per-Note Normalization (Match Strudel Behavior)
-                        // This ensures consistent volume regardless of ZzFX params
+                        // Normalize to 0.5 peak, but scale by intended volume to preserve
+                        // relative loudness between instruments (e.g., hi-hat 0.3 vs pad 0.5)
                         let maxAmp = 0;
                         for(let s=0; s<sound.length; s++) {
                              const abs = Math.abs(sound[s]);
@@ -108,15 +113,8 @@ export const buildSong = (song) => {
                         }
                         
                         if (maxAmp > 0) {
-                            // Target Peak: 0.5 (Standard Strudel Headroom)
-                            // Apply Attenuation Gain here
-                             
-                            // Formula:
-                            // Normalized (0.5) * PatternGain (1 - atten/20)
-                            let noteGain = 1.0;
-                            noteGain *= (1 - (attenuation / MAX_ATTENUATION));
-                            
-                            const scale = (0.5 / maxAmp) * noteGain;
+                            // Scale to 0.5 headroom, preserving intended volume
+                            const scale = (0.5 / maxAmp) * intendedVol;
                             
                             for(let s=0; s<sound.length; s++) {
                                 sound[s] *= scale;

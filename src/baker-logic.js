@@ -50,7 +50,7 @@ function getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoices = Infin
  * @returns {Object} { song: ZzFXM song array, stats: { channelCount, droppedNotes } }
  */
 export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8, options = {}) {
-    const { maxVoicesPerInstrument = Infinity } = options;
+    const { maxVoicesPerInstrument = Infinity, normalizeUnisonLayers = false } = options;
     
     const totalRows = cycles * ROWS_PER_CYCLE;
     const events = pattern.queryArc(0, cycles);
@@ -65,24 +65,60 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
     console.log("Baker Stats:", {
         instrCount: instrumentArray?.length,
         mappingKeys: Object.keys(instrumentMapping || {}).length,
-        mappingPreview: instrumentMapping
+        mappingPreview: instrumentMapping,
+        normalizeUnisonLayers
     });
 
-    events.forEach((e) => {
+    // Helper to resolve instrument index from event
+    function resolveInstIndex(e) {
         let instIndex = 0;
         let s = e.value.s;
-        
         if (typeof s !== 'undefined') {
-            // Check mapping first
             if (instrumentMapping[s] !== undefined) {
                 instIndex = instrumentMapping[s];
             } else {
-                // Fallback to numeric parsing
                 instIndex = parseInt(s);
                 if (isNaN(instIndex)) instIndex = 0;
             }
         }
+        return instIndex;
+    }
 
+    // Helper to calculate semitone shift for an event
+    function calculateSemitone(e, instIndex) {
+        let semitone = 0;
+        const rawNote = e.value.note ?? e.value.n ?? 60;
+        const midiNote = typeof rawNote === 'string' ? noteToMidi(rawNote) : rawNote;
+        
+        if (typeof midiNote === 'number' && !isNaN(midiNote)) {
+            let baseFreq = 440;
+            if (instrumentArray && instrumentArray[instIndex]) {
+                baseFreq = instrumentArray[instIndex][2] || 440;
+            }
+            const baseMidi = 12 * Math.log2(baseFreq / 440) + 69;
+            semitone = midiNote - baseMidi;
+        }
+        return semitone;
+    }
+
+    // --- PASS 1: Build unison map if normalization is enabled ---
+    // Key: "instIndex-gridIndex-semitone", Value: count of identical notes
+    const unisonMap = new Map();
+    if (normalizeUnisonLayers) {
+        events.forEach((e) => {
+            const gridIndex = Math.floor(e.whole.begin.valueOf() * ROWS_PER_CYCLE);
+            if (gridIndex < totalRows) {
+                const instIndex = resolveInstIndex(e);
+                const semitone = Math.round(calculateSemitone(e, instIndex));
+                const key = `${instIndex}-${gridIndex}-${semitone}`;
+                unisonMap.set(key, (unisonMap.get(key) || 0) + 1);
+            }
+        });
+    }
+
+    // --- PASS 2: Process events ---
+    events.forEach((e) => {
+        const instIndex = resolveInstIndex(e);
         const gridIndex = Math.floor(e.whole.begin.valueOf() * ROWS_PER_CYCLE);
         
         if (gridIndex < totalRows) {
@@ -101,27 +137,22 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
             if (!tracks[trackKey]) tracks[trackKey] = Array(totalRows).fill(0);
 
             // Pitch
-            let semitone = 0;
-            const rawNote = e.value.note ?? e.value.n ?? 60;
-            const midiNote = typeof rawNote === 'string' ? noteToMidi(rawNote) : rawNote;
-            
-            if (typeof midiNote === 'number' && !isNaN(midiNote)) {
-                // Calculate Base MIDI of the instrument
-                // ZzFX Freq is param index 2
-                let baseFreq = 440;
-                if (instrumentArray && instrumentArray[instIndex]) {
-                    baseFreq = instrumentArray[instIndex][2] || 440;
-                }
-                
-                // Formula: 12 * log2(freq / 440) + 69
-                const baseMidi = 12 * Math.log2(baseFreq / 440) + 69;
-                
-                // Shift = Target - Base
-                semitone = midiNote - baseMidi;
-            }
+            const semitone = calculateSemitone(e, instIndex);
             
             // Velocity (Mapped to Attenuation)
             let gain = (typeof e.value.gain !== 'undefined') ? e.value.gain : 1;
+            
+            // Apply unison normalization if enabled
+            // Only affects identical notes (same instrument + same time + same pitch)
+            if (normalizeUnisonLayers) {
+                const unisonKey = `${instIndex}-${gridIndex}-${Math.round(semitone)}`;
+                const unisonCount = unisonMap.get(unisonKey) || 1;
+                if (unisonCount > 1) {
+                    // Apply 1/sqrt(n) scaling for stacked identical notes
+                    gain *= (1 / Math.sqrt(unisonCount));
+                }
+            }
+            
             let attenuation = Math.floor((1 - gain) * MAX_ATTENUATION);
 
             // ZzFXMicro Pattern Format: [Instrument, Attenuation, Note]

@@ -66,9 +66,10 @@ const dom = {
     // Export Settings Modal
     exportSettingsBtn: document.getElementById('exportSettingsBtn'),
     exportSettingsModal: document.getElementById('exportSettingsModal'),
-    unlimitedChannels: document.getElementById('unlimitedChannels'),
+    limitChannels: document.getElementById('limitChannels'),
     channelLimitGroup: document.getElementById('channelLimitGroup'),
     maxChannelsInput: document.getElementById('maxChannelsInput'),
+    normalizeLayers: document.getElementById('normalizeLayers'),
     closeExportSettings: document.getElementById('closeExportSettings'),
 };
 
@@ -637,12 +638,14 @@ async function bakeCurrentSong() {
         const { array: instrumentArray, mapping: instrumentMapping } = await getInstrumentsForBaker();
         
         // 4. Get export settings
-        const isUnlimited = dom.unlimitedChannels.checked;
-        const maxChannels = isUnlimited ? Infinity : parseInt(dom.maxChannelsInput.value) || 16;
+        const isLimitEnabled = dom.limitChannels.checked;
+        const maxChannels = isLimitEnabled ? (parseInt(dom.maxChannelsInput.value) || 16) : Infinity;
+        const normalizeLayers = dom.normalizeLayers?.checked || false;
         
         // 5. Bake!
         const result = bakePattern(pattern, bpm, instrumentArray, instrumentMapping, 8, {
-            maxVoicesPerInstrument: maxChannels
+            maxVoicesPerInstrument: maxChannels,
+            normalizeUnisonLayers: normalizeLayers
         });
         const songData = result.song;
         const { channelCount, droppedNotes } = result.stats;
@@ -1126,12 +1129,14 @@ function setupExportSettingsModal() {
     });
     
     // Toggle channel limit input based on checkbox
-    dom.unlimitedChannels.addEventListener('change', () => {
-        if (dom.unlimitedChannels.checked) {
-            dom.channelLimitGroup.classList.add('opacity-50', 'pointer-events-none');
-        } else {
-            dom.channelLimitGroup.classList.remove('opacity-50', 'pointer-events-none');
+    dom.limitChannels.addEventListener('change', () => {
+        if (dom.limitChannels.checked) {
+            dom.channelLimitGroup.classList.remove('hidden');
+            dom.maxChannelsInput.disabled = false;
             dom.maxChannelsInput.focus();
+        } else {
+            dom.channelLimitGroup.classList.add('hidden');
+            dom.maxChannelsInput.disabled = true;
         }
     });
 }
