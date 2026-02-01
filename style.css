@@ -323,3 +323,82 @@ strudel-editor {
 .param-field label {
   @apply block text-sm font-medium leading-none text-foreground mb-1.5;
 }
+
+/* Tracker Styles */
+.tracker-grid {
+  @apply flex gap-4 p-2;
+}
+
+.tracker-channel {
+  @apply flex flex-col gap-1 min-w-[120px];
+}
+
+.tracker-channel-header {
+  @apply flex flex-col gap-1 pb-2 border-b border-border;
+}
+
+.tracker-channel-select {
+  @apply w-full h-8 rounded-md border border-input bg-input-bg px-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+}
+
+.tracker-channel-label {
+  @apply text-xs font-bold text-muted-foreground uppercase tracking-wider text-center;
+}
+
+.tracker-row {
+  @apply flex items-center gap-1;
+}
+
+.tracker-step-num {
+  @apply w-5 text-[10px] text-muted-foreground font-mono text-right;
+}
+
+.tracker-cell {
+  @apply flex-1 h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all hover:border-primary/50;
+}
+
+.tracker-cell.active {
+  @apply border-primary bg-primary/10 text-primary;
+}
+
+.tracker-cell.has-note {
+  @apply bg-accent/20 text-accent-foreground font-bold;
+}
+
+.tracker-cell.rest {
+  @apply text-muted-foreground/50;
+}
+
+/* Keyboard mapping hint overlay */
+.tracker-keyboard-hint {
+  @apply fixed bottom-4 right-4 bg-card border border-border rounded-lg p-3 shadow-lg text-xs;
+}
+
+/* Blocks Styles */
+.blocks-list {
+  @apply space-y-2;
+}
+
+.block-item {
+  @apply p-3 rounded-md border border-border bg-card cursor-pointer transition-all hover:border-primary/50 hover:bg-accent/10;
+}
+
+.block-item.selected {
+  @apply bg-accent border-primary;
+}
+
+.block-name {
+  @apply font-bold text-sm text-foreground;
+}
+
+.block-description {
+  @apply text-xs text-muted-foreground mt-1;
+}
+
+.blocks-empty {
+  @apply text-center py-8 text-muted-foreground;
+}
+
+.selected-block-info {
+  @apply p-3 bg-muted rounded-md;
+}

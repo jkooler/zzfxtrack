@@ -494,6 +494,15 @@
             >Saved</span
           >
         </div>
+
+        <!-- Blocks Button (Header Right) -->
+        <button
+          id="blocksBtn"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 flex items-center gap-2"
+          title="Open Blocks (Ctrl+B)"
+        >
+          <i data-lucide="box" class="w-4 h-4"></i> Blocks
+        </button>
       </header>
 
       <!-- Welcome View -->
@@ -984,6 +993,154 @@
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
           >
             Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blocks Modal -->
+    <div
+      id="blocksModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-2xl max-h-[85vh] gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+      >
+        <div class="flex items-center justify-between">
+          <h2
+            class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono"
+          >
+            Blocks
+          </h2>
+          <button
+            id="closeBlocksBtn"
+            class="text-muted-foreground hover:text-foreground"
+          >
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+
+        <p class="text-sm text-muted-foreground">
+          Blocks are reusable musical patterns. Create a block with the tracker, then insert it into any song.
+        </p>
+
+        <!-- Blocks List -->
+        <div id="blocksList" class="blocks-list flex-1 overflow-y-auto min-h-[200px] max-h-[400px] space-y-2 border border-border rounded-md p-3">
+          <!-- Blocks will be rendered here -->
+        </div>
+
+        <!-- Selected Block Info -->
+        <div class="selected-block-info p-3 bg-muted rounded-md">
+          <div class="text-xs text-muted-foreground uppercase tracking-wider font-bold mb-1">Selected</div>
+          <div id="selectedBlockName" class="text-sm font-medium text-foreground">No block selected</div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end gap-2">
+          <button
+            id="createBlockBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i> Create Block
+          </button>
+          <button
+            id="deleteBlockBtn"
+            disabled
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-destructive hover:text-destructive-foreground h-9 px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+          </button>
+          <button
+            id="insertBlockBtn"
+            disabled
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
+          >
+            <i data-lucide="arrow-down" class="w-4 h-4"></i> Insert into Song
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tracker Modal -->
+    <div
+      id="trackerModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-5xl max-h-[90vh] gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+      >
+        <div class="flex items-center justify-between">
+          <h2
+            class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono"
+          >
+            Tracker
+          </h2>
+          <button
+            id="closeTrackerBtn"
+            class="text-muted-foreground hover:text-foreground"
+          >
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+
+        <!-- Tracker Grid -->
+        <div class="tracker-container flex-1 overflow-auto">
+          <div id="trackerGrid" class="tracker-grid flex gap-4">
+            <!-- 4 channels will be generated here -->
+          </div>
+        </div>
+
+        <!-- Mini Notation Output -->
+        <div class="space-y-2">
+          <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+            Generated Mini-Notation
+          </label>
+          <textarea
+            id="trackerOutput"
+            readonly
+            class="w-full h-24 rounded-md border border-input bg-muted px-3 py-2 text-xs font-mono text-muted-foreground resize-none"
+            placeholder="Tracker output will appear here..."
+          ></textarea>
+        </div>
+
+        <!-- Keyboard Help -->
+        <div class="text-xs text-muted-foreground border-t border-border pt-3">
+          <span class="font-bold">Keyboard:</span> 
+          <span class="font-mono bg-muted px-1 rounded">z</span>=C3 
+          <span class="font-mono bg-muted px-1 rounded">s</span>=C#3 
+          <span class="font-mono bg-muted px-1 rounded">x</span>=D3 
+          <span class="font-mono bg-muted px-1 rounded">d</span>=D#3 
+          <span class="font-mono bg-muted px-1 rounded">c</span>=E3 
+          <span class="font-mono bg-muted px-1 rounded">v</span>=F3 
+          <span class="font-mono bg-muted px-1 rounded">g</span>=F#3 
+          <span class="font-mono bg-muted px-1 rounded">b</span>=G3 
+          <span class="font-mono bg-muted px-1 rounded">h</span>=G#3 
+          <span class="font-mono bg-muted px-1 rounded">n</span>=A3 
+          <span class="font-mono bg-muted px-1 rounded">j</span>=A#3 
+          <span class="font-mono bg-muted px-1 rounded">m</span>=B3 |
+          <span class="font-mono bg-muted px-1 rounded">q..u</span>=C4..B4 |
+          <span class="font-mono bg-muted px-1 rounded">-</span>=Rest |
+          <span class="font-mono bg-muted px-1 rounded">Backspace</span>=Clear
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <button
+            id="clearTrackerBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+          >
+            Clear All
+          </button>
+          <button
+            id="copyTrackerBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
+          >
+            <i data-lucide="copy" class="w-4 h-4"></i> Copy to Clipboard
+          </button>
+          <button
+            id="applyTrackerBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
+          >
+            <i data-lucide="check" class="w-4 h-4"></i> Apply to Editor
           </button>
         </div>
       </div>

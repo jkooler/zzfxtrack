@@ -7,12 +7,14 @@ import tailwindcss from '@tailwindcss/vite';
 // Helper to resolve paths
 const SONGS_DIR = path.resolve(__dirname, 'songs');
 const OUTPUT_DIR = path.resolve(__dirname, 'output');
+const BLOCKS_DIR = path.resolve(__dirname, 'blocks');
 
 /**
  * Custom Vite Plugin to provide a simple API for:
  * - Listing songs
  * - Reading/Saving/Deleting songs
  * - Saving baked JSON files
+ * - Managing blocks (reusable patterns)
  */
 const apiPlugin = () => ({
   name: 'strudel-baker-api',
@@ -177,6 +179,132 @@ const apiPlugin = () => ({
        }
        next();
      });
+
+     // API: List Blocks
+     // GET /api/blocks
+     server.middlewares.use('/api/blocks', (req, res, next) => {
+       if (req.method === 'GET' && req.url === '/') {
+         try {
+           if (!fs.existsSync(BLOCKS_DIR)) {
+             fs.mkdirSync(BLOCKS_DIR, { recursive: true });
+           }
+           
+           const files = fs.readdirSync(BLOCKS_DIR)
+             .filter(f => f.endsWith('.js') && f !== 'index.js');
+           
+           // Read metadata from each block file
+           const blocks = files.map(filename => {
+             const filePath = path.join(BLOCKS_DIR, filename);
+             try {
+               const content = fs.readFileSync(filePath, 'utf-8');
+               // Extract name, description, and pattern from exports
+               const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
+               const descMatch = content.match(/export\s+const\s+description\s*=\s*["']([^"']*)["']/);
+               // Pattern can be in backticks, single quotes, or double quotes
+               const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*[`"']([\s\S]*?)[`"'];?\s*$/m);
+               
+               return {
+                 filename,
+                 name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
+                 description: descMatch ? descMatch[1] : '',
+                 pattern: patternMatch ? patternMatch[1].trim() : ''
+               };
+             } catch (e) {
+               return { filename, name: filename.replace('.js', ''), description: '', pattern: '' };
+             }
+           });
+           
+           res.setHeader('Content-Type', 'application/json');
+           res.end(JSON.stringify(blocks));
+         } catch (e) {
+           res.statusCode = 500;
+           res.end(JSON.stringify({ error: e.message }));
+         }
+         return;
+       }
+       
+       // POST /api/blocks - Create new block
+       if (req.method === 'POST' && req.url === '/') {
+         let body = '';
+         req.on('data', chunk => body += chunk);
+         req.on('end', () => {
+           try {
+             const blockData = JSON.parse(body);
+             const { filename, name, description, pattern, trackerState } = blockData;
+             
+             // Validate filename
+             if (!filename || filename.includes('..') || !filename.endsWith('.js')) {
+               res.statusCode = 400;
+               res.end('Invalid filename');
+               return;
+             }
+             
+             if (!fs.existsSync(BLOCKS_DIR)) {
+               fs.mkdirSync(BLOCKS_DIR, { recursive: true });
+             }
+             
+             const filePath = path.join(BLOCKS_DIR, filename);
+             
+             // Generate block file content
+             const fileContent = `// Block: ${name}
+// ${description || 'No description'}
+
+export const name = "${name}";
+export const description = "${description || ''}";
+
+export const pattern = \`${pattern}\`;
+
+// Optional: Tracker state for re-editing
+export const trackerState = ${JSON.stringify(trackerState, null, 2)};
+`;
+             
+             fs.writeFileSync(filePath, fileContent);
+             console.log(`[API] Created block: ${filename}`);
+             res.end('Block created successfully');
+           } catch (e) {
+             console.error('[API] Create block error:', e);
+             res.statusCode = 500;
+             res.end(`Error creating block: ${e.message}`);
+           }
+         });
+         return;
+       }
+       
+       next();
+     });
+
+     // API: Delete Block
+     // DELETE /api/blocks/:filename
+     server.middlewares.use((req, res, next) => {
+       if (!req.url.startsWith('/api/blocks/')) {
+         return next();
+       }
+       
+       const filename = req.url.replace('/api/blocks/', '');
+       
+       if (req.method === 'DELETE') {
+         // Validate filename
+         if (!filename || filename.includes('..') || !filename.endsWith('.js')) {
+           res.statusCode = 400;
+           res.end('Invalid filename');
+           return;
+         }
+         
+         const filePath = path.join(BLOCKS_DIR, filename);
+         
+         if (fs.existsSync(filePath)) {
+           fs.unlinkSync(filePath);
+           console.log(`[API] Deleted block: ${filename}`);
+           res.end('Block deleted successfully');
+         } else {
+           res.statusCode = 404;
+           res.end('Block not found');
+         }
+         return;
+       }
+       
+       next();
+     });
   }
 });
 
@@ -263,7 +391,7 @@ export default defineConfig({
     strictPort: false, // Allow using next available port if 5173 is taken
     host: true, // Listen on all network interfaces for better accessibility
     watch: {
-      ignored: ['**/songs/**', '**/output/**', '**/instruments.js']
+      ignored: ['**/songs/**', '**/output/**', '**/instruments.js', '**/blocks/**']
     }
   }
 });

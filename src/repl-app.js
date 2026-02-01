@@ -8,6 +8,8 @@ import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, getInstrumentsForBaker, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
 import { createIcons, icons } from 'lucide';
+import { initTracker, openTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState } from './tracker.js';
+import { initBlocks, openBlocksModal, saveBlock } from './blocks.js';
 
 // --- Global State ---
 let currentSongFilename = null;
@@ -150,6 +152,14 @@ async function init() {
 
     // 8. Sync Theme Colors from CodeMirror to Sidebar
     setTimeout(syncThemeColors, 1000); // Wait for editor render
+    
+    // 9. Initialize Tracker
+    initTrackerWithInstruments();
+    setupTrackerEventListeners();
+    
+    // 10. Initialize Blocks
+    initBlocks();
+    setupBlocksEventListeners();
 }
 
 /**
@@ -1143,6 +1153,181 @@ function setupExportSettingsModal() {
 
 // Initialize export settings modal
 setupExportSettingsModal();
+
+// --- Tracker Integration ---
+
+/**
+ * Initialize tracker with current instruments
+ */
+async function initTrackerWithInstruments() {
+    const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+    const instruments = getDefragmentedInstruments();
+    
+    const instrumentList = instruments.map(inst => ({
+        id: inst.strudelAlias,
+        name: inst.strudelAlias,
+    }));
+    
+    initTracker(instrumentList);
+}
+
+/**
+ * Setup tracker event listeners
+ */
+function setupTrackerEventListeners() {
+    // Listen for tracker:apply event to insert code into editor
+    document.addEventListener('tracker:apply', async (e) => {
+        const code = e.detail.code;
+        if (code && dom.repl.editor) {
+            // Get the current code and convert it to file format (with exports)
+            let fileCode = editorToFile(dom.repl.editor.code || '');
+            
+            // Remove any existing pattern definition from the file code
+            fileCode = fileCode.replace(
+                /export\s+const\s+pattern\s*=[\s\S]*?;\s*$/,
+                ''
+            );
+            
+            // Add the new pattern before the final closing
+            fileCode = fileCode.replace(
+                /(\nexport const bpm = \d+;)/,
+                `$1\n\nexport const pattern = ${code};`
+            );
+            
+            // Convert back to editor format and set
+            const editorCode = fileToEditor(fileCode);
+            dom.repl.editor.setCode(editorCode);
+            
+            // Also save to server
+            fetch(`/api/song/${currentSongFilename}`, {
+                method: 'POST',
+                body: fileCode
+            });
+            
+            setStatus('Tracker pattern applied to editor', 'success');
+        }
+    });
+    
+    // Add keyboard shortcut to open tracker (Ctrl/Cmd + T)
+    document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+            // Only if not in an input field
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT') {
+                e.preventDefault();
+                openTrackerModal();
+            }
+        }
+    });
+}
+
+/**
+ * Open the tracker modal with current instruments
+ */
+async function openTrackerModal() {
+    const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+    const instruments = getDefragmentedInstruments();
+    
+    const instrumentList = instruments.map(inst => ({
+        id: inst.strudelAlias,
+        name: inst.strudelAlias,
+    }));
+    
+    openTracker(instrumentList);
+}
+
+// Expose tracker open function globally for button access
+window.openTrackerModal = openTrackerModal;
+
+/**
+ * Setup blocks event listeners
+ */
+function setupBlocksEventListeners() {
+    // Blocks button in header
+    const blocksBtn = document.getElementById('blocksBtn');
+    blocksBtn?.addEventListener('click', openBlocksModal);
+    
+    // Listen for blocks:create event (from Blocks modal)
+    document.addEventListener('blocks:create', () => {
+        openTrackerModal();
+        // Switch tracker to "block creation mode"
+        isCreatingBlock = true;
+    });
+    
+    // Listen for blocks:insert event
+    document.addEventListener('blocks:insert', (e) => {
+        const { pattern, name } = e.detail;
+        if (pattern && dom.repl.editor) {
+            // Get the current code and convert it to file format (with exports)
+            let fileCode = editorToFile(dom.repl.editor.code || '');
+            
+            // Remove any existing pattern definition from the file code
+            fileCode = fileCode.replace(
+                /export\s+const\s+pattern\s*=[\s\S]*?;\s*$/,
+                ''
+            );
+            
+            // Add the new pattern before the final closing
+            fileCode = fileCode.replace(
+                /(\nexport const bpm = \d+;)/,
+                `$1\n\nexport const pattern = ${pattern};`
+            );
+            
+            // Convert back to editor format and set
+            const editorCode = fileToEditor(fileCode);
+            dom.repl.editor.setCode(editorCode);
+            
+            // Also save to server
+            fetch(`/api/song/${currentSongFilename}`, {
+                method: 'POST',
+                body: fileCode
+            });
+            
+            setStatus(`Block "${name}" inserted into song`, 'success');
+        }
+    });
+    
+    // Keyboard shortcut for blocks (Ctrl/Cmd + B)
+    document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+            // Only if not in an input field
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT') {
+                e.preventDefault();
+                openBlocksModal();
+            }
+        }
+    });
+}
+
+// Flag to track if we're creating a block (vs just using tracker)
+let isCreatingBlock = false;
+
+// Override the tracker apply handler to support saving as block
+document.addEventListener('tracker:apply', async (e) => {
+    if (isCreatingBlock) {
+        // Save as block instead of inserting into song
+        const code = e.detail.code;
+        const trackerState = serializeTrackerState();
+        
+        // Prompt for block name and description
+        const name = prompt('Enter a name for this block:', 'My Pattern');
+        if (!name) {
+            isCreatingBlock = false;
+            return;
+        }
+        
+        const description = prompt('Enter a description (optional):', '');
+        
+        // Save the block
+        const success = await saveBlock(name, description, code, trackerState);
+        if (success) {
+            setStatus(`Block "${name}" saved successfully`, 'success');
+        } else {
+            setStatus('Failed to save block', 'error');
+        }
+        
+        isCreatingBlock = false;
+    }
+});
 
 // Start
 init();
