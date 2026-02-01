@@ -556,6 +556,13 @@
       >
         <div class="flex gap-2 items-center w-full">
           <button
+            id="exportSettingsBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 w-9 p-0 flex items-center justify-center"
+            title="Export Settings"
+          >
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </button>
+          <button
             id="bakeBtn"
             class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-2 uppercase"
           >
@@ -876,6 +883,60 @@
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-destructive text-destructive-foreground hover:bg-destructive/90 h-9 px-4 py-2 shadow-sm"
           >
             Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Settings Modal -->
+    <div
+      id="exportSettingsModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+      >
+        <h2
+          class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono"
+        >
+          Export Settings
+        </h2>
+        
+        <div class="space-y-4">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              id="unlimitedChannels"
+              checked
+              class="w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
+            />
+            <span class="text-sm font-medium text-foreground">Unlimited channels</span>
+          </label>
+          
+          <div id="channelLimitGroup" class="space-y-2 opacity-50 pointer-events-none">
+            <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+              Max Channels
+            </label>
+            <input
+              type="number"
+              id="maxChannelsInput"
+              value="16"
+              min="1"
+              max="64"
+              class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <p class="text-xs text-muted-foreground/80 italic">
+              Note: Some notes can be cut out, especially if you're using chords in Strudel.
+            </p>
+          </div>
+        </div>
+        
+        <div class="flex justify-end gap-2 mt-2">
+          <button
+            id="closeExportSettings"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm"
+          >
+            Done
           </button>
         </div>
       </div>

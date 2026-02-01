@@ -62,6 +62,14 @@ const dom = {
     externalLinkModal: document.getElementById('externalLinkModal'),
     confirmExternalLink: document.getElementById('confirmExternalLink'),
     cancelExternalLink: document.getElementById('cancelExternalLink'),
+    
+    // Export Settings Modal
+    exportSettingsBtn: document.getElementById('exportSettingsBtn'),
+    exportSettingsModal: document.getElementById('exportSettingsModal'),
+    unlimitedChannels: document.getElementById('unlimitedChannels'),
+    channelLimitGroup: document.getElementById('channelLimitGroup'),
+    maxChannelsInput: document.getElementById('maxChannelsInput'),
+    closeExportSettings: document.getElementById('closeExportSettings'),
 };
 
 // --- View State Helpers ---
@@ -628,8 +636,14 @@ async function bakeCurrentSong() {
         // 3. Get dynamic instruments from manager
         const { array: instrumentArray, mapping: instrumentMapping } = await getInstrumentsForBaker();
         
-        // 4. Bake!
-        const result = bakePattern(pattern, bpm, instrumentArray, instrumentMapping);
+        // 4. Get export settings
+        const isUnlimited = dom.unlimitedChannels.checked;
+        const maxChannels = isUnlimited ? Infinity : parseInt(dom.maxChannelsInput.value) || 16;
+        
+        // 5. Bake!
+        const result = bakePattern(pattern, bpm, instrumentArray, instrumentMapping, 8, {
+            maxVoicesPerInstrument: maxChannels
+        });
         const songData = result.song;
         const { channelCount, droppedNotes } = result.stats;
         
@@ -1090,6 +1104,40 @@ function closeExternalLinkModal() {
     dom.externalLinkModal.classList.remove('open');
     pendingExternalUrl = null;
 }
+
+// --- Export Settings Modal ---
+
+function setupExportSettingsModal() {
+    // Open modal
+    dom.exportSettingsBtn.addEventListener('click', () => {
+        dom.exportSettingsModal.classList.add('open');
+    });
+    
+    // Close modal
+    dom.closeExportSettings.addEventListener('click', () => {
+        dom.exportSettingsModal.classList.remove('open');
+    });
+    
+    // Close on overlay click
+    dom.exportSettingsModal.addEventListener('click', (e) => {
+        if (e.target === dom.exportSettingsModal) {
+            dom.exportSettingsModal.classList.remove('open');
+        }
+    });
+    
+    // Toggle channel limit input based on checkbox
+    dom.unlimitedChannels.addEventListener('change', () => {
+        if (dom.unlimitedChannels.checked) {
+            dom.channelLimitGroup.classList.add('opacity-50', 'pointer-events-none');
+        } else {
+            dom.channelLimitGroup.classList.remove('opacity-50', 'pointer-events-none');
+            dom.maxChannelsInput.focus();
+        }
+    });
+}
+
+// Initialize export settings modal
+setupExportSettingsModal();
 
 // Start
 init();
