@@ -629,7 +629,9 @@ async function bakeCurrentSong() {
         const { array: instrumentArray, mapping: instrumentMapping } = await getInstrumentsForBaker();
         
         // 4. Bake!
-        const songData = bakePattern(pattern, bpm, instrumentArray, instrumentMapping);
+        const result = bakePattern(pattern, bpm, instrumentArray, instrumentMapping);
+        const songData = result.song;
+        const { channelCount, droppedNotes } = result.stats;
         
         // Store for preview
         lastBakedData = songData;
@@ -650,7 +652,12 @@ async function bakeCurrentSong() {
         dom.previewPlayBtn.disabled = false;
         if(dom.showJsonBtn) dom.showJsonBtn.disabled = false;
         
-        setStatus(`/output/${jsonFilename}`, 'success');
+        // Build status message with channel count
+        let statusMsg = `/output/${jsonFilename} (${channelCount} ch)`;
+        if (droppedNotes > 0) {
+            statusMsg += ` • ${droppedNotes} notes dropped`;
+        }
+        setStatus(statusMsg, 'success');
         
     } catch (e) {
         console.error(e);
