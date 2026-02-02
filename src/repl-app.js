@@ -8,8 +8,8 @@ import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, getInstrumentsForBaker, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState } from './tracker.js';
-import { initBlocks, openBlocksModal, saveBlock } from './blocks.js';
+import { initTracker, openTracker, openTrackerForEdit, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState } from './tracker.js';
+import { initBlocks, openBlocksModal, saveBlock, updateBlock } from './blocks.js';
 
 // --- Global State ---
 let currentSongFilename = null;
@@ -1239,6 +1239,29 @@ async function openTrackerModal() {
 window.openTrackerModal = openTrackerModal;
 
 /**
+ * Open the tracker modal for editing an existing block
+ */
+async function openTrackerModalForEdit(block, trackerState) {
+    const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+    const instruments = getDefragmentedInstruments();
+    
+    const instrumentList = instruments.map(inst => ({
+        id: inst.strudelAlias,
+        name: inst.strudelAlias,
+    }));
+    
+    // Prepare block data for edit mode
+    const blockData = {
+        filename: block.filename,
+        name: block.name,
+        description: block.description,
+        trackerState: trackerState,
+    };
+    
+    openTrackerForEdit(instrumentList, blockData);
+}
+
+/**
  * Setup blocks event listeners
  */
 function setupBlocksEventListeners() {
@@ -1251,6 +1274,12 @@ function setupBlocksEventListeners() {
         openTrackerModal();
         // Switch tracker to "block creation mode"
         isCreatingBlock = true;
+    });
+    
+    // Listen for blocks:edit event (from Blocks modal)
+    document.addEventListener('blocks:edit', async (e) => {
+        const { block, trackerState } = e.detail;
+        await openTrackerModalForEdit(block, trackerState);
     });
     
     // Listen for blocks:insert event
@@ -1326,6 +1355,24 @@ document.addEventListener('tracker:apply', async (e) => {
         }
         
         isCreatingBlock = false;
+    }
+});
+
+// Listen for tracker:saveBlock event (when saving edits to existing block)
+document.addEventListener('tracker:saveBlock', async (e) => {
+    const { filename, name, description, pattern, trackerState } = e.detail;
+    
+    // Confirm before saving
+    if (!confirm(`Save changes to block "${name}"?`)) {
+        return;
+    }
+    
+    // Update the block
+    const success = await updateBlock(filename, name, description, pattern, trackerState);
+    if (success) {
+        setStatus(`Block "${name}" updated successfully`, 'success');
+    } else {
+        setStatus('Failed to update block', 'error');
     }
 });
 

@@ -51,6 +51,15 @@ const state = {
   focusedStep: 0,
 };
 
+// Edit mode state
+let editMode = {
+  isEditing: false,
+  blockFilename: null,
+  blockName: null,
+  blockDescription: null,
+  onSave: null, // Callback for save action
+};
+
 // DOM Elements
 let elements = {};
 
@@ -90,6 +99,8 @@ function cacheElements() {
     clearBtn: document.getElementById('clearTrackerBtn'),
     copyBtn: document.getElementById('copyTrackerBtn'),
     applyBtn: document.getElementById('applyTrackerBtn'),
+    saveBtn: document.getElementById('saveTrackerBtn'),
+    title: document.querySelector('#trackerModal h2'),
   };
 }
 
@@ -225,6 +236,9 @@ function setupEventListeners() {
 
   // Copy button
   elements.copyBtn?.addEventListener('click', copyToClipboard);
+
+  // Save button (for edit mode)
+  elements.saveBtn?.addEventListener('click', handleSaveBlock);
 
   // Apply button
   elements.applyBtn?.addEventListener('click', applyToEditor);
@@ -425,6 +439,12 @@ function applyToEditor() {
  * Open the tracker modal
  */
 export function openTracker(instrumentList) {
+  // Reset edit mode
+  resetEditMode();
+  
+  // Hide save button, show apply button
+  updateEditModeUI();
+  
   if (instrumentList) {
     state.instruments = instrumentList;
     renderGrid();
@@ -437,10 +457,100 @@ export function openTracker(instrumentList) {
 }
 
 /**
+ * Open the tracker modal in edit mode for an existing block
+ */
+export function openTrackerForEdit(instrumentList, blockData) {
+  // Set edit mode
+  editMode.isEditing = true;
+  editMode.blockFilename = blockData.filename;
+  editMode.blockName = blockData.name;
+  editMode.blockDescription = blockData.description;
+  
+  // Update UI for edit mode
+  updateEditModeUI();
+  
+  // Clear and reset state first
+  clearAll();
+  
+  // Load tracker state if available
+  if (blockData.trackerState) {
+    deserializeTrackerState(blockData.trackerState);
+  }
+  
+  if (instrumentList) {
+    state.instruments = instrumentList;
+    renderGrid();
+  }
+
+  elements.modal?.classList.add('open');
+  
+  // Focus first cell
+  setFocus(0, 0);
+}
+
+/**
+ * Reset edit mode state
+ */
+function resetEditMode() {
+  editMode.isEditing = false;
+  editMode.blockFilename = null;
+  editMode.blockName = null;
+  editMode.blockDescription = null;
+  editMode.onSave = null;
+}
+
+/**
+ * Update UI based on edit mode state
+ */
+function updateEditModeUI() {
+  // Update title
+  if (elements.title) {
+    elements.title.textContent = editMode.isEditing 
+      ? `Tracker - Editing: ${editMode.blockName}` 
+      : 'Tracker';
+  }
+  
+  // Show/hide save button
+  if (elements.saveBtn) {
+    if (editMode.isEditing) {
+      elements.saveBtn.classList.remove('hidden');
+    } else {
+      elements.saveBtn.classList.add('hidden');
+    }
+  }
+}
+
+/**
+ * Handle save button click in edit mode
+ */
+function handleSaveBlock() {
+  if (!editMode.isEditing) return;
+  
+  const trackerState = serializeTrackerState();
+  const pattern = elements.output?.value || '';
+  
+  // Dispatch event for the app to handle saving
+  const event = new CustomEvent('tracker:saveBlock', {
+    detail: {
+      filename: editMode.blockFilename,
+      name: editMode.blockName,
+      description: editMode.blockDescription,
+      pattern,
+      trackerState,
+    }
+  });
+  document.dispatchEvent(event);
+}
+
+/**
  * Close the tracker modal
  */
 export function closeTracker() {
   elements.modal?.classList.remove('open');
+  
+  // Reset edit mode when closing
+  resetEditMode();
+  updateEditModeUI();
 }
 
 /**

@@ -1,10 +1,10 @@
-// Block: My Pattern
+// Block: Kick
 // No description
 
-export const name = "My Pattern";
+export const name = "Kick";
 export const description = "";
 
-export const pattern = `note("c3 f3 c3 d#3 f3 c3 d#3 f3 g3*2 d3 g3 d3 ~*3").s("test-tan")`;
+export const pattern = `note("c3 ~*3 c3 ~*3 c3 ~*3 c3 ~*3").s("test-kick")`;
 
 // Optional: Tracker state for re-editing
 export const trackerState = {
@@ -14,18 +14,18 @@ export const trackerState = {
   "grid": [
     [
       "c3",
-      "f3",
+      null,
+      null,
+      null,
       "c3",
-      "d#3",
-      "f3",
+      null,
+      null,
+      null,
       "c3",
-      "d#3",
-      "f3",
-      "g3",
-      "g3",
-      "d3",
-      "g3",
-      "d3",
+      null,
+      null,
+      null,
+      "c3",
       null,
       null,
       null
@@ -86,7 +86,7 @@ export const trackerState = {
     ]
   ],
   "channelInstruments": [
-    "test-tan",
+    "test-kick",
     "",
     "",
     ""

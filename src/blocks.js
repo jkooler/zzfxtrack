@@ -9,6 +9,9 @@
 // Block storage - in-memory cache
 let blocksCache = [];
 
+// Currently selected block index
+let selectedBlockIndex = null;
+
 // DOM Elements
 let elements = {};
 
@@ -32,6 +35,7 @@ function cacheElements() {
     createBlockBtn: document.getElementById('createBlockBtn'),
     insertBlockBtn: document.getElementById('insertBlockBtn'),
     deleteBlockBtn: document.getElementById('deleteBlockBtn'),
+    editBlockBtn: document.getElementById('editBlockBtn'),
     selectedBlockName: document.getElementById('selectedBlockName'),
   };
 }
@@ -44,6 +48,16 @@ function setupEventListeners() {
   elements.createBlockBtn?.addEventListener('click', openTrackerForNewBlock);
   elements.insertBlockBtn?.addEventListener('click', insertSelectedBlock);
   elements.deleteBlockBtn?.addEventListener('click', deleteSelectedBlock);
+  
+  // Edit button click handler with explicit logging
+  if (elements.editBlockBtn) {
+    elements.editBlockBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[Blocks] Edit button clicked, disabled:', elements.editBlockBtn.disabled);
+      openTrackerForEdit();
+    });
+  }
 }
 
 /**
@@ -113,18 +127,25 @@ function selectBlock(index) {
     selectedEl.classList.add('selected', 'bg-accent', 'border-primary');
   }
   
+  // Store selected index
+  selectedBlockIndex = index;
+  
   // Update selected block display
   const block = blocksCache[index];
   if (elements.selectedBlockName) {
     elements.selectedBlockName.textContent = block?.name || 'No block selected';
   }
   
-  // Enable insert/delete buttons
+    // Enable insert/delete/edit buttons
   if (elements.insertBlockBtn) {
-    elements.insertBlockBtn.disabled = !block;
+    elements.insertBlockBtn.disabled = false;
   }
   if (elements.deleteBlockBtn) {
-    elements.deleteBlockBtn.disabled = !block;
+    elements.deleteBlockBtn.disabled = false;
+  }
+  if (elements.editBlockBtn) {
+    elements.editBlockBtn.disabled = false;
+    console.log('[Blocks] Edit button enabled for:', block?.name);
   }
 }
 
@@ -147,6 +168,41 @@ function openTrackerForNewBlock() {
   
   // Dispatch event to open tracker in "block creation mode"
   const event = new CustomEvent('blocks:create');
+  document.dispatchEvent(event);
+}
+
+/**
+ * Open tracker to edit the selected block
+ */
+async function openTrackerForEdit() {
+  const block = getSelectedBlock();
+  if (!block) return;
+  
+  closeBlocksModal();
+  
+  // Fetch the full block data including trackerState
+  let trackerState = block.trackerState;
+  
+  // If trackerState wasn't in the cached data, fetch it directly from the file
+  if (!trackerState && block.filename) {
+    try {
+      const response = await fetch(`/api/blocks/${block.filename}`);
+      if (response.ok) {
+        const fullBlock = await response.json();
+        trackerState = fullBlock.trackerState;
+      }
+    } catch (err) {
+      console.warn('[Blocks] Could not fetch full block data:', err);
+    }
+  }
+  
+  // Dispatch event to open tracker in "block edit mode"
+  const event = new CustomEvent('blocks:edit', {
+    detail: { 
+      block: block,
+      trackerState: trackerState
+    }
+  });
   document.dispatchEvent(event);
 }
 
@@ -194,6 +250,7 @@ async function deleteSelectedBlock() {
     await loadBlocksList();
     
     // Reset selection
+    selectedBlockIndex = null;
     if (elements.selectedBlockName) {
       elements.selectedBlockName.textContent = 'No block selected';
     }
@@ -203,6 +260,9 @@ async function deleteSelectedBlock() {
     if (elements.deleteBlockBtn) {
       elements.deleteBlockBtn.disabled = true;
     }
+    if (elements.editBlockBtn) {
+    elements.editBlockBtn.disabled = true;
+  }
   } catch (err) {
     console.error('[Blocks] Failed to delete block:', err);
     alert('Failed to delete block. See console for details.');
@@ -246,6 +306,37 @@ export async function saveBlock(name, description, pattern, trackerState) {
 }
 
 /**
+ * Update an existing block with new data
+ */
+export async function updateBlock(filename, name, description, pattern, trackerState) {
+  try {
+    const blockData = {
+      filename,
+      name,
+      description: description || '',
+      pattern,
+      trackerState,
+    };
+    
+    const response = await fetch(`/api/blocks/${filename}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(blockData),
+    });
+    
+    if (!response.ok) throw new Error('Update failed');
+    
+    // Reload the list
+    await loadBlocksList();
+    
+    return true;
+  } catch (err) {
+    console.error('[Blocks] Failed to update block:', err);
+    return false;
+  }
+}
+
+/**
  * Open the blocks modal
  */
 export function openBlocksModal() {
@@ -276,3 +367,4 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
