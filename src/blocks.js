@@ -1,3 +1,5 @@
+import { createIcons, icons } from 'lucide';
+
 /**
  * Blocks Module
  * 
@@ -14,6 +16,7 @@ let selectedBlockIndex = null;
 
 // DOM Elements
 let elements = {};
+let blockToDelete = null;
 
 /**
  * Initialize the blocks system
@@ -37,6 +40,10 @@ function cacheElements() {
     deleteBlockBtn: document.getElementById('deleteBlockBtn'),
     editBlockBtn: document.getElementById('editBlockBtn'),
     selectedBlockName: document.getElementById('selectedBlockName'),
+    deleteBlockModal: document.getElementById('deleteBlockModal'),
+    deleteBlockText: document.getElementById('deleteBlockText'),
+    cancelDeleteBlock: document.getElementById('cancelDeleteBlock'),
+    confirmDeleteBlock: document.getElementById('confirmDeleteBlock'),
   };
 }
 
@@ -48,6 +55,8 @@ function setupEventListeners() {
   elements.createBlockBtn?.addEventListener('click', openTrackerForNewBlock);
   elements.insertBlockBtn?.addEventListener('click', insertSelectedBlock);
   elements.deleteBlockBtn?.addEventListener('click', deleteSelectedBlock);
+  elements.cancelDeleteBlock?.addEventListener('click', closeDeleteBlockModal);
+  elements.confirmDeleteBlock?.addEventListener('click', confirmDeleteBlock);
   
   // Edit button click handler with explicit logging
   if (elements.editBlockBtn) {
@@ -97,19 +106,32 @@ function renderBlocksList() {
   
   blocksCache.forEach((block, index) => {
     const blockEl = document.createElement('div');
-    blockEl.className = 'block-item p-3 rounded-md border border-border hover:border-primary/50 cursor-pointer transition-colors';
+    blockEl.className = 'block-item';
     blockEl.dataset.index = index;
     blockEl.dataset.filename = block.filename;
     
     blockEl.innerHTML = `
-      <div class="block-name font-bold text-sm text-foreground">${escapeHtml(block.name)}</div>
-      <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(block.description || 'No description')}</div>
+      <div class="min-w-0">
+        <div class="block-name font-bold text-sm text-foreground">${escapeHtml(block.name)}</div>
+        <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(block.description || 'No description')}</div>
+      </div>
+      <div class="song-item-actions">
+        <button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+      </div>
     `;
     
     blockEl.addEventListener('click', () => selectBlock(index));
+
+    const deleteBtn = blockEl.querySelector('.sidebar-del-btn');
+    deleteBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteBlockByIndex(index);
+    });
     
     elements.blocksList.appendChild(blockEl);
   });
+
+  createIcons({ icons });
 }
 
 /**
@@ -147,6 +169,36 @@ function selectBlock(index) {
     elements.editBlockBtn.disabled = false;
     console.log('[Blocks] Edit button enabled for:', block?.name);
   }
+
+  // Trigger preview on selection
+  if (block) {
+    previewBlock(block);
+  }
+}
+
+async function previewBlock(block) {
+  let trackerState = block.trackerState;
+  if (!trackerState && block.filename) {
+    try {
+      const response = await fetch(`/api/blocks/${block.filename}`);
+      if (response.ok) {
+        const fullBlock = await response.json();
+        trackerState = fullBlock.trackerState;
+      }
+    } catch (err) {
+      console.warn('[Blocks] Could not fetch block for preview:', err);
+    }
+  }
+
+  if (!trackerState) return;
+
+  const event = new CustomEvent('blocks:preview', {
+    detail: {
+      name: block.name,
+      trackerState,
+    }
+  });
+  document.dispatchEvent(event);
 }
 
 /**
@@ -233,12 +285,31 @@ async function insertSelectedBlock() {
  */
 async function deleteSelectedBlock() {
   const block = getSelectedBlock();
+  showDeleteBlockConfirmation(block);
+}
+
+async function deleteBlockByIndex(index) {
+  const block = blocksCache[index];
+  showDeleteBlockConfirmation(block);
+}
+
+function showDeleteBlockConfirmation(block) {
   if (!block) return;
-  
-  if (!confirm(`Delete block "${block.name}"? This cannot be undone.`)) {
-    return;
+  blockToDelete = block;
+  if (elements.deleteBlockText) {
+    elements.deleteBlockText.innerHTML = `Block: <strong>${escapeHtml(block.name)}</strong><br>This action is irreversible.`;
   }
-  
+  elements.deleteBlockModal?.classList.add('open');
+}
+
+function closeDeleteBlockModal() {
+  elements.deleteBlockModal?.classList.remove('open');
+  blockToDelete = null;
+}
+
+async function confirmDeleteBlock() {
+  if (!blockToDelete) return;
+  const block = blockToDelete;
   try {
     const response = await fetch(`/api/blocks/${block.filename}`, {
       method: 'DELETE',
@@ -250,22 +321,28 @@ async function deleteSelectedBlock() {
     await loadBlocksList();
     
     // Reset selection
-    selectedBlockIndex = null;
-    if (elements.selectedBlockName) {
-      elements.selectedBlockName.textContent = 'No block selected';
-    }
-    if (elements.insertBlockBtn) {
-      elements.insertBlockBtn.disabled = true;
-    }
-    if (elements.deleteBlockBtn) {
-      elements.deleteBlockBtn.disabled = true;
-    }
-    if (elements.editBlockBtn) {
-    elements.editBlockBtn.disabled = true;
-  }
+    clearBlockSelection();
   } catch (err) {
     console.error('[Blocks] Failed to delete block:', err);
     alert('Failed to delete block. See console for details.');
+  } finally {
+    closeDeleteBlockModal();
+  }
+}
+
+function clearBlockSelection() {
+  selectedBlockIndex = null;
+  if (elements.selectedBlockName) {
+    elements.selectedBlockName.textContent = 'No block selected';
+  }
+  if (elements.insertBlockBtn) {
+    elements.insertBlockBtn.disabled = true;
+  }
+  if (elements.deleteBlockBtn) {
+    elements.deleteBlockBtn.disabled = true;
+  }
+  if (elements.editBlockBtn) {
+    elements.editBlockBtn.disabled = true;
   }
 }
 
@@ -367,4 +444,3 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
-

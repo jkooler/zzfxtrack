@@ -8,7 +8,7 @@ import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, getInstrumentsForBaker, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState } from './tracker.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce } from './tracker.js';
 import { initBlocks, openBlocksModal, saveBlock, updateBlock } from './blocks.js';
 
 // --- Global State ---
@@ -1284,6 +1284,22 @@ function setupBlocksEventListeners() {
             
             setStatus(`Block "${name}" inserted into song`, 'success');
         }
+    });
+
+    // Listen for blocks:preview event
+    document.addEventListener('blocks:preview', async (e) => {
+        const { trackerState } = e.detail || {};
+        if (!trackerState) return;
+
+        const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+        const instruments = getDefragmentedInstruments();
+        const instrumentList = instruments.map(inst => ({
+            id: inst.strudelAlias,
+            name: inst.strudelAlias,
+            params: inst.params,
+        }));
+
+        previewTrackerStateOnce(trackerState, instrumentList);
     });
     
     // Keyboard shortcut for blocks (Ctrl/Cmd + B)

@@ -721,6 +721,156 @@ function updatePreviewUI() {
 }
 
 /**
+ * Play a one-shot preview of a tracker state (no looping)
+ */
+export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120) {
+  if (!trackerState || !instrumentList) return;
+
+  stopPreview();
+
+  if (!previewState.audioContext) {
+    previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  const ctx = previewState.audioContext;
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+
+  const channels = trackerState.channels || (Array.isArray(trackerState.grid) ? trackerState.grid.length : 0);
+  const steps = trackerState.steps || (Array.isArray(trackerState.grid?.[0]) ? trackerState.grid[0].length : 0);
+  const grid = trackerState.grid || [];
+  const channelInstruments = Array.isArray(trackerState.channelInstruments) ? trackerState.channelInstruments : [];
+
+  const hasContent = grid.some((channel, ch) => {
+    const instId = channelInstruments[ch];
+    if (!instId) return false;
+    return Array.isArray(channel) && channel.some(note => note && note !== '~' && note !== '-');
+  });
+  if (!hasContent) return;
+
+  const secondsPerBeat = 60 / bpm;
+  const secondsPerStep = secondsPerBeat / 4; // 16th notes
+  const sampleRate = 44100;
+  const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
+  const patternSamples = Math.ceil(steps * samplesPerStep);
+  const mixBuffer = new Float32Array(patternSamples);
+
+  const noteToSemitone = (noteStr) => {
+    if (!noteStr || noteStr === '~' || noteStr === '-') return null;
+    
+    const noteMap = {
+      'c': 0, 'c#': 1, 'd': 2, 'd#': 3, 'e': 4, 'f': 5,
+      'f#': 6, 'g': 7, 'g#': 8, 'a': 9, 'a#': 10, 'b': 11
+    };
+    
+    const match = noteStr.match(/^([a-g]#?)(\d)$/i);
+    if (!match) return null;
+    
+    const noteName = match[1].toLowerCase();
+    const octave = parseInt(match[2], 10);
+    
+    const noteOffset = noteMap[noteName];
+    if (noteOffset === undefined) return null;
+    
+    const midiNote = (octave + 1) * 12 + noteOffset;
+    return midiNote - 60;
+  };
+
+  const instrumentById = new Map(instrumentList.map(inst => [inst.id, inst]));
+
+  for (let ch = 0; ch < channels; ch++) {
+    const instrumentId = channelInstruments[ch];
+    if (!instrumentId) continue;
+
+    const instrument = instrumentById.get(instrumentId);
+    if (!instrument || !instrument.params) continue;
+
+    const baseParams = instrument.params;
+    const baseFreq = baseParams[2] || 232;
+    const channel = grid[ch] || [];
+
+    for (let step = 0; step < steps; step++) {
+      const note = channel[step];
+      const semitoneOffset = noteToSemitone(note);
+      if (semitoneOffset === null) continue;
+
+      const p = [...baseParams];
+      while (p.length < 21) p.push(0);
+
+      const ratio = Math.pow(2, semitoneOffset / 12);
+      p[2] = baseFreq * ratio;
+
+      const intendedVol = p[0] !== undefined ? p[0] : 1;
+      p[0] = 1;
+
+      let samples;
+      try {
+        samples = zzfxG(...p);
+      } catch (err) {
+        console.error(`[Tracker] Failed to generate sound for ${instrumentId}:`, err);
+        continue;
+      }
+
+      if (!samples || samples.length === 0) continue;
+
+      let maxAmp = 0;
+      for (let i = 0; i < samples.length; i++) {
+        const abs = Math.abs(samples[i]);
+        if (abs > maxAmp) maxAmp = abs;
+      }
+      if (maxAmp > 0) {
+        const scale = (0.5 / maxAmp) * intendedVol;
+        for (let i = 0; i < samples.length; i++) {
+          samples[i] *= scale;
+        }
+      }
+
+      const noteStart = step * samplesPerStep;
+      for (let j = 0; j < samples.length; j++) {
+        const bufferIndex = noteStart + j;
+        if (bufferIndex >= mixBuffer.length) break;
+        mixBuffer[bufferIndex] += samples[j];
+      }
+    }
+  }
+
+  let maxAmp = 0;
+  for (let i = 0; i < mixBuffer.length; i++) {
+    maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
+  }
+  if (maxAmp > 0) {
+    const scale = 0.5 / maxAmp;
+    for (let i = 0; i < mixBuffer.length; i++) {
+      mixBuffer[i] *= scale;
+    }
+  }
+
+  const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
+  audioBuffer.getChannelData(0).set(mixBuffer);
+
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.loop = false;
+  source.connect(ctx.destination);
+  source.start(0);
+
+  previewState.playingSource = source;
+  previewState.isPlaying = true;
+  previewState.bufferDuration = audioBuffer.duration;
+  previewState.startTime = ctx.currentTime;
+  updatePreviewUI();
+
+  source.onended = () => {
+    if (previewState.playingSource === source) {
+      previewState.playingSource = null;
+      previewState.isPlaying = false;
+      updatePreviewUI();
+    }
+  };
+}
+
+/**
  * Open the tracker modal
  */
 export function openTracker(instrumentList) {
