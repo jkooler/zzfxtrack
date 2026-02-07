@@ -337,9 +337,19 @@ function setNote(channel, step, note) {
   renderGrid();
   updateOutput();
   
-  // Play note preview if it's a valid note (not null, not rest)
-  if (note && note !== '~' && note !== '-') {
-    playNotePreview(channel, note);
+  // If preview is playing, update the loop seamlessly
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    
+    playPreview(currentOffset);
+  } else {
+    // Otherwise play single note preview if it's a valid note
+    if (note && note !== '~' && note !== '-') {
+      playNotePreview(channel, note);
+    }
   }
 }
 
@@ -390,6 +400,15 @@ function clearAll() {
   state.channelInstruments = ['', '', '', ''];
   renderGrid();
   updateOutput();
+  
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    
+    playPreview(currentOffset);
+  }
 }
 
 /**
@@ -507,7 +526,7 @@ function togglePreview() {
 /**
  * Play a preview of the current tracker pattern
  */
-function playPreview() {
+function playPreview(startOffset = 0) {
   // Stop any existing playback
   stopPreview();
 
@@ -540,10 +559,10 @@ function playPreview() {
   const sampleRate = 44100;
   const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
   
-  // Calculate buffer length (16 steps + 2 second tail for release)
+  // Calculate buffer length (exact pattern length for seamless looping)
   const totalSteps = state.steps;
-  const bufferLength = Math.ceil((totalSteps * samplesPerStep) + (sampleRate * 2));
-  const mixBuffer = new Float32Array(bufferLength);
+  const patternSamples = Math.ceil(totalSteps * samplesPerStep);
+  const mixBuffer = new Float32Array(patternSamples);
 
   // Note to semitone offset mapping (relative to C4)
   const noteToSemitone = (noteStr) => {
@@ -626,12 +645,11 @@ function playPreview() {
         }
       }
 
-      // Mix into buffer at correct position
+      // Mix into buffer at correct position with wrap-around
       const noteStart = step * samplesPerStep;
       for (let j = 0; j < samples.length; j++) {
-        if (noteStart + j < mixBuffer.length) {
-          mixBuffer[noteStart + j] += samples[j];
-        }
+        const bufferIndex = (noteStart + j) % patternSamples;
+        mixBuffer[bufferIndex] += samples[j];
       }
     }
   }
@@ -654,25 +672,24 @@ function playPreview() {
 
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
+  source.loop = true; // Loop indefinitely
   source.connect(ctx.destination);
-  source.start();
+  
+  // Start with offset if provided to maintain loop position
+  source.start(0, startOffset % audioBuffer.duration);
 
   previewState.playingSource = source;
   previewState.isPlaying = true;
+  previewState.bufferDuration = audioBuffer.duration;
+  // Calculate when the loop effectively started to track position for future updates
+  previewState.startTime = ctx.currentTime - (startOffset % audioBuffer.duration);
 
   // Update button state
   updatePreviewUI();
+  
+  // No onended handler needed for looping, as it stops only on manual stop()
 
-  // Handle end of playback
-  source.onended = () => {
-    if (previewState.playingSource === source) {
-      previewState.playingSource = null;
-      previewState.isPlaying = false;
-      updatePreviewUI();
-    }
-  };
-
-  console.log(`[Tracker] Preview playing (${totalSteps} steps @ ${BPM} BPM)`);
+  console.log(`[Tracker] Preview playing loop (${totalSteps} steps @ ${BPM} BPM)`);
 }
 
 /**
