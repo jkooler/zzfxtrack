@@ -8,7 +8,7 @@ import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, getInstrumentsForBaker, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState } from './tracker.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState } from './tracker.js';
 import { initBlocks, openBlocksModal, saveBlock, updateBlock } from './blocks.js';
 
 // --- Global State ---
@@ -1176,38 +1176,7 @@ async function initTrackerWithInstruments() {
  * Setup tracker event listeners
  */
 function setupTrackerEventListeners() {
-    // Listen for tracker:apply event to insert code into editor
-    document.addEventListener('tracker:apply', async (e) => {
-        const code = e.detail.code;
-        if (code && dom.repl.editor) {
-            // Get the current code and convert it to file format (with exports)
-            let fileCode = editorToFile(dom.repl.editor.code || '');
-            
-            // Remove any existing pattern definition from the file code
-            fileCode = fileCode.replace(
-                /export\s+const\s+pattern\s*=[\s\S]*?;\s*$/,
-                ''
-            );
-            
-            // Add the new pattern before the final closing
-            fileCode = fileCode.replace(
-                /(\nexport const bpm = \d+;)/,
-                `$1\n\nexport const pattern = ${code};`
-            );
-            
-            // Convert back to editor format and set
-            const editorCode = fileToEditor(fileCode);
-            dom.repl.editor.setCode(editorCode);
-            
-            // Also save to server
-            fetch(`/api/song/${currentSongFilename}`, {
-                method: 'POST',
-                body: fileCode
-            });
-            
-            setStatus('Tracker pattern applied to editor', 'success');
-        }
-    });
+
     
     // Add keyboard shortcut to open tracker (Ctrl/Cmd + T)
     document.addEventListener('keydown', (e) => {
@@ -1275,8 +1244,7 @@ function setupBlocksEventListeners() {
     // Listen for blocks:create event (from Blocks modal)
     document.addEventListener('blocks:create', () => {
         openTrackerModal();
-        // Switch tracker to "block creation mode"
-        isCreatingBlock = true;
+
     });
     
     // Listen for blocks:edit event (from Blocks modal)
@@ -1330,52 +1298,35 @@ function setupBlocksEventListeners() {
     });
 }
 
-// Flag to track if we're creating a block (vs just using tracker)
-let isCreatingBlock = false;
 
-// Override the tracker apply handler to support saving as block
-document.addEventListener('tracker:apply', async (e) => {
-    if (isCreatingBlock) {
-        // Save as block instead of inserting into song
-        const code = e.detail.code;
-        const trackerState = serializeTrackerState();
-        
-        // Prompt for block name and description
-        const name = prompt('Enter a name for this block:', 'My Pattern');
-        if (!name) {
-            isCreatingBlock = false;
-            return;
-        }
-        
-        const description = prompt('Enter a description (optional):', '');
-        
-        // Save the block
-        const success = await saveBlock(name, description, code, trackerState);
-        if (success) {
-            setStatus(`Block "${name}" saved successfully`, 'success');
-        } else {
-            setStatus('Failed to save block', 'error');
-        }
-        
-        isCreatingBlock = false;
-    }
-});
 
-// Listen for tracker:saveBlock event (when saving edits to existing block)
+// Listen for tracker:saveBlock event (when saving edits)
 document.addEventListener('tracker:saveBlock', async (e) => {
-    const { filename, name, description, pattern, trackerState } = e.detail;
+    const { isNewBlock, filename, name, description, pattern, trackerState } = e.detail;
     
-    // Confirm before saving
-    if (!confirm(`Save changes to block "${name}"?`)) {
-        return;
-    }
-    
-    // Update the block
-    const success = await updateBlock(filename, name, description, pattern, trackerState);
-    if (success) {
-        setStatus(`Block "${name}" updated successfully`, 'success');
+    if (isNewBlock) {
+        // Handle new block creation
+        const success = await saveBlock(name, description || "Created in tracker", pattern, trackerState);
+        if (success) {
+            setStatus(`Block "${name}" created successfully`, 'success');
+            // Close tracker and return to blocks list
+            closeTracker();
+            openBlocksModal();
+        } else {
+            setStatus('Failed to create block', 'error');
+        }
     } else {
-        setStatus('Failed to update block', 'error');
+        // Handle existing block update
+        // Update the block
+        const success = await updateBlock(filename, name, description, pattern, trackerState);
+        if (success) {
+            setStatus(`Block "${name}" updated successfully`, 'success');
+            // Close tracker and return to blocks list
+            closeTracker();
+            openBlocksModal();
+        } else {
+            setStatus('Failed to update block', 'error');
+        }
     }
 });
 

@@ -57,6 +57,7 @@ const state = {
 // Edit mode state
 let editMode = {
   isEditing: false,
+  isNewBlock: false,
   blockFilename: null,
   blockName: null,
   blockDescription: null,
@@ -108,9 +109,10 @@ function cacheElements() {
     closeBtn: document.getElementById('closeTrackerBtn'),
     clearBtn: document.getElementById('clearTrackerBtn'),
     copyBtn: document.getElementById('copyTrackerBtn'),
-    applyBtn: document.getElementById('applyTrackerBtn'),
     saveBtn: document.getElementById('saveTrackerBtn'),
     previewBtn: document.getElementById('previewTrackerBtn'),
+    blockProps: document.getElementById('trackerBlockProps'),
+    blockNameInput: document.getElementById('trackerBlockName'),
     title: document.querySelector('#trackerModal h2'),
   };
 }
@@ -251,9 +253,6 @@ function setupEventListeners() {
   // Save button (for edit mode)
   elements.saveBtn?.addEventListener('click', handleSaveBlock);
 
-  // Apply button
-  elements.applyBtn?.addEventListener('click', applyToEditor);
-
   // Preview button
   elements.previewBtn?.addEventListener('click', togglePreview);
 
@@ -268,8 +267,8 @@ function handleKeyDown(e) {
   // Only process if tracker is open
   if (!elements.modal?.classList.contains('open')) return;
 
-  // Don't capture if typing in a select/textarea
-  if (e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+  // Don't capture if typing in a select/textarea/input
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
 
   const key = e.key.toLowerCase();
 
@@ -501,16 +500,7 @@ async function copyToClipboard() {
   }
 }
 
-/**
- * Apply tracker output to the Strudel editor
- */
-function applyToEditor() {
-  const event = new CustomEvent('tracker:apply', {
-    detail: { code: elements.output.value },
-  });
-  document.dispatchEvent(event);
-  closeTracker();
-}
+
 
 /**
  * Toggle preview playback
@@ -737,7 +727,11 @@ export function openTracker(instrumentList) {
   // Reset edit mode
   resetEditMode();
   
-  // Hide save button, show apply button
+  // Enable editing for new blocks so we can save them
+  editMode.isEditing = true;
+  editMode.isNewBlock = true;
+  
+  // Update UI (save button will be visible now)
   updateEditModeUI();
   
   if (instrumentList) {
@@ -757,6 +751,7 @@ export function openTracker(instrumentList) {
 export function openTrackerForEdit(instrumentList, blockData) {
   // Set edit mode
   editMode.isEditing = true;
+  editMode.isNewBlock = false;
   editMode.blockFilename = blockData.filename;
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
@@ -788,6 +783,7 @@ export function openTrackerForEdit(instrumentList, blockData) {
  */
 function resetEditMode() {
   editMode.isEditing = false;
+  editMode.isNewBlock = false;
   editMode.blockFilename = null;
   editMode.blockName = null;
   editMode.blockDescription = null;
@@ -800,9 +796,25 @@ function resetEditMode() {
 function updateEditModeUI() {
   // Update title
   if (elements.title) {
-    elements.title.textContent = editMode.isEditing 
-      ? `Tracker - Editing: ${editMode.blockName}` 
-      : 'Tracker';
+    if (editMode.isEditing) {
+      elements.title.textContent = editMode.isNewBlock 
+        ? 'Tracker - New Block' 
+        : `Tracker - Editing: ${editMode.blockName}`;
+    } else { // Should not happen if saving is enabled, but fallback
+      elements.title.textContent = 'Tracker';
+    }
+  }
+  
+  // Show/hide block properties (name input)
+  if (elements.blockProps) {
+    if (editMode.isEditing) {
+      elements.blockProps.classList.remove('hidden');
+      if (elements.blockNameInput) {
+        elements.blockNameInput.value = editMode.blockName || '';
+      }
+    } else {
+      elements.blockProps.classList.add('hidden');
+    }
   }
   
   // Show/hide save button
@@ -821,14 +833,26 @@ function updateEditModeUI() {
 function handleSaveBlock() {
   if (!editMode.isEditing) return;
   
+  // Get and validate name
+  let name = editMode.blockName;
+  if (elements.blockNameInput) {
+    name = elements.blockNameInput.value.trim();
+    if (!name) {
+      alert("Please enter a block name.");
+      elements.blockNameInput.focus();
+      return;
+    }
+  }
+  
   const trackerState = serializeTrackerState();
   const pattern = elements.output?.value || '';
   
   // Dispatch event for the app to handle saving
   const event = new CustomEvent('tracker:saveBlock', {
     detail: {
+      isNewBlock: editMode.isNewBlock,
       filename: editMode.blockFilename,
-      name: editMode.blockName,
+      name: name,
       description: editMode.blockDescription,
       pattern,
       trackerState,

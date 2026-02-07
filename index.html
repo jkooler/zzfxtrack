@@ -1122,6 +1122,17 @@
             <i data-lucide="x" class="w-6 h-6"></i>
           </button>
         </div>
+        
+        <!-- Block Name Input (Only shown in Edit/Create Mode) -->
+        <div id="trackerBlockProps" class="hidden flex gap-2 items-center pb-2 border-b border-border/50">
+          <label for="trackerBlockName" class="text-xs font-bold text-muted-foreground uppercase">Name:</label>
+          <input 
+            type="text" 
+            id="trackerBlockName" 
+            placeholder="Block Name" 
+            class="flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+        </div>
 
         <!-- Tracker Grid -->
         <div class="tracker-container flex-1 overflow-auto">
@@ -1190,12 +1201,7 @@
           >
             <i data-lucide="save" class="w-4 h-4"></i> Save Block
           </button>
-          <button
-            id="applyTrackerBtn"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
-          >
-            <i data-lucide="check" class="w-4 h-4"></i> Apply to Editor
-          </button>
+
         </div>
       </div>
     </div>
