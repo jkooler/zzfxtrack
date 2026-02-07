@@ -1151,6 +1151,14 @@
         
         <!-- Block Name Input (Only shown in Edit/Create Mode) -->
         <div id="trackerBlockProps" class="hidden flex gap-2 items-center pb-2 border-b border-border/50">
+          <button
+            id="previewTrackerBtn"
+            type="button"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm flex items-center justify-center"
+            title="Preview"
+          >
+            <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+          </button>
           <label for="trackerBlockName" class="text-xs font-bold text-muted-foreground uppercase">Name:</label>
           <input 
             type="text" 
@@ -1214,12 +1222,6 @@
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
           >
             <i data-lucide="copy" class="w-4 h-4"></i> Copy to Clipboard
-          </button>
-          <button
-            id="previewTrackerBtn"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
-          >
-            <i data-lucide="play" class="w-4 h-4"></i> Preview
           </button>
           <button
             id="saveTrackerBtn"

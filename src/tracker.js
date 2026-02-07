@@ -7,6 +7,7 @@
 
 import { zzfxG } from './zzfx-loader.js';
 import { playTestNote } from './instrument-preview.js';
+import { createIcons, icons } from 'lucide';
 
 // Keyboard to note mapping (zxcvb row = C3-B3, qwerty row = C4-B4)
 const KEYBOARD_MAP = {
@@ -270,6 +271,9 @@ function handleKeyDown(e) {
   // Don't capture if typing in a select/textarea/input
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
 
+  // Only handle editing when a cell is actively selected
+  if (!document.querySelector('.tracker-cell.active')) return;
+
   const key = e.key.toLowerCase();
 
   // Navigation
@@ -320,10 +324,32 @@ function handleKeyDown(e) {
     return;
   }
 
+  if (key === ' ') {
+    e.preventDefault();
+    insertBlankRowAtStep(state.focusedChannel, state.focusedStep);
+    const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
+    setFocus(state.focusedChannel, newStep);
+    return;
+  }
+
   // Clear note
-  if (key === 'backspace' || key === 'delete') {
+  if (key === 'delete') {
     e.preventDefault();
     setNote(state.focusedChannel, state.focusedStep, null);
+    const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
+    setFocus(state.focusedChannel, newStep);
+    return;
+  }
+
+  if (key === 'backspace') {
+    e.preventDefault();
+    if (state.focusedStep === 0) {
+      setNote(state.focusedChannel, state.focusedStep, null);
+      setFocus(state.focusedChannel, 0);
+    } else {
+      shiftColumnUpFromStep(state.focusedChannel, state.focusedStep - 1);
+      setFocus(state.focusedChannel, state.focusedStep - 1);
+    }
     return;
   }
 }
@@ -349,6 +375,42 @@ function setNote(channel, step, note) {
     if (note && note !== '~' && note !== '-') {
       playNotePreview(channel, note);
     }
+  }
+}
+
+function shiftColumnUpFromStep(channel, startStep) {
+  for (let step = startStep; step < state.steps - 1; step++) {
+    state.grid[channel][step].note = state.grid[channel][step + 1].note;
+  }
+  state.grid[channel][state.steps - 1].note = null;
+  renderGrid();
+  updateOutput();
+
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    
+    playPreview(currentOffset);
+  }
+}
+
+function insertBlankRowAtStep(channel, startStep) {
+  for (let step = state.steps - 1; step > startStep; step--) {
+    state.grid[channel][step].note = state.grid[channel][step - 1].note;
+  }
+  state.grid[channel][startStep].note = null;
+  renderGrid();
+  updateOutput();
+
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    
+    playPreview(currentOffset);
   }
 }
 
@@ -554,8 +616,7 @@ function playPreview(startOffset = 0) {
   const patternSamples = Math.ceil(totalSteps * samplesPerStep);
   const mixBuffer = new Float32Array(patternSamples);
 
-  // Note to semitone offset mapping (relative to C4)
-  const noteToSemitone = (noteStr) => {
+  const noteToFreq = (noteStr) => {
     if (!noteStr || noteStr === '~' || noteStr === '-') return null;
     
     const noteMap = {
@@ -572,10 +633,8 @@ function playPreview(startOffset = 0) {
     const noteOffset = noteMap[noteName];
     if (noteOffset === undefined) return null;
     
-    // MIDI note number (C4 = 60)
     const midiNote = (octave + 1) * 12 + noteOffset;
-    // Return semitone offset from C4
-    return midiNote - 60;
+    return 440 * Math.pow(2, (midiNote - 69) / 12);
   };
 
   // Process each channel
@@ -591,22 +650,19 @@ function playPreview(startOffset = 0) {
     }
 
     const baseParams = instrument.params;
-    const baseFreq = baseParams[2] || 232;
 
     // Process each step
     for (let step = 0; step < state.steps; step++) {
       const cell = state.grid[ch][step];
-      const semitoneOffset = noteToSemitone(cell.note);
-      
-      if (semitoneOffset === null) continue;
+      const freq = noteToFreq(cell.note);
+      if (freq === null) continue;
 
       // Clone and modify params for this note
       const p = [...baseParams];
       while (p.length < 21) p.push(0);
 
-      // Calculate pitch ratio
-      const ratio = Math.pow(2, semitoneOffset / 12);
-      p[2] = baseFreq * ratio; // Frequency
+      // Set absolute frequency
+      p[2] = freq;
 
       // Generate samples
       const intendedVol = p[0] !== undefined ? p[0] : 1;
@@ -705,19 +761,14 @@ function updatePreviewUI() {
   if (!elements.previewBtn) return;
 
   if (previewState.isPlaying) {
-    elements.previewBtn.innerHTML = '<i data-lucide="square" class="w-4 h-4"></i> Stop';
-    elements.previewBtn.classList.add('bg-destructive', 'text-destructive-foreground');
-    elements.previewBtn.classList.remove('bg-secondary', 'text-secondary-foreground');
+    elements.previewBtn.innerHTML = '<i data-lucide="square" class="w-5 h-5 fill-current"></i>';
+    elements.previewBtn.style.color = '#ff3333';
   } else {
-    elements.previewBtn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i> Preview';
-    elements.previewBtn.classList.remove('bg-destructive', 'text-destructive-foreground');
-    elements.previewBtn.classList.add('bg-secondary', 'text-secondary-foreground');
+    elements.previewBtn.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
+    elements.previewBtn.style.color = '#eee';
   }
 
-  // Refresh Lucide icons
-  if (window.lucide) {
-    window.lucide.createIcons();
-  }
+  createIcons({ icons });
 }
 
 /**
@@ -753,10 +804,11 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
   const secondsPerStep = secondsPerBeat / 4; // 16th notes
   const sampleRate = 44100;
   const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
-  const patternSamples = Math.ceil(steps * samplesPerStep);
+  const tailSamples = sampleRate; // 1 second tail to avoid hard cut
+  const patternSamples = Math.ceil(steps * samplesPerStep) + tailSamples;
   const mixBuffer = new Float32Array(patternSamples);
 
-  const noteToSemitone = (noteStr) => {
+  const noteToFreq = (noteStr) => {
     if (!noteStr || noteStr === '~' || noteStr === '-') return null;
     
     const noteMap = {
@@ -774,7 +826,7 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
     if (noteOffset === undefined) return null;
     
     const midiNote = (octave + 1) * 12 + noteOffset;
-    return midiNote - 60;
+    return 440 * Math.pow(2, (midiNote - 69) / 12);
   };
 
   const instrumentById = new Map(instrumentList.map(inst => [inst.id, inst]));
@@ -787,19 +839,17 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
     if (!instrument || !instrument.params) continue;
 
     const baseParams = instrument.params;
-    const baseFreq = baseParams[2] || 232;
     const channel = grid[ch] || [];
 
     for (let step = 0; step < steps; step++) {
       const note = channel[step];
-      const semitoneOffset = noteToSemitone(note);
-      if (semitoneOffset === null) continue;
+      const freq = noteToFreq(note);
+      if (freq === null) continue;
 
       const p = [...baseParams];
       while (p.length < 21) p.push(0);
 
-      const ratio = Math.pow(2, semitoneOffset / 12);
-      p[2] = baseFreq * ratio;
+      p[2] = freq;
 
       const intendedVol = p[0] !== undefined ? p[0] : 1;
       p[0] = 1;
@@ -965,6 +1015,9 @@ function updateEditModeUI() {
     } else {
       elements.blockProps.classList.add('hidden');
     }
+
+    // Ensure icons render when the block props row is revealed.
+    createIcons({ icons });
   }
   
   // Show/hide save button
