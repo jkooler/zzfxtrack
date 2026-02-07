@@ -1166,6 +1166,7 @@ async function initTrackerWithInstruments() {
     const instrumentList = instruments.map(inst => ({
         id: inst.strudelAlias,
         name: inst.strudelAlias,
+        params: inst.params,
     }));
     
     initTracker(instrumentList);
@@ -1230,6 +1231,7 @@ async function openTrackerModal() {
     const instrumentList = instruments.map(inst => ({
         id: inst.strudelAlias,
         name: inst.strudelAlias,
+        params: inst.params,
     }));
     
     openTracker(instrumentList);
@@ -1248,6 +1250,7 @@ async function openTrackerModalForEdit(block, trackerState) {
     const instrumentList = instruments.map(inst => ({
         id: inst.strudelAlias,
         name: inst.strudelAlias,
+        params: inst.params,
     }));
     
     // Prepare block data for edit mode

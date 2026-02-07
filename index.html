@@ -111,11 +111,20 @@
 
       <!-- Lists -->
       <ul id="songList" class="song-list flex-1 overflow-y-auto space-y-1"></ul>
-      
-      <div id="instrumentControls" class="hidden px-3 py-1 border-b border-border/30 flex justify-end items-center">
-        <label class="flex items-center gap-2 text-[10px] font-bold tracking-wider text-muted-foreground uppercase cursor-pointer hover:text-foreground transition-colors">
+
+      <div
+        id="instrumentControls"
+        class="hidden px-3 py-1 border-b border-border/30 flex justify-end items-center"
+      >
+        <label
+          class="flex items-center gap-2 text-[10px] font-bold tracking-wider text-muted-foreground uppercase cursor-pointer hover:text-foreground transition-colors"
+        >
           <span>Used in selected song</span>
-          <input type="checkbox" id="usedInstrumentsOnly" class="w-3 h-3 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background" />
+          <input
+            type="checkbox"
+            id="usedInstrumentsOnly"
+            class="w-3 h-3 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
+          />
         </label>
       </div>
 
@@ -334,7 +343,8 @@
             </div>
             <!-- Param 11 -->
             <div class="space-y-1">
-              <label class="text-xs text-foreground">11: Pitch Jump Time (s)</label
+              <label class="text-xs text-foreground"
+                >11: Pitch Jump Time (s)</label
               ><input
                 type="number"
                 id="param11"
@@ -910,7 +920,7 @@
         >
           Export Settings
         </h2>
-        
+
         <div class="space-y-4">
           <label class="flex items-center gap-3 cursor-pointer">
             <input
@@ -918,11 +928,15 @@
               id="limitChannels"
               class="w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
             />
-            <span class="text-sm font-medium text-foreground">Limit channel usage</span>
+            <span class="text-sm font-medium text-foreground"
+              >Limit channel usage</span
+            >
           </label>
-          
+
           <div id="channelLimitGroup" class="space-y-2 hidden">
-            <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+            <label
+              class="text-xs text-muted-foreground uppercase tracking-wider font-bold"
+            >
               Max Channels
             </label>
             <input
@@ -935,7 +949,8 @@
               class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             />
             <p class="text-xs text-muted-foreground/80 italic">
-              Note: Some notes can be cut out, especially if you're using chords in Strudel.
+              Note: Some notes can be cut out, especially if you're using chords
+              in Strudel.
             </p>
           </div>
 
@@ -946,14 +961,17 @@
                 id="normalizeLayers"
                 class="w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
               />
-              <span class="text-sm font-medium text-foreground">Normalize Layers</span>
+              <span class="text-sm font-medium text-foreground"
+                >Normalize Layers</span
+              >
             </label>
             <p class="text-xs text-muted-foreground/80 italic mt-2 ml-7">
-              Reduce gain when the same note plays multiple times simultaneously (1/√n scaling)
+              Reduce gain when the same note plays multiple times simultaneously
+              (1/√n scaling)
             </p>
           </div>
         </div>
-        
+
         <div class="flex justify-end gap-2 mt-2">
           <button
             id="closeExportSettings"
@@ -1021,18 +1039,26 @@
         </div>
 
         <p class="text-sm text-muted-foreground">
-          Blocks are reusable musical patterns. Create a block with the tracker, then insert it into any song.
+          Blocks are reusable musical patterns. Create a block with the tracker,
+          then insert it into any song.
         </p>
 
         <!-- Blocks List -->
-        <div id="blocksList" class="blocks-list flex-1 overflow-y-auto min-h-[200px] max-h-[400px] space-y-2 border border-border rounded-md p-3">
+        <div
+          id="blocksList"
+          class="blocks-list flex-1 overflow-y-auto min-h-[200px] max-h-[400px] space-y-2 border border-border rounded-md p-3"
+        >
           <!-- Blocks will be rendered here -->
         </div>
 
         <!-- Selected Block Info -->
         <div class="selected-block-info p-3 bg-muted rounded-md">
           <div class="flex items-center justify-between mb-2">
-            <div class="text-xs text-muted-foreground uppercase tracking-wider font-bold">Selected</div>
+            <div
+              class="text-xs text-muted-foreground uppercase tracking-wider font-bold"
+            >
+              Selected
+            </div>
             <button
               id="editBlockBtn"
               type="button"
@@ -1041,7 +1067,12 @@
               <i data-lucide="pencil" class="w-3 h-3"></i> Edit
             </button>
           </div>
-          <div id="selectedBlockName" class="text-sm font-medium text-foreground">No block selected</div>
+          <div
+            id="selectedBlockName"
+            class="text-sm font-medium text-foreground"
+          >
+            No block selected
+          </div>
         </div>
 
         <!-- Actions -->
@@ -1101,7 +1132,9 @@
 
         <!-- Mini Notation Output -->
         <div class="space-y-2">
-          <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+          <label
+            class="text-xs text-muted-foreground uppercase tracking-wider font-bold"
+          >
             Generated Mini-Notation
           </label>
           <textarea
@@ -1114,18 +1147,18 @@
 
         <!-- Keyboard Help -->
         <div class="text-xs text-muted-foreground border-t border-border pt-3">
-          <span class="font-bold">Keyboard:</span> 
-          <span class="font-mono bg-muted px-1 rounded">z</span>=C3 
-          <span class="font-mono bg-muted px-1 rounded">s</span>=C#3 
-          <span class="font-mono bg-muted px-1 rounded">x</span>=D3 
-          <span class="font-mono bg-muted px-1 rounded">d</span>=D#3 
-          <span class="font-mono bg-muted px-1 rounded">c</span>=E3 
-          <span class="font-mono bg-muted px-1 rounded">v</span>=F3 
-          <span class="font-mono bg-muted px-1 rounded">g</span>=F#3 
-          <span class="font-mono bg-muted px-1 rounded">b</span>=G3 
-          <span class="font-mono bg-muted px-1 rounded">h</span>=G#3 
-          <span class="font-mono bg-muted px-1 rounded">n</span>=A3 
-          <span class="font-mono bg-muted px-1 rounded">j</span>=A#3 
+          <span class="font-bold">Keyboard:</span>
+          <span class="font-mono bg-muted px-1 rounded">z</span>=C3
+          <span class="font-mono bg-muted px-1 rounded">s</span>=C#3
+          <span class="font-mono bg-muted px-1 rounded">x</span>=D3
+          <span class="font-mono bg-muted px-1 rounded">d</span>=D#3
+          <span class="font-mono bg-muted px-1 rounded">c</span>=E3
+          <span class="font-mono bg-muted px-1 rounded">v</span>=F3
+          <span class="font-mono bg-muted px-1 rounded">g</span>=F#3
+          <span class="font-mono bg-muted px-1 rounded">b</span>=G3
+          <span class="font-mono bg-muted px-1 rounded">h</span>=G#3
+          <span class="font-mono bg-muted px-1 rounded">n</span>=A3
+          <span class="font-mono bg-muted px-1 rounded">j</span>=A#3
           <span class="font-mono bg-muted px-1 rounded">m</span>=B3 |
           <span class="font-mono bg-muted px-1 rounded">q..u</span>=C4..B4 |
           <span class="font-mono bg-muted px-1 rounded">-</span>=Rest |
@@ -1144,6 +1177,12 @@
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
           >
             <i data-lucide="copy" class="w-4 h-4"></i> Copy to Clipboard
+          </button>
+          <button
+            id="previewTrackerBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
+          >
+            <i data-lucide="play" class="w-4 h-4"></i> Preview
           </button>
           <button
             id="saveTrackerBtn"

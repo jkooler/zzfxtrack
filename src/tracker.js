@@ -5,6 +5,9 @@
  * Uses zxcvb/qwerty keyboard layout for note input (like FastTracker/ProTracker).
  */
 
+import { zzfxG } from './zzfx-loader.js';
+import { playTestNote } from './instrument-preview.js';
+
 // Keyboard to note mapping (zxcvb row = C3-B3, qwerty row = C4-B4)
 const KEYBOARD_MAP = {
   // Lower row (C3 - B3)
@@ -60,6 +63,13 @@ let editMode = {
   onSave: null, // Callback for save action
 };
 
+// Preview playback state
+let previewState = {
+  audioContext: null,
+  playingSource: null,
+  isPlaying: false,
+};
+
 // DOM Elements
 let elements = {};
 
@@ -100,6 +110,7 @@ function cacheElements() {
     copyBtn: document.getElementById('copyTrackerBtn'),
     applyBtn: document.getElementById('applyTrackerBtn'),
     saveBtn: document.getElementById('saveTrackerBtn'),
+    previewBtn: document.getElementById('previewTrackerBtn'),
     title: document.querySelector('#trackerModal h2'),
   };
 }
@@ -243,6 +254,9 @@ function setupEventListeners() {
   // Apply button
   elements.applyBtn?.addEventListener('click', applyToEditor);
 
+  // Preview button
+  elements.previewBtn?.addEventListener('click', togglePreview);
+
   // Keyboard input
   document.addEventListener('keydown', handleKeyDown);
 }
@@ -322,6 +336,50 @@ function setNote(channel, step, note) {
   state.grid[channel][step].note = note;
   renderGrid();
   updateOutput();
+  
+  // Play note preview if it's a valid note (not null, not rest)
+  if (note && note !== '~' && note !== '-') {
+    playNotePreview(channel, note);
+  }
+}
+
+/**
+ * Play a preview of a note using the channel's instrument
+ */
+function playNotePreview(channel, noteStr) {
+  const instrumentId = state.channelInstruments[channel];
+  if (!instrumentId) return;
+  
+  // Find instrument params
+  const instrument = state.instruments.find(i => i.id === instrumentId);
+  if (!instrument || !instrument.params) return;
+  
+  // Calculate frequency for the note
+  const noteMap = {
+    'c': 0, 'c#': 1, 'd': 2, 'd#': 3, 'e': 4, 'f': 5,
+    'f#': 6, 'g': 7, 'g#': 8, 'a': 9, 'a#': 10, 'b': 11
+  };
+  
+  const match = noteStr.match(/^([a-g]#?)(\d)$/i);
+  if (!match) return;
+  
+  const noteName = match[1].toLowerCase();
+  const octave = parseInt(match[2], 10);
+  
+  const noteOffset = noteMap[noteName];
+  if (noteOffset === undefined) return;
+  
+  // MIDI note number (C4 = 60)
+  const midiNote = (octave + 1) * 12 + noteOffset;
+  const semitoneOffset = midiNote - 60; // offset from C4
+  
+  // Calculate frequency
+  const baseFreq = instrument.params[2] || 232;
+  const ratio = Math.pow(2, semitoneOffset / 12);
+  const frequency = baseFreq * ratio;
+  
+  // Play the note
+  playTestNote(instrument.params, frequency);
 }
 
 /**
@@ -436,6 +494,226 @@ function applyToEditor() {
 }
 
 /**
+ * Toggle preview playback
+ */
+function togglePreview() {
+  if (previewState.isPlaying) {
+    stopPreview();
+  } else {
+    playPreview();
+  }
+}
+
+/**
+ * Play a preview of the current tracker pattern
+ */
+function playPreview() {
+  // Stop any existing playback
+  stopPreview();
+
+  // Check if we have any notes with instruments
+  const hasContent = state.channelInstruments.some((inst, ch) => {
+    if (!inst) return false;
+    return state.grid[ch].some(cell => cell.note && cell.note !== '~');
+  });
+
+  if (!hasContent) {
+    console.log('[Tracker] No content to preview');
+    return;
+  }
+
+  // Initialize audio context if needed
+  if (!previewState.audioContext) {
+    previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  const ctx = previewState.audioContext;
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+
+  // Default BPM (16 steps per cycle, 4 beats per cycle = 16th notes)
+  const BPM = 120;
+  const secondsPerBeat = 60 / BPM;
+  const secondsPerStep = secondsPerBeat / 4; // 16th notes
+
+  const sampleRate = 44100;
+  const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
+  
+  // Calculate buffer length (16 steps + 2 second tail for release)
+  const totalSteps = state.steps;
+  const bufferLength = Math.ceil((totalSteps * samplesPerStep) + (sampleRate * 2));
+  const mixBuffer = new Float32Array(bufferLength);
+
+  // Note to semitone offset mapping (relative to C4)
+  const noteToSemitone = (noteStr) => {
+    if (!noteStr || noteStr === '~' || noteStr === '-') return null;
+    
+    const noteMap = {
+      'c': 0, 'c#': 1, 'd': 2, 'd#': 3, 'e': 4, 'f': 5,
+      'f#': 6, 'g': 7, 'g#': 8, 'a': 9, 'a#': 10, 'b': 11
+    };
+    
+    const match = noteStr.match(/^([a-g]#?)(\d)$/i);
+    if (!match) return null;
+    
+    const noteName = match[1].toLowerCase();
+    const octave = parseInt(match[2], 10);
+    
+    const noteOffset = noteMap[noteName];
+    if (noteOffset === undefined) return null;
+    
+    // MIDI note number (C4 = 60)
+    const midiNote = (octave + 1) * 12 + noteOffset;
+    // Return semitone offset from C4
+    return midiNote - 60;
+  };
+
+  // Process each channel
+  for (let ch = 0; ch < state.channels; ch++) {
+    const instrumentId = state.channelInstruments[ch];
+    if (!instrumentId) continue;
+
+    // Find instrument params
+    const instrument = state.instruments.find(i => i.id === instrumentId);
+    if (!instrument || !instrument.params) {
+      console.warn(`[Tracker] Instrument not found: ${instrumentId}`);
+      continue;
+    }
+
+    const baseParams = instrument.params;
+    const baseFreq = baseParams[2] || 232;
+
+    // Process each step
+    for (let step = 0; step < state.steps; step++) {
+      const cell = state.grid[ch][step];
+      const semitoneOffset = noteToSemitone(cell.note);
+      
+      if (semitoneOffset === null) continue;
+
+      // Clone and modify params for this note
+      const p = [...baseParams];
+      while (p.length < 21) p.push(0);
+
+      // Calculate pitch ratio
+      const ratio = Math.pow(2, semitoneOffset / 12);
+      p[2] = baseFreq * ratio; // Frequency
+
+      // Generate samples
+      const intendedVol = p[0] !== undefined ? p[0] : 1;
+      p[0] = 1; // Generate at full volume for normalization
+
+      let samples;
+      try {
+        samples = zzfxG(...p);
+      } catch (err) {
+        console.error(`[Tracker] Failed to generate sound for ${instrumentId}:`, err);
+        continue;
+      }
+
+      if (!samples || samples.length === 0) continue;
+
+      // Normalize
+      let maxAmp = 0;
+      for (let i = 0; i < samples.length; i++) {
+        const abs = Math.abs(samples[i]);
+        if (abs > maxAmp) maxAmp = abs;
+      }
+      if (maxAmp > 0) {
+        const scale = (0.5 / maxAmp) * intendedVol;
+        for (let i = 0; i < samples.length; i++) {
+          samples[i] *= scale;
+        }
+      }
+
+      // Mix into buffer at correct position
+      const noteStart = step * samplesPerStep;
+      for (let j = 0; j < samples.length; j++) {
+        if (noteStart + j < mixBuffer.length) {
+          mixBuffer[noteStart + j] += samples[j];
+        }
+      }
+    }
+  }
+
+  // Final normalization
+  let maxAmp = 0;
+  for (let i = 0; i < mixBuffer.length; i++) {
+    maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
+  }
+  if (maxAmp > 0) {
+    const scale = 0.5 / maxAmp;
+    for (let i = 0; i < mixBuffer.length; i++) {
+      mixBuffer[i] *= scale;
+    }
+  }
+
+  // Create audio buffer and play
+  const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
+  audioBuffer.getChannelData(0).set(mixBuffer);
+
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(ctx.destination);
+  source.start();
+
+  previewState.playingSource = source;
+  previewState.isPlaying = true;
+
+  // Update button state
+  updatePreviewUI();
+
+  // Handle end of playback
+  source.onended = () => {
+    if (previewState.playingSource === source) {
+      previewState.playingSource = null;
+      previewState.isPlaying = false;
+      updatePreviewUI();
+    }
+  };
+
+  console.log(`[Tracker] Preview playing (${totalSteps} steps @ ${BPM} BPM)`);
+}
+
+/**
+ * Stop preview playback
+ */
+function stopPreview() {
+  if (previewState.playingSource) {
+    try {
+      previewState.playingSource.stop();
+    } catch (e) {
+      // Already stopped
+    }
+    previewState.playingSource = null;
+  }
+  previewState.isPlaying = false;
+  updatePreviewUI();
+}
+
+/**
+ * Update preview button UI based on playback state
+ */
+function updatePreviewUI() {
+  if (!elements.previewBtn) return;
+
+  if (previewState.isPlaying) {
+    elements.previewBtn.innerHTML = '<i data-lucide="square" class="w-4 h-4"></i> Stop';
+    elements.previewBtn.classList.add('bg-destructive', 'text-destructive-foreground');
+    elements.previewBtn.classList.remove('bg-secondary', 'text-secondary-foreground');
+  } else {
+    elements.previewBtn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i> Preview';
+    elements.previewBtn.classList.remove('bg-destructive', 'text-destructive-foreground');
+    elements.previewBtn.classList.add('bg-secondary', 'text-secondary-foreground');
+  }
+
+  // Refresh Lucide icons
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+}
+
+/**
  * Open the tracker modal
  */
 export function openTracker(instrumentList) {
@@ -546,6 +824,9 @@ function handleSaveBlock() {
  * Close the tracker modal
  */
 export function closeTracker() {
+  // Stop any playing preview
+  stopPreview();
+  
   elements.modal?.classList.remove('open');
   
   // Reset edit mode when closing
