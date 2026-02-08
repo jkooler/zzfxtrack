@@ -1,4 +1,6 @@
 import { createIcons, icons } from 'lucide';
+import { setupScrubInteraction } from './instrument-ui.js';
+import { primePreviewAudioContext } from './tracker.js';
 
 /**
  * Blocks Module
@@ -16,7 +18,18 @@ let selectedBlockIndex = null;
 
 // DOM Elements
 let elements = {};
-let blockToDelete = null;
+	let blockToDelete = null;
+	let arrangementsCache = [];
+	let selectedArrangementIndex = null;
+	let arrangementEditMode = {
+	  isEditing: false,
+	  filename: null,
+	};
+let arrangementToDelete = null;
+
+function emitStatus(message, type = 'normal') {
+  document.dispatchEvent(new CustomEvent('app:status', { detail: { message, type } }));
+}
 
 /**
  * Initialize the blocks system
@@ -31,20 +44,42 @@ export function initBlocks() {
  * Cache DOM element references
  */
 function cacheElements() {
-  elements = {
+	  elements = {
     modal: document.getElementById('blocksModal'),
     blocksList: document.getElementById('blocksList'),
+    blocksTabPanel: document.getElementById('blocksTabPanel'),
+    arrangerTabPanel: document.getElementById('arrangerTabPanel'),
+    blocksTabBtn: document.getElementById('blocksModalBlocksTab'),
+    arrangerTabBtn: document.getElementById('blocksModalArrangerTab'),
+    description: document.getElementById('blocksModalDescription'),
+    arrangementsList: document.getElementById('arrangementsList'),
+    createArrangementBtn: document.getElementById('createArrangementBtn'),
+    insertArrangementBtn: document.getElementById('insertArrangementBtn'),
+    arrangementModal: document.getElementById('arrangementModal'),
+    arrangementModalTitle: document.getElementById('arrangementModalTitle'),
+    previewArrangementBtn: document.getElementById('previewArrangementBtn'),
+    closeArrangementBtn: document.getElementById('closeArrangementBtn'),
+    cancelArrangementBtn: document.getElementById('cancelArrangementBtn'),
+    saveArrangementBtn: document.getElementById('saveArrangementBtn'),
+    addArrangementRowBtn: document.getElementById('addArrangementRowBtn'),
+    arrangementName: document.getElementById('arrangementName'),
+    arrangementBpm: document.getElementById('arrangementBpm'),
+    arrangementRows: document.getElementById('arrangementRows'),
     closeBtn: document.getElementById('closeBlocksBtn'),
     createBlockBtn: document.getElementById('createBlockBtn'),
     insertBlockBtn: document.getElementById('insertBlockBtn'),
     deleteBlockBtn: document.getElementById('deleteBlockBtn'),
     preserveBlockBpm: document.getElementById('preserveBlockBpm'),
-    deleteBlockModal: document.getElementById('deleteBlockModal'),
-    deleteBlockText: document.getElementById('deleteBlockText'),
-    cancelDeleteBlock: document.getElementById('cancelDeleteBlock'),
-    confirmDeleteBlock: document.getElementById('confirmDeleteBlock'),
-  };
-}
+	    deleteBlockModal: document.getElementById('deleteBlockModal'),
+	    deleteBlockText: document.getElementById('deleteBlockText'),
+	    cancelDeleteBlock: document.getElementById('cancelDeleteBlock'),
+	    confirmDeleteBlock: document.getElementById('confirmDeleteBlock'),
+	    deleteArrangementModal: document.getElementById('deleteArrangementModal'),
+	    deleteArrangementText: document.getElementById('deleteArrangementText'),
+	    cancelDeleteArrangement: document.getElementById('cancelDeleteArrangement'),
+	    confirmDeleteArrangement: document.getElementById('confirmDeleteArrangement'),
+	  };
+	}
 
 /**
  * Setup event listeners
@@ -54,8 +89,459 @@ function setupEventListeners() {
   elements.createBlockBtn?.addEventListener('click', openTrackerForNewBlock);
   elements.insertBlockBtn?.addEventListener('click', insertSelectedBlock);
   elements.deleteBlockBtn?.addEventListener('click', deleteSelectedBlock);
-  elements.cancelDeleteBlock?.addEventListener('click', closeDeleteBlockModal);
-  elements.confirmDeleteBlock?.addEventListener('click', confirmDeleteBlock);
+	  elements.cancelDeleteBlock?.addEventListener('click', closeDeleteBlockModal);
+	  elements.confirmDeleteBlock?.addEventListener('click', confirmDeleteBlock);
+	  elements.cancelDeleteArrangement?.addEventListener('click', closeDeleteArrangementModal);
+	  elements.confirmDeleteArrangement?.addEventListener('click', confirmDeleteArrangement);
+
+  elements.blocksTabBtn?.addEventListener('click', () => setActiveTab('blocks'));
+  elements.arrangerTabBtn?.addEventListener('click', () => setActiveTab('arranger'));
+
+  elements.createArrangementBtn?.addEventListener('click', () => { void openArrangementEditor(); });
+  elements.insertArrangementBtn?.addEventListener('click', insertSelectedArrangement);
+  elements.closeArrangementBtn?.addEventListener('click', closeArrangementEditor);
+  elements.cancelArrangementBtn?.addEventListener('click', closeArrangementEditor);
+  elements.previewArrangementBtn?.addEventListener('click', previewArrangementDraft);
+  elements.addArrangementRowBtn?.addEventListener('click', () => {
+    arrangementDraft.rows.push({ repeats: 1, blocks: [] });
+    renderArrangementRows();
+  });
+  elements.saveArrangementBtn?.addEventListener('click', saveArrangementFromEditor);
+
+  if (elements.arrangementBpm) {
+    setupScrubInteraction(elements.arrangementBpm);
+  }
+}
+
+function previewArrangementDraft() {
+  const name = (elements.arrangementName?.value || arrangementDraft.name || 'Arrangement').trim() || 'Arrangement';
+  const bpmVal = parseInt(elements.arrangementBpm?.value || String(arrangementDraft.bpm || 120), 10);
+  const bpm = Number.isFinite(bpmVal) ? Math.min(Math.max(bpmVal, 20), 300) : 120;
+
+  const arrangementState = {
+    version: 1,
+    name,
+    bpm,
+    rows: arrangementDraft.rows.map(r => ({
+      repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
+      blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+    })),
+  };
+
+  primePreviewAudioContext();
+  emitStatus(`Previewing arrangement "${name}"...`, 'normal');
+  console.log('[Arranger] Previewing draft:', arrangementState);
+  const event = new CustomEvent('arrangements:preview', { detail: { arrangement: { name, arrangementState } } });
+  document.dispatchEvent(event);
+}
+
+function setActiveTab(tab) {
+  const blocksActive = tab !== 'arranger';
+  elements.blocksTabPanel?.classList.toggle('hidden', !blocksActive);
+  elements.arrangerTabPanel?.classList.toggle('hidden', blocksActive);
+  elements.blocksTabBtn?.classList.toggle('active', blocksActive);
+  elements.arrangerTabBtn?.classList.toggle('active', !blocksActive);
+  if (elements.description) {
+    elements.description.textContent = blocksActive
+      ? 'Blocks are reusable musical patterns. Create a block with the tracker, then insert it into any song.'
+      : 'Create arrangements with Blocks to quickly test out your song ideas.';
+  }
+  if (!blocksActive) {
+    loadArrangementsList();
+  }
+}
+
+async function loadArrangementsList() {
+  try {
+    const response = await fetch('/api/arrangements');
+    if (!response.ok) throw new Error('Failed to load arrangements');
+    arrangementsCache = await response.json();
+  } catch (err) {
+    console.error('[Arranger] Failed to load arrangements:', err);
+    arrangementsCache = [];
+  }
+  renderArrangementsList();
+}
+
+function renderArrangementsList() {
+  if (!elements.arrangementsList) return;
+
+  elements.arrangementsList.innerHTML = '';
+
+  if (!arrangementsCache.length) {
+    elements.arrangementsList.innerHTML = `
+      <div class="blocks-empty text-center py-8 text-muted-foreground">
+        <p class="mb-2">No arrangements yet.</p>
+        <p class="text-sm">Create one to start arranging your blocks.</p>
+      </div>
+    `;
+    if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = true;
+    return;
+  }
+
+  arrangementsCache.forEach((arr, index) => {
+    const el = document.createElement('div');
+    el.className = 'block-item';
+    el.dataset.index = index;
+    el.tabIndex = 0;
+    el.innerHTML = `
+      <div class="min-w-0">
+        <div class="block-name font-bold text-sm text-foreground">${escapeHtml(arr.name)}</div>
+        <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(`BPM ${arr.bpm ?? 120}`)}</div>
+      </div>
+      <div class="song-item-actions">
+        <button class="sidebar-edit-btn" title="Edit ${escapeHtml(arr.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
+        <button class="sidebar-del-btn" title="Delete ${escapeHtml(arr.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+      </div>
+    `;
+
+    el.addEventListener('click', () => selectArrangement(index));
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      selectArrangement(index);
+    });
+
+    el.querySelector('.sidebar-edit-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectArrangement(index);
+      void openArrangementEditor(arrangementsCache[index]);
+    });
+
+	    el.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
+	      e.stopPropagation();
+	      openDeleteArrangementModal(index);
+	    });
+
+    elements.arrangementsList.appendChild(el);
+  });
+
+  createIcons({ icons });
+}
+
+function selectArrangement(index) {
+  document.querySelectorAll('#arrangementsList .block-item').forEach(el => {
+    el.classList.remove('selected', 'bg-accent', 'border-primary');
+  });
+  const selectedEl = document.querySelector(`#arrangementsList .block-item[data-index="${index}"]`);
+  if (selectedEl) {
+    selectedEl.classList.add('selected', 'bg-accent', 'border-primary');
+  }
+  selectedArrangementIndex = index;
+  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = false;
+
+  const arrangement = arrangementsCache[index];
+  if (arrangement?.arrangementState) {
+    primePreviewAudioContext();
+    emitStatus(`Previewing arrangement "${arrangement.name}"...`, 'normal');
+    console.log('[Arranger] Preview request:', arrangement);
+    const event = new CustomEvent('arrangements:preview', { detail: { arrangement } });
+    document.dispatchEvent(event);
+  }
+}
+
+	async function deleteArrangementByIndex(index) {
+	  const arr = arrangementsCache[index];
+	  if (!arr?.filename) return;
+	  try {
+    const res = await fetch(`/api/arrangements/${arr.filename}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Delete failed');
+    await loadArrangementsList();
+  } catch (err) {
+    console.error('[Arranger] Delete failed:', err);
+    alert('Failed to delete arrangement. See console for details.');
+	  }
+	}
+
+	function openDeleteArrangementModal(index) {
+	  const arr = arrangementsCache[index];
+	  if (!arr) return;
+	  arrangementToDelete = arr;
+	  if (elements.deleteArrangementText) {
+	    elements.deleteArrangementText.textContent = `This will permanently delete "${arr.name}". This action cannot be undone.`;
+	  }
+	  elements.deleteArrangementModal?.classList.add('open');
+	  elements.confirmDeleteArrangement?.focus();
+	}
+
+	function closeDeleteArrangementModal() {
+	  arrangementToDelete = null;
+	  elements.deleteArrangementModal?.classList.remove('open');
+	}
+
+	async function confirmDeleteArrangement() {
+	  if (!arrangementToDelete?.filename) {
+	    closeDeleteArrangementModal();
+	    return;
+	  }
+	  const filename = arrangementToDelete.filename;
+	  closeDeleteArrangementModal();
+	  try {
+	    const res = await fetch(`/api/arrangements/${filename}`, { method: 'DELETE' });
+	    if (!res.ok) throw new Error('Delete failed');
+	    await loadArrangementsList();
+	  } catch (err) {
+	    console.error('[Arranger] Delete failed:', err);
+	    alert('Failed to delete arrangement. See console for details.');
+	  }
+	}
+
+function getSelectedArrangement() {
+  const selectedEl = document.querySelector('#arrangementsList .block-item.selected');
+  if (!selectedEl) return null;
+  const index = parseInt(selectedEl.dataset.index, 10);
+  return arrangementsCache[index];
+}
+
+function insertSelectedArrangement() {
+  const arr = getSelectedArrangement();
+  if (!arr?.arrangementState) return;
+  const event = new CustomEvent('arrangements:insert', { detail: { arrangement: arr } });
+  document.dispatchEvent(event);
+  closeBlocksModal();
+}
+
+let arrangementDraft = {
+  version: 1,
+  name: '',
+  bpm: 120,
+  rows: [{ repeats: 1, blocks: [] }],
+};
+
+async function ensureBlocksLoaded() {
+  if (blocksCache?.length) return;
+  await loadBlocksList();
+}
+
+async function openArrangementEditor(arrangement = null) {
+  if (!elements.arrangementModal) return;
+  await ensureBlocksLoaded();
+  console.log('[Arranger] Opening editor. blocksCache:', blocksCache?.length || 0);
+  if (!blocksCache?.length) {
+    emitStatus('No blocks available (failed to load /api/blocks).', 'error');
+  }
+
+  arrangementEditMode.isEditing = !!arrangement;
+  arrangementEditMode.filename = arrangement?.filename || null;
+
+  const state = arrangement?.arrangementState || null;
+  arrangementDraft = {
+    version: 1,
+    name: arrangement?.name || state?.name || '',
+    bpm: state?.bpm ?? arrangement?.bpm ?? 120,
+    rows: Array.isArray(state?.rows) && state.rows.length
+      ? state.rows.map(r => ({
+          repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
+          blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+        }))
+      : [{ repeats: 1, blocks: [] }],
+  };
+
+  if (elements.arrangementModalTitle) {
+    elements.arrangementModalTitle.textContent = arrangementEditMode.isEditing
+      ? `Arrangement: ${arrangementDraft.name}`
+      : 'Arrangement - New';
+  }
+  if (elements.arrangementName) elements.arrangementName.value = arrangementDraft.name;
+  if (elements.arrangementBpm) elements.arrangementBpm.value = String(arrangementDraft.bpm);
+
+  renderArrangementRows();
+  elements.arrangementModal.classList.add('open');
+  elements.arrangementName?.focus();
+  createIcons({ icons });
+}
+
+function closeArrangementEditor() {
+  elements.arrangementModal?.classList.remove('open');
+}
+
+function renderArrangementRows() {
+  if (!elements.arrangementRows) return;
+  elements.arrangementRows.innerHTML = '';
+
+  arrangementDraft.rows.forEach((row, rowIndex) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'arr-row';
+    rowEl.dataset.row = rowIndex;
+
+    const repeatsEl = document.createElement('input');
+    repeatsEl.type = 'number';
+    repeatsEl.min = '1';
+    repeatsEl.max = '99';
+    repeatsEl.step = '1';
+    repeatsEl.value = String(row.repeats || 1);
+    repeatsEl.className = 'arr-repeats';
+    repeatsEl.addEventListener('input', () => {
+      const val = parseInt(repeatsEl.value, 10);
+      row.repeats = Number.isFinite(val) ? Math.min(Math.max(val, 1), 99) : 1;
+    });
+    setupScrubInteraction(repeatsEl);
+
+	    const chipsEl = document.createElement('div');
+	    chipsEl.className = 'arr-chips';
+
+	    const updateSelectDisabled = (selectEl) => {
+	      if (!selectEl) return;
+	      const options = Array.from(selectEl.querySelectorAll('option'));
+	      for (const opt of options) {
+	        if (!opt.value) continue;
+	        opt.disabled = row.blocks.includes(opt.value);
+	      }
+	    };
+
+	    const renderChips = () => {
+	      chipsEl.innerHTML = '';
+	      row.blocks.forEach((filename, i) => {
+	        const block = blocksCache.find(b => b.filename === filename);
+	        const chip = document.createElement('div');
+        chip.className = 'arr-chip';
+        chip.innerHTML = `
+          <span class="arr-chip-label">${escapeHtml(block?.name || filename)}</span>
+          <button type="button" class="arr-chip-del" title="Remove"><i data-lucide="x" class="w-3 h-3"></i></button>
+        `;
+	        chip.querySelector('.arr-chip-del')?.addEventListener('click', () => {
+	          row.blocks.splice(i, 1);
+	          renderChips();
+	          updateSelectDisabled(selectEl);
+	          createIcons({ icons });
+	        });
+	        chipsEl.appendChild(chip);
+	      });
+	    };
+
+	    const selectEl = document.createElement('select');
+	    selectEl.className = 'arr-block-select';
+	    selectEl.innerHTML = `<option value="">Add block…</option>` + blocksCache
+	      .map(b => {
+	        const disabled = row.blocks.includes(b.filename) ? ' disabled' : '';
+	        return `<option value="${escapeHtml(b.filename)}"${disabled}>${escapeHtml(b.name)}</option>`;
+	      })
+	      .join('');
+    selectEl.addEventListener('change', () => {
+      const val = selectEl.value;
+      if (!val) return;
+      if (!row.blocks.includes(val)) {
+        row.blocks.push(val);
+      }
+      selectEl.value = '';
+      console.log('[Arranger] Added block to row', rowIndex, val, '=>', row.blocks);
+      renderChips();
+      updateSelectDisabled(selectEl);
+      createIcons({ icons });
+    });
+
+    const removeRowBtn = document.createElement('button');
+    removeRowBtn.type = 'button';
+    removeRowBtn.className = 'arr-row-del';
+    removeRowBtn.title = 'Remove row';
+    removeRowBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
+    removeRowBtn.addEventListener('click', () => {
+      if (arrangementDraft.rows.length === 1) {
+        arrangementDraft.rows[0] = { repeats: 1, blocks: [] };
+      } else {
+        arrangementDraft.rows.splice(rowIndex, 1);
+      }
+      renderArrangementRows();
+      createIcons({ icons });
+    });
+
+	    rowEl.appendChild(repeatsEl);
+	    rowEl.appendChild(chipsEl);
+	    rowEl.appendChild(selectEl);
+	    rowEl.appendChild(removeRowBtn);
+
+	    elements.arrangementRows.appendChild(rowEl);
+	    renderChips();
+	    updateSelectDisabled(selectEl);
+	  });
+
+	  createIcons({ icons });
+	}
+
+async function saveArrangementFromEditor() {
+  const rawName = elements.arrangementName?.value?.trim() || '';
+  if (!rawName) {
+    alert('Please enter an arrangement name.');
+    elements.arrangementName?.focus();
+    return;
+  }
+
+  emitStatus('Saving arrangement...', 'normal');
+  console.log('[Arranger] Saving draft:', JSON.parse(JSON.stringify(arrangementDraft)));
+
+  const bpmVal = parseInt(elements.arrangementBpm?.value || '120', 10);
+  arrangementDraft.name = rawName;
+  arrangementDraft.bpm = Number.isFinite(bpmVal) ? Math.min(Math.max(bpmVal, 20), 300) : 120;
+
+  const existing = await fetch('/api/arrangements').then(r => r.ok ? r.json() : []).catch(() => []);
+  const currentFilename = arrangementEditMode.filename ? arrangementEditMode.filename.toLowerCase() : null;
+  const existingNames = new Set(
+    existing
+      .filter(a => String(a?.filename || '').toLowerCase() !== currentFilename)
+      .map(a => String(a?.name || '').toLowerCase())
+  );
+
+  let uniqueName = rawName;
+  let suffix = 1;
+  while (existingNames.has(uniqueName.toLowerCase())) {
+    suffix++;
+    uniqueName = `${rawName}_${suffix}`;
+  }
+  arrangementDraft.name = uniqueName;
+  if (elements.arrangementName) elements.arrangementName.value = uniqueName;
+
+  const sanitizeBase = (str) => (str || 'arrangement')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'arrangement';
+
+  const arrangementState = {
+    version: 1,
+    name: arrangementDraft.name,
+    bpm: arrangementDraft.bpm,
+    rows: arrangementDraft.rows.map(r => ({
+      repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
+      blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+    })),
+  };
+  console.log('[Arranger] arrangementState payload:', arrangementState);
+
+  try {
+    if (arrangementEditMode.isEditing && arrangementEditMode.filename) {
+      const res = await fetch(`/api/arrangements/${arrangementEditMode.filename}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: arrangementDraft.name, arrangementState })
+      });
+      if (!res.ok) throw new Error('Update failed');
+    } else {
+      const existingFilenames = new Set(existing.map(a => String(a?.filename || '').toLowerCase()));
+      const baseSlug = sanitizeBase(arrangementDraft.name);
+      let uniqueSlug = baseSlug;
+      suffix = 1;
+      while (existingFilenames.has(`${uniqueSlug}.js`)) {
+        suffix++;
+        uniqueSlug = `${baseSlug}-${suffix}`;
+      }
+      const filename = `${uniqueSlug}.js`;
+      const res = await fetch('/api/arrangements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, name: arrangementDraft.name, arrangementState })
+      });
+      if (!res.ok) throw new Error('Save failed');
+      arrangementEditMode.filename = filename;
+      arrangementEditMode.isEditing = true;
+    }
+
+    await loadArrangementsList();
+    closeArrangementEditor();
+    emitStatus('Arrangement saved.', 'success');
+  } catch (err) {
+    console.error('[Arranger] Save failed:', err);
+    alert('Failed to save arrangement. See console for details.');
+    emitStatus('Failed to save arrangement.', 'error');
+  }
 }
 
 /**
@@ -263,12 +749,14 @@ async function insertSelectedBlock() {
   }
   const preserveBlockBpm = !!elements.preserveBlockBpm?.checked;
   let blockBpm = block.trackerState?.bpm;
-  if (preserveBlockBpm && !blockBpm && block.filename) {
+  let blockSteps = block.trackerState?.steps;
+  if (((preserveBlockBpm && !blockBpm) || !blockSteps) && block.filename) {
     try {
       const response = await fetch(`/api/blocks/${block.filename}`);
       if (response.ok) {
         const fullBlock = await response.json();
         blockBpm = fullBlock?.trackerState?.bpm;
+        blockSteps = fullBlock?.trackerState?.steps;
       }
     } catch (err) {
       console.warn('[Blocks] Could not fetch block BPM:', err);
@@ -281,7 +769,8 @@ async function insertSelectedBlock() {
       pattern: block.pattern,
       name: block.name,
       preserveBlockBpm,
-      blockBpm
+      blockBpm,
+      blockSteps
     },
   });
   document.dispatchEvent(event);
@@ -354,14 +843,35 @@ function clearBlockSelection() {
  */
 export async function saveBlock(name, description, pattern, trackerState) {
   try {
-    // Generate filename from name (sanitize)
-    const filename = name.toLowerCase()
+    const sanitizeBase = (raw) => (raw || 'block')
+      .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') + '.js';
+      .replace(/^-|-$/g, '') || 'block';
+
+    const existing = await fetch('/api/blocks').then(r => r.ok ? r.json() : []).catch(() => []);
+    const existingNames = new Set(existing.map(b => String(b?.name || '').toLowerCase()));
+    const existingFilenames = new Set(existing.map(b => String(b?.filename || '').toLowerCase()));
+
+    const baseName = String(name || '').trim() || 'block';
+    let uniqueName = baseName;
+    let suffix = 1;
+    while (existingNames.has(uniqueName.toLowerCase())) {
+      suffix++;
+      uniqueName = `${baseName}_${suffix}`;
+    }
+
+    const baseSlug = sanitizeBase(baseName);
+    let uniqueSlug = baseSlug;
+    suffix = 1;
+    while (existingFilenames.has(`${uniqueSlug}.js`)) {
+      suffix++;
+      uniqueSlug = `${baseSlug}-${suffix}`;
+    }
+    const filename = `${uniqueSlug}.js`;
     
     const blockData = {
       filename,
-      name,
+      name: uniqueName,
       description: description || '',
       pattern,
       trackerState,
@@ -390,9 +900,25 @@ export async function saveBlock(name, description, pattern, trackerState) {
  */
 export async function updateBlock(filename, name, description, pattern, trackerState) {
   try {
+    const existing = await fetch('/api/blocks').then(r => r.ok ? r.json() : []).catch(() => []);
+    const currentFilename = String(filename || '').toLowerCase();
+    const existingNames = new Set(
+      existing
+        .filter(b => String(b?.filename || '').toLowerCase() !== currentFilename)
+        .map(b => String(b?.name || '').toLowerCase())
+    );
+
+    const baseName = String(name || '').trim() || 'block';
+    let uniqueName = baseName;
+    let suffix = 1;
+    while (existingNames.has(uniqueName.toLowerCase())) {
+      suffix++;
+      uniqueName = `${baseName}_${suffix}`;
+    }
+
     const blockData = {
       filename,
-      name,
+      name: uniqueName,
       description: description || '',
       pattern,
       trackerState,
@@ -421,7 +947,9 @@ export async function updateBlock(filename, name, description, pattern, trackerS
  */
 export function openBlocksModal() {
   elements.modal?.classList.add('open');
+  setActiveTab('blocks');
   loadBlocksList(); // Refresh list when opening
+  document.dispatchEvent(new CustomEvent('blocks:modalOpen'));
 }
 
 /**
@@ -429,6 +957,7 @@ export function openBlocksModal() {
  */
 export function closeBlocksModal() {
   elements.modal?.classList.remove('open');
+  document.dispatchEvent(new CustomEvent('blocks:modalClose'));
 }
 
 /**

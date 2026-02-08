@@ -8,6 +8,7 @@ import tailwindcss from '@tailwindcss/vite';
 const SONGS_DIR = path.resolve(__dirname, 'songs');
 const OUTPUT_DIR = path.resolve(__dirname, 'output');
 const BLOCKS_DIR = path.resolve(__dirname, 'blocks');
+const ARRANGEMENTS_DIR = path.resolve(__dirname, 'arrangements');
 
 /**
  * Custom Vite Plugin to provide a simple API for:
@@ -265,9 +266,9 @@ const apiPlugin = () => ({
                 const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
                 const descMatch = content.match(/export\s+const\s+description\s*=\s*["']([^"']*)["']/);
                 // Pattern can be in backticks, single quotes, or double quotes
-                const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*[`"']([\s\S]*?)[`"'];?\s*$/m);
+                const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*([`"'])([\s\S]*?)\1\s*;?/);
                 // Extract trackerState if present
-                const trackerStateMatch = content.match(/export\s+const\s+trackerState\s*=\s*(\{[\s\S]*?\});?\s*$/m);
+                const trackerStateMatch = content.match(/export\s+const\s+trackerState\s*=\s*(\{[\s\S]*?\})\s*;/);
                 let trackerState = null;
                 if (trackerStateMatch) {
                   try {
@@ -281,7 +282,7 @@ const apiPlugin = () => ({
                   filename,
                   name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
                   description: descMatch ? descMatch[1] : '',
-                  pattern: patternMatch ? patternMatch[1].trim() : '',
+                  pattern: patternMatch ? patternMatch[2].trim() : '',
                   trackerState
                 };
               } catch (e) {
@@ -348,7 +349,7 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
        next();
      });
 
-      // API: Get/Delete/Update Block
+     // API: Get/Delete/Update Block
       // GET /api/blocks/:filename
       // DELETE /api/blocks/:filename
       // PUT /api/blocks/:filename
@@ -376,8 +377,8 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
               // Extract all exports
               const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
               const descMatch = content.match(/export\s+const\s+description\s*=\s*["']([^"']*)["']/);
-              const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*[`"']([\s\S]*?)[`"'];?\s*$/m);
-              const trackerStateMatch = content.match(/export\s+const\s+trackerState\s*=\s*(\{[\s\S]*?\});?\s*$/m);
+              const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*([`"'])([\s\S]*?)\1\s*;?/);
+              const trackerStateMatch = content.match(/export\s+const\s+trackerState\s*=\s*(\{[\s\S]*?\})\s*;/);
               
               let trackerState = null;
               if (trackerStateMatch) {
@@ -393,7 +394,7 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
                 filename,
                 name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
                 description: descMatch ? descMatch[1] : '',
-                pattern: patternMatch ? patternMatch[1].trim() : '',
+                pattern: patternMatch ? patternMatch[2].trim() : '',
                 trackerState
               }));
             } catch (e) {
@@ -456,6 +457,192 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
           return;
         }
         
+        next();
+      });
+
+     // API: Arrangements
+     // GET /api/arrangements
+     server.middlewares.use('/api/arrangements', (req, res, next) => {
+       if (req.method === 'GET' && req.url === '/') {
+         try {
+           if (!fs.existsSync(ARRANGEMENTS_DIR)) {
+             fs.mkdirSync(ARRANGEMENTS_DIR, { recursive: true });
+           }
+
+           const files = fs.readdirSync(ARRANGEMENTS_DIR)
+             .filter(f => f.endsWith('.js') && f !== 'index.js');
+
+           const arrangements = files.map(filename => {
+             const filePath = path.join(ARRANGEMENTS_DIR, filename);
+             try {
+               const content = fs.readFileSync(filePath, 'utf-8');
+               const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
+               const arrangementStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
+               let arrangementState = null;
+               if (arrangementStateMatch) {
+                 try {
+                   arrangementState = JSON.parse(arrangementStateMatch[1]);
+                 } catch (e) {
+                   // ignore
+                 }
+               }
+
+               return {
+                 filename,
+                 name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
+                 bpm: arrangementState?.bpm ?? 120,
+                 arrangementState
+               };
+             } catch (e) {
+               return { filename, name: filename.replace('.js', ''), bpm: 120, arrangementState: null };
+             }
+           });
+
+           res.setHeader('Content-Type', 'application/json');
+           res.end(JSON.stringify(arrangements));
+         } catch (e) {
+           res.statusCode = 500;
+           res.end(JSON.stringify({ error: e.message }));
+         }
+         return;
+       }
+
+       // POST /api/arrangements - Create new arrangement
+       if (req.method === 'POST' && req.url === '/') {
+         let body = '';
+         req.on('data', chunk => body += chunk);
+         req.on('end', () => {
+           try {
+             const arrangementData = JSON.parse(body);
+             const { filename, name, arrangementState } = arrangementData;
+
+             if (!filename || filename.includes('..') || !filename.endsWith('.js')) {
+               res.statusCode = 400;
+               res.end('Invalid filename');
+               return;
+             }
+
+             if (!fs.existsSync(ARRANGEMENTS_DIR)) {
+               fs.mkdirSync(ARRANGEMENTS_DIR, { recursive: true });
+             }
+
+             const filePath = path.join(ARRANGEMENTS_DIR, filename);
+             const fileContent = `// Arrangement: ${name}
+
+export const name = "${name}";
+
+export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
+`;
+
+             fs.writeFileSync(filePath, fileContent);
+             console.log(`[API] Created arrangement: ${filename}`);
+             res.end('Arrangement created successfully');
+           } catch (e) {
+             console.error('[API] Create arrangement error:', e);
+             res.statusCode = 500;
+             res.end(`Error creating arrangement: ${e.message}`);
+           }
+         });
+         return;
+       }
+
+       next();
+     });
+
+      // API: Get/Delete/Update Arrangement
+      // GET /api/arrangements/:filename
+      // DELETE /api/arrangements/:filename
+      // PUT /api/arrangements/:filename
+      server.middlewares.use((req, res, next) => {
+        if (!req.url.startsWith('/api/arrangements/')) {
+          return next();
+        }
+
+        const filename = req.url.replace('/api/arrangements/', '');
+        if (!filename || filename.includes('..') || !filename.endsWith('.js')) {
+          res.statusCode = 400;
+          res.end('Invalid filename');
+          return;
+        }
+
+        const filePath = path.join(ARRANGEMENTS_DIR, filename);
+
+        if (req.method === 'GET') {
+          if (fs.existsSync(filePath)) {
+            try {
+              const content = fs.readFileSync(filePath, 'utf-8');
+              const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
+              const arrangementStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
+              let arrangementState = null;
+              if (arrangementStateMatch) {
+                try {
+                  arrangementState = JSON.parse(arrangementStateMatch[1]);
+                } catch (e) {
+                  // ignore
+                }
+              }
+
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({
+                filename,
+                name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
+                bpm: arrangementState?.bpm ?? 120,
+                arrangementState
+              }));
+            } catch (e) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: e.message }));
+            }
+          } else {
+            res.statusCode = 404;
+            res.end('Arrangement not found');
+          }
+          return;
+        }
+
+        if (req.method === 'DELETE') {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`[API] Deleted arrangement: ${filename}`);
+            res.end('Deleted');
+          } else {
+            res.statusCode = 404;
+            res.end('Arrangement not found');
+          }
+          return;
+        }
+
+        if (req.method === 'PUT') {
+          let body = '';
+          req.on('data', chunk => body += chunk);
+          req.on('end', () => {
+            try {
+              const arrangementData = JSON.parse(body);
+              const { name, arrangementState } = arrangementData;
+
+              if (!fs.existsSync(ARRANGEMENTS_DIR)) {
+                fs.mkdirSync(ARRANGEMENTS_DIR, { recursive: true });
+              }
+
+              const fileContent = `// Arrangement: ${name}
+
+export const name = "${name}";
+
+export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
+`;
+
+              fs.writeFileSync(filePath, fileContent);
+              console.log(`[API] Updated arrangement: ${filename}`);
+              res.end('Updated');
+            } catch (e) {
+              console.error('[API] Update arrangement error:', e);
+              res.statusCode = 500;
+              res.end(`Error updating arrangement: ${e.message}`);
+            }
+          });
+          return;
+        }
+
         next();
       });
   }

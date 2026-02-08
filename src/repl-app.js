@@ -8,8 +8,8 @@ import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, getInstrumentsForBaker, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce } from './tracker.js';
-import { initBlocks, openBlocksModal, saveBlock, updateBlock } from './blocks.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, previewArrangementStateOnce, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
+import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
 
 // --- Global State ---
 let currentSongFilename = null;
@@ -469,19 +469,29 @@ function editorToFile(code) {
         .filter(l => !l.trim().startsWith('setcps('))
         .join('\n').trim();
 
-    const extractBlocksSetup = (codeText) => {
-        const startMarker = '// BLOCKS START';
-        const endMarker = '// BLOCKS END';
-        const startIdx = codeText.indexOf(startMarker);
-        const endIdx = codeText.indexOf(endMarker);
-        if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return null;
-        const before = codeText.slice(0, startIdx).trim();
-        const blocks = codeText.slice(startIdx, endIdx + endMarker.length).trim();
-        const after = codeText.slice(endIdx + endMarker.length).trim();
-        return {
-            setup: [before, blocks].filter(Boolean).join('\n\n'),
-            expr: after,
-        };
+    const extractBlocksAndArrangementsSetup = (codeText) => {
+        const blocksStart = '// BLOCKS START';
+        const blocksEnd = '// BLOCKS END';
+        const arrStart = '// ARRANGEMENTS START';
+        const arrEnd = '// ARRANGEMENTS END';
+
+        const blocksStartIdx = codeText.indexOf(blocksStart);
+        const blocksEndIdx = codeText.indexOf(blocksEnd);
+        const arrStartIdx = codeText.indexOf(arrStart);
+        const arrEndIdx = codeText.indexOf(arrEnd);
+
+        // Nothing to extract.
+        if (blocksStartIdx === -1 || blocksEndIdx === -1 || blocksEndIdx <= blocksStartIdx) return null;
+
+        let setupEndIdx = blocksEndIdx + blocksEnd.length;
+        if (arrStartIdx !== -1 && arrEndIdx !== -1 && arrEndIdx > arrStartIdx) {
+            // If arrangements section exists, include it in setup so const declarations don't end up in pattern expr.
+            setupEndIdx = arrEndIdx + arrEnd.length;
+        }
+
+        const setup = codeText.slice(0, setupEndIdx).trim();
+        const expr = codeText.slice(setupEndIdx).trim();
+        return { setup, expr };
     };
 
     const splitSetupAndExpr = (codeText) => {
@@ -504,18 +514,20 @@ function editorToFile(code) {
         return { setup: '', expr: codeText.trim() };
     };
 
-    const extracted = extractBlocksSetup(cleanCode);
+    const extracted = extractBlocksAndArrangementsSetup(cleanCode);
     const { setup, expr } = extracted && extracted.expr ? extracted : splitSetupAndExpr(cleanCode);
     const finalExpr = expr && expr.trim() ? expr.trim() : 'stack()';
     
     // Identify used strudel functions for import
-    const commonFuncs = ['stack', 'note', 's', 'slow', 'fast', 'rev', 'jux', 'every', 'chunk', 'scale', 'gain', 'lpf', 'room', 'clip', 'sine', 'add', 'sub', 'mul', 'div', 'choose', 'rand', 'saw', 'square', 'tri', 'cat', 'seq', 'mini', 'tidal', 'pure', 'orbit', 'delay', 'shifto', 'shape', 'cps'];
+    const commonFuncs = ['stack', 'arrange', 'silence', 'note', 's', 'slow', 'fast', 'rev', 'jux', 'every', 'chunk', 'scale', 'gain', 'lpf', 'room', 'clip', 'sine', 'add', 'sub', 'mul', 'div', 'choose', 'rand', 'saw', 'square', 'tri', 'cat', 'seq', 'mini', 'tidal', 'pure', 'orbit', 'delay', 'shifto', 'shape', 'cps'];
     const usedImports = commonFuncs.filter(f => cleanCode.includes(f + '(') || cleanCode.includes(f + '.'));
     // Always include basics
     if (!usedImports.includes('note')) usedImports.push('note');
     if (!usedImports.includes('s')) usedImports.push('s');
     // We may insert blocks that rely on these even if the user's editor code doesn't.
     if (!usedImports.includes('stack')) usedImports.push('stack');
+    if (!usedImports.includes('arrange')) usedImports.push('arrange');
+    if (!usedImports.includes('silence')) usedImports.push('silence');
     if (!usedImports.includes('slow')) usedImports.push('slow');
     if (!usedImports.includes('gain')) usedImports.push('gain');
     
@@ -833,6 +845,12 @@ function setStatus(msg, type = 'normal') {
     dom.statusMsg.innerText = msg;
     dom.statusMsg.style.color = type === 'error' ? '#ff3333' : (type === 'success' ? '#00ff66' : '#888');
 }
+
+document.addEventListener('app:status', (e) => {
+    const { message, type } = e.detail || {};
+    if (typeof message !== 'string') return;
+    setStatus(message, type || 'normal');
+});
 
 function showSaveStatus(message = '✅ Saved changes', duration = 2000) {
     // Use the saveStatus span for temporary messages
@@ -1306,6 +1324,13 @@ async function initTrackerWithInstruments() {
  */
 function setupTrackerEventListeners() {
 
+    document.addEventListener('tracker:closed', (e) => {
+        const { returnToBlocksOnClose } = e.detail || {};
+        if (!returnToBlocksOnClose) return;
+        if (isBlocksModalOpen()) return;
+        openBlocksModal();
+    });
+
     
     // Add keyboard shortcut to open tracker (Ctrl/Cmd + T)
     document.addEventListener('keydown', (e) => {
@@ -1366,13 +1391,27 @@ async function openTrackerModalForEdit(block, trackerState) {
  * Setup blocks event listeners
  */
 function setupBlocksEventListeners() {
-    // Blocks button in header
-    const blocksBtn = document.getElementById('blocksBtn');
-    blocksBtn?.addEventListener('click', openBlocksModal);
-    
-    // Listen for blocks:create event (from Blocks modal)
-    document.addEventListener('blocks:create', () => {
-        openTrackerModal();
+	    // Blocks button in header
+	    const blocksBtn = document.getElementById('blocksBtn');
+	    blocksBtn?.addEventListener('click', openBlocksModal);
+
+	    // Stop Strudel playback when entering the Blocks modal (avoids confusion with previews/exports).
+	    document.addEventListener('blocks:modalOpen', () => {
+	        const editor = dom.repl.editor;
+	        if (editor && editor.repl.scheduler.started) {
+	            editor.stop();
+	            updatePlayState(false);
+	        }
+	    });
+
+	    // Stop any tracker-based preview playback when exiting the Blocks modal.
+	    document.addEventListener('blocks:modalClose', () => {
+	        stopTrackerPreviewPlayback();
+	    });
+	    
+	    // Listen for blocks:create event (from Blocks modal)
+	    document.addEventListener('blocks:create', () => {
+	        openTrackerModal();
 
     });
     
@@ -1384,7 +1423,7 @@ function setupBlocksEventListeners() {
     
     // Listen for blocks:insert event
     document.addEventListener('blocks:insert', (e) => {
-        const { pattern, name, preserveBlockBpm, blockBpm } = e.detail;
+        const { pattern, name, preserveBlockBpm, blockBpm, blockSteps } = e.detail;
         if (pattern && dom.repl.editor) {
             // Get the current code and convert it to file format (with exports)
             let fileCode = editorToFile(dom.repl.editor.code || '');
@@ -1742,6 +1781,16 @@ function setupBlocksEventListeners() {
                 }
             }
 
+            // Keep row timing consistent: steps are 16ths, so 32 steps should take 2 cycles, etc.
+            const stepsInt = Number.isInteger(blockSteps) ? blockSteps : null;
+            if (stepsInt && stepsInt !== 16) {
+                const stepFactor = stepsInt / 16;
+                if (Number.isFinite(stepFactor) && stepFactor > 0 && stepFactor !== 1) {
+                    const stepFactorStr = Number(stepFactor.toFixed(4));
+                    scaledPattern = `(${scaledPattern}).slow(${stepFactorStr})`;
+                }
+            }
+
             fileCode = fileCode.replace(
                 /\/\/ BLOCKS END/,
                 `const ${varName} = ${scaledPattern};\n// BLOCKS END`
@@ -1764,10 +1813,343 @@ function setupBlocksEventListeners() {
         }
     });
 
-    // Listen for blocks:preview event
-    document.addEventListener('blocks:preview', async (e) => {
-        const { trackerState } = e.detail || {};
-        if (!trackerState) return;
+	    // Listen for arrangements:insert event
+	    document.addEventListener('arrangements:insert', async (e) => {
+	        const { arrangement } = e.detail || {};
+	        if (!arrangement || !dom.repl.editor) return;
+
+        let fileCode = editorToFile(dom.repl.editor.code || '');
+
+        const slugify = (str) => (str || 'x')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 32) || 'x';
+
+        const ensureBlocksSection = (code) => {
+            if (code.includes('// BLOCKS START') && code.includes('// BLOCKS END')) return code;
+            return code.replace(
+                /(export const bpm\s*=\s*\d+;\s*)/m,
+                `$1\n\n// BLOCKS START\n// BLOCKS END\n`
+            );
+        };
+
+	        const ensureArrangementsSection = (code) => {
+	            if (code.includes('// ARRANGEMENTS START') && code.includes('// ARRANGEMENTS END')) return code;
+	            if (code.includes('// BLOCKS END')) {
+	                return code.replace(
+	                    /\/\/ BLOCKS END\s*\n/,
+	                    `// BLOCKS END\n\n// ARRANGEMENTS START\n// ARRANGEMENTS END\n`
+	                );
+	            }
+	            return code.replace(
+	                /(export const bpm\s*=\s*\d+;\s*)/m,
+	                `$1\n\n// ARRANGEMENTS START\n// ARRANGEMENTS END\n`
+	            );
+	        };
+
+	        const nextAvailableVarName = (code, base) => {
+	            let candidate = base;
+	            let n = 2;
+	            while (new RegExp(`\\bconst\\s+${candidate}\\b`).test(code) || new RegExp(`\\b${candidate}\\b`).test(code)) {
+	                candidate = `${base}_${n}`;
+	                n++;
+	            }
+	            return candidate;
+	        };
+
+	        const findMatchingParen = (text, openIdx) => {
+	            let depth = 0;
+	            let inSingle = false;
+	            let inDouble = false;
+	            let inTemplate = false;
+            let inLineComment = false;
+            let inBlockComment = false;
+            for (let i = openIdx; i < text.length; i++) {
+                const ch = text[i];
+                const next = text[i + 1];
+
+                if (inLineComment) {
+                    if (ch === '\n') inLineComment = false;
+                    continue;
+                }
+                if (inBlockComment) {
+                    if (ch === '*' && next === '/') {
+                        inBlockComment = false;
+                        i++;
+                    }
+                    continue;
+                }
+
+                if (inSingle) {
+                    if (ch === '\\\\') { i++; continue; }
+                    if (ch === '\'') inSingle = false;
+                    continue;
+                }
+                if (inDouble) {
+                    if (ch === '\\\\') { i++; continue; }
+                    if (ch === '"') inDouble = false;
+                    continue;
+                }
+                if (inTemplate) {
+                    if (ch === '\\\\') { i++; continue; }
+                    if (ch === '`') inTemplate = false;
+                    continue;
+                }
+
+                if (ch === '/' && next === '/') { inLineComment = true; i++; continue; }
+                if (ch === '/' && next === '*') { inBlockComment = true; i++; continue; }
+                if (ch === '\'') { inSingle = true; continue; }
+                if (ch === '"') { inDouble = true; continue; }
+                if (ch === '`') { inTemplate = true; continue; }
+
+                if (ch === '(') depth++;
+                if (ch === ')') {
+                    depth--;
+                    if (depth === 0) return i;
+                }
+            }
+            return -1;
+        };
+
+        const appendToTopLevelStackExpr = (expr, arg) => {
+            const trimmed = expr.trimStart();
+            if (!trimmed.startsWith('stack')) return null;
+            const stackIdx = expr.indexOf('stack');
+            let i = stackIdx + 5;
+            while (i < expr.length && /\s/.test(expr[i])) i++;
+            if (expr[i] !== '(') return null;
+            const openIdx = i;
+            const closeIdx = findMatchingParen(expr, openIdx);
+            if (closeIdx === -1) return null;
+
+            const argsText = expr.slice(openIdx + 1, closeIdx);
+            const hasArgs = argsText.trim().length > 0;
+            const multiline = expr.includes('\n');
+            const insert = hasArgs ? (multiline ? `,\n  ${arg}` : `, ${arg}`) : (multiline ? `\n  ${arg}\n` : `${arg}`);
+
+            let insertPos = closeIdx;
+            if (hasArgs) {
+                while (insertPos > openIdx + 1 && /\s/.test(expr[insertPos - 1])) insertPos--;
+            }
+            return expr.slice(0, insertPos) + insert + expr.slice(insertPos);
+        };
+
+	        const upsertPatternLayer = (code, layerVar) => {
+	            const match = code.match(/export const pattern\s*=\s*([\s\S]*?);\s*$/);
+	            if (!match) return `${code.trim()}\n\nexport const pattern = ${layerVar};\n`;
+	            const existing = match[1].trim();
+	            if (!existing) return code.replace(match[0], `export const pattern = ${layerVar};\n`);
+	            const appended = appendToTopLevelStackExpr(existing, layerVar);
+	            if (appended) return code.replace(match[0], `export const pattern = ${appended};\n`);
+	            return code.replace(match[0], `export const pattern = stack(\n  ${existing},\n  ${layerVar}\n);\n`);
+	        };
+
+	        const normalizePatternStack = (code) => {
+	            const match = code.match(/export const pattern\s*=\s*([\s\S]*?);\s*$/);
+	            if (!match) return code;
+	            const expr = match[1].trim();
+	            const trimmed = expr.trimStart();
+	            if (!trimmed.startsWith('stack')) return code;
+
+	            const parseTopLevelArgs = (text) => {
+	                const args = [];
+	                let current = '';
+	                let depth = 0;
+	                let inSingle = false;
+	                let inDouble = false;
+	                let inTemplate = false;
+	                let inLineComment = false;
+	                let inBlockComment = false;
+	                for (let i = 0; i < text.length; i++) {
+	                    const ch = text[i];
+	                    const next = text[i + 1];
+
+	                    if (inLineComment) {
+	                        current += ch;
+	                        if (ch === '\n') inLineComment = false;
+	                        continue;
+	                    }
+	                    if (inBlockComment) {
+	                        current += ch;
+	                        if (ch === '*' && next === '/') {
+	                            inBlockComment = false;
+	                            current += next;
+	                            i++;
+	                        }
+	                        continue;
+	                    }
+
+	                    if (inSingle) {
+	                        current += ch;
+	                        if (ch === '\\\\') { current += next; i++; continue; }
+	                        if (ch === '\'') inSingle = false;
+	                        continue;
+	                    }
+	                    if (inDouble) {
+	                        current += ch;
+	                        if (ch === '\\\\') { current += next; i++; continue; }
+	                        if (ch === '"') inDouble = false;
+	                        continue;
+	                    }
+	                    if (inTemplate) {
+	                        current += ch;
+	                        if (ch === '\\\\') { current += next; i++; continue; }
+	                        if (ch === '`') inTemplate = false;
+	                        continue;
+	                    }
+
+	                    if (ch === '/' && next === '/') { inLineComment = true; current += ch; continue; }
+	                    if (ch === '/' && next === '*') { inBlockComment = true; current += ch; continue; }
+	                    if (ch === '\'') { inSingle = true; current += ch; continue; }
+	                    if (ch === '"') { inDouble = true; current += ch; continue; }
+	                    if (ch === '`') { inTemplate = true; current += ch; continue; }
+
+	                    if (ch === '(') depth++;
+	                    if (ch === ')') depth--;
+
+	                    if (ch === ',' && depth === 0) {
+	                        args.push(current.trim());
+	                        current = '';
+	                        continue;
+	                    }
+
+	                    current += ch;
+	                }
+	                if (current.trim()) args.push(current.trim());
+	                return args;
+	            };
+
+	            const stackIdx = expr.indexOf('stack');
+	            let i = stackIdx + 5;
+	            while (i < expr.length && /\\s/.test(expr[i])) i++;
+	            if (expr[i] !== '(') return code;
+	            const openIdx = i;
+	            const closeIdx = findMatchingParen(expr, openIdx);
+	            if (closeIdx === -1) return code;
+
+	            const inner = expr.slice(openIdx + 1, closeIdx);
+	            const args = parseTopLevelArgs(inner);
+	            if (!args.length) return code;
+
+	            let flattened = [];
+	            let didFlatten = false;
+	            for (const arg of args) {
+	                const argTrim = arg.trimStart();
+	                if (argTrim.startsWith('stack')) {
+	                    const localIdx = arg.indexOf('stack');
+	                    let j = localIdx + 5;
+	                    while (j < arg.length && /\\s/.test(arg[j])) j++;
+	                    if (arg[j] === '(') {
+	                        const close = findMatchingParen(arg, j);
+	                        if (close !== -1) {
+	                            const innerArg = arg.slice(j + 1, close);
+	                            const innerArgs = parseTopLevelArgs(innerArg);
+	                            if (innerArgs.length) {
+	                                flattened = flattened.concat(innerArgs);
+	                                didFlatten = true;
+	                                continue;
+	                            }
+	                        }
+	                    }
+	                }
+	                flattened.push(arg);
+	            }
+
+	            if (!didFlatten) return code;
+
+	            const multiline = expr.includes('\\n');
+	            const joiner = multiline ? ',\\n  ' : ', ';
+	            const rebuilt = multiline
+	                ? `stack(\\n  ${flattened.join(joiner)}\\n)`
+	                : `stack(${flattened.join(joiner)})`;
+
+	            return code.replace(match[0], `export const pattern = ${rebuilt};\\n`);
+	        };
+
+	        fileCode = ensureBlocksSection(fileCode);
+	        fileCode = ensureArrangementsSection(fileCode);
+
+	        const rows = arrangement.arrangementState?.rows || [];
+	        const wantedBlockFiles = Array.from(new Set(
+	            rows.flatMap(r => Array.isArray(r.blocks) ? r.blocks : [])
+	        ));
+
+	        const blockVarByFilename = {};
+	        const usedBlockVars = new Set();
+	        for (const filename of wantedBlockFiles) {
+	            try {
+	                const res = await fetch(`/api/blocks/${filename}`);
+	                if (!res.ok) continue;
+	                const block = await res.json();
+	                // Use filename-derived var names to avoid name collisions between blocks.
+	                const baseVar = `block_${slugify(filename.replace(/\\.js$/, ''))}`;
+	                const varName = usedBlockVars.has(baseVar) ? nextAvailableVarName(fileCode, baseVar) : baseVar;
+	                blockVarByFilename[filename] = varName;
+	                usedBlockVars.add(varName);
+
+	                const already = new RegExp(`\\bconst\\s+${varName}\\b`).test(fileCode);
+	                if (already) continue;
+
+                const stepsInt = block?.trackerState?.steps;
+                let scaledPattern = block.pattern;
+                if (Number.isInteger(stepsInt) && stepsInt !== 16) {
+                    const stepFactor = stepsInt / 16;
+                    if (Number.isFinite(stepFactor) && stepFactor > 0 && stepFactor !== 1) {
+                        const stepFactorStr = Number(stepFactor.toFixed(4));
+                        scaledPattern = `(${scaledPattern}).slow(${stepFactorStr})`;
+                    }
+                }
+
+	                fileCode = fileCode.replace(
+	                    /\/\/ BLOCKS END/,
+	                    `const ${varName} = ${scaledPattern};\n// BLOCKS END`
+	                );
+	            } catch (err) {
+	                console.warn('[Arranger] Failed to fetch block for insertion:', filename, err);
+	            }
+	        }
+
+	        const arrName = arrangement.name || arrangement.arrangementState?.name || 'arrangement';
+	        const baseArrVar = `arr_${slugify(arrName)}`;
+	        const arrVar = new RegExp(`\\bconst\\s+${baseArrVar}\\b`).test(fileCode) ? nextAvailableVarName(fileCode, baseArrVar) : baseArrVar;
+	        {
+	            const arrangeLines = rows.map(r => {
+	                const reps = Number.isInteger(r.repeats) ? r.repeats : 1;
+	                const blocks = Array.isArray(r.blocks) ? r.blocks : [];
+	                if (!blocks.length) {
+                    return `  [${reps}, silence]`;
+                }
+                const vars = blocks.map(f => blockVarByFilename[f]).filter(Boolean);
+                if (!vars.length) return `  [${reps}, silence]`;
+                return `  [${reps}, stack(${vars.join(', ')})]`;
+            });
+
+	            const arrangeExpr = `arrange(\n${arrangeLines.join(',\n')}\n)`;
+	            fileCode = fileCode.replace(
+	                /\/\/ ARRANGEMENTS END/,
+	                `const ${arrVar} = ${arrangeExpr};\n// ARRANGEMENTS END`
+	            );
+	        }
+
+	        fileCode = upsertPatternLayer(fileCode, arrVar);
+	        fileCode = normalizePatternStack(fileCode);
+
+        const editorCode = fileToEditor(fileCode);
+        dom.repl.editor.setCode(editorCode);
+
+        fetch(`/api/song/${currentSongFilename}`, {
+            method: 'POST',
+            body: fileCode
+        });
+
+        setStatus(`Arrangement "${arrName}" inserted into song`, 'success');
+    });
+
+	    // Listen for blocks:preview event
+	    document.addEventListener('blocks:preview', async (e) => {
+	        const { trackerState } = e.detail || {};
+	        if (!trackerState) return;
 
         const { getDefragmentedInstruments } = await import('./instrument-manager.js');
         const instruments = getDefragmentedInstruments();
@@ -1777,8 +2159,77 @@ function setupBlocksEventListeners() {
             params: inst.params,
         }));
 
-        previewTrackerStateOnce(trackerState, instrumentList, trackerState.bpm || 120);
-    });
+	        previewTrackerStateOnce(trackerState, instrumentList, trackerState.bpm || 120);
+	    });
+
+	    // Listen for arrangements:preview event
+	    document.addEventListener('arrangements:preview', async (e) => {
+	        const { arrangement } = e.detail || {};
+	        const arrangementState = arrangement?.arrangementState;
+	        if (!arrangementState) return;
+
+	        try {
+	            setStatus(`Previewing arrangement "${arrangement?.name || 'arrangement'}"...`, 'normal');
+	            console.log('[Arranger] Preview start:', arrangementState);
+	            const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+	            const instruments = getDefragmentedInstruments();
+	            const instrumentList = instruments.map(inst => ({
+	                id: inst.strudelAlias,
+	                name: inst.strudelAlias,
+	                params: inst.params,
+	            }));
+	            const instrumentIdSet = new Set(instrumentList.map(i => i.id));
+
+	            const wantedBlockFiles = Array.from(new Set(
+	                (arrangementState.rows || []).flatMap(r => Array.isArray(r.blocks) ? r.blocks : [])
+	            ));
+
+	            const isPlayableTrackerState = (ts) => {
+	                if (!ts) return false;
+	                if (!Array.isArray(ts.grid) || !Array.isArray(ts.channelInstruments)) return false;
+	                return ts.grid.some((channel, ch) => {
+	                    const instId = ts.channelInstruments[ch];
+	                    if (!instId || !instrumentIdSet.has(instId)) return false;
+	                    return Array.isArray(channel) && channel.some(note => note && note !== '~' && note !== '-');
+	                });
+	            };
+
+	            const trackerStateByFilename = {};
+	            let fetched = 0;
+	            let playable = 0;
+	            for (const filename of wantedBlockFiles) {
+	                try {
+	                    const res = await fetch(`/api/blocks/${filename}`);
+	                    if (!res.ok) continue;
+	                    fetched++;
+	                    const block = await res.json();
+	                    console.log('[Arranger] Preview fetched block:', filename, 'trackerState?', !!block?.trackerState);
+	                    if (block?.trackerState) {
+	                        trackerStateByFilename[filename] = block.trackerState;
+	                        if (isPlayableTrackerState(block.trackerState)) playable++;
+	                    }
+	                } catch (err) {
+	                    console.warn('[Arranger] Failed to fetch block for preview:', filename, err);
+	                }
+	            }
+
+	            if (wantedBlockFiles.length > 0 && fetched === 0) {
+	                setStatus('Arrangement preview failed: could not load blocks.', 'error');
+	                return;
+	            }
+	            if (wantedBlockFiles.length > 0 && playable === 0) {
+	                setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
+	                return;
+	            }
+
+	            const bpm = arrangementState.bpm || 120;
+	            console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
+	            previewArrangementStateOnce(arrangementState, trackerStateByFilename, instrumentList, bpm);
+	        } catch (err) {
+	            console.error('[Arranger] Preview failed:', err);
+	            setStatus('Arrangement preview failed (see console).', 'error');
+	        }
+	    });
     
     // Keyboard shortcut for blocks (Ctrl/Cmd + B)
     document.addEventListener('keydown', (e) => {

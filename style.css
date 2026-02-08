@@ -521,3 +521,26 @@ strudel-editor {
 .selected-block-info {
   @apply p-3 bg-muted rounded-md;
 }
+
+/* Arranger */
+.arr-row {
+  @apply flex items-center gap-2 p-2 rounded-md border border-border/50 bg-background/30;
+}
+.arr-repeats {
+  @apply w-16 h-8 rounded-md border border-input bg-input-bg px-2 py-1 text-sm font-mono text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+}
+.arr-chips {
+  @apply flex flex-wrap gap-2 flex-1 min-w-0;
+}
+.arr-chip {
+  @apply inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted border border-border text-xs text-foreground;
+}
+.arr-chip-del {
+  @apply text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded-md;
+}
+.arr-block-select {
+  @apply h-8 w-40 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+}
+.arr-row-del {
+  @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0;
+}

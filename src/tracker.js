@@ -65,6 +65,7 @@ let editMode = {
   blockName: null,
   blockDescription: null,
   onSave: null, // Callback for save action
+  returnToBlocksOnClose: false,
 };
 
 // Preview playback state
@@ -75,6 +76,17 @@ let previewState = {
   playheadRafId: null,
   playingStep: null,
 };
+
+export function primePreviewAudioContext() {
+  if (!previewState.audioContext) {
+    previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  const ctx = previewState.audioContext;
+  if (ctx && ctx.state === 'suspended') {
+    // Fire-and-forget; callers invoke this from a user gesture handler.
+    ctx.resume().catch(() => {});
+  }
+}
 
 let octaveOffset = 0;
 let effectPreviewTimeout = null;
@@ -111,6 +123,47 @@ function initGrid() {
   );
 }
 
+function setSteps(nextSteps) {
+  const desired = parseInt(nextSteps, 10);
+  if (Number.isNaN(desired)) return;
+  const clamped = Math.min(Math.max(desired, 1), 256);
+  if (clamped === state.steps) return;
+
+  const prevGrid = state.grid;
+  state.steps = clamped;
+
+  state.grid = Array(state.channels).fill(null).map((_, ch) =>
+    Array(state.steps).fill(null).map((__, step) => {
+      const prevCell = prevGrid?.[ch]?.[step];
+      if (prevCell) {
+        return {
+          note: prevCell.note ?? null,
+          vol: prevCell.vol ?? null,
+          reps: prevCell.reps ?? null,
+          nd: prevCell.nd ?? null,
+          active: false,
+        };
+      }
+      return { note: null, vol: null, reps: null, nd: null, active: false };
+    })
+  );
+
+  state.focusedStep = Math.min(Math.max(state.focusedStep, 0), state.steps - 1);
+
+  renderGrid();
+  updateOutput();
+
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    playPreview(currentOffset);
+  }
+
+  focusNoteCell(state.focusedChannel, state.focusedStep);
+}
+
 function scheduleEffectPreview(channel, step) {
   if (previewState.isPlaying) return;
   effectPreviewRequest = { channel, step };
@@ -145,6 +198,8 @@ function cacheElements() {
     blockProps: document.getElementById('trackerBlockProps'),
     blockNameInput: document.getElementById('trackerBlockName'),
     blockBpmInput: document.getElementById('trackerBlockBpm'),
+    blockRowsPreset: document.getElementById('trackerBlockRowsPreset'),
+    blockRowsCustom: document.getElementById('trackerBlockRowsCustom'),
     title: document.querySelector('#trackerModal h2'),
   };
 }
@@ -568,6 +623,34 @@ function setupEventListeners() {
     });
 
     setupScrubInteraction(elements.blockBpmInput);
+  }
+
+  if (elements.blockRowsPreset && elements.blockRowsCustom) {
+    elements.blockRowsPreset.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val === 'custom') {
+        elements.blockRowsCustom.classList.remove('hidden');
+        setSteps(elements.blockRowsCustom.value);
+        elements.blockRowsCustom.focus();
+      } else {
+        elements.blockRowsCustom.classList.add('hidden');
+        setSteps(val);
+      }
+    });
+
+    elements.blockRowsCustom.addEventListener('input', (e) => {
+      if (elements.blockRowsPreset.value !== 'custom') return;
+      const raw = e.target.value.trim();
+      if (!raw) return;
+      setSteps(raw);
+    });
+
+    elements.blockRowsCustom.addEventListener('blur', (e) => {
+      if (elements.blockRowsPreset.value !== 'custom') return;
+      if (!e.target.value.trim()) {
+        e.target.value = String(state.steps);
+      }
+    });
   }
 
   // Keyboard input
@@ -1226,6 +1309,10 @@ function stopPreview() {
   updatePreviewUI();
 }
 
+export function stopTrackerPreviewPlayback() {
+  stopPreview();
+}
+
 function stopPlayhead() {
   if (previewState.playheadRafId != null) {
     cancelAnimationFrame(previewState.playheadRafId);
@@ -1320,6 +1407,50 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
     ctx.resume();
   }
 
+  const rendered = renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds: 1 });
+  if (!rendered) return;
+
+  const { mixBuffer, sampleRate } = rendered;
+  playMixBuffer(mixBuffer, sampleRate);
+}
+
+function playMixBuffer(mixBuffer, sampleRate) {
+  if (!mixBuffer || mixBuffer.length === 0) return;
+
+  if (!previewState.audioContext) {
+    previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  const ctx = previewState.audioContext;
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+
+  const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
+  audioBuffer.getChannelData(0).set(mixBuffer);
+
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.loop = false;
+  source.connect(ctx.destination);
+  source.start(0);
+
+  previewState.playingSource = source;
+  previewState.isPlaying = true;
+  previewState.bufferDuration = audioBuffer.duration;
+  previewState.startTime = ctx.currentTime;
+  updatePreviewUI();
+
+  source.onended = () => {
+    if (previewState.playingSource === source) {
+      previewState.playingSource = null;
+      previewState.isPlaying = false;
+      updatePreviewUI();
+    }
+  };
+}
+
+function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds = 0 } = {}) {
   const channels = trackerState.channels || (Array.isArray(trackerState.grid) ? trackerState.grid.length : 0);
   const steps = trackerState.steps || (Array.isArray(trackerState.grid?.[0]) ? trackerState.grid[0].length : 0);
   const grid = trackerState.grid || [];
@@ -1339,7 +1470,7 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
   const secondsPerStep = secondsPerBeat / 4; // 16th notes
   const sampleRate = 44100;
   const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
-  const tailSamples = sampleRate; // 1 second tail to avoid hard cut
+  const tailSamples = Math.floor(sampleRate * Math.max(0, tailSeconds));
   const patternSamples = Math.ceil(steps * samplesPerStep) + tailSamples;
   const mixBuffer = new Float32Array(patternSamples);
 
@@ -1365,6 +1496,7 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
   };
 
   const instrumentById = new Map(instrumentList.map(inst => [inst.id, inst]));
+  let mixedNotes = 0;
 
   for (let ch = 0; ch < channels; ch++) {
     const instrumentId = channelInstruments[ch];
@@ -1426,7 +1558,13 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
           mixBuffer[bufferIndex] += samples[j] * noteGain;
         }
       }
+      mixedNotes++;
     }
+  }
+
+  if (mixedNotes === 0) {
+    console.warn('[Tracker] Render produced silence (no matching instruments?).');
+    return null;
   }
 
   let maxAmp = 0;
@@ -1440,28 +1578,79 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
     }
   }
 
-  const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
-  audioBuffer.getChannelData(0).set(mixBuffer);
+  return { mixBuffer, sampleRate, samplesPerStep };
+}
 
-  const source = ctx.createBufferSource();
-  source.buffer = audioBuffer;
-  source.loop = false;
-  source.connect(ctx.destination);
-  source.start(0);
+export function previewArrangementStateOnce(arrangementState, trackerStateByFilename, instrumentList, bpm = 120) {
+  if (!arrangementState || !instrumentList) return;
 
-  previewState.playingSource = source;
-  previewState.isPlaying = true;
-  previewState.bufferDuration = audioBuffer.duration;
-  previewState.startTime = ctx.currentTime;
-  updatePreviewUI();
+  stopPreview();
 
-  source.onended = () => {
-    if (previewState.playingSource === source) {
-      previewState.playingSource = null;
-      previewState.isPlaying = false;
-      updatePreviewUI();
+  const secondsPerBeat = 60 / bpm;
+  const secondsPerStep = secondsPerBeat / 4; // 16th notes
+  const sampleRate = 44100;
+  const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
+
+  const rows = Array.isArray(arrangementState.rows) ? arrangementState.rows : [];
+  if (!rows.length) return;
+
+  // Strudel's arrange() treats the first number as the number of cycles the section lasts for.
+  // In our tracker, 1 cycle == 16 steps (16th notes).
+  const rowDescriptors = rows.map(r => {
+    const cycles = Number.isInteger(r?.repeats) ? Math.min(Math.max(r.repeats, 1), 99) : 1;
+    const files = Array.isArray(r?.blocks) ? r.blocks.filter(Boolean) : [];
+    const states = files.map(f => trackerStateByFilename?.[f]).filter(Boolean);
+    return { cycles, files, states };
+  });
+
+  const totalCycles = rowDescriptors.reduce((sum, r) => sum + r.cycles, 0);
+  if (!totalCycles) return;
+
+  const tailSamples = sampleRate; // 1 second tail at end
+  const totalSamples = totalCycles * 16 * samplesPerStep + tailSamples;
+  const mixBuffer = new Float32Array(totalSamples);
+
+  let writeOffset = 0;
+  let anyMixed = false;
+  for (const row of rowDescriptors) {
+    const rowSamples = row.cycles * 16 * samplesPerStep;
+    const rowMix = new Float32Array(rowSamples);
+
+    // Mix stacked blocks for this row
+    for (const state of row.states) {
+      const rendered = renderTrackerStateToMixBuffer(state, instrumentList, bpm, { tailSeconds: 0 });
+      if (!rendered?.mixBuffer) continue;
+      const blockBuf = rendered.mixBuffer;
+      const blockLen = blockBuf.length;
+      if (blockLen <= 0) continue;
+
+      // Match Strudel's behavior: shorter stacked patterns keep looping within the row duration.
+      for (let i = 0; i < rowMix.length; i++) {
+        rowMix[i] += blockBuf[i % blockLen];
+      }
+      anyMixed = true;
     }
-  };
+
+    mixBuffer.set(rowMix, writeOffset);
+    writeOffset += rowMix.length;
+  }
+
+  let maxAmp = 0;
+  for (let i = 0; i < mixBuffer.length; i++) {
+    maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
+  }
+  if (!anyMixed || maxAmp === 0) {
+    console.warn('[Arranger] Preview produced silence. Check block trackerState instruments match current instruments.');
+    return;
+  }
+  if (maxAmp > 0) {
+    const scale = 0.5 / maxAmp;
+    for (let i = 0; i < mixBuffer.length; i++) {
+      mixBuffer[i] *= scale;
+    }
+  }
+
+  playMixBuffer(mixBuffer, sampleRate);
 }
 
 /**
@@ -1474,7 +1663,9 @@ export function openTracker(instrumentList) {
   // Enable editing for new blocks so we can save them
   editMode.isEditing = true;
   editMode.isNewBlock = true;
+  editMode.returnToBlocksOnClose = true;
   state.bpm = 120;
+  setSteps(16);
   
   // Update UI (save button will be visible now)
   updateEditModeUI();
@@ -1497,6 +1688,7 @@ export function openTrackerForEdit(instrumentList, blockData) {
   // Set edit mode
   editMode.isEditing = true;
   editMode.isNewBlock = false;
+  editMode.returnToBlocksOnClose = true;
   editMode.blockFilename = blockData.filename;
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
@@ -1533,6 +1725,7 @@ function resetEditMode() {
   editMode.blockName = null;
   editMode.blockDescription = null;
   editMode.onSave = null;
+  editMode.returnToBlocksOnClose = false;
 }
 
 /**
@@ -1559,6 +1752,16 @@ function updateEditModeUI() {
       }
       if (elements.blockBpmInput) {
         elements.blockBpmInput.value = String(state.bpm || 120);
+      }
+      if (elements.blockRowsPreset && elements.blockRowsCustom) {
+        const preset = (state.steps === 16 || state.steps === 32 || state.steps === 64) ? String(state.steps) : 'custom';
+        elements.blockRowsPreset.value = preset;
+        if (preset === 'custom') {
+          elements.blockRowsCustom.classList.remove('hidden');
+          elements.blockRowsCustom.value = String(state.steps);
+        } else {
+          elements.blockRowsCustom.classList.add('hidden');
+        }
       }
     } else {
       elements.blockProps.classList.add('hidden');
@@ -1616,6 +1819,7 @@ function handleSaveBlock() {
  * Close the tracker modal
  */
 export function closeTracker() {
+  const shouldReturnToBlocks = !!editMode.returnToBlocksOnClose;
   // Stop any playing preview
   stopPreview();
   
@@ -1624,6 +1828,8 @@ export function closeTracker() {
   // Reset edit mode when closing
   resetEditMode();
   updateEditModeUI();
+
+  document.dispatchEvent(new CustomEvent('tracker:closed', { detail: { returnToBlocksOnClose: shouldReturnToBlocks } }));
 }
 
 /**
@@ -1692,6 +1898,10 @@ export function deserializeTrackerState(data) {
   }
 
   try {
+    const nextSteps = Number.isInteger(data.steps) ? Math.min(Math.max(data.steps, 1), 256) : state.steps;
+    state.steps = nextSteps;
+    initGrid();
+
     // Validate grid dimensions
     if (!Array.isArray(data.grid) || data.grid.length !== state.channels) {
       console.warn('[Tracker] Grid dimension mismatch');
@@ -1700,27 +1910,26 @@ export function deserializeTrackerState(data) {
 
     // Load grid data
     for (let ch = 0; ch < state.channels; ch++) {
-      if (!Array.isArray(data.grid[ch]) || data.grid[ch].length !== state.steps) {
-        console.warn(`[Tracker] Channel ${ch} dimension mismatch`);
-        continue;
-      }
-
+      const chNotes = Array.isArray(data.grid[ch]) ? data.grid[ch] : [];
+      const chVol = Array.isArray(data.vol?.[ch]) ? data.vol[ch] : [];
+      const chReps = Array.isArray(data.reps?.[ch]) ? data.reps[ch] : [];
+      const chNd = Array.isArray(data.nd?.[ch]) ? data.nd[ch] : [];
       for (let step = 0; step < state.steps; step++) {
-        state.grid[ch][step].note = data.grid[ch][step] || null;
-        if (data.vol && Array.isArray(data.vol[ch]) && data.vol[ch].length === state.steps) {
-          const volVal = data.vol[ch][step];
+        state.grid[ch][step].note = chNotes[step] || null;
+        if (chVol.length) {
+          const volVal = chVol[step];
           state.grid[ch][step].vol = volVal ? volVal : null;
         } else {
           state.grid[ch][step].vol = null;
         }
-        if (data.reps && Array.isArray(data.reps[ch]) && data.reps[ch].length === state.steps) {
-          const repsVal = data.reps[ch][step];
+        if (chReps.length) {
+          const repsVal = chReps[step];
           state.grid[ch][step].reps = repsVal ? repsVal : null;
         } else {
           state.grid[ch][step].reps = null;
         }
-        if (data.nd && Array.isArray(data.nd[ch]) && data.nd[ch].length === state.steps) {
-          const ndVal = data.nd[ch][step];
+        if (chNd.length) {
+          const ndVal = chNd[step];
           state.grid[ch][step].nd = Number.isInteger(ndVal) ? ndVal : null;
         } else {
           state.grid[ch][step].nd = null;
@@ -1735,6 +1944,16 @@ export function deserializeTrackerState(data) {
     state.bpm = Number.isFinite(data.bpm) ? data.bpm : 120;
     if (elements.blockBpmInput) {
       elements.blockBpmInput.value = String(state.bpm);
+    }
+    if (elements.blockRowsPreset && elements.blockRowsCustom) {
+      const preset = (state.steps === 16 || state.steps === 32 || state.steps === 64) ? String(state.steps) : 'custom';
+      elements.blockRowsPreset.value = preset;
+      if (preset === 'custom') {
+        elements.blockRowsCustom.classList.remove('hidden');
+        elements.blockRowsCustom.value = String(state.steps);
+      } else {
+        elements.blockRowsCustom.classList.add('hidden');
+      }
     }
 
     // Re-render with new data
