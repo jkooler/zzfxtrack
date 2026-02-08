@@ -356,7 +356,7 @@ strudel-editor {
 
 /* Tracker Styles */
 .tracker-grid {
-  @apply flex gap-4 p-2;
+  @apply flex gap-3 p-2;
 }
 
 .tracker-timetrack {
@@ -377,7 +377,8 @@ strudel-editor {
 }
 
 .tracker-timetrack-row {
-  @apply w-8 h-7 text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-2 select-none cursor-pointer;
+  @apply h-7 text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-0 select-none cursor-pointer;
+  width: calc(var(--spacing) * 2);
 }
 
 .tracker-timetrack-row.beat {
