@@ -1,9 +1,6 @@
-import { note, s, stack, arrange, silence, slow, gain } from "@strudel/core";
+import { stack, arrange, note, s, slow, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
-
-
-
 
 // BLOCKS START
 const block_bassline_js = note("c1 ~ c1 ~ ~ ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ ~").s("demo-bass");
@@ -21,4 +18,6 @@ const arr_testing_arrangement = arrange(
   [4, stack(block_bassline_js, block_simple_chord_pattern_js)]
 );
 // ARRANGEMENTS END
+
+
 export const pattern = stack(arr_testing_arrangement);

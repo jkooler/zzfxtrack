@@ -1471,7 +1471,8 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
   const sampleRate = 44100;
   const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
   const tailSamples = Math.floor(sampleRate * Math.max(0, tailSeconds));
-  const patternSamples = Math.ceil(steps * samplesPerStep) + tailSamples;
+  const mainSamples = Math.ceil(steps * samplesPerStep);
+  const patternSamples = mainSamples + tailSamples;
   const mixBuffer = new Float32Array(patternSamples);
 
   const noteToFreq = (noteStr) => {
@@ -1578,7 +1579,7 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
     }
   }
 
-  return { mixBuffer, sampleRate, samplesPerStep };
+  return { mixBuffer, sampleRate, samplesPerStep, mainSamples };
 }
 
 export function previewArrangementStateOnce(arrangementState, trackerStateByFilename, instrumentList, bpm = 120) {
@@ -1613,26 +1614,67 @@ export function previewArrangementStateOnce(arrangementState, trackerStateByFile
   let writeOffset = 0;
   let anyMixed = false;
   for (const row of rowDescriptors) {
-    const rowSamples = row.cycles * 16 * samplesPerStep;
-    const rowMix = new Float32Array(rowSamples);
+    const rowMainSamples = row.cycles * 16 * samplesPerStep;
+    const rowMix = new Float32Array(rowMainSamples + tailSamples);
 
     // Mix stacked blocks for this row
     for (const state of row.states) {
-      const rendered = renderTrackerStateToMixBuffer(state, instrumentList, bpm, { tailSeconds: 0 });
+      const srcChannels = Number.isInteger(state?.channels)
+        ? state.channels
+        : (Array.isArray(state?.grid) ? state.grid.length : 0);
+      const srcSteps = Number.isInteger(state?.steps)
+        ? state.steps
+        : (Array.isArray(state?.grid?.[0]) ? state.grid[0].length : 0);
+      if (!srcChannels || !srcSteps) continue;
+
+      const rowSteps = row.cycles * 16;
+      const expandOrSlice = (src) => {
+        if (!Array.isArray(src)) return null;
+        const out = new Array(rowSteps);
+        for (let i = 0; i < rowSteps; i++) {
+          out[i] = src[i % srcSteps] ?? null;
+        }
+        return out;
+      };
+
+      const renderState = {
+        version: 1,
+        channels: srcChannels,
+        steps: rowSteps,
+        bpm,
+        grid: Array.from({ length: srcChannels }, (_, ch) => expandOrSlice(state.grid?.[ch]) || Array.from({ length: rowSteps }, () => null)),
+        vol: Array.from({ length: srcChannels }, (_, ch) => expandOrSlice(state.vol?.[ch]) || Array.from({ length: rowSteps }, () => null)),
+        reps: Array.from({ length: srcChannels }, (_, ch) => expandOrSlice(state.reps?.[ch]) || Array.from({ length: rowSteps }, () => null)),
+        nd: Array.from({ length: srcChannels }, (_, ch) => expandOrSlice(state.nd?.[ch]) || Array.from({ length: rowSteps }, () => null)),
+        channelInstruments: Array.isArray(state.channelInstruments)
+          ? state.channelInstruments.slice(0, srcChannels)
+          : Array.from({ length: srcChannels }, () => ''),
+      };
+
+      const rendered = renderTrackerStateToMixBuffer(renderState, instrumentList, bpm, { tailSeconds: 1 });
       if (!rendered?.mixBuffer) continue;
       const blockBuf = rendered.mixBuffer;
-      const blockLen = blockBuf.length;
-      if (blockLen <= 0) continue;
-
-      // Match Strudel's behavior: shorter stacked patterns keep looping within the row duration.
-      for (let i = 0; i < rowMix.length; i++) {
-        rowMix[i] += blockBuf[i % blockLen];
+      for (let i = 0; i < rowMainSamples; i++) {
+        if (i >= blockBuf.length) break;
+        rowMix[i] += blockBuf[i];
       }
+      for (let t = 0; t < tailSamples; t++) {
+        const srcIdx = rowMainSamples + t;
+        if (srcIdx >= blockBuf.length) break;
+        const fade = 1 - (t / tailSamples);
+        rowMix[rowMainSamples + t] += blockBuf[srcIdx] * fade;
+      }
+
       anyMixed = true;
     }
 
-    mixBuffer.set(rowMix, writeOffset);
-    writeOffset += rowMix.length;
+    // Overlap-add into the global buffer so the tail can ring over into the next row.
+    for (let i = 0; i < rowMix.length; i++) {
+      const dst = writeOffset + i;
+      if (dst >= mixBuffer.length) break;
+      mixBuffer[dst] += rowMix[i];
+    }
+    writeOffset += rowMainSamples;
   }
 
   let maxAmp = 0;
