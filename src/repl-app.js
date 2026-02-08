@@ -73,6 +73,9 @@ const dom = {
     maxChannelsInput: document.getElementById('maxChannelsInput'),
     normalizeLayers: document.getElementById('normalizeLayers'),
     closeExportSettings: document.getElementById('closeExportSettings'),
+    bakeResolutionHint: document.getElementById('bakeResolutionHint'),
+    bakeResolutionCustomWrap: document.getElementById('bakeResolutionCustomWrap'),
+    bakeResolutionCustom: document.getElementById('bakeResolutionCustom'),
 };
 
 // --- View State Helpers ---
@@ -545,6 +548,8 @@ async function loadSong(filename) {
         hideSaveStatus();
         
         renderPlayButton(); // Update play button context (Stop vs Play)
+
+        await loadSongMeta(filename);
         
         // Update indicators in sidebar
         updateInstrumentUsage(editorCode);
@@ -554,6 +559,51 @@ async function loadSong(filename) {
     } catch (e) {
         console.error(e);
         setStatus(`Error loading ${filename}`, 'error');
+    }
+}
+
+async function loadSongMeta(filename) {
+    try {
+        const res = await fetch(`/api/song-meta/${filename}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const rowsPerCycle = parseInt(data?.rowsPerCycle, 10);
+        if (!rowsPerCycle || Number.isNaN(rowsPerCycle)) return;
+
+        const resolutionInputs = document.querySelectorAll('input[name="bakeResolution"]');
+        const isPreset = rowsPerCycle === 48 || rowsPerCycle === 96;
+        resolutionInputs.forEach(input => {
+            input.checked = input.value === String(isPreset ? rowsPerCycle : 'custom');
+        });
+        if (!isPreset && dom.bakeResolutionCustom) {
+            dom.bakeResolutionCustom.value = String(rowsPerCycle);
+        }
+        const event = new Event('change', { bubbles: true });
+        document.querySelector('input[name="bakeResolution"]:checked')?.dispatchEvent(event);
+    } catch (e) {
+        console.warn('Failed to load song meta', e);
+    }
+}
+
+async function saveSongMeta() {
+    if (!currentSongFilename) return;
+    const resolutionInput = document.querySelector('input[name="bakeResolution"]:checked');
+    let rowsPerCycle = 96;
+    if (resolutionInput?.value === '48') {
+        rowsPerCycle = 48;
+    } else if (resolutionInput?.value === 'custom') {
+        const parsed = parseInt(dom.bakeResolutionCustom?.value, 10);
+        if (parsed && !Number.isNaN(parsed)) rowsPerCycle = parsed;
+    }
+
+    try {
+        await fetch(`/api/song-meta/${currentSongFilename}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rowsPerCycle })
+        });
+    } catch (e) {
+        console.warn('Failed to save song meta', e);
     }
 }
 
@@ -651,11 +701,20 @@ async function bakeCurrentSong() {
         const isLimitEnabled = dom.limitChannels.checked;
         const maxChannels = isLimitEnabled ? (parseInt(dom.maxChannelsInput.value) || 16) : Infinity;
         const normalizeLayers = dom.normalizeLayers?.checked || false;
+        const resolutionInput = document.querySelector('input[name="bakeResolution"]:checked');
+        let rowsPerCycle = 96;
+        if (resolutionInput?.value === '48') {
+            rowsPerCycle = 48;
+        } else if (resolutionInput?.value === 'custom') {
+            const parsed = parseInt(dom.bakeResolutionCustom?.value, 10);
+            if (parsed && !Number.isNaN(parsed)) rowsPerCycle = parsed;
+        }
         
         // 5. Bake!
         const result = bakePattern(pattern, bpm, instrumentArray, instrumentMapping, 8, {
             maxVoicesPerInstrument: maxChannels,
-            normalizeUnisonLayers: normalizeLayers
+            normalizeUnisonLayers: normalizeLayers,
+            rowsPerCycle
         });
         const songData = result.song;
         const { channelCount, droppedNotes } = result.stats;
@@ -1137,6 +1196,29 @@ function setupExportSettingsModal() {
             dom.exportSettingsModal.classList.remove('open');
         }
     });
+
+    const resolutionInputs = document.querySelectorAll('input[name="bakeResolution"]');
+    const updateResolutionUi = () => {
+        const selected = document.querySelector('input[name="bakeResolution"]:checked');
+        const isCustom = selected?.value === 'custom';
+        if (dom.bakeResolutionHint) {
+            dom.bakeResolutionHint.style.display = selected?.value === '48' ? 'block' : 'none';
+        }
+        if (dom.bakeResolutionCustomWrap) {
+            dom.bakeResolutionCustomWrap.classList.toggle('hidden', !isCustom);
+        }
+    };
+    resolutionInputs.forEach(input => {
+        input.addEventListener('change', () => {
+            updateResolutionUi();
+            saveSongMeta();
+        });
+    });
+    dom.bakeResolutionCustom?.addEventListener('input', () => {
+        updateResolutionUi();
+        saveSongMeta();
+    });
+    updateResolutionUi();
     
     // Toggle channel limit input based on checkbox
     dom.limitChannels.addEventListener('change', () => {

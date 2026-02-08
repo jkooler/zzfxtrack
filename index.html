@@ -970,6 +970,58 @@
               (1/√n scaling)
             </p>
           </div>
+
+          <div class="border-t border-border pt-4 space-y-2">
+            <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+              Baking Resolution
+            </label>
+            <div class="flex items-center gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="bakeResolution"
+                  value="96"
+                  checked
+                  class="w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
+                />
+                <span class="text-sm font-medium text-foreground">96</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="bakeResolution"
+                  value="48"
+                  class="w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
+                />
+                <span class="text-sm font-medium text-foreground">48</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="bakeResolution"
+                  value="custom"
+                  class="w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
+                />
+                <span class="text-sm font-medium text-foreground">Custom</span>
+              </label>
+            </div>
+            <div id="bakeResolutionCustomWrap" class="hidden">
+              <input
+                type="number"
+                id="bakeResolutionCustom"
+                min="1"
+                step="1"
+                value="96"
+                class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <p
+              id="bakeResolutionHint"
+              class="text-xs text-muted-foreground/80 italic"
+            >
+              Smaller file size. Supports only R1 and R3.
+            </p>
+          </div>
         </div>
 
         <div class="flex justify-end gap-2 mt-2">

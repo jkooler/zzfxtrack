@@ -6,8 +6,8 @@ import { noteToMidi } from '@strudel/core';
  * instrument are allocated to separate voice channels.
  */
 
-// Resolution increased to 48 (LCM of 16 and 12) to support triplets and 16th notes
-const ROWS_PER_CYCLE = 48;
+// Default resolution (supports 16th, 8th, 32nd, triplets)
+const DEFAULT_ROWS_PER_CYCLE = 96;
 const BASE_RESOLUTION = 16; 
 const MAX_ATTENUATION = 20;
 
@@ -50,9 +50,9 @@ function getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoices = Infin
  * @returns {Object} { song: ZzFXM song array, stats: { channelCount, droppedNotes } }
  */
 export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8, options = {}) {
-    const { maxVoicesPerInstrument = Infinity, normalizeUnisonLayers = false } = options;
+    const { maxVoicesPerInstrument = Infinity, normalizeUnisonLayers = false, rowsPerCycle = DEFAULT_ROWS_PER_CYCLE } = options;
     
-    const totalRows = cycles * ROWS_PER_CYCLE;
+    const totalRows = cycles * rowsPerCycle;
     const events = pattern.queryArc(0, cycles);
     
     // Voice-aware track storage: { "instIndex-voice": Array[totalRows] }
@@ -106,7 +106,7 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
     const unisonMap = new Map();
     if (normalizeUnisonLayers) {
         events.forEach((e) => {
-            const gridIndex = Math.floor(e.whole.begin.valueOf() * ROWS_PER_CYCLE);
+            const gridIndex = Math.floor(e.whole.begin.valueOf() * rowsPerCycle);
             if (gridIndex < totalRows) {
                 const instIndex = resolveInstIndex(e);
                 const semitone = Math.round(calculateSemitone(e, instIndex));
@@ -119,7 +119,7 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
     // --- PASS 2: Process events ---
     events.forEach((e) => {
         const instIndex = resolveInstIndex(e);
-        const gridIndex = Math.floor(e.whole.begin.valueOf() * ROWS_PER_CYCLE);
+        const gridIndex = Math.floor(e.whole.begin.valueOf() * rowsPerCycle);
         
         if (gridIndex < totalRows) {
             // Get available voice for this instrument at this position
@@ -184,7 +184,7 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
     });
 
     // Scale BPM based on resolution increase
-    const bpmScale = ROWS_PER_CYCLE / BASE_RESOLUTION;
+    const bpmScale = rowsPerCycle / BASE_RESOLUTION;
 
     const channelCount = patternData.length;
     

@@ -84,6 +84,10 @@ const apiPlugin = () => ({
         if (req.method === 'DELETE') {
              if (fs.existsSync(filePath)) {
                  fs.unlinkSync(filePath);
+                 const metaPath = path.join(SONGS_DIR, songName.replace(/\.js$/, '.meta.json'));
+                 if (fs.existsSync(metaPath)) {
+                     fs.unlinkSync(metaPath);
+                 }
                  res.end('Deleted');
              } else {
                  res.statusCode = 404;
@@ -92,6 +96,66 @@ const apiPlugin = () => ({
              return;
         }
         
+        next();
+    });
+
+    // API: Song metadata
+    // GET/POST/DELETE /api/song-meta/:filename
+    server.middlewares.use((req, res, next) => {
+        if (!req.url.startsWith('/api/song-meta/')) {
+            return next();
+        }
+
+        const songName = req.url.replace('/api/song-meta/', '');
+        if (songName.includes('..') || !songName.endsWith('.js')) {
+            res.statusCode = 400;
+            res.end('Invalid filename');
+            return;
+        }
+
+        const metaPath = path.join(SONGS_DIR, songName.replace(/\.js$/, '.meta.json'));
+
+        if (req.method === 'GET') {
+            if (fs.existsSync(metaPath)) {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(fs.readFileSync(metaPath, 'utf-8'));
+            } else {
+                res.statusCode = 404;
+                res.end('Not found');
+            }
+            return;
+        }
+
+        if (req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body || '{}');
+                    if (!fs.existsSync(SONGS_DIR)) {
+                        fs.mkdirSync(SONGS_DIR, { recursive: true });
+                    }
+                    fs.writeFileSync(metaPath, JSON.stringify(data, null, 2));
+                    res.end('Saved');
+                } catch (e) {
+                    res.statusCode = 400;
+                    res.end('Invalid JSON');
+                }
+            });
+            return;
+        }
+
+        if (req.method === 'DELETE') {
+            if (fs.existsSync(metaPath)) {
+                fs.unlinkSync(metaPath);
+                res.end('Deleted');
+            } else {
+                res.statusCode = 404;
+                res.end('Not found');
+            }
+            return;
+        }
+
         next();
     });
     

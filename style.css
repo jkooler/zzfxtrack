@@ -329,6 +329,31 @@ strudel-editor {
   @apply flex gap-4 p-2;
 }
 
+.tracker-timetrack {
+  @apply flex flex-col gap-1;
+}
+
+.tracker-timetrack-header {
+  @apply flex flex-col gap-1 pb-2 border-b border-border sticky top-0 z-10 bg-background;
+}
+
+.tracker-timetrack-label-spacer {
+  @apply text-xs font-bold text-muted-foreground uppercase tracking-wider text-center select-none h-4 flex items-center justify-center;
+  visibility: hidden;
+}
+
+.tracker-timetrack-select-spacer {
+  @apply h-8;
+}
+
+.tracker-timetrack-row {
+  @apply w-8 h-7 text-[10px] text-muted-foreground font-mono text-right flex items-center justify-end pr-2 select-none cursor-pointer;
+}
+
+.tracker-timetrack-row.active {
+  @apply text-primary;
+}
+
 .tracker-channel {
   @apply flex flex-col gap-1 min-w-[120px];
 }
@@ -337,24 +362,62 @@ strudel-editor {
   @apply flex flex-col gap-1 pb-2 border-b border-border sticky top-0 z-10 bg-background;
 }
 
+.tracker-channel-header-row {
+  @apply flex items-center gap-1;
+}
+
 .tracker-channel-select {
-  @apply w-full h-8 rounded-md border border-input bg-input-bg px-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply flex-1 h-8 rounded-md border border-input bg-input-bg px-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
 
 .tracker-channel-label {
-  @apply text-xs font-bold text-muted-foreground uppercase tracking-wider text-center;
+  @apply text-xs font-bold text-muted-foreground uppercase tracking-wider text-center h-4 flex items-center justify-center;
+}
+
+.tracker-reps-label {
+  @apply w-10 h-8 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
+}
+
+.tracker-nd-label {
+  @apply w-10 h-8 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
 }
 
 .tracker-row {
   @apply flex items-center gap-1;
 }
 
-.tracker-step-num {
-  @apply w-5 text-[10px] text-muted-foreground font-mono text-right;
-}
-
 .tracker-cell {
   @apply flex-1 h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all hover:border-primary/50;
+}
+
+.tracker-cell:focus-visible {
+  outline: none;
+}
+
+.tracker-reps-input {
+  @apply w-10 h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+}
+
+.tracker-nd-input {
+  @apply w-10 h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+}
+
+.tracker-reps-input::-webkit-outer-spin-button,
+.tracker-reps-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.tracker-reps-input[type="number"],
+.tracker-nd-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.tracker-nd-input::-webkit-outer-spin-button,
+.tracker-nd-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .tracker-cell.active {
@@ -367,6 +430,14 @@ strudel-editor {
 
 .tracker-cell.rest {
   @apply text-muted-foreground/50;
+}
+
+.tracker-cell.playing-step {
+  @apply bg-transparent border-transparent;
+}
+
+.tracker-cell.playing-step:hover {
+  @apply border-transparent;
 }
 
 /* Keyboard mapping hint overlay */
