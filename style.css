@@ -44,6 +44,14 @@
 }
 
 @layer base {
+  :focus-visible {
+    outline: none;
+  }
+
+  [tabindex]:focus-visible {
+    box-shadow: 0 0 0 1px var(--ring);
+    border-color: var(--primary);
+  }
   /* Use html:root for higher specificity (0-1-1) to beat Strudel's inline :root (0-1-0) */
   html:root {
     /* Dark Mode Default (Stone & Amber) */
@@ -191,6 +199,11 @@ input[readonly]:focus-visible {
 .block-item:hover .song-item-actions {
   @apply opacity-100;
 }
+.song-item:focus-within .song-item-actions,
+.instrument-item:focus-within .song-item-actions,
+.block-item:focus-within .song-item-actions {
+  @apply opacity-100;
+}
 
 .instrument-item {
   @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 text-sm relative;
@@ -226,7 +239,24 @@ input[readonly]:focus-visible {
 }
 
 .sidebar-del-btn {
-  @apply text-muted-foreground hover:text-destructive transition-colors p-1 bg-transparent border-0 cursor-pointer;
+  @apply text-muted-foreground hover:text-destructive focus-visible:text-destructive transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none;
+}
+.sidebar-edit-btn {
+  @apply text-muted-foreground hover:text-primary focus-visible:text-primary transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none inline-flex items-center gap-2 text-xs;
+}
+.sidebar-del-btn:hover,
+.sidebar-del-btn:focus-visible,
+.sidebar-edit-btn:hover,
+.sidebar-edit-btn:focus-visible {
+  background-color: rgba(0, 0, 0, 0.4);
+}
+.sidebar-edit-btn:hover,
+.sidebar-edit-btn:focus-visible {
+  box-shadow: 0 0 0 1px var(--input);
+}
+.sidebar-del-btn:hover,
+.sidebar-del-btn:focus-visible {
+  box-shadow: 0 0 0 1px var(--destructive);
 }
 
 #instrumentControls {
@@ -359,7 +389,7 @@ strudel-editor {
 }
 
 .tracker-channel {
-  @apply flex flex-col gap-1 min-w-[120px];
+  @apply flex flex-col gap-1 min-w-[180px];
 }
 
 .tracker-channel-header {
@@ -367,11 +397,12 @@ strudel-editor {
 }
 
 .tracker-channel-header-row {
-  @apply flex items-center gap-1;
+  @apply grid items-center gap-1;
+  grid-template-columns: minmax(0, 1fr) 0 24px 24px;
 }
 
 .tracker-channel-select {
-  @apply w-24 h-8 rounded-md border border-input bg-input-bg px-1 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply w-full min-w-0 h-8 rounded-md border border-input bg-input-bg px-1 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
 
 .tracker-channel-label {
@@ -379,15 +410,20 @@ strudel-editor {
 }
 
 .tracker-reps-label {
-  @apply w-[24px] h-8 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
+  @apply w-[24px] h-8 shrink-0 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
+}
+
+.tracker-vol-label {
+  @apply w-0 h-8 shrink-0 overflow-hidden;
 }
 
 .tracker-nd-label {
-  @apply w-[24px] h-8 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
+  @apply w-[24px] h-8 shrink-0 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
 }
 
 .tracker-row {
-  @apply flex items-center gap-1;
+  @apply grid items-center gap-1;
+  grid-template-columns: minmax(0, 1fr) 24px 24px 24px;
 }
 
 .tracker-cell {
@@ -398,12 +434,16 @@ strudel-editor {
   outline: none;
 }
 
+.tracker-vol-input {
+  @apply w-[24px] h-7 shrink-0 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+}
+
 .tracker-reps-input {
-  @apply w-[24px] h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply w-[24px] h-7 shrink-0 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
 
 .tracker-nd-input {
-  @apply w-[24px] h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply w-[24px] h-7 shrink-0 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
 
 .tracker-reps-input::-webkit-outer-spin-button,
@@ -413,11 +453,14 @@ strudel-editor {
 }
 
 .tracker-reps-input[type="number"],
+.tracker-vol-input[type="number"],
 .tracker-nd-input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
 
+.tracker-vol-input::-webkit-outer-spin-button,
+.tracker-vol-input::-webkit-inner-spin-button,
 .tracker-nd-input::-webkit-outer-spin-button,
 .tracker-nd-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -455,7 +498,7 @@ strudel-editor {
 }
 
 .block-item {
-  @apply p-3 rounded-md border border-border bg-card cursor-pointer transition-all hover:border-primary/50 hover:bg-accent/10 flex items-start justify-between gap-3;
+  @apply p-3 rounded-md border border-border bg-card cursor-pointer transition-all hover:border-primary/50 hover:bg-accent/10 flex items-center justify-between gap-3;
 }
 
 .block-item.selected {

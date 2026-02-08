@@ -1337,7 +1337,7 @@ function setupBlocksEventListeners() {
     
     // Listen for blocks:insert event
     document.addEventListener('blocks:insert', (e) => {
-        const { pattern, name } = e.detail;
+        const { pattern, name, preserveBlockBpm, blockBpm } = e.detail;
         if (pattern && dom.repl.editor) {
             // Get the current code and convert it to file format (with exports)
             let fileCode = editorToFile(dom.repl.editor.code || '');
@@ -1348,10 +1348,21 @@ function setupBlocksEventListeners() {
                 ''
             );
             
+            let insertPattern = pattern;
+            if (preserveBlockBpm && blockBpm) {
+                const bpmMatch = fileCode.match(/export\s+const\s+bpm\s*=\s*(\d+)/);
+                const songBpm = bpmMatch ? Number(bpmMatch[1]) : 120;
+                const factor = songBpm && blockBpm ? (songBpm / blockBpm) : 1;
+                if (Number.isFinite(factor) && factor !== 1) {
+                    const factorStr = Number(factor.toFixed(4));
+                    insertPattern = `${pattern}.slow(${factorStr})`;
+                }
+            }
+
             // Add the new pattern before the final closing
             fileCode = fileCode.replace(
                 /(\nexport const bpm = \d+;)/,
-                `$1\n\nexport const pattern = ${pattern};`
+                `$1\n\nexport const pattern = ${insertPattern};`
             );
             
             // Convert back to editor format and set
@@ -1381,7 +1392,7 @@ function setupBlocksEventListeners() {
             params: inst.params,
         }));
 
-        previewTrackerStateOnce(trackerState, instrumentList);
+        previewTrackerStateOnce(trackerState, instrumentList, trackerState.bpm || 120);
     });
     
     // Keyboard shortcut for blocks (Ctrl/Cmd + B)

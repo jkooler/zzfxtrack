@@ -38,8 +38,7 @@ function cacheElements() {
     createBlockBtn: document.getElementById('createBlockBtn'),
     insertBlockBtn: document.getElementById('insertBlockBtn'),
     deleteBlockBtn: document.getElementById('deleteBlockBtn'),
-    editBlockBtn: document.getElementById('editBlockBtn'),
-    selectedBlockName: document.getElementById('selectedBlockName'),
+    preserveBlockBpm: document.getElementById('preserveBlockBpm'),
     deleteBlockModal: document.getElementById('deleteBlockModal'),
     deleteBlockText: document.getElementById('deleteBlockText'),
     cancelDeleteBlock: document.getElementById('cancelDeleteBlock'),
@@ -57,16 +56,6 @@ function setupEventListeners() {
   elements.deleteBlockBtn?.addEventListener('click', deleteSelectedBlock);
   elements.cancelDeleteBlock?.addEventListener('click', closeDeleteBlockModal);
   elements.confirmDeleteBlock?.addEventListener('click', confirmDeleteBlock);
-  
-  // Edit button click handler with explicit logging
-  if (elements.editBlockBtn) {
-    elements.editBlockBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('[Blocks] Edit button clicked, disabled:', elements.editBlockBtn.disabled);
-      openTrackerForEdit();
-    });
-  }
 }
 
 /**
@@ -109,6 +98,7 @@ function renderBlocksList() {
     blockEl.className = 'block-item';
     blockEl.dataset.index = index;
     blockEl.dataset.filename = block.filename;
+    blockEl.tabIndex = 0;
     
     blockEl.innerHTML = `
       <div class="min-w-0">
@@ -116,11 +106,24 @@ function renderBlocksList() {
         <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(block.description || 'No description')}</div>
       </div>
       <div class="song-item-actions">
+        <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
         <button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
       </div>
     `;
     
     blockEl.addEventListener('click', () => selectBlock(index));
+    blockEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      selectBlock(index);
+    });
+
+    const editBtn = blockEl.querySelector('.sidebar-edit-btn');
+    editBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectBlock(index);
+      openTrackerForEdit(index);
+    });
 
     const deleteBtn = blockEl.querySelector('.sidebar-del-btn');
     deleteBtn?.addEventListener('click', (e) => {
@@ -152,11 +155,7 @@ function selectBlock(index) {
   // Store selected index
   selectedBlockIndex = index;
   
-  // Update selected block display
   const block = blocksCache[index];
-  if (elements.selectedBlockName) {
-    elements.selectedBlockName.textContent = block?.name || 'No block selected';
-  }
   
     // Enable insert/delete/edit buttons
   if (elements.insertBlockBtn) {
@@ -165,11 +164,6 @@ function selectBlock(index) {
   if (elements.deleteBlockBtn) {
     elements.deleteBlockBtn.disabled = false;
   }
-  if (elements.editBlockBtn) {
-    elements.editBlockBtn.disabled = false;
-    console.log('[Blocks] Edit button enabled for:', block?.name);
-  }
-
   // Trigger preview on selection
   if (block) {
     previewBlock(block);
@@ -226,8 +220,8 @@ function openTrackerForNewBlock() {
 /**
  * Open tracker to edit the selected block
  */
-async function openTrackerForEdit() {
-  const block = getSelectedBlock();
+async function openTrackerForEdit(index = null) {
+  const block = Number.isInteger(index) ? blocksCache[index] : getSelectedBlock();
   if (!block) return;
   
   closeBlocksModal();
@@ -267,12 +261,27 @@ async function insertSelectedBlock() {
     console.warn('[Blocks] No block selected or block has no pattern');
     return;
   }
+  const preserveBlockBpm = !!elements.preserveBlockBpm?.checked;
+  let blockBpm = block.trackerState?.bpm;
+  if (preserveBlockBpm && !blockBpm && block.filename) {
+    try {
+      const response = await fetch(`/api/blocks/${block.filename}`);
+      if (response.ok) {
+        const fullBlock = await response.json();
+        blockBpm = fullBlock?.trackerState?.bpm;
+      }
+    } catch (err) {
+      console.warn('[Blocks] Could not fetch block BPM:', err);
+    }
+  }
   
   // Dispatch event to insert block into editor
   const event = new CustomEvent('blocks:insert', {
     detail: { 
       pattern: block.pattern,
-      name: block.name 
+      name: block.name,
+      preserveBlockBpm,
+      blockBpm
     },
   });
   document.dispatchEvent(event);
@@ -332,17 +341,11 @@ async function confirmDeleteBlock() {
 
 function clearBlockSelection() {
   selectedBlockIndex = null;
-  if (elements.selectedBlockName) {
-    elements.selectedBlockName.textContent = 'No block selected';
-  }
   if (elements.insertBlockBtn) {
     elements.insertBlockBtn.disabled = true;
   }
   if (elements.deleteBlockBtn) {
     elements.deleteBlockBtn.disabled = true;
-  }
-  if (elements.editBlockBtn) {
-    elements.editBlockBtn.disabled = true;
   }
 }
 

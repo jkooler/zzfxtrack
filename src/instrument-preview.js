@@ -6,7 +6,7 @@ import { zzfxG } from './zzfx-loader.js';
  */
 
 let previewAudioContext = null;
-let previewSource = null;
+let previewSources = new Set();
 let previewTimeout = null;
 
 /**
@@ -23,14 +23,14 @@ function getPreviewAudioContext() {
  * Stop currently playing test note
  */
 export function stopTestNote() {
-    if (previewSource) {
+    previewSources.forEach((source) => {
         try {
-            previewSource.stop();
+            source.stop();
         } catch (e) {
             // Already stopped
         }
-        previewSource = null;
-    }
+    });
+    previewSources.clear();
 }
 
 /**
@@ -38,8 +38,10 @@ export function stopTestNote() {
  * @param {Array} params - ZzFX parameters (21 numbers)
  * @param {number} frequency - Test frequency in Hz (default: 440)
  */
-export function playTestNote(params, frequency = null) {
-    stopTestNote();
+export function playTestNote(params, frequency = null, gain = 1, delaySeconds = 0, allowOverlap = false) {
+    if (!allowOverlap) {
+        stopTestNote();
+    }
     
     try {
         const ctx = getPreviewAudioContext();
@@ -71,16 +73,17 @@ export function playTestNote(params, frequency = null) {
         // Create and play source
         const source = ctx.createBufferSource();
         source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start();
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = Math.max(0, Number.isFinite(gain) ? gain : 1);
+        source.connect(gainNode).connect(ctx.destination);
+        const startTime = ctx.currentTime + Math.max(0, Number.isFinite(delaySeconds) ? delaySeconds : 0);
+        source.start(startTime);
         
-        previewSource = source;
+        previewSources.add(source);
         
         // Auto-cleanup when finished
         source.onended = () => {
-            if (previewSource === source) {
-                previewSource = null;
-            }
+            previewSources.delete(source);
         };
         
         console.log('[InstrumentPreview] Playing test note at', testParams[2], 'Hz');

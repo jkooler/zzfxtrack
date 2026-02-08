@@ -8,6 +8,7 @@
 import { zzfxG } from './zzfx-loader.js';
 import { playTestNote } from './instrument-preview.js';
 import { createIcons, icons } from 'lucide';
+import { setupScrubInteraction } from './instrument-ui.js';
 
 // Keyboard to note mapping (zxcvb row = C3-B3, qwerty row = C4-B4)
 const KEYBOARD_MAP = {
@@ -48,6 +49,7 @@ const NOTE_TO_KEY = Object.fromEntries(
 const state = {
   channels: 4,
   steps: 16,
+  bpm: 120,
   grid: [], // Array of channels, each with array of { note: string|null, active: boolean }
   instruments: [], // Available instruments
   channelInstruments: ['', '', '', ''], // Selected instrument for each channel
@@ -74,6 +76,11 @@ let previewState = {
   playingStep: null,
 };
 
+let octaveOffset = 0;
+let effectPreviewTimeout = null;
+let effectPreviewRequest = null;
+const EFFECT_PREVIEW_DEBOUNCE_MS = 150;
+
 // DOM Elements
 let elements = {};
 
@@ -96,11 +103,30 @@ function initGrid() {
   state.grid = Array(state.channels).fill(null).map(() =>
     Array(state.steps).fill(null).map(() => ({
       note: null,
+      vol: null,
       reps: null,
       nd: null,
       active: false,
     }))
   );
+}
+
+function scheduleEffectPreview(channel, step) {
+  if (previewState.isPlaying) return;
+  effectPreviewRequest = { channel, step };
+  if (effectPreviewTimeout) {
+    clearTimeout(effectPreviewTimeout);
+  }
+  effectPreviewTimeout = setTimeout(() => {
+    effectPreviewTimeout = null;
+    const request = effectPreviewRequest;
+    effectPreviewRequest = null;
+    if (!request || previewState.isPlaying) return;
+    const cellNote = state.grid[request.channel]?.[request.step]?.note;
+    if (cellNote && cellNote !== '~' && cellNote !== '-') {
+      playNotePreview(request.channel, request.step, cellNote);
+    }
+  }, EFFECT_PREVIEW_DEBOUNCE_MS);
 }
 
 /**
@@ -118,6 +144,7 @@ function cacheElements() {
     previewBtn: document.getElementById('previewTrackerBtn'),
     blockProps: document.getElementById('trackerBlockProps'),
     blockNameInput: document.getElementById('trackerBlockName'),
+    blockBpmInput: document.getElementById('trackerBlockBpm'),
     title: document.querySelector('#trackerModal h2'),
   };
 }
@@ -215,9 +242,14 @@ function renderGrid() {
     ndLabelEl.className = 'tracker-nd-label';
     ndLabelEl.textContent = 'DL';
 
+    const volLabelEl = document.createElement('div');
+    volLabelEl.className = 'tracker-vol-label';
+    volLabelEl.textContent = '';
+
     const headerRowEl = document.createElement('div');
     headerRowEl.className = 'tracker-channel-header-row';
     headerRowEl.appendChild(selectEl);
+    headerRowEl.appendChild(volLabelEl);
     headerRowEl.appendChild(repsLabelEl);
     headerRowEl.appendChild(ndLabelEl);
 
@@ -256,6 +288,49 @@ function renderGrid() {
         cellEl.focus();
       });
 
+      const volEl = document.createElement('input');
+      volEl.type = 'number';
+      volEl.min = '0';
+      volEl.max = '99';
+      volEl.step = '1';
+      volEl.className = 'tracker-vol-input';
+      volEl.dataset.channel = ch;
+      volEl.dataset.step = step;
+
+      if (cellData.vol) {
+        volEl.value = String(cellData.vol);
+      }
+
+      volEl.addEventListener('input', (e) => {
+        const raw = e.target.value.trim();
+        const parsed = parseInt(raw, 10);
+        if (!raw) {
+          state.grid[ch][step].vol = null;
+        } else if (!Number.isNaN(parsed)) {
+          const clamped = Math.min(Math.max(parsed, 0), 99);
+          state.grid[ch][step].vol = clamped === 0 ? null : clamped;
+          if (clamped === 0) e.target.value = '';
+        }
+        updateOutput();
+        if (previewState.isPlaying && previewState.audioContext) {
+          const ctx = previewState.audioContext;
+          const duration = previewState.bufferDuration || 2.0;
+          const elapsed = ctx.currentTime - previewState.startTime;
+          const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+          playPreview(currentOffset);
+        } else {
+          scheduleEffectPreview(ch, step);
+        }
+      });
+
+      volEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setFocus(ch, step);
+        volEl.focus();
+      });
+
+      setupScrubInteraction(volEl);
+
       const repsEl = document.createElement('input');
       repsEl.type = 'number';
       repsEl.min = '0';
@@ -286,6 +361,8 @@ function renderGrid() {
           const elapsed = ctx.currentTime - previewState.startTime;
           const currentOffset = elapsed > 0 ? elapsed % duration : 0;
           playPreview(currentOffset);
+        } else {
+          scheduleEffectPreview(ch, step);
         }
       });
 
@@ -325,6 +402,8 @@ function renderGrid() {
           const elapsed = ctx.currentTime - previewState.startTime;
           const currentOffset = elapsed > 0 ? elapsed % duration : 0;
           playPreview(currentOffset);
+        } else {
+          scheduleEffectPreview(ch, step);
         }
       });
 
@@ -335,6 +414,7 @@ function renderGrid() {
       });
 
       rowEl.appendChild(cellEl);
+      rowEl.appendChild(volEl);
       rowEl.appendChild(repsEl);
       rowEl.appendChild(ndEl);
       channelEl.appendChild(rowEl);
@@ -409,6 +489,17 @@ function focusRepsInput(channel, step) {
   }
 }
 
+function focusVolInput(channel, step) {
+  setFocus(channel, step);
+  const volInput = document.querySelector(
+    `.tracker-vol-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+  );
+  if (volInput) {
+    volInput.focus();
+    volInput.select();
+  }
+}
+
 function focusNdInput(channel, step) {
   setFocus(channel, step);
   const ndInput = document.querySelector(
@@ -453,6 +544,32 @@ function setupEventListeners() {
   // Preview button
   elements.previewBtn?.addEventListener('click', togglePreview);
 
+  if (elements.blockBpmInput) {
+    elements.blockBpmInput.addEventListener('input', (e) => {
+      const raw = e.target.value.trim();
+      const parsed = parseInt(raw, 10);
+      if (Number.isNaN(parsed)) return;
+      const clamped = Math.min(Math.max(parsed, 20), 300);
+      state.bpm = clamped;
+      if (previewState.isPlaying && previewState.audioContext) {
+        const ctx = previewState.audioContext;
+        const duration = previewState.bufferDuration || 2.0;
+        const elapsed = ctx.currentTime - previewState.startTime;
+        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+        playPreview(currentOffset);
+      }
+    });
+
+    elements.blockBpmInput.addEventListener('blur', (e) => {
+      if (!e.target.value.trim()) {
+        state.bpm = 120;
+        e.target.value = '120';
+      }
+    });
+
+    setupScrubInteraction(elements.blockBpmInput);
+  }
+
   // Keyboard input
   document.addEventListener('keydown', handleKeyDown);
 }
@@ -466,19 +583,37 @@ function handleKeyDown(e) {
 
   // Don't capture if typing in a select/textarea/input
   const isFormField = e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT';
+  const isVolInput = e.target.classList?.contains('tracker-vol-input');
   const isRepsInput = e.target.classList?.contains('tracker-reps-input');
   const isNdInput = e.target.classList?.contains('tracker-nd-input');
-  if (isFormField && !isRepsInput && !isNdInput) return;
+  if (isFormField && !isVolInput && !isRepsInput && !isNdInput) return;
 
-  if (isRepsInput || isNdInput) {
+  if (isVolInput || isRepsInput || isNdInput) {
     const key = e.key.toLowerCase();
     const channel = parseInt(e.target.dataset.channel, 10);
     const step = parseInt(e.target.dataset.step, 10);
+    const inVol = isVolInput;
     const inReps = isRepsInput;
+
+    if (key === 'tab') {
+      e.preventDefault();
+      const delta = e.shiftKey ? -4 : 4;
+      const targetStep = Math.min(Math.max(step + delta, 0), state.steps - 1);
+      if (inVol) {
+        focusVolInput(channel, targetStep);
+      } else if (inReps) {
+        focusRepsInput(channel, targetStep);
+      } else {
+        focusNdInput(channel, targetStep);
+      }
+      return;
+    }
 
     if (key === 'arrowup') {
       e.preventDefault();
-      if (inReps) {
+      if (inVol) {
+        focusVolInput(channel, Math.max(step - 1, 0));
+      } else if (inReps) {
         focusRepsInput(channel, Math.max(step - 1, 0));
       } else {
         focusNdInput(channel, Math.max(step - 1, 0));
@@ -487,7 +622,9 @@ function handleKeyDown(e) {
     }
     if (key === 'arrowdown') {
       e.preventDefault();
-      if (inReps) {
+      if (inVol) {
+        focusVolInput(channel, Math.min(step + 1, state.steps - 1));
+      } else if (inReps) {
         focusRepsInput(channel, Math.min(step + 1, state.steps - 1));
       } else {
         focusNdInput(channel, Math.min(step + 1, state.steps - 1));
@@ -496,8 +633,10 @@ function handleKeyDown(e) {
     }
     if (key === 'arrowleft') {
       e.preventDefault();
-      if (inReps) {
+      if (inVol) {
         focusNoteCell(channel, step);
+      } else if (inReps) {
+        focusVolInput(channel, step);
       } else {
         focusRepsInput(channel, step);
       }
@@ -505,7 +644,9 @@ function handleKeyDown(e) {
     }
     if (key === 'arrowright') {
       e.preventDefault();
-      if (inReps) {
+      if (inVol) {
+        focusRepsInput(channel, step);
+      } else if (inReps) {
         focusNdInput(channel, step);
       } else {
         const nextChannel = Math.min(channel + 1, state.channels - 1);
@@ -548,11 +689,11 @@ function handleKeyDown(e) {
 
   if (key === 'arrowright') {
     e.preventDefault();
-    const ndInput = document.querySelector(
-      `.tracker-nd-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+    const volInput = document.querySelector(
+      `.tracker-vol-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
     );
-    if (ndInput) {
-      focusRepsInput(state.focusedChannel, state.focusedStep);
+    if (volInput) {
+      focusVolInput(state.focusedChannel, state.focusedStep);
     } else {
       const newCh = Math.min(state.focusedChannel + 1, state.channels - 1);
       setFocus(newCh, state.focusedStep);
@@ -562,13 +703,8 @@ function handleKeyDown(e) {
 
   if (key === 'tab') {
     e.preventDefault();
-    const currentBlock = Math.floor(state.focusedStep / 4);
-    let targetStep;
-    if (e.shiftKey) {
-      targetStep = Math.max((currentBlock - 1) * 4, 0);
-    } else {
-      targetStep = Math.min((currentBlock + 1) * 4, state.steps - 1);
-    }
+    const delta = e.shiftKey ? -4 : 4;
+    const targetStep = Math.min(Math.max(state.focusedStep + delta, 0), state.steps - 1);
     setFocus(state.focusedChannel, targetStep);
     return;
   }
@@ -579,13 +715,25 @@ function handleKeyDown(e) {
     return;
   }
 
+  if (key === '/') {
+    e.preventDefault();
+    octaveOffset = Math.max(octaveOffset - 1, -3);
+    return;
+  }
+
+  if (key === '*') {
+    e.preventDefault();
+    octaveOffset = Math.min(octaveOffset + 1, 3);
+    return;
+  }
+
   // Note input
   if (KEYBOARD_MAP[key]) {
     e.preventDefault();
-    setNote(state.focusedChannel, state.focusedStep, KEYBOARD_MAP[key]);
-    // Advance to next step
-    const newStep = (state.focusedStep + 1) % state.steps;
-    setFocus(state.focusedChannel, newStep);
+    const note = applyOctaveOffset(KEYBOARD_MAP[key], octaveOffset);
+    if (note) {
+      setNote(state.focusedChannel, state.focusedStep, note);
+    }
     return;
   }
 
@@ -626,6 +774,17 @@ function handleKeyDown(e) {
     }
     return;
   }
+
+  // (fallthrough)
+}
+
+function applyOctaveOffset(noteStr, offset) {
+  const match = noteStr.match(/^([a-g]#?)(\d)$/i);
+  if (!match) return noteStr;
+  const noteName = match[1].toLowerCase();
+  const octave = parseInt(match[2], 10);
+  const nextOctave = Math.min(Math.max(octave + offset, 0), 8);
+  return `${noteName}${nextOctave}`;
 }
 
 /**
@@ -647,7 +806,7 @@ function setNote(channel, step, note) {
   } else {
     // Otherwise play single note preview if it's a valid note
     if (note && note !== '~' && note !== '-') {
-      playNotePreview(channel, note);
+      playNotePreview(channel, step, note);
     }
   }
 }
@@ -691,7 +850,7 @@ function insertBlankRowAtStep(channel, startStep) {
 /**
  * Play a preview of a note using the channel's instrument
  */
-function playNotePreview(channel, noteStr) {
+function playNotePreview(channel, step, noteStr) {
   const instrumentId = state.channelInstruments[channel];
   if (!instrumentId) return;
   
@@ -720,8 +879,17 @@ function playNotePreview(channel, noteStr) {
   // Calculate absolute frequency (A4 = 440 Hz)
   const frequency = 440 * Math.pow(2, (midiNote - 69) / 12);
   
-  // Play the note
-  playTestNote(instrument.params, frequency);
+  const cell = state.grid[channel]?.[step];
+  const noteGain = Number.isInteger(cell?.vol) ? Math.min(Math.max(cell.vol, 1), 99) / 99 : 1;
+  const { reps, delaySteps, substepCount } = resolveSubsteps(cell?.reps, cell?.nd);
+  const stepSize = substepCount / reps;
+  const delaySeconds = (delaySteps / substepCount) * (60 / state.bpm / 4);
+  const repeatInterval = stepSize / substepCount * (60 / state.bpm / 4);
+  
+  for (let r = 0; r < reps; r++) {
+    const delay = delaySeconds + (r * repeatInterval);
+    playTestNote(instrument.params, frequency, noteGain, delay, true);
+  }
 }
 
 /**
@@ -760,9 +928,17 @@ function updateOutput() {
       return buildStepToken(cell.note, cell.reps, cell.nd);
     });
 
+    const hasVol = state.grid[ch].some(cell => cell.vol != null);
+    const gainTokens = hasVol ? state.grid[ch].map(cell => {
+      const vol = Number.isInteger(cell.vol) ? cell.vol : 99;
+      const gain = Math.min(Math.max(vol, 1), 99) / 99;
+      return gain.toFixed(2).replace(/\.00$/, '');
+    }) : null;
+
     patterns.push({
       instrument,
       pattern: tokens.join(' '),
+      gainPattern: gainTokens ? gainTokens.join(' ') : null,
     });
   }
 
@@ -773,6 +949,9 @@ function updateOutput() {
 
   // Generate Strudel code
   const lines = patterns.map(p => {
+    if (p.gainPattern) {
+      return `note("${p.pattern}").s("${p.instrument}").gain("${p.gainPattern}")`;
+    }
     return `note("${p.pattern}").s("${p.instrument}")`;
   });
 
@@ -886,8 +1065,7 @@ function playPreview(startOffset = 0) {
   }
 
   // Default BPM (16 steps per cycle, 4 beats per cycle = 16th notes)
-  const BPM = 120;
-  const secondsPerBeat = 60 / BPM;
+  const secondsPerBeat = 60 / state.bpm;
   const secondsPerStep = secondsPerBeat / 4; // 16th notes
 
   const sampleRate = 44100;
@@ -974,13 +1152,14 @@ function playPreview(startOffset = 0) {
       }
 
       const { reps, delaySteps, substepCount } = resolveSubsteps(cell.reps, cell.nd);
+      const noteGain = Number.isInteger(cell.vol) ? Math.min(Math.max(cell.vol, 1), 99) / 99 : 1;
       const stepSize = substepCount / reps;
       for (let r = 0; r < reps; r++) {
         const subOffset = Math.floor(samplesPerStep * ((delaySteps + r * stepSize) / substepCount));
         const noteStart = step * samplesPerStep + subOffset;
         for (let j = 0; j < samples.length; j++) {
           const bufferIndex = (noteStart + j) % patternSamples;
-          mixBuffer[bufferIndex] += samples[j];
+          mixBuffer[bufferIndex] += samples[j] * noteGain;
         }
       }
     }
@@ -1147,6 +1326,7 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
   const channelInstruments = Array.isArray(trackerState.channelInstruments) ? trackerState.channelInstruments : [];
   const repsGrid = Array.isArray(trackerState.reps) ? trackerState.reps : [];
   const ndGrid = Array.isArray(trackerState.nd) ? trackerState.nd : [];
+  const volGrid = Array.isArray(trackerState.vol) ? trackerState.vol : [];
 
   const hasContent = grid.some((channel, ch) => {
     const instId = channelInstruments[ch];
@@ -1233,7 +1413,9 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
 
       const repsVal = repsGrid[ch]?.[step];
       const ndVal = ndGrid[ch]?.[step];
+      const volVal = volGrid[ch]?.[step];
       const { reps, delaySteps, substepCount } = resolveSubsteps(repsVal, ndVal);
+      const noteGain = Number.isInteger(volVal) ? Math.min(Math.max(volVal, 1), 99) / 99 : 1;
       const stepSize = substepCount / reps;
       for (let r = 0; r < reps; r++) {
         const subOffset = Math.floor(samplesPerStep * ((delaySteps + r * stepSize) / substepCount));
@@ -1241,7 +1423,7 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
         for (let j = 0; j < samples.length; j++) {
           const bufferIndex = noteStart + j;
           if (bufferIndex >= mixBuffer.length) break;
-          mixBuffer[bufferIndex] += samples[j];
+          mixBuffer[bufferIndex] += samples[j] * noteGain;
         }
       }
     }
@@ -1292,6 +1474,7 @@ export function openTracker(instrumentList) {
   // Enable editing for new blocks so we can save them
   editMode.isEditing = true;
   editMode.isNewBlock = true;
+  state.bpm = 120;
   
   // Update UI (save button will be visible now)
   updateEditModeUI();
@@ -1360,8 +1543,8 @@ function updateEditModeUI() {
   if (elements.title) {
     if (editMode.isEditing) {
       elements.title.textContent = editMode.isNewBlock 
-        ? 'Tracker - New Block' 
-        : `Tracker - Editing: ${editMode.blockName}`;
+        ? 'Block - New Block' 
+        : `Block: ${editMode.blockName}`;
     } else { // Should not happen if saving is enabled, but fallback
       elements.title.textContent = 'Tracker';
     }
@@ -1373,6 +1556,9 @@ function updateEditModeUI() {
       elements.blockProps.classList.remove('hidden');
       if (elements.blockNameInput) {
         elements.blockNameInput.value = editMode.blockName || '';
+      }
+      if (elements.blockBpmInput) {
+        elements.blockBpmInput.value = String(state.bpm || 120);
       }
     } else {
       elements.blockProps.classList.add('hidden');
@@ -1471,6 +1657,9 @@ export function serializeTrackerState() {
   const gridData = state.grid.map(channel =>
     channel.map(cell => cell.note || null)
   );
+  const volData = state.grid.map(channel =>
+    channel.map(cell => (cell.vol ? cell.vol : null))
+  );
   const repsData = state.grid.map(channel =>
     channel.map(cell => (cell.reps ? cell.reps : null))
   );
@@ -1482,7 +1671,9 @@ export function serializeTrackerState() {
     version: 1,
     channels: state.channels,
     steps: state.steps,
+    bpm: state.bpm,
     grid: gridData,
+    vol: volData,
     reps: repsData,
     nd: ndData,
     channelInstruments: state.channelInstruments,
@@ -1516,6 +1707,12 @@ export function deserializeTrackerState(data) {
 
       for (let step = 0; step < state.steps; step++) {
         state.grid[ch][step].note = data.grid[ch][step] || null;
+        if (data.vol && Array.isArray(data.vol[ch]) && data.vol[ch].length === state.steps) {
+          const volVal = data.vol[ch][step];
+          state.grid[ch][step].vol = volVal ? volVal : null;
+        } else {
+          state.grid[ch][step].vol = null;
+        }
         if (data.reps && Array.isArray(data.reps[ch]) && data.reps[ch].length === state.steps) {
           const repsVal = data.reps[ch][step];
           state.grid[ch][step].reps = repsVal ? repsVal : null;
@@ -1534,6 +1731,10 @@ export function deserializeTrackerState(data) {
     // Load instrument assignments
     if (data.channelInstruments && Array.isArray(data.channelInstruments)) {
       state.channelInstruments = data.channelInstruments.slice(0, state.channels);
+    }
+    state.bpm = Number.isFinite(data.bpm) ? data.bpm : 120;
+    if (elements.blockBpmInput) {
+      elements.blockBpmInput.value = String(state.bpm);
     }
 
     // Re-render with new data

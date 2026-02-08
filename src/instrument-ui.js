@@ -1513,7 +1513,7 @@ export async function getInstrumentsForBaker() {
 /**
  * Enable drag-to-change (scrub) interaction on an input
  */
-function setupScrubInteraction(input) {
+export function setupScrubInteraction(input) {
     if (input._scrubInitialized) return;
     input._scrubInitialized = true;
     
