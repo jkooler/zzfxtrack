@@ -468,6 +468,45 @@ function editorToFile(code) {
         .filter(l => !l.trim().match(/^(const\s+)?bpm\s*=/))
         .filter(l => !l.trim().startsWith('setcps('))
         .join('\n').trim();
+
+    const extractBlocksSetup = (codeText) => {
+        const startMarker = '// BLOCKS START';
+        const endMarker = '// BLOCKS END';
+        const startIdx = codeText.indexOf(startMarker);
+        const endIdx = codeText.indexOf(endMarker);
+        if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return null;
+        const before = codeText.slice(0, startIdx).trim();
+        const blocks = codeText.slice(startIdx, endIdx + endMarker.length).trim();
+        const after = codeText.slice(endIdx + endMarker.length).trim();
+        return {
+            setup: [before, blocks].filter(Boolean).join('\n\n'),
+            expr: after,
+        };
+    };
+
+    const splitSetupAndExpr = (codeText) => {
+        const rawLines = codeText.split('\n');
+        // Find the smallest suffix that parses as an expression (supporting multiline expressions).
+        for (let split = rawLines.length - 1; split >= 0; split--) {
+            const setup = rawLines.slice(0, split).join('\n').trim();
+            const expr = rawLines.slice(split).join('\n').trim();
+            if (!expr) continue;
+            const wrapped = `${setup}\nreturn (\n${expr}\n);`;
+            try {
+                // Parse-only; never executed.
+                // eslint-disable-next-line no-new-func
+                new Function(wrapped);
+                return { setup, expr };
+            } catch (_) {
+                // keep searching
+            }
+        }
+        return { setup: '', expr: codeText.trim() };
+    };
+
+    const extracted = extractBlocksSetup(cleanCode);
+    const { setup, expr } = extracted && extracted.expr ? extracted : splitSetupAndExpr(cleanCode);
+    const finalExpr = expr && expr.trim() ? expr.trim() : 'stack()';
     
     // Identify used strudel functions for import
     const commonFuncs = ['stack', 'note', 's', 'slow', 'fast', 'rev', 'jux', 'every', 'chunk', 'scale', 'gain', 'lpf', 'room', 'clip', 'sine', 'add', 'sub', 'mul', 'div', 'choose', 'rand', 'saw', 'square', 'tri', 'cat', 'seq', 'mini', 'tidal', 'pure', 'orbit', 'delay', 'shifto', 'shape', 'cps'];
@@ -475,14 +514,21 @@ function editorToFile(code) {
     // Always include basics
     if (!usedImports.includes('note')) usedImports.push('note');
     if (!usedImports.includes('s')) usedImports.push('s');
+    // We may insert blocks that rely on these even if the user's editor code doesn't.
+    if (!usedImports.includes('stack')) usedImports.push('stack');
+    if (!usedImports.includes('slow')) usedImports.push('slow');
+    if (!usedImports.includes('gain')) usedImports.push('gain');
     
     const importStmt = `import { ${usedImports.join(', ')} } from "@strudel/core";`;
     
+    const setupBlock = setup ? `\n${setup}\n` : '';
+
     return `${importStmt}
 
 export const bpm = ${bpmVal};
+${setupBlock}
 
-export const pattern = ${cleanCode};
+export const pattern = ${finalExpr};
 `;
 }
 
@@ -681,8 +727,9 @@ async function bakeCurrentSong() {
         // This avoids file cache issues or import delays.
         const editor = dom.repl.editor;
         
-        // Ensure latest code is evaluated
-        await editor.evaluate();
+        // Ensure latest code is evaluated, but do not start Strudel playback.
+        // Strudel's underlying repl supports a "start" flag (used internally for drawFirstFrame()).
+        await editor.repl.evaluate(code, false);
         
         // Get pattern
         const pattern = editor.repl.scheduler.pattern;
@@ -1341,29 +1388,367 @@ function setupBlocksEventListeners() {
         if (pattern && dom.repl.editor) {
             // Get the current code and convert it to file format (with exports)
             let fileCode = editorToFile(dom.repl.editor.code || '');
-            
-            // Remove any existing pattern definition from the file code
-            fileCode = fileCode.replace(
-                /export\s+const\s+pattern\s*=[\s\S]*?;\s*$/,
-                ''
-            );
-            
-            let insertPattern = pattern;
+
+            const slugify = (str) => (str || 'block')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '')
+                .slice(0, 32) || 'block';
+
+            const ensureBlocksSection = (code) => {
+                if (code.includes('// BLOCKS START') && code.includes('// BLOCKS END')) return code;
+                return code.replace(
+                    /(export const bpm\s*=\s*\d+;\s*)/m,
+                    `$1\n\n// BLOCKS START\n// BLOCKS END\n`
+                );
+            };
+
+            const nextAvailableVarName = (code, base) => {
+                let candidate = base;
+                let n = 2;
+                while (new RegExp(`\\bconst\\s+${candidate}\\b`).test(code) || new RegExp(`\\b${candidate}\\b`).test(code)) {
+                    candidate = `${base}_${n}`;
+                    n++;
+                }
+                return candidate;
+            };
+
+            const upsertPatternLayer = (code, layerVar) => {
+                const match = code.match(/export const pattern\s*=\s*([\s\S]*?);\s*$/);
+                if (!match) {
+                    return `${code.trim()}\n\nexport const pattern = ${layerVar};\n`;
+                }
+                const existing = match[1].trim();
+                if (!existing) {
+                    return code.replace(match[0], `export const pattern = ${layerVar};\n`);
+                }
+
+                try {
+                    // Parse-only guard so we don't persist a broken pattern.
+                    // eslint-disable-next-line no-new-func
+                    new Function(`return (\n${existing}\n);`);
+                } catch (_) {
+                    return code.replace(match[0], `export const pattern = ${layerVar};\n`);
+                }
+
+                const findMatchingParen = (text, openIdx) => {
+                    let depth = 0;
+                    let inSingle = false;
+                    let inDouble = false;
+                    let inTemplate = false;
+                    let inLineComment = false;
+                    let inBlockComment = false;
+                    for (let i = openIdx; i < text.length; i++) {
+                        const ch = text[i];
+                        const next = text[i + 1];
+
+                        if (inLineComment) {
+                            if (ch === '\n') inLineComment = false;
+                            continue;
+                        }
+                        if (inBlockComment) {
+                            if (ch === '*' && next === '/') {
+                                inBlockComment = false;
+                                i++;
+                            }
+                            continue;
+                        }
+
+                        if (inSingle) {
+                            if (ch === '\\') {
+                                i++;
+                                continue;
+                            }
+                            if (ch === '\'') inSingle = false;
+                            continue;
+                        }
+                        if (inDouble) {
+                            if (ch === '\\') {
+                                i++;
+                                continue;
+                            }
+                            if (ch === '"') inDouble = false;
+                            continue;
+                        }
+                        if (inTemplate) {
+                            if (ch === '\\') {
+                                i++;
+                                continue;
+                            }
+                            if (ch === '`') inTemplate = false;
+                            continue;
+                        }
+
+                        if (ch === '/' && next === '/') {
+                            inLineComment = true;
+                            i++;
+                            continue;
+                        }
+                        if (ch === '/' && next === '*') {
+                            inBlockComment = true;
+                            i++;
+                            continue;
+                        }
+
+                        if (ch === '\'') {
+                            inSingle = true;
+                            continue;
+                        }
+                        if (ch === '"') {
+                            inDouble = true;
+                            continue;
+                        }
+                        if (ch === '`') {
+                            inTemplate = true;
+                            continue;
+                        }
+
+                        if (ch === '(') depth++;
+                        if (ch === ')') {
+                            depth--;
+                            if (depth === 0) return i;
+                        }
+                    }
+                    return -1;
+                };
+
+                const tryAppendToTopLevelStack = (expr, arg) => {
+                    const trimmed = expr.trimStart();
+                    if (!trimmed.startsWith('stack')) return null;
+                    const stackIdx = expr.indexOf('stack');
+                    let i = stackIdx + 5;
+                    while (i < expr.length && /\s/.test(expr[i])) i++;
+                    if (expr[i] !== '(') return null;
+                    const openIdx = i;
+                    const closeIdx = findMatchingParen(expr, openIdx);
+                    if (closeIdx === -1) return null;
+
+                    const argsText = expr.slice(openIdx + 1, closeIdx);
+                    const hasArgs = argsText.trim().length > 0;
+                    const multiline = expr.includes('\n');
+
+                    let insert;
+                    if (hasArgs) {
+                        insert = multiline ? `,\n  ${arg}` : `, ${arg}`;
+                    } else {
+                        insert = multiline ? `\n  ${arg}\n` : `${arg}`;
+                    }
+
+                    let insertPos = closeIdx;
+                    if (hasArgs) {
+                        while (insertPos > openIdx + 1 && /\s/.test(expr[insertPos - 1])) insertPos--;
+                    }
+                    return expr.slice(0, insertPos) + insert + expr.slice(insertPos);
+                };
+
+                const flattened = tryAppendToTopLevelStack(existing, layerVar);
+                if (flattened) {
+                    return code.replace(match[0], `export const pattern = ${flattened};\n`);
+                }
+
+                const next = `stack(\n  ${existing},\n  ${layerVar}\n)`;
+                return code.replace(match[0], `export const pattern = ${next};\n`);
+            };
+
+            const normalizePatternStack = (code) => {
+                const match = code.match(/export const pattern\s*=\s*([\s\S]*?);\s*$/);
+                if (!match) return code;
+                const expr = match[1].trim();
+                const trimmed = expr.trimStart();
+                if (!trimmed.startsWith('stack')) return code;
+
+                const findMatchingParen = (text, openIdx) => {
+                    let depth = 0;
+                    let inSingle = false;
+                    let inDouble = false;
+                    let inTemplate = false;
+                    let inLineComment = false;
+                    let inBlockComment = false;
+                    for (let i = openIdx; i < text.length; i++) {
+                        const ch = text[i];
+                        const next = text[i + 1];
+
+                        if (inLineComment) {
+                            if (ch === '\n') inLineComment = false;
+                            continue;
+                        }
+                        if (inBlockComment) {
+                            if (ch === '*' && next === '/') {
+                                inBlockComment = false;
+                                i++;
+                            }
+                            continue;
+                        }
+
+                        if (inSingle) {
+                            if (ch === '\\') { i++; continue; }
+                            if (ch === '\'') inSingle = false;
+                            continue;
+                        }
+                        if (inDouble) {
+                            if (ch === '\\') { i++; continue; }
+                            if (ch === '"') inDouble = false;
+                            continue;
+                        }
+                        if (inTemplate) {
+                            if (ch === '\\') { i++; continue; }
+                            if (ch === '`') inTemplate = false;
+                            continue;
+                        }
+
+                        if (ch === '/' && next === '/') { inLineComment = true; i++; continue; }
+                        if (ch === '/' && next === '*') { inBlockComment = true; i++; continue; }
+                        if (ch === '\'') { inSingle = true; continue; }
+                        if (ch === '"') { inDouble = true; continue; }
+                        if (ch === '`') { inTemplate = true; continue; }
+
+                        if (ch === '(') depth++;
+                        if (ch === ')') {
+                            depth--;
+                            if (depth === 0) return i;
+                        }
+                    }
+                    return -1;
+                };
+
+                const parseTopLevelArgs = (text) => {
+                    const args = [];
+                    let current = '';
+                    let depth = 0;
+                    let inSingle = false;
+                    let inDouble = false;
+                    let inTemplate = false;
+                    let inLineComment = false;
+                    let inBlockComment = false;
+                    for (let i = 0; i < text.length; i++) {
+                        const ch = text[i];
+                        const next = text[i + 1];
+
+                        if (inLineComment) {
+                            current += ch;
+                            if (ch === '\n') inLineComment = false;
+                            continue;
+                        }
+                        if (inBlockComment) {
+                            current += ch;
+                            if (ch === '*' && next === '/') {
+                                current += next;
+                                inBlockComment = false;
+                                i++;
+                            }
+                            continue;
+                        }
+
+                        if (inSingle) {
+                            current += ch;
+                            if (ch === '\\') { current += next; i++; continue; }
+                            if (ch === '\'') inSingle = false;
+                            continue;
+                        }
+                        if (inDouble) {
+                            current += ch;
+                            if (ch === '\\') { current += next; i++; continue; }
+                            if (ch === '"') inDouble = false;
+                            continue;
+                        }
+                        if (inTemplate) {
+                            current += ch;
+                            if (ch === '\\') { current += next; i++; continue; }
+                            if (ch === '`') inTemplate = false;
+                            continue;
+                        }
+
+                        if (ch === '/' && next === '/') { inLineComment = true; current += ch; continue; }
+                        if (ch === '/' && next === '*') { inBlockComment = true; current += ch; continue; }
+                        if (ch === '\'') { inSingle = true; current += ch; continue; }
+                        if (ch === '"') { inDouble = true; current += ch; continue; }
+                        if (ch === '`') { inTemplate = true; current += ch; continue; }
+
+                        if (ch === '(') depth++;
+                        if (ch === ')') depth--;
+
+                        if (ch === ',' && depth === 0) {
+                            args.push(current.trim());
+                            current = '';
+                            continue;
+                        }
+
+                        current += ch;
+                    }
+                    if (current.trim()) args.push(current.trim());
+                    return args;
+                };
+
+                const stackIdx = expr.indexOf('stack');
+                let i = stackIdx + 5;
+                while (i < expr.length && /\s/.test(expr[i])) i++;
+                if (expr[i] !== '(') return code;
+                const openIdx = i;
+                const closeIdx = findMatchingParen(expr, openIdx);
+                if (closeIdx === -1) return code;
+
+                const inner = expr.slice(openIdx + 1, closeIdx);
+                const args = parseTopLevelArgs(inner);
+                if (!args.length) return code;
+
+                let flattened = [];
+                let didFlatten = false;
+                for (const arg of args) {
+                    const argTrim = arg.trimStart();
+                    if (argTrim.startsWith('stack')) {
+                        const localIdx = arg.indexOf('stack');
+                        let j = localIdx + 5;
+                        while (j < arg.length && /\s/.test(arg[j])) j++;
+                        if (arg[j] === '(') {
+                            const close = findMatchingParen(arg, j);
+                            if (close !== -1) {
+                                const innerArg = arg.slice(j + 1, close);
+                                const innerArgs = parseTopLevelArgs(innerArg);
+                                if (innerArgs.length) {
+                                    flattened = flattened.concat(innerArgs);
+                                    didFlatten = true;
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    flattened.push(arg);
+                }
+
+                if (!didFlatten) return code;
+
+                const multiline = expr.includes('\n');
+                const joiner = multiline ? ',\n  ' : ', ';
+                const rebuilt = multiline
+                    ? `stack(\n  ${flattened.join(joiner)}\n)`
+                    : `stack(${flattened.join(joiner)})`;
+
+                return code.replace(match[0], `export const pattern = ${rebuilt};\n`);
+            };
+
+            fileCode = ensureBlocksSection(fileCode);
+
+            const baseVar = `block_${slugify(name)}`;
+            const varName = nextAvailableVarName(fileCode, baseVar);
+
+            let scaledPattern = pattern;
             if (preserveBlockBpm && blockBpm) {
                 const bpmMatch = fileCode.match(/export\s+const\s+bpm\s*=\s*(\d+)/);
                 const songBpm = bpmMatch ? Number(bpmMatch[1]) : 120;
                 const factor = songBpm && blockBpm ? (songBpm / blockBpm) : 1;
                 if (Number.isFinite(factor) && factor !== 1) {
                     const factorStr = Number(factor.toFixed(4));
-                    insertPattern = `${pattern}.slow(${factorStr})`;
+                    scaledPattern = `(${pattern}).slow(${factorStr})`;
                 }
             }
 
-            // Add the new pattern before the final closing
             fileCode = fileCode.replace(
-                /(\nexport const bpm = \d+;)/,
-                `$1\n\nexport const pattern = ${insertPattern};`
+                /\/\/ BLOCKS END/,
+                `const ${varName} = ${scaledPattern};\n// BLOCKS END`
             );
+
+            fileCode = upsertPatternLayer(fileCode, varName);
+            fileCode = normalizePatternStack(fileCode);
             
             // Convert back to editor format and set
             const editorCode = fileToEditor(fileCode);

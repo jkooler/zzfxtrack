@@ -120,8 +120,8 @@ const apiPlugin = () => ({
                 res.setHeader('Content-Type', 'application/json');
                 res.end(fs.readFileSync(metaPath, 'utf-8'));
             } else {
-                res.statusCode = 404;
-                res.end('Not found');
+                res.setHeader('Content-Type', 'application/json');
+                res.end('{}');
             }
             return;
         }
