@@ -141,6 +141,9 @@ function setActiveTab(tab) {
   elements.arrangerTabPanel?.classList.toggle('hidden', blocksActive);
   elements.blocksTabBtn?.classList.toggle('active', blocksActive);
   elements.arrangerTabBtn?.classList.toggle('active', !blocksActive);
+  // Keep insert buttons consistent: only enabled when an item is selected.
+  if (elements.insertBlockBtn) elements.insertBlockBtn.disabled = selectedBlockIndex == null;
+  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null;
   if (elements.description) {
     elements.description.textContent = blocksActive
       ? 'Blocks are reusable musical patterns. Create a block with the tracker, then insert it into any song.'
@@ -167,6 +170,8 @@ function renderArrangementsList() {
   if (!elements.arrangementsList) return;
 
   elements.arrangementsList.innerHTML = '';
+  selectedArrangementIndex = null;
+  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = true;
 
   if (!arrangementsCache.length) {
     elements.arrangementsList.innerHTML = `
@@ -228,7 +233,7 @@ function selectArrangement(index) {
     selectedEl.classList.add('selected', 'bg-accent', 'border-primary');
   }
   selectedArrangementIndex = index;
-  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = false;
+  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null;
 
   const arrangement = arrangementsCache[index];
   if (arrangement?.arrangementState) {
@@ -568,6 +573,9 @@ function renderBlocksList() {
   if (!elements.blocksList) return;
   
   elements.blocksList.innerHTML = '';
+  selectedBlockIndex = null;
+  if (elements.insertBlockBtn) elements.insertBlockBtn.disabled = true;
+  if (elements.deleteBlockBtn) elements.deleteBlockBtn.disabled = true;
   
   if (blocksCache.length === 0) {
     elements.blocksList.innerHTML = `
@@ -645,10 +653,10 @@ function selectBlock(index) {
   
     // Enable insert/delete/edit buttons
   if (elements.insertBlockBtn) {
-    elements.insertBlockBtn.disabled = false;
+    elements.insertBlockBtn.disabled = selectedBlockIndex == null;
   }
   if (elements.deleteBlockBtn) {
-    elements.deleteBlockBtn.disabled = false;
+    elements.deleteBlockBtn.disabled = selectedBlockIndex == null;
   }
   // Trigger preview on selection
   if (block) {

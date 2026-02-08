@@ -2,6 +2,10 @@ import { stack, arrange, note, s, slow, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
 
+// This is just a testing song for Blocks and Arrangements
+// The feature is found top right corner and is experimental
+// I'm trying to figure out, if tracker data can be imported to Strudel
+ 
 // BLOCKS START
 const block_bassline_js = note("c1 ~ c1 ~ ~ ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ ~").s("demo-bass");
 const block_simple_chord_pattern_js = (stack(
@@ -17,7 +21,11 @@ const arr_testing_arrangement = arrange(
   [1, stack(block_bassline_js)],
   [4, stack(block_bassline_js, block_simple_chord_pattern_js)]
 );
+const arr_testing_arrangement_2 = arrange(
+  [1, stack(block_bassline_js)],
+  [4, stack(block_bassline_js, block_simple_chord_pattern_js)]
+);
 // ARRANGEMENTS END
 
 
-export const pattern = stack(arr_testing_arrangement);
+export const pattern = stack(arr_testing_arrangement, arr_testing_arrangement_2);

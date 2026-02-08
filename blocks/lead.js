@@ -1,7 +1,7 @@
-// Block: Lead
+// Block: Sequence
 // Created in tracker
 
-export const name = "Lead";
+export const name = "Sequence";
 export const description = "Created in tracker";
 
 export const pattern = `note("f4 ~ d4 ~ ~ ~ ~ ~ g3 ~ ~ a3 ~ ~ e4 ~").s("test-tri")`;
