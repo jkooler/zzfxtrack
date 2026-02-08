@@ -153,6 +153,9 @@ function renderGrid() {
     stepEl.className = 'tracker-timetrack-row';
     stepEl.dataset.step = step;
     stepEl.textContent = String(step + 1);
+    if (step % 4 === 0) {
+      stepEl.classList.add('beat');
+    }
 
     if (step === state.focusedStep) {
       stepEl.classList.add('active');
@@ -206,11 +209,11 @@ function renderGrid() {
 
     const repsLabelEl = document.createElement('div');
     repsLabelEl.className = 'tracker-reps-label';
-    repsLabelEl.textContent = 'Reps';
+    repsLabelEl.textContent = 'RP';
 
     const ndLabelEl = document.createElement('div');
     ndLabelEl.className = 'tracker-nd-label';
-    ndLabelEl.textContent = 'ND';
+    ndLabelEl.textContent = 'DL';
 
     const headerRowEl = document.createElement('div');
     headerRowEl.className = 'tracker-channel-header-row';
@@ -255,7 +258,8 @@ function renderGrid() {
 
       const repsEl = document.createElement('input');
       repsEl.type = 'number';
-      repsEl.min = '1';
+      repsEl.min = '0';
+      repsEl.max = '99';
       repsEl.step = '1';
       repsEl.className = 'tracker-reps-input';
       repsEl.dataset.channel = ch;
@@ -270,8 +274,10 @@ function renderGrid() {
         const parsed = parseInt(raw, 10);
         if (!raw) {
           state.grid[ch][step].reps = null;
-        } else if (!Number.isNaN(parsed) && parsed > 0) {
-          state.grid[ch][step].reps = parsed;
+        } else if (!Number.isNaN(parsed)) {
+          const clamped = Math.min(Math.max(parsed, 0), 99);
+          state.grid[ch][step].reps = clamped === 0 ? null : clamped;
+          if (clamped === 0) e.target.value = '';
         }
         updateOutput();
         if (previewState.isPlaying && previewState.audioContext) {
@@ -292,7 +298,7 @@ function renderGrid() {
       const ndEl = document.createElement('input');
       ndEl.type = 'number';
       ndEl.min = '0';
-      ndEl.max = '3';
+      ndEl.max = '99';
       ndEl.step = '1';
       ndEl.className = 'tracker-nd-input';
       ndEl.dataset.channel = ch;
@@ -308,7 +314,9 @@ function renderGrid() {
         if (!raw) {
           state.grid[ch][step].nd = null;
         } else if (!Number.isNaN(parsed)) {
-          state.grid[ch][step].nd = Math.min(Math.max(parsed, 0), 3);
+          const clamped = Math.min(Math.max(parsed, 0), 99);
+          state.grid[ch][step].nd = clamped === 0 ? null : clamped;
+          if (clamped === 0) e.target.value = '';
         }
         updateOutput();
         if (previewState.isPlaying && previewState.audioContext) {

@@ -347,7 +347,11 @@ strudel-editor {
 }
 
 .tracker-timetrack-row {
-  @apply w-8 h-7 text-[10px] text-muted-foreground font-mono text-right flex items-center justify-end pr-2 select-none cursor-pointer;
+  @apply w-8 h-7 text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-2 select-none cursor-pointer;
+}
+
+.tracker-timetrack-row.beat {
+  @apply text-foreground;
 }
 
 .tracker-timetrack-row.active {
@@ -367,7 +371,7 @@ strudel-editor {
 }
 
 .tracker-channel-select {
-  @apply flex-1 h-8 rounded-md border border-input bg-input-bg px-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply w-24 h-8 rounded-md border border-input bg-input-bg px-1 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
 
 .tracker-channel-label {
@@ -375,11 +379,11 @@ strudel-editor {
 }
 
 .tracker-reps-label {
-  @apply w-10 h-8 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
+  @apply w-[24px] h-8 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
 }
 
 .tracker-nd-label {
-  @apply w-10 h-8 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
+  @apply w-[24px] h-8 text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center justify-center;
 }
 
 .tracker-row {
@@ -395,11 +399,11 @@ strudel-editor {
 }
 
 .tracker-reps-input {
-  @apply w-10 h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply w-[24px] h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
 
 .tracker-nd-input {
-  @apply w-10 h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply w-[24px] h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
 
 .tracker-reps-input::-webkit-outer-spin-button,
