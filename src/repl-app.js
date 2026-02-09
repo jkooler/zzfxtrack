@@ -894,6 +894,12 @@ dom.confirmNewSong.addEventListener('click', () => {
     const name = dom.newSongName.value.trim();
     if (name) createNewSong(name);
 });
+dom.newSongName.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const name = dom.newSongName.value.trim();
+    if (name) createNewSong(name);
+});
 
 // Delete Confirmation
 let songToDelete = null;
@@ -1128,6 +1134,11 @@ function updatePlayState(isPlaying) {
     }
     updateSongListVisualizer();
     renderPlayButton();
+}
+
+export function isStrudelPlaybackActive() {
+    const editor = dom.repl.editor;
+    return Boolean(editor && editor.repl && editor.repl.scheduler && editor.repl.scheduler.started);
 }
 
 function renderPlayButton() {

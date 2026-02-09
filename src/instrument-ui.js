@@ -16,7 +16,7 @@ import {
 import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 
-import { reloadInstruments } from './repl-app.js';
+import { reloadInstruments, isStrudelPlaybackActive } from './repl-app.js';
 import { createIcons, icons } from 'lucide';
 import { getInstrumentAnalyser } from './zzfx-loader.js';
 import { ScopeVisualizer } from './visualizer.js';
@@ -155,6 +155,11 @@ function setupEventListeners() {
     dom.newInstrumentBtn.addEventListener('click', openNewInstrumentModal);
     dom.cancelNewInstrument.addEventListener('click', closeNewInstrumentModal);
     dom.confirmNewInstrument.addEventListener('click', handleCreateInstrument);
+    dom.newInstrumentName.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        handleCreateInstrument();
+    });
     
     // Download instruments.js
     dom.downloadInstrumentsBtn.addEventListener('click', handleDownloadInstruments);
@@ -1282,8 +1287,10 @@ function handleParamChange(paramIndex) {
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
     
-    // Play test note (debounced)
-    playTestNoteDebounced(newParams);
+    // Play test note (debounced) if Strudel isn't currently playing
+    if (!isStrudelPlaybackActive()) {
+        playTestNoteDebounced(newParams);
+    }
 }
 
 /**
