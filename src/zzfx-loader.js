@@ -4,6 +4,8 @@ import { getVisualizerAnalyser } from "./visualizer.js";
 
 
 const instrumentAnalysers = new Map();
+let monophonicAliasSet = new Set();
+const activeVoiceByAlias = new Map();
 
 export function getInstrumentAnalyser(id) {
     if (instrumentAnalysers.has(id)) return instrumentAnalysers.get(id);
@@ -177,11 +179,26 @@ let registeredAliases = new Set();
 /**
  * Load ZzFX instruments into Strudel's sound system
  */
-export function loadZzFXInstruments(instrumentMap) {
+export function loadZzFXInstruments(instrumentMap, options = {}) {
     if (typeof window === 'undefined') return;
 
     const audioCtx = getAudioContext();
     console.log("🔊 Generating ZzFX previews (ZzFXMicro v1.3.2 compatible)...");
+    if (options?.monophonicAliases) {
+        if (options.monophonicAliases instanceof Set) {
+            monophonicAliasSet = new Set(options.monophonicAliases);
+        } else if (Array.isArray(options.monophonicAliases)) {
+            monophonicAliasSet = new Set(options.monophonicAliases);
+        } else if (typeof options.monophonicAliases === 'object') {
+            monophonicAliasSet = new Set(
+                Object.entries(options.monophonicAliases)
+                    .filter(([, v]) => Boolean(v))
+                    .map(([k]) => k)
+            );
+        }
+    } else {
+        monophonicAliasSet = new Set();
+    }
 
     const newAliases = new Set(Object.keys(instrumentMap));
 
@@ -189,6 +206,11 @@ export function loadZzFXInstruments(instrumentMap) {
     for (const alias of registeredAliases) {
         if (!newAliases.has(alias)) {
             console.log(`[ZzFX] invalidating removed instrument: ${alias}`);
+            const active = activeVoiceByAlias.get(alias);
+            if (active) {
+                try { active.source.stop(); } catch (e) {}
+                activeVoiceByAlias.delete(alias);
+            }
             // Overwrite with a silent handler that warns
             registerSound(alias, (time, value) => {
                 console.warn(`⚠️ Instrument "${alias}" has been removed or renamed. Please update your code.`);
@@ -211,6 +233,19 @@ export function loadZzFXInstruments(instrumentMap) {
 
         registerSound(id, (time, value, onEnded) => {
             const startTime = Math.max(time, audioCtx.currentTime + 0.01);
+            const isMonophonic = monophonicAliasSet.has(id);
+            if (isMonophonic) {
+                const prev = activeVoiceByAlias.get(id);
+                if (prev) {
+                    // Fade the previous voice to avoid clicks, then stop it at the new note boundary.
+                    try {
+                        prev.gainNode.gain.cancelScheduledValues(startTime);
+                        prev.gainNode.gain.setValueAtTime(prev.gainNode.gain.value, startTime);
+                        prev.gainNode.gain.linearRampToValueAtTime(0, startTime + 0.01);
+                    } catch (e) {}
+                    try { prev.source.stop(startTime + 0.011); } catch (e) {}
+                }
+            }
 
             // Dynamic Generation with True Pitch Shifting!
             // We mimic the ZzFXM Player logic exactly to ensure parity.
@@ -307,7 +342,17 @@ export function loadZzFXInstruments(instrumentMap) {
                 gainNode.disconnect();
                 source.disconnect();
                 if (onEnded) onEnded();
+                if (isMonophonic) {
+                    const current = activeVoiceByAlias.get(id);
+                    if (current?.source === source) {
+                        activeVoiceByAlias.delete(id);
+                    }
+                }
             };
+
+            if (isMonophonic) {
+                activeVoiceByAlias.set(id, { source, gainNode });
+            }
 
             return {
                 node: gainNode,

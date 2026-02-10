@@ -8,10 +8,11 @@ import { zzfxG } from './zzfx-loader.js';
 // Max attenuation used in baker-logic.js
 const MAX_ATTENUATION = 20;
 
-export const buildSong = (song) => {
+export const buildSong = (song, options = {}) => {
     // song structure: [instruments, patterns, sequence, BPM]
     if (!song) return null;
     let [instruments, patterns, sequence, BPM] = song;
+    const monophonicByInstrumentIndex = options?.monophonicByInstrumentIndex || [];
     
     let sampleRate = 44100;
     let secondsPerBeat = 60 / BPM;
@@ -44,6 +45,9 @@ export const buildSong = (song) => {
     
     let currentSampleOffset = 0;
 
+    // Used to avoid clicks when cutting monophonic notes at the next note boundary.
+    const MONO_CUT_FADE_SAMPLES = Math.floor(sampleRate * 0.01); // ~10ms
+
     sequence.forEach((patIndex, seqIndex) => {
         let pattern = patterns[patIndex]; // Array of channels
         
@@ -52,6 +56,14 @@ export const buildSong = (song) => {
         // Iterate Channels
         pattern.forEach((channel, channelIndex) => {
             // Channel is array of note events: [InstrumentIndex, Attenuation, Semitone]
+
+            // If an instrument is marked monophonic, cut its note at the next note-on in the same channel.
+            const nextNoteAt = Array(channel.length).fill(null);
+            let next = null;
+            for (let i = channel.length - 1; i >= 0; i--) {
+                nextNoteAt[i] = next;
+                if (channel[i]) next = i;
+            }
             
             for (let i = 0; i < channel.length; i++) {
                 const noteData = channel[i];
@@ -123,9 +135,29 @@ export const buildSong = (song) => {
                         
                         // Mix
                         let noteStart = Math.floor(currentSampleOffset + (i * samplesPerRow));
-                        for (let j=0; j<sound.length; j++) {
+                        let mixLen = sound.length;
+                        let monoCutFadeSamples = 0;
+                        if (monophonicByInstrumentIndex?.[instIndex]) {
+                            const nextRow = nextNoteAt[i];
+                            if (typeof nextRow === 'number') {
+                                const maxSamples = Math.floor((nextRow - i) * samplesPerRow);
+                                mixLen = Math.min(mixLen, Math.max(0, maxSamples));
+                                monoCutFadeSamples = Math.min(MONO_CUT_FADE_SAMPLES, mixLen);
+                            }
+                        }
+                        for (let j=0; j<mixLen; j++) {
                             if (noteStart + j < mixBuffer.length) {
-                                mixBuffer[noteStart + j] += sound[j];
+                                let sample = sound[j];
+                                if (monoCutFadeSamples > 0 && j >= mixLen - monoCutFadeSamples) {
+                                    if (monoCutFadeSamples === 1) {
+                                        sample = 0;
+                                    } else {
+                                        const fadeStart = mixLen - monoCutFadeSamples;
+                                        const t = (j - fadeStart) / (monoCutFadeSamples - 1); // 0..1
+                                        sample *= (1 - t);
+                                    }
+                                }
+                                mixBuffer[noteStart + j] += sample;
                             }
                         }
                     }
@@ -154,11 +186,11 @@ export const buildSong = (song) => {
 // Playback State
 let playingSource = null;
 
-export function playZzfxmSong(songData, audioCtx, onEnded) {
+export function playZzfxmSong(songData, audioCtx, onEnded, options = {}) {
     stopZzfxmSong();
     
     console.log("[ZzFXM] Building song...", songData);
-    const pcm = buildSong(songData);
+    const pcm = buildSong(songData, options);
     if (!pcm) {
         console.error("[ZzFXM] Failed to build song");
         if (onEnded) onEnded();

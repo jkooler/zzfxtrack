@@ -53,6 +53,7 @@ const dom = {
     instExportName: document.getElementById('instExportName'),
     instStrudelAlias: document.getElementById('instStrudelAlias'),
     instChannel: document.getElementById('instChannel'),
+    instMonophonic: document.getElementById('instMonophonic'),
     
     // Modals
     newInstrumentModal: document.getElementById('newInstrumentModal'),
@@ -180,6 +181,9 @@ function setupEventListeners() {
     // Drawer inputs - auto-save and preview on change
     dom.instExportName.addEventListener('input', handleDrawerChange);
     dom.instStrudelAlias.addEventListener('input', handleDrawerChange);
+    if (dom.instMonophonic) {
+        dom.instMonophonic.addEventListener('change', handleMonophonicChange);
+    }
     
     // Parameter inputs - debounced preview
     paramInputs.forEach((input, index) => {
@@ -242,6 +246,10 @@ function normalizeLocalInstruments() {
         }
         if (safeExport !== inst.exportName) {
             updated.exportName = safeExport;
+            didChange = true;
+        }
+        if (typeof updated.monophonic !== 'boolean') {
+            updated.monophonic = false;
             didChange = true;
         }
         return updated;
@@ -1211,6 +1219,7 @@ function openDrawer(instrumentId) {
     dom.instExportName.value = instrument.exportName;
     dom.instStrudelAlias.value = instrument.strudelAlias;
     dom.instChannel.value = instrument.channel;
+    if (dom.instMonophonic) dom.instMonophonic.checked = Boolean(instrument.monophonic);
     
     // Populate parameters
     instrument.params.forEach((value, index) => {
@@ -1265,6 +1274,14 @@ function handleDrawerChange() {
     };
     
     updateInstrument(currentInstrumentId, changes);
+    renderInstrumentList();
+    autoUpdateInstrumentsFile();
+    reloadInstruments(); // Reload instruments into Strudel
+}
+
+function handleMonophonicChange() {
+    if (!currentInstrumentId) return;
+    updateInstrument(currentInstrumentId, { monophonic: Boolean(dom.instMonophonic.checked) });
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
@@ -1511,10 +1528,11 @@ function handleDownloadInstruments() {
  * Called by repl-app.js when baking
  */
 export async function getInstrumentsForBaker() {
-    const { getInstrumentMapping, getInstrumentArray } = await import('./instrument-manager.js');
+    const { getInstrumentMapping, getInstrumentArray, getMonophonicArray } = await import('./instrument-manager.js');
     return {
         mapping: getInstrumentMapping(),
-        array: getInstrumentArray()
+        array: getInstrumentArray(),
+        monophonicByIndex: getMonophonicArray()
     };
 }
 /**

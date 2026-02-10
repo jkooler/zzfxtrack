@@ -15,6 +15,7 @@ import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock 
 let currentSongFilename = null;
 let currentSongDisplayName = ''; // Store the display name for restoration
 let lastBakedData = null;
+let lastBakedMeta = null;
 let autoSaveTimeout = null; // Debounce timer for auto-save
 let isPreviewPlaying = false;
 let playingSongFilename = null;
@@ -220,19 +221,19 @@ function syncThemeColors() {
  * Call this after instruments are modified to update the sound registry
  */
 export async function reloadInstruments() {
-    const { getInstrumentMapping } = await import('./instrument-manager.js');
-    const mapping = getInstrumentMapping();
-    
-    // Build instruments object from mapping
+    const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+
     const instruments = {};
-    const defragged = (await import('./instrument-manager.js')).getDefragmentedInstruments();
-    
-    defragged.forEach(inst => {
+    const monophonicAliases = new Set();
+    const defragged = getDefragmentedInstruments();
+
+    defragged.forEach((inst) => {
         instruments[inst.strudelAlias] = inst.params;
+        if (inst.monophonic) monophonicAliases.add(inst.strudelAlias);
     });
-    
+
     // Reload into Strudel
-    loadZzFXInstruments(instruments);
+    loadZzFXInstruments(instruments, { monophonicAliases });
     console.log('[ReplApp] Reloaded', Object.keys(instruments).length, 'instruments into Strudel');
 }
 
@@ -754,7 +755,7 @@ async function bakeCurrentSong() {
         if (match) bpm = Number(match[1]);
         
         // 3. Get dynamic instruments from manager
-        const { array: instrumentArray, mapping: instrumentMapping } = await getInstrumentsForBaker();
+        const { array: instrumentArray, mapping: instrumentMapping, monophonicByIndex } = await getInstrumentsForBaker();
         
         // 4. Get export settings
         const isLimitEnabled = dom.limitChannels.checked;
@@ -773,13 +774,15 @@ async function bakeCurrentSong() {
         const result = bakePattern(pattern, bpm, instrumentArray, instrumentMapping, 8, {
             maxVoicesPerInstrument: maxChannels,
             normalizeUnisonLayers: normalizeLayers,
-            rowsPerCycle
+            rowsPerCycle,
+            monophonicByInstrumentIndex: monophonicByIndex
         });
         const songData = result.song;
         const { channelCount, droppedNotes } = result.stats;
         
         // Store for preview
         lastBakedData = songData;
+        lastBakedMeta = { monophonicByInstrumentIndex: monophonicByIndex };
         dom.previewJson.innerText = JSON.stringify(songData, null, 2);
         
         // 4. Send JSON to server
@@ -1080,7 +1083,7 @@ dom.previewPlayBtn.addEventListener('click', () => {
     
     playZzfxmSong(lastBakedData, getAudioContext(), () => {
         updatePreviewPlayButton(false);
-    });
+    }, lastBakedMeta);
     updatePreviewPlayButton(true);
 });
 

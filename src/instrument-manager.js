@@ -67,6 +67,7 @@ export function createInstrument(
     strudelAlias: strudelAlias || "z-untitled",
     channel: channel ?? instruments.length,
     params: params.length === 21 ? params : defaultParams,
+    monophonic: false,
   };
 
   instruments.push(instrument);
@@ -183,6 +184,15 @@ export function getInstrumentArray() {
 }
 
 /**
+ * Get monophonic flag array for baker (defragmented, sequential)
+ * @returns {Array} Array of booleans aligned to getInstrumentArray()
+ */
+export function getMonophonicArray() {
+  const defragged = getDefragmentedInstruments();
+  return defragged.map((inst) => Boolean(inst.monophonic));
+}
+
+/**
  * Get instrument by ID
  * @param {string} id - Instrument ID
  * @returns {Object|null} Instrument object or null
@@ -199,6 +209,18 @@ export function getInstrumentById(id) {
  */
 export function migrateFromFile(importedData) {
   console.log("[InstrumentManager] Starting migration from instruments.js");
+
+  const existing = loadInstruments();
+  const existingByAlias = new Map(
+    existing
+      .filter((inst) => inst && typeof inst.strudelAlias === "string")
+      .map((inst) => [inst.strudelAlias, inst]),
+  );
+  const existingByAliasLower = new Map(
+    existing
+      .filter((inst) => inst && typeof inst.strudelAlias === "string")
+      .map((inst) => [inst.strudelAlias.toLowerCase(), inst]),
+  );
 
   const instruments = [];
   let channel = 0;
@@ -228,12 +250,15 @@ export function migrateFromFile(importedData) {
       }
 
       if (params && Array.isArray(params)) {
+        const prev =
+          existingByAlias.get(alias) || existingByAliasLower.get(alias.toLowerCase());
         instruments.push({
-          id: generateId(),
+          id: prev?.id || generateId(),
           exportName,
           strudelAlias: alias,
           channel: ch,
           params,
+          monophonic: typeof prev?.monophonic === "boolean" ? prev.monophonic : false,
         });
       } else {
         console.warn(`[InstrumentManager] Could not find params for ${alias}`);

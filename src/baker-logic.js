@@ -47,10 +47,11 @@ function getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoices = Infin
  * @param {number} cycles - Number of cycles to bake (default: 8)
  * @param {Object} options - Optional settings
  * @param {number} options.maxVoicesPerInstrument - Max voices per instrument (default: Infinity)
+ * @param {Array} options.monophonicByInstrumentIndex - Boolean array aligned to instrumentArray (default: [])
  * @returns {Object} { song: ZzFXM song array, stats: { channelCount, droppedNotes } }
  */
 export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8, options = {}) {
-    const { maxVoicesPerInstrument = Infinity, normalizeUnisonLayers = false, rowsPerCycle = DEFAULT_ROWS_PER_CYCLE } = options;
+    const { maxVoicesPerInstrument = Infinity, normalizeUnisonLayers = false, rowsPerCycle = DEFAULT_ROWS_PER_CYCLE, monophonicByInstrumentIndex = [] } = options;
     
     const totalRows = cycles * rowsPerCycle;
     const events = pattern.queryArc(0, cycles);
@@ -122,15 +123,15 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
         const gridIndex = Math.floor(e.whole.begin.valueOf() * rowsPerCycle);
         
         if (gridIndex < totalRows) {
-            // Get available voice for this instrument at this position
-            const voice = getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoicesPerInstrument);
-            
+            const isMonophonic = Boolean(monophonicByInstrumentIndex?.[instIndex]);
+            const voice = isMonophonic ? 0 : getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoicesPerInstrument);
+
             if (voice === -1) {
                 // Limit reached, skip this note
                 droppedNotes++;
                 return;
             }
-            
+
             const trackKey = `${instIndex}-${voice}`;
             
             // Ensure track exists
@@ -157,7 +158,16 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
 
             // ZzFXMicro Pattern Format: [Instrument, Attenuation, Note]
             // Note: instIndex is the ORIGINAL instrument index, not the channel number
-            tracks[trackKey][gridIndex] = [instIndex, attenuation, semitone];
+            if (isMonophonic && tracks[trackKey][gridIndex]) {
+                // If multiple notes land on the same row (e.g. a chord), keep the highest pitch.
+                droppedNotes++;
+                const existingSemitone = tracks[trackKey][gridIndex][2];
+                if (semitone > existingSemitone) {
+                    tracks[trackKey][gridIndex] = [instIndex, attenuation, semitone];
+                }
+            } else {
+                tracks[trackKey][gridIndex] = [instIndex, attenuation, semitone];
+            }
         }
     });
 
