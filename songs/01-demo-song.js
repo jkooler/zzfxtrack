@@ -8,8 +8,6 @@ export const bpm = 120;
 // 2. Make sure to use the "Instruments" instead of the synthesis provided by Strudel.
 // 3. Any sound produced by Strudel will not carry on to the exported ZzFXM songs.
 
-// This is an early alpha version, so there could be other issues as well.
-
 
 export const pattern = stack(
   note("bb2(3,8)").s("demo-kickdrum"),

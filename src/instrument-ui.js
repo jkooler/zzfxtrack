@@ -181,9 +181,6 @@ function setupEventListeners() {
     // Drawer inputs - auto-save and preview on change
     dom.instExportName.addEventListener('input', handleDrawerChange);
     dom.instStrudelAlias.addEventListener('input', handleDrawerChange);
-    if (dom.instMonophonic) {
-        dom.instMonophonic.addEventListener('change', handleMonophonicChange);
-    }
     
     // Parameter inputs - debounced preview
     paramInputs.forEach((input, index) => {
@@ -576,6 +573,27 @@ function reorganizeParameters(useArrayOrder) {
             groupHeader.textContent = groupName;
             groupHeader.className = 'param-group-header';
             paramGroup.appendChild(groupHeader);
+
+            // Instrument-level settings: placed between "General" and the Wave Shape UI.
+            if (groupName === 'General') {
+                const monoField = document.createElement('div');
+                // Avoid `.param-field label { ... }` global rule overriding our flex alignment.
+                monoField.className = 'flex flex-col gap-2';
+
+                const checkbox = ensureMonophonicControl();
+                const row = document.createElement('div');
+                row.className = 'flex flex-row items-center gap-3 h-8';
+
+                const label = document.createElement('label');
+                label.className = 'flex items-center h-4 text-sm font-medium leading-4 text-foreground select-none';
+                label.setAttribute('for', 'instMonophonic');
+                label.textContent = 'Monophonic';
+
+                row.appendChild(checkbox);
+                row.appendChild(label);
+                monoField.appendChild(row);
+                paramGroup.appendChild(monoField);
+            }
             
             if (groupName === 'Envelope (ADSR)') {
                 // Multislider Container
@@ -1219,7 +1237,6 @@ function openDrawer(instrumentId) {
     dom.instExportName.value = instrument.exportName;
     dom.instStrudelAlias.value = instrument.strudelAlias;
     dom.instChannel.value = instrument.channel;
-    if (dom.instMonophonic) dom.instMonophonic.checked = Boolean(instrument.monophonic);
     
     // Populate parameters
     instrument.params.forEach((value, index) => {
@@ -1285,6 +1302,39 @@ function handleMonophonicChange() {
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
+}
+
+function ensureMonophonicControl() {
+    const existing = document.getElementById('instMonophonic');
+    if (existing) {
+        dom.instMonophonic = existing;
+        if (!existing._monoListenerAttached) {
+            existing.addEventListener('change', handleMonophonicChange);
+            existing._monoListenerAttached = true;
+        }
+        if (currentInstrumentId) {
+            const inst = getInstrumentById(currentInstrumentId);
+            if (inst) existing.checked = Boolean(inst.monophonic);
+        }
+        return existing;
+    }
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = 'instMonophonic';
+    checkbox.className = 'w-4 h-4 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background';
+    checkbox.title = 'If enabled, new notes will cut previous notes for this instrument';
+    checkbox.addEventListener('change', handleMonophonicChange);
+    checkbox._monoListenerAttached = true;
+
+    dom.instMonophonic = checkbox;
+
+    if (currentInstrumentId) {
+        const inst = getInstrumentById(currentInstrumentId);
+        if (inst) checkbox.checked = Boolean(inst.monophonic);
+    }
+
+    return checkbox;
 }
 
 /**
