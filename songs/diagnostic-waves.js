@@ -1,11 +1,13 @@
-import { note, s, cat } from "@strudel/core";
+import { note, s, cat, stack, arrange, silence, slow, gain } from "@strudel/core";
 
 export const bpm = 120;
 
-export const pattern = // Plays C3-C8 arpeggios on each diagnostic wave shape
-// Useful to see what volume levels cause clipping by the polyphony.
+// Note to self:
+// Plays C3-C8 arpeggios on each diagnostic wave shape
+// Diagnose what volume levels cause clipping by the polyphony.
 
-cat(
+
+export const pattern = cat(
     // Test kick
     note("c2").s("test-kick"),
 

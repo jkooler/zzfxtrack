@@ -27,8 +27,8 @@ export const zzfxm_demo_cowbell = [0.7,0,440,0,0.1,0,0,0,50,50,0,0,0,0,34121,0,0
 export const zzfxm_demo_bass = [0.5,0,55,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,0.3,0,-555];
 export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
 export const zzfxm_demo_kickdrum = [1,0,130,0,0.08,0.05,0,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
-export const zzfxm_test_elpiano = [0.22,0,440,0,0.09,1.01,2,0.5,0,0,0,0,0.23,0.08,0,0,0,0.75,0.19,0.04,-130];
-export const zzfxm_test_horn = [0.3,0,110,0.02,0.22,0.1,2,4.6,0,0,0,0,0,0.13,0,0,0,1,0.82,0,-296];
+export const zzfxm_test_elpiano = [0.22,0,440,0,0.09,1.01,2,0.5,0,0,0,0,0.23,0.08,0,0,0,0.75,0.19,0.04,-180];
+export const zzfxm_test_horn = [0.3,0,110,0.03,0.22,0.1,2,9.1,0,0,0,0,0,0.12,0,0,0,0.92,0.82,0,-328];
 
 /**
  * Strudel Sound Names to ZzFXM Channel Indices

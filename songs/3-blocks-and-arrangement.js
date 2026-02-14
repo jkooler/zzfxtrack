@@ -2,9 +2,9 @@ import { stack, arrange, note, s, slow, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
 
-// This is just a testing song for Blocks and Arrangements
+// This is a testing song for Blocks and Arrangements
 // The feature is found top right corner and is experimental
-// I'm trying to figure out, if tracker data can be imported to Strudel
+// Goal of the feature is to merge traditional tools with Strudel
  
 // BLOCKS START
 const block_bassline_js = note("c1 ~ c1 ~ ~ ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ ~").s("demo-bass");
