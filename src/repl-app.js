@@ -1092,7 +1092,7 @@ dom.previewPlayBtn.addEventListener('click', () => {
 function updatePreviewPlayButton(playing) {
     isPreviewPlaying = playing;
     dom.previewPlayBtn.innerHTML = playing ? '<i data-lucide="square" class="w-4 h-4 fill-current"></i>' : '<i data-lucide="play" class="w-4 h-4"></i>';
-    dom.previewPlayBtn.style.color = playing ? '#ff3333' : '#eee';
+    dom.previewPlayBtn.style.color = '#eee';
     createIcons({ icons });
 }
 
@@ -1155,7 +1155,7 @@ function renderPlayButton() {
     const showStop = isRunning && playingSongFilename === currentSongFilename;
     
     dom.playBtn.innerHTML = showStop ? '<i data-lucide="square" class="w-5 h-5 fill-current"></i>' : '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
-    dom.playBtn.style.color = showStop ? '#ff3333' : '#eee';
+    dom.playBtn.style.color = '#eee';
     createIcons({ icons });
 }
 

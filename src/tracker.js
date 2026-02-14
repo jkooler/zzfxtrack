@@ -1381,11 +1381,10 @@ function updatePreviewUI() {
 
   if (previewState.isPlaying) {
     elements.previewBtn.innerHTML = '<i data-lucide="square" class="w-5 h-5 fill-current"></i>';
-    elements.previewBtn.style.color = '#ff3333';
   } else {
     elements.previewBtn.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
-    elements.previewBtn.style.color = '#eee';
   }
+  elements.previewBtn.style.color = '#eee';
 
   createIcons({ icons });
 }
