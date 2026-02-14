@@ -61,6 +61,18 @@ const dom = {
     closeJsonModalBtn: document.getElementById('closeJsonModalBtn'),
     closeJsonModalBottomBtn: document.getElementById('closeJsonModalBottomBtn'),
     copyJsonBtn: document.getElementById('copyJsonBtn'),
+    
+    // Licensing Modal
+    openLicenseModalBtn: document.getElementById('openLicenseModalBtn'),
+    licenseAttributionModal: document.getElementById('licenseAttributionModal'),
+    closeLicenseModalBtn: document.getElementById('closeLicenseModalBtn'),
+    closeLicenseModalBottomBtn: document.getElementById('closeLicenseModalBottomBtn'),
+    
+    // Change Log Modal
+    openChangelogModalBtn: document.getElementById('openChangelogModalBtn'),
+    changelogModal: document.getElementById('changelogModal'),
+    closeChangelogModalBtn: document.getElementById('closeChangelogModalBtn'),
+    closeChangelogModalBottomBtn: document.getElementById('closeChangelogModalBottomBtn'),
 
     // External Link Modal
     externalLinkModal: document.getElementById('externalLinkModal'),
@@ -1206,6 +1218,46 @@ if(dom.showJsonBtn) dom.showJsonBtn.addEventListener('click', openJsonModal);
 if(dom.closeJsonModalBtn) dom.closeJsonModalBtn.addEventListener('click', closeJsonModal);
 if(dom.closeJsonModalBottomBtn) dom.closeJsonModalBottomBtn.addEventListener('click', closeJsonModal);
 if(dom.copyJsonBtn) dom.copyJsonBtn.addEventListener('click', copyJsonToClipboard);
+
+// --- Licensing Modal Logic ---
+function openLicenseModal() {
+    dom.licenseAttributionModal?.classList.add('open');
+}
+
+function closeLicenseModal() {
+    dom.licenseAttributionModal?.classList.remove('open');
+}
+
+if (dom.openLicenseModalBtn) dom.openLicenseModalBtn.addEventListener('click', openLicenseModal);
+if (dom.closeLicenseModalBtn) dom.closeLicenseModalBtn.addEventListener('click', closeLicenseModal);
+if (dom.closeLicenseModalBottomBtn) dom.closeLicenseModalBottomBtn.addEventListener('click', closeLicenseModal);
+if (dom.licenseAttributionModal) {
+    dom.licenseAttributionModal.addEventListener('click', (e) => {
+        if (e.target === dom.licenseAttributionModal) {
+            closeLicenseModal();
+        }
+    });
+}
+
+// --- Change Log Modal Logic ---
+function openChangelogModal() {
+    dom.changelogModal?.classList.add('open');
+}
+
+function closeChangelogModal() {
+    dom.changelogModal?.classList.remove('open');
+}
+
+if (dom.openChangelogModalBtn) dom.openChangelogModalBtn.addEventListener('click', openChangelogModal);
+if (dom.closeChangelogModalBtn) dom.closeChangelogModalBtn.addEventListener('click', closeChangelogModal);
+if (dom.closeChangelogModalBottomBtn) dom.closeChangelogModalBottomBtn.addEventListener('click', closeChangelogModal);
+if (dom.changelogModal) {
+    dom.changelogModal.addEventListener('click', (e) => {
+        if (e.target === dom.changelogModal) {
+            closeChangelogModal();
+        }
+    });
+}
 
 /**
  * Handle confirmation of external links

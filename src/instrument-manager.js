@@ -5,6 +5,17 @@
 
 const STORAGE_KEY = "zzfxm-instruments";
 
+function parseMonophonicFlag(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+    if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  }
+  return fallback;
+}
+
 // Generate unique ID
 function generateId() {
   return `inst_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -221,6 +232,7 @@ export function migrateFromFile(importedData) {
       .filter((inst) => inst && typeof inst.strudelAlias === "string")
       .map((inst) => [inst.strudelAlias.toLowerCase(), inst]),
   );
+  const monophonicFromFile = importedData?.instrumentMonophonic || {};
 
   const instruments = [];
   let channel = 0;
@@ -252,13 +264,17 @@ export function migrateFromFile(importedData) {
       if (params && Array.isArray(params)) {
         const prev =
           existingByAlias.get(alias) || existingByAliasLower.get(alias.toLowerCase());
+        const monoFromFile =
+          monophonicFromFile?.[alias] ??
+          monophonicFromFile?.[alias.toLowerCase()] ??
+          monophonicFromFile?.[alias.toUpperCase()];
         instruments.push({
           id: prev?.id || generateId(),
           exportName,
           strudelAlias: alias,
           channel: ch,
           params,
-          monophonic: typeof prev?.monophonic === "boolean" ? prev.monophonic : false,
+          monophonic: parseMonophonicFlag(monoFromFile, parseMonophonicFlag(prev?.monophonic, false)),
         });
       } else {
         console.warn(`[InstrumentManager] Could not find params for ${alias}`);

@@ -2,7 +2,9 @@ import { zzfxG } from './zzfx-loader.js';
 
 /**
  * ZzFX Music Renderer v2.0.3 by Frank Force 2019
- * Adapted for ES Modules and Strudel Baker format.
+ * Adapted from ZzFXM (Keith Clark and Frank Force, MIT License)
+ * for ES Modules and Strudel Baker format.
+ * Original project: https://keithclark.github.io/ZzFXM/
  */
 
 // Max attenuation used in baker-logic.js

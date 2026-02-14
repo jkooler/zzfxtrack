@@ -10,7 +10,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "AGPL-3.0-or-later",
   "description": "",
   "dependencies": {
     "@strudel/core": "^1.2.5",

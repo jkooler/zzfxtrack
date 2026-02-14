@@ -93,6 +93,19 @@ export function generateInstrumentsFile() {
     });
     
     content += `};\n\n`;
+
+    // Export monophonic instrument settings by alias
+    content += `// Per-instrument playback settings\n`;
+    content += `export const instrumentMonophonic = {\n`;
+
+    defragged.forEach((inst, index, arr) => {
+        const comma = index < arr.length - 1 ? ',' : '';
+        const safeAlias = toSafeAlias(inst.strudelAlias);
+        const mono = Boolean(inst.monophonic);
+        content += `    "${safeAlias}": ${mono}${comma}\n`;
+    });
+
+    content += `};\n\n`;
     
     // Export instrumentArray
     content += `// Also export as array for the baker (ordered by channel index)\n`;

@@ -228,6 +228,17 @@ function sanitizeStrudelAlias(value) {
     return safe;
 }
 
+function parseMonophonicFlag(value, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
+        if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+    }
+    return fallback;
+}
+
 function normalizeLocalInstruments() {
     const instruments = loadInstruments();
     let didChange = false;
@@ -245,8 +256,9 @@ function normalizeLocalInstruments() {
             updated.exportName = safeExport;
             didChange = true;
         }
-        if (typeof updated.monophonic !== 'boolean') {
-            updated.monophonic = false;
+        const normalizedMono = parseMonophonicFlag(updated.monophonic, false);
+        if (updated.monophonic !== normalizedMono) {
+            updated.monophonic = normalizedMono;
             didChange = true;
         }
         return updated;
@@ -264,7 +276,8 @@ function getFingerprint(instruments = []) {
         instruments
             .map((inst) => ({
                 name: getInstrumentDisplayName(inst),
-                params: Array.isArray(inst.params) ? inst.params : []
+                params: Array.isArray(inst.params) ? inst.params : [],
+                monophonic: parseMonophonicFlag(inst.monophonic, false)
             }))
             .sort((a, b) => a.name.localeCompare(b.name))
     );
@@ -286,6 +299,15 @@ async function fetchServerInstruments() {
 function buildServerInstrumentList(serverData) {
     const list = [];
     const instruments = serverData?.instruments || {};
+    const monophonicMap = serverData?.instrumentMonophonic || {};
+
+    const readMonophonic = (alias) => {
+        const raw =
+            monophonicMap?.[alias] ??
+            monophonicMap?.[String(alias).toLowerCase()] ??
+            monophonicMap?.[String(alias).toUpperCase()];
+        return parseMonophonicFlag(raw, false);
+    };
 
     if (serverData?.instrumentMapping) {
         Object.entries(serverData.instrumentMapping).forEach(([alias]) => {
@@ -298,7 +320,8 @@ function buildServerInstrumentList(serverData) {
             if (Array.isArray(params)) {
                 list.push({
                     strudelAlias: alias,
-                    params
+                    params,
+                    monophonic: readMonophonic(alias)
                 });
             }
         });
@@ -309,7 +332,8 @@ function buildServerInstrumentList(serverData) {
         if (Array.isArray(params)) {
             list.push({
                 strudelAlias: alias,
-                params
+                params,
+                monophonic: readMonophonic(alias)
             });
         }
     });
@@ -317,7 +341,7 @@ function buildServerInstrumentList(serverData) {
     return list;
 }
 
-function renderSyncList(listEl, names, highlightSet, paramConflictSet) {
+function renderSyncList(listEl, names, highlightSet, paramConflictSet, monophonicConflictSet) {
     if (!listEl) return;
     listEl.innerHTML = '';
 
@@ -332,6 +356,8 @@ function renderSyncList(listEl, names, highlightSet, paramConflictSet) {
         const li = document.createElement('li');
         if (paramConflictSet?.has(name)) {
             li.textContent = `${name} (Parameter conflict)`;
+        } else if (monophonicConflictSet?.has(name)) {
+            li.textContent = `${name} (Monophonic conflict)`;
         } else {
             li.textContent = name;
         }
@@ -357,16 +383,20 @@ function showSyncModal(localInstruments, fileInstruments) {
 
     const localParamMap = new Map();
     const fileParamMap = new Map();
+    const localMonoMap = new Map();
+    const fileMonoMap = new Map();
 
     localInstruments.forEach((inst) => {
         const name = getInstrumentDisplayName(inst);
         const params = Array.isArray(inst.params) ? inst.params : [];
         localParamMap.set(name, JSON.stringify(params));
+        localMonoMap.set(name, parseMonophonicFlag(inst.monophonic, false));
     });
     fileInstruments.forEach((inst) => {
         const name = getInstrumentDisplayName(inst);
         const params = Array.isArray(inst.params) ? inst.params : [];
         fileParamMap.set(name, JSON.stringify(params));
+        fileMonoMap.set(name, parseMonophonicFlag(inst.monophonic, false));
     });
 
     const paramConflicts = new Set();
@@ -376,11 +406,18 @@ function showSyncModal(localInstruments, fileInstruments) {
         }
     });
 
-    const localHighlight = new Set([...localOnly, ...paramConflicts]);
-    const fileHighlight = new Set([...fileOnly, ...paramConflicts]);
+    const monophonicConflicts = new Set();
+    localNames.forEach((name) => {
+        if (fileMonoMap.has(name) && localMonoMap.get(name) !== fileMonoMap.get(name)) {
+            monophonicConflicts.add(name);
+        }
+    });
 
-    renderSyncList(dom.syncLocalList, localNames, localHighlight, paramConflicts);
-    renderSyncList(dom.syncFileList, fileNames, fileHighlight, paramConflicts);
+    const localHighlight = new Set([...localOnly, ...paramConflicts, ...monophonicConflicts]);
+    const fileHighlight = new Set([...fileOnly, ...paramConflicts, ...monophonicConflicts]);
+
+    renderSyncList(dom.syncLocalList, localNames, localHighlight, paramConflicts, monophonicConflicts);
+    renderSyncList(dom.syncFileList, fileNames, fileHighlight, paramConflicts, monophonicConflicts);
 
     dom.instrumentSyncModal.classList.add('open');
 
@@ -413,8 +450,12 @@ async function syncInstrumentSources() {
             console.log('[InstrumentUI] Migration needed, importing from instruments.js');
             try {
                 const cacheBust = `?t=${Date.now()}`;
-                const { instruments: instrumentsObj, instrumentMapping } = await import(`../instruments.js${cacheBust}`);
-                migrateFromFile({ instruments: instrumentsObj, instrumentMapping });
+                const {
+                    instruments: instrumentsObj,
+                    instrumentMapping,
+                    instrumentMonophonic
+                } = await import(`../instruments.js${cacheBust}`);
+                migrateFromFile({ instruments: instrumentsObj, instrumentMapping, instrumentMonophonic });
             } catch (e) {
                 console.error('[InstrumentUI] Migration failed:', e);
             }

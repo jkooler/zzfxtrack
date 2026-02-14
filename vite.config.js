@@ -672,6 +672,7 @@ const updateInstrumentsPlugin = () => ({
         res.end(JSON.stringify({
           instruments: moduleData.instruments || {},
           instrumentMapping: moduleData.instrumentMapping || {},
+          instrumentMonophonic: moduleData.instrumentMonophonic || {},
           instrumentArray: moduleData.instrumentArray || []
         }));
       } catch (e) {

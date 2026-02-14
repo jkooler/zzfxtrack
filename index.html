@@ -560,6 +560,20 @@
             uses <strong>ZzFXMicro</strong> (standard for ZzFXM).<br />The
             parameter mapping differs from the full ZzFX library.
           </div>
+          <div class="mt-4 flex items-center justify-center gap-2">
+            <button
+              id="openChangelogModalBtn"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
+            >
+              Change Log
+            </button>
+            <button
+              id="openLicenseModalBtn"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
+            >
+              See Licensing And Attribution Notes
+            </button>
+          </div>
         </div>
       </div>
 
@@ -655,6 +669,116 @@
           </button>
           <button
             id="closeJsonModalBottomBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Licensing And Attribution Modal -->
+    <div
+      id="licenseAttributionModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-2xl max-h-[85vh] gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+      >
+        <div class="flex items-center justify-between">
+          <h2
+            class="text-lg font-semibold leading-none tracking-tight text-primary"
+          >
+            Open Source & Licenses
+          </h2>
+          <button
+            id="closeLicenseModalBtn"
+            class="text-muted-foreground hover:text-foreground"
+          >
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+        <div class="text-sm text-muted-foreground space-y-3 overflow-y-auto pr-1">
+          <p>
+            This app uses
+            <a
+              href="https://codeberg.org/uzu/strudel"
+              target="_blank"
+              class="text-primary hover:underline"
+              >Strudel (AGPL-3.0-or-later)</a
+            >,
+            <a
+              href="https://github.com/KilledByAPixel/ZzFX"
+              target="_blank"
+              class="text-primary hover:underline"
+              >ZzFX / ZzFXMicro (MIT)</a
+            >, and
+            <a
+              href="https://keithclark.github.io/ZzFXM/"
+              target="_blank"
+              class="text-primary hover:underline"
+              >ZzFXM (MIT)</a
+            >.
+          </p>
+          <p>
+            Strudel packages used by this app are licensed under AGPL-3.0-or-later.
+            ZzFX and ZzFXM are MIT-licensed components adapted for this workflow.
+          </p>
+          <p>
+            For full repository-level attribution details, see
+            <code>THIRD_PARTY_NOTICES.md</code> in the project root.
+          </p>
+        </div>
+        <div class="flex justify-end">
+          <button
+            id="closeLicenseModalBottomBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change Log Modal -->
+    <div
+      id="changelogModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-2xl max-h-[85vh] gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+      >
+        <div class="flex items-center justify-between">
+          <h2
+            class="text-lg font-semibold leading-none tracking-tight text-primary"
+          >
+            Change Log
+          </h2>
+          <button
+            id="closeChangelogModalBtn"
+            class="text-muted-foreground hover:text-foreground"
+          >
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+        <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
+          <div class="border border-border rounded-md p-3 bg-card/50">
+            <p class="text-foreground font-semibold">v0.1.0-alpha.1</p>
+            <p class="text-xs opacity-80">2026-02-14</p>
+            <ul class="list-disc pl-5 mt-2 space-y-1">
+              <li>First public alpha release.</li>
+              <li>Strudel composition workflow with ZzFX instrument support.</li>
+              <li>ZzFXM-compatible bake/export and preview flow.</li>
+              <li>In-app licensing and attribution modal.</li>
+            </ul>
+          </div>
+          <p>
+            Full details are tracked in <code>CHANGELOG.md</code> in the project root.
+          </p>
+        </div>
+        <div class="flex justify-end">
+          <button
+            id="closeChangelogModalBottomBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
           >
             Close

@@ -1,72 +1,58 @@
-# 🎹 Strudel to ZzFXM
+# Strudel to ZzFXM Baker
 
-A workflow tool for composing music with [Strudel](https://strudel.cc/) and exporting it to the compact [ZzFXM](https://keithclark.github.io/ZzFXM/) format.
+Browser-based tool to compose with Strudel patterns, preview generated sound, and export song/instrument data compatible with ZzFXM playback.
 
-## 🚀 Quick Start
+## What This App Is For
 
-1. **Install dependencies**:
+- Compose music using a Strudel REPL workflow.
+- Define and test ZzFX instrument parameters.
+- Export baked JSON data for use in games/apps that use ZzFXM-style song playback.
 
-   ```bash
-   npm install
-   ```
+## Quick Start
 
-2. **Start the Preview UI**:
-
-   ```bash
-   npm run dev
-   ```
-
-   Open the URL (usually http://localhost:5173) to live-preview your songs.
-
-   > **Note for AI Agents**: If the dev server is already running, do not attempt to start it again. Simply navigate to http://localhost:5173 in the browser. The Vite config is set to use the next available port if 5173 is occupied.
-
-3. **Bake songs**:
-   - **From UI**: Select a song and click **"BAKE JSON"** to download it.
-   - **From CLI**:
-     ```bash
-     npm run bake demo-bass         # Bake one song to /output
-     npm run bake -- --all          # Bake all songs to /output
-     npm run bake -- --all --combined # Create a bundle for PixiJS
-     ```
-
-## 📂 Project Structure
-
-- `/songs`: Your composition files (`.js`).
-- `/instruments.js`: Define your ZzFX parameters here.
-- `/src/baker-logic.js`: The engine that translates Strudel to ZzFXM.
-- `/output`: Where baked JSON files are saved.
-
-## 🎵 Writing Songs
-
-Songs are located in the `/songs/` directory. Each song should export a `pattern` (Strudel pattern) and a `bpm`.
-
-```javascript
-import { stack, note } from "@strudel/core";
-export const bpm = 125;
-export const pattern = note("c3 e3 g3").s("0"); // "0" refers to the instrument ID
+1. Install dependencies:
+```bash
+npm install
+```
+2. Start the app:
+```bash
+npm run dev
+```
+3. Bake songs:
+```bash
+npm run bake -- demo-bass
+npm run bake -- --all
+npm run bake -- --all --combined
 ```
 
-### 🎯 Best Practices
+## Project Structure
 
-**Instrument Naming**: Avoid common drum pattern names (like `hh`, `bd`, `sn`, `cp`) as they may conflict with Strudel's built-in shortcuts. Use prefixes or descriptive names:
+- `songs/`: song definitions.
+- `instruments.js`: ZzFX instrument parameter definitions.
+- `src/baker-logic.js`: Strudel-to-ZzFXM conversion logic.
+- `output/`: generated bake output.
 
-- ✅ Good: `zzfx_hh`, `z_kick`, `bass_synth`, `lead_1`
-- ❌ Avoid: `hh`, `bd`, `sn` (these are Strudel pattern shortcuts)
+## Licensing And Third-Party Notices
 
-This ensures your ZzFX instruments are always used instead of falling back to samples.
+This repository is licensed under `AGPL-3.0-or-later` (see `LICENSE`).
 
-## 🎮 PixiJS Integration
+This project also depends on and/or includes adapted code from:
 
-Use the `--combined` flag to generate `songs-bundle.json`. This format is optimized for loading all game music in one go:
+- Strudel (`@strudel/*`) - `AGPL-3.0-or-later`
+- ZzFX / ZzFXMicro - `MIT`
+- ZzFXM - `MIT`
 
-```javascript
-// Example loading in game
-const bundle = await fetch("songs-bundle.json").then((r) => r.json());
-// Access instruments: bundle.instruments
-// Access specific song data: bundle.songs['demo-bass']
-```
+See `THIRD_PARTY_NOTICES.md` for attribution details and upstream links.
 
-## 🛠️ Requirements
+## In-App Attribution
 
-- Node.js 16+
-- Modern Browser for previews
+The welcome screen includes:
+
+- `See Licensing And Attribution Notes` button that opens a modal with attribution and license links.
+- `Change Log` button that opens a modal with release notes.
+
+## Releases
+
+- Release process guide: `RELEASING.md`
+- Published versions: GitHub Releases (`vX.Y.Z` tags)
+- Support policy: latest release is supported; older releases remain available as-is.

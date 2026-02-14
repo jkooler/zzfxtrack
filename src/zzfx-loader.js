@@ -24,8 +24,8 @@ export function getInstrumentAnalyser(id) {
 /**
  * ZzFXMicro-compatible Sample Generator
  * 
- * This is a direct port of ZzFXMicro v1.3.2 by Frank Force (MIT License)
- * https://github.com/KilledByAPixel/ZzFX
+ * This is a direct port of ZzFXMicro v1.3.2 by Frank Force (MIT License).
+ * Original project: https://github.com/KilledByAPixel/ZzFX
  * 
  * Parameter order:
  * [volume, randomness, frequency, attack, sustain, release, shape, shapeCurve,
