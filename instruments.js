@@ -27,8 +27,8 @@ export const zzfxm_demo_cowbell = [0.7,0,440,0,0.1,0,0,0,50,50,0,0,0,0,34121,0,0
 export const zzfxm_demo_bass = [0.5,0,55,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,0.3,0,-555];
 export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
 export const zzfxm_demo_kickdrum = [1,0,130,0,0.08,0.05,0,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
-export const zzfxm_test_elpiano = [0.22,0,440,0,0.09,1.01,2,0.5,0,0,0,0,0.23,0.08,0,0,0,0.75,0.19,0.04,-180];
-export const zzfxm_test_horn = [0.3,0,110,0.03,0.22,0.1,2,9.1,0,0,0,0,0,0.12,0,0,0,0.92,0.82,0,-328];
+export const zzfxm_demo_elpiano = [0.22,0,440,0,0.09,1.01,2,0.5,0,0,0,0,0.23,0.08,0,0,0,0.75,0.19,0.04,-180];
+export const zzfxm_demo_horn = [0.3,0,110,0.03,0.22,0.1,2,9.1,0,0,0,0,0,0.12,0,0,0,0.92,0.82,0,-328];
 
 /**
  * Strudel Sound Names to ZzFXM Channel Indices
@@ -54,8 +54,8 @@ export const instrumentMapping = {
     "demo-bass": 15,
     "demo-hh-open": 16,
     "demo-kickdrum": 17,
-    "test-elpiano": 18,
-    "test-horn": 19
+    "demo-elpiano": 18,
+    "demo-horn": 19
 };
 
 // Map them to IDs you want to use in Strudel
@@ -78,8 +78,8 @@ export const instruments = {
     "demo-bass": zzfxm_demo_bass,
     "demo-hh-open": zzfxm_demo_hh_open,
     "demo-kickdrum": zzfxm_demo_kickdrum,
-    "test-elpiano": zzfxm_test_elpiano,
-    "test-horn": zzfxm_test_horn
+    "demo-elpiano": zzfxm_demo_elpiano,
+    "demo-horn": zzfxm_demo_horn
 };
 
 // Also export as array for the baker (ordered by channel index)
@@ -102,6 +102,6 @@ export const instrumentArray = [
     zzfxm_demo_bass,
     zzfxm_demo_hh_open,
     zzfxm_demo_kickdrum,
-    zzfxm_test_elpiano,
-    zzfxm_test_horn
+    zzfxm_demo_elpiano,
+    zzfxm_demo_horn
 ];

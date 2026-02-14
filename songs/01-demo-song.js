@@ -19,5 +19,5 @@ export const pattern = stack(
   note("<[c4,f4,bb3]@2 [d4,g4,b4] [d4,f4,a4]>*2").s("demo-pad")
 )
 
-// If you look down, you'll see "Export ZzFXM" button.
-// Clicking it will generate the song data.;
+// If you look down, you'll see the "Export ZzFXM" button.
+// Clicking it will generate the song data and is the main feature of this app.;

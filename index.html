@@ -74,7 +74,9 @@
         class="sidebar-header p-3 border-b border-border flex flex-col gap-3"
       >
         <h1
-          class="text-lg font-bold tracking-tight text-primary font-mono text-center mt-1 mb-1"
+          id="sidebarTitle"
+          class="text-lg font-bold tracking-tight text-primary font-mono text-center mt-1 mb-1 cursor-pointer hover:text-primary/90 transition-colors"
+          title="Show introduction"
         >
           STRUDEL TO ZZFXM
         </h1>
@@ -540,8 +542,8 @@
               href="https://codeberg.org/uzu/strudel"
               target="_blank"
               class="font-medium text-primary underline underline-offset-4 hover:no-underline"
-              >Strudel</a
-            >.
+              >Strudel REPL</a
+            > interface.
           </p>
           <p class="text-base text-muted-foreground">
             After creating your song, export it to JSON format and use it in
@@ -554,7 +556,7 @@
             >.
           </p>
           <div class="mt-8 pt-6 border-t border-border text-sm opacity-80">
-            <strong class="text-foreground">NOTE:</strong> Ensure your project
+            <strong class="text-foreground">NOTE:</strong> Ensure your game or project
             uses <strong>ZzFXMicro</strong> (standard for ZzFXM).<br />The
             parameter mapping differs from the full ZzFX library.
           </div>
@@ -1081,7 +1083,7 @@
           <h2
             class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono"
           >
-            Blocks
+            Blocks (experimental alpha)
           </h2>
           <button
             id="closeBlocksBtn"
@@ -1096,8 +1098,7 @@
             id="blocksModalBlocksTab"
             class="blocks-modal-tab active inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
-            Blocks
-          </button>
+            Blocks          </button>
           <button
             id="blocksModalArrangerTab"
             class="blocks-modal-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"

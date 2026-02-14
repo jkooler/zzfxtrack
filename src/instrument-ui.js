@@ -1237,7 +1237,10 @@ function openDrawer(instrumentId) {
     dom.instExportName.value = instrument.exportName;
     dom.instStrudelAlias.value = instrument.strudelAlias;
     dom.instChannel.value = instrument.channel;
-    
+    if (dom.instMonophonic) {
+        dom.instMonophonic.checked = Boolean(instrument.monophonic);
+    }
+
     // Populate parameters
     instrument.params.forEach((value, index) => {
         if (paramInputs[index]) {

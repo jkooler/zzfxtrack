@@ -24,6 +24,7 @@ let pendingExternalUrl = null;
 // --- DOM Elements ---
 const dom = {
     repl: document.getElementById('repl'),
+    sidebarTitle: document.getElementById('sidebarTitle'),
     songList: document.getElementById('songList'),
     songNameInput: document.getElementById('songNameInput'),
     saveSongNameBtn: document.getElementById('saveSongNameBtn'),
@@ -891,6 +892,7 @@ function closeModal() {
 
 dom.bakeBtn.addEventListener('click', bakeCurrentSong);
 
+dom.sidebarTitle.addEventListener('click', showWelcome);
 dom.newSongBtn.addEventListener('click', openModal);
 dom.cancelNewSong.addEventListener('click', closeModal);
 dom.confirmNewSong.addEventListener('click', () => {
