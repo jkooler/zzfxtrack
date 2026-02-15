@@ -4,9 +4,8 @@ export const bpm = 120;
 
 // Demo song for Strudel to ZzFXM
 
-// 1. Audio processing effects will not carry on to exported .json file that ZzFXM plays.
-// 2. Make sure to use the "Instruments" instead of the synthesis provided by Strudel.
-// 3. Any sound produced by Strudel's own sound generation will not carry on to the exported ZzFXM songs.
+// If you're new to Strudel, it's recommended to read the official docs
+// https://patterns.slab.org/learn/getting-started/
 
 
 export const pattern = stack(
@@ -20,4 +19,9 @@ export const pattern = stack(
 )
 
 // If you look down, you'll see the "Export ZzFXM" button.
-// Clicking it will generate the song data, that is compatible with ZzFXM.;
+// Clicking it will generate the song data as .json, that is compatible with ZzFXM.
+
+// 1. Audio processing effects will not carry over to exported .json file
+// 2. Some advanced Strudel pattern logic may also be only partially compatible
+// 3. Make sure to use the "Instruments" instead of the synthesis provided by Strudel.
+// 4. Sounds produced by Strudel's inherit sound engines will not carry as well.;

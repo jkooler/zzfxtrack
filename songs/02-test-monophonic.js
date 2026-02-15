@@ -2,12 +2,9 @@ import { stack, note, s, slow, arrange, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
 
-// Testing monophonic horn instrument with polyphonic epiano.
-
-// Listen to the [b2 g2 e2 g#2] phrase, and you'll notice that notes aren't played on top of each other.
-
-// This a custom feature to the external ZzFXMicro pipeline and works with both Strudel and ZzFXM playback.
-// Note: Chords will obviously not work if insturment is defined as monophonic.
+// Feature test: Monophonic horn instrument with polyphonic epiano.
+// This uses the external ZzFXMicro pipeline and works with both Strudel and ZzFXM playback.
+// Note: Chords will obviously not work if instrument is defined as monophonic.
 
 
 export const pattern = stack(
