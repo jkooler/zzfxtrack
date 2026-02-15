@@ -161,6 +161,8 @@ async function init() {
         dom.newSongBtn.style.display = 'none';
     }
     if (dom.demoModeBadge) {
+        dom.demoModeBadge.hidden = !DEMO_MODE;
+        dom.demoModeBadge.style.display = DEMO_MODE ? 'inline-flex' : 'none';
         dom.demoModeBadge.classList.toggle('hidden', !DEMO_MODE);
     }
     
