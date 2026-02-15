@@ -1,4 +1,4 @@
-# Strudel to ZzFXM Baker
+# Strudel to ZzFXM
 
 Browser-based tool to compose with Strudel patterns, preview generated sound, and export song/instrument data compatible with ZzFXM playback.
 
@@ -6,7 +6,9 @@ Browser-based tool to compose with Strudel patterns, preview generated sound, an
 
 - Compose music using a Strudel REPL workflow.
 - Define and test ZzFX instrument parameters.
-- Export baked JSON data for use in games/apps that use ZzFXM-style song playback.
+- Export JSON song data for use in games/apps that use ZzFXM-style song playback.
+
+Disclaimer: Currently this app is solely made for my specific needs, but I'm always happy to hear if you have found it useful! -Jarno Koole (jarno@koole.fi)
 
 ## Quick Start
 
@@ -18,19 +20,19 @@ npm install
 ```bash
 npm run dev
 ```
-3. Bake songs:
+3. Export songs:
 ```bash
-npm run bake -- demo-bass
-npm run bake -- --all
-npm run bake -- --all --combined
+npm run export -- 01-demo-song
+npm run export -- --all
+npm run export -- --all --combined
 ```
 
 ## Project Structure
 
 - `songs/`: song definitions.
 - `instruments.js`: ZzFX instrument parameter definitions.
-- `src/baker-logic.js`: Strudel-to-ZzFXM conversion logic.
-- `output/`: generated bake output.
+- `src/export-logic.js`: Strudel-to-ZzFXM export conversion logic.
+- `output/`: generated export output.
 
 ## Licensing And Third-Party Notices
 

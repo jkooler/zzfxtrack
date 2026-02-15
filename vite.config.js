@@ -14,11 +14,11 @@ const ARRANGEMENTS_DIR = path.resolve(__dirname, 'arrangements');
  * Custom Vite Plugin to provide a simple API for:
  * - Listing songs
  * - Reading/Saving/Deleting songs
- * - Saving baked JSON files
+ * - Saving exported JSON files
  * - Managing blocks (reusable patterns)
  */
 const apiPlugin = () => ({
-  name: 'strudel-baker-api',
+  name: 'strudel-export-api',
   configureServer(server) {
     
     // API: List Songs
@@ -48,15 +48,25 @@ const apiPlugin = () => ({
             return next();
         }
         
-        const songName = req.url.replace('/api/song/', '');
+        const songNameRaw = req.url.replace('/api/song/', '');
+        let songName = songNameRaw;
+        try {
+            songName = decodeURIComponent(songNameRaw);
+        } catch (e) {
+            res.statusCode = 400;
+            res.end('Invalid filename encoding');
+            return;
+        }
         // Basic security: prevent escaping directory
         if (songName.includes('..') || !songName.endsWith('.js')) {
             res.statusCode = 400;
             res.end('Invalid filename');
             return;
         }
-
-        const filePath = path.join(SONGS_DIR, songName);
+        const candidates = songName === songNameRaw ? [songName] : [songName, songNameRaw];
+        const existingCandidate = candidates.find((name) => fs.existsSync(path.join(SONGS_DIR, name)));
+        const resolvedSongName = existingCandidate || songName;
+        const filePath = path.join(SONGS_DIR, resolvedSongName);
 
         // GET - Read song content
         if (req.method === 'GET') {
@@ -85,7 +95,7 @@ const apiPlugin = () => ({
         if (req.method === 'DELETE') {
              if (fs.existsSync(filePath)) {
                  fs.unlinkSync(filePath);
-                 const metaPath = path.join(SONGS_DIR, songName.replace(/\.js$/, '.meta.json'));
+                 const metaPath = path.join(SONGS_DIR, resolvedSongName.replace(/\.js$/, '.meta.json'));
                  if (fs.existsSync(metaPath)) {
                      fs.unlinkSync(metaPath);
                  }
@@ -107,14 +117,24 @@ const apiPlugin = () => ({
             return next();
         }
 
-        const songName = req.url.replace('/api/song-meta/', '');
+        const songNameRaw = req.url.replace('/api/song-meta/', '');
+        let songName = songNameRaw;
+        try {
+            songName = decodeURIComponent(songNameRaw);
+        } catch (e) {
+            res.statusCode = 400;
+            res.end('Invalid filename encoding');
+            return;
+        }
         if (songName.includes('..') || !songName.endsWith('.js')) {
             res.statusCode = 400;
             res.end('Invalid filename');
             return;
         }
-
-        const metaPath = path.join(SONGS_DIR, songName.replace(/\.js$/, '.meta.json'));
+        const candidates = songName === songNameRaw ? [songName] : [songName, songNameRaw];
+        const existingCandidate = candidates.find((name) => fs.existsSync(path.join(SONGS_DIR, name)));
+        const resolvedSongName = existingCandidate || songName;
+        const metaPath = path.join(SONGS_DIR, resolvedSongName.replace(/\.js$/, '.meta.json'));
 
         if (req.method === 'GET') {
             if (fs.existsSync(metaPath)) {
@@ -160,13 +180,13 @@ const apiPlugin = () => ({
         next();
     });
     
-    // API: Save Baked JSON
-    // POST /api/save-baked/:filename
+    // API: Save Exported JSON
+    // POST /api/save-exported/:filename
     server.middlewares.use((req, res, next) => {
-        if (!req.url.startsWith('/api/save-baked/')) {
+        if (!req.url.startsWith('/api/save-exported/')) {
             return next();
         }
-        const fileName = req.url.replace('/api/save-baked/', '');
+        const fileName = req.url.replace('/api/save-exported/', '');
         
         if (fileName.includes('..') || !fileName.endsWith('.json')) {
              res.statusCode = 400;
@@ -184,7 +204,7 @@ const apiPlugin = () => ({
                      fs.mkdirSync(path.dirname(filePath), { recursive: true });
                  }
                  fs.writeFileSync(filePath, body);
-                 res.end('Baked file saved');
+                 res.end('Exported file saved');
              });
              return;
         }

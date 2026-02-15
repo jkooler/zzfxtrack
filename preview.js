@@ -1,7 +1,7 @@
 import { getAudioContext, initAudio, webaudioRepl, drawTimeScope, getAnalyserById } from "@strudel/webaudio"; 
 import { songs } from "./songs/index.js";
 import { instruments, instruments as instrumentMap } from "./instruments.js";
-import { bakePattern } from "./src/baker-logic.js";
+import { exportPattern } from "./src/export-logic.js";
 import { initStrudel } from "./src/init.js";
 import { loadZzFXInstruments } from "./src/zzfx-loader.js";
 
@@ -12,7 +12,7 @@ const repl = webaudioRepl();
 const songSelect = document.getElementById('songSelect');
 const playBtn = document.getElementById('playBtn');
 const stopBtn = document.getElementById('stopBtn');
-const bakeBtn = document.getElementById('bakeBtn');
+const exportBtn = document.getElementById('exportBtn');
 const status = document.getElementById('status');
 const canvas = document.getElementById('visualizer');
 
@@ -113,14 +113,14 @@ function stopSong() {
     status.innerText = "🛑 Stopped.";
 }
 
-function bakeSong() {
+function exportSong() {
     if (!currentPattern) {
         status.innerText = "❌ Load a song first!";
         return;
     }
 
-    status.innerText = "🍞 Baking ZzFXM JSON...";
-    const songData = bakePattern(currentPattern, currentBpm, instruments);
+    status.innerText = "🍞 Exporting ZzFXM JSON...";
+    const songData = exportPattern(currentPattern, currentBpm, instruments);
     
     // Download logic
     const blob = new Blob([JSON.stringify(songData)], { type: 'application/json' });
@@ -131,7 +131,7 @@ function bakeSong() {
     a.click();
     URL.revokeObjectURL(url);
     
-    status.innerText = `✅ Baked ${songSelect.value}.json successfully!`;
+    status.innerText = `✅ Exported ${songSelect.value}.json successfully!`;
 }
 
 // Bind Events
@@ -142,7 +142,7 @@ songSelect.addEventListener('change', () => {
 
 playBtn.addEventListener('click', playSong);
 stopBtn.addEventListener('click', stopSong);
-bakeBtn.addEventListener('click', bakeSong);
+exportBtn.addEventListener('click', exportSong);
 
 // Initial Load
 loadSong(songSelect.value);

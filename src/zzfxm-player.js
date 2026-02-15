@@ -3,11 +3,11 @@ import { zzfxG } from './zzfx-loader.js';
 /**
  * ZzFX Music Renderer v2.0.3 by Frank Force 2019
  * Adapted from ZzFXM (Keith Clark and Frank Force, MIT License)
- * for ES Modules and Strudel Baker format.
+ * for ES Modules and Strudel Exporter format.
  * Original project: https://keithclark.github.io/ZzFXM/
  */
 
-// Max attenuation used in baker-logic.js
+// Max attenuation used in export-logic.js
 const MAX_ATTENUATION = 20;
 
 export const buildSong = (song, options = {}) => {
@@ -18,15 +18,15 @@ export const buildSong = (song, options = {}) => {
     
     let sampleRate = 44100;
     let secondsPerBeat = 60 / BPM;
-    // Baker uses 16 rows per beat? No, 16 rows per CYCLE usually.
-    // In Baker Logic: ROWS_PER_CYCLE = 16.
+    // Exporter uses 16 rows per beat? No, 16 rows per CYCLE usually.
+    // In Exporter Logic: ROWS_PER_CYCLE = 16.
     // Strudel cycle usually = 1 bar (4 beats).
     // So 16 rows = 4 beats. -> 4 rows per beat. -> 16th notes.
     // So 1 row = 1/16th note.
     
     let samplesPerRow = (secondsPerBeat / 4) * sampleRate;
     
-    // In our simplified baker, patterns is `[patternData]`.
+    // In our simplified exporter, patterns is `[patternData]`.
     // patternData is an array of channels.
     // sequence is `[0]`.
     
@@ -71,7 +71,7 @@ export const buildSong = (song, options = {}) => {
                 const noteData = channel[i];
                 if (noteData) {
                     // noteData is [inst, atten, semi] or just [inst, atten, semi]
-                    // Baker: `tracks[instIndex][gridIndex] = [instIndex, attenuation, semitone];`
+                    // Exporter: `tracks[instIndex][gridIndex] = [instIndex, attenuation, semitone];`
                     
                     let instIndex = noteData[0];
                     let attenuation = noteData[1];

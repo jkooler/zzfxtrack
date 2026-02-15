@@ -2,24 +2,40 @@ import '@strudel/repl/index.mjs';
 import { instruments } from '../instruments.js';
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
-import { bakePattern } from './baker-logic.js';
+import { exportPattern } from './export-logic.js';
 import { playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
-import { initInstrumentUI, getInstrumentsForBaker, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
+import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
 import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, previewArrangementStateOnce, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
 
+const DEMO_MODE =
+    import.meta.env.MODE === 'demo' ||
+    (import.meta.env.PROD && import.meta.env.VITE_DEMO_MODE === 'true');
+const demoSongModules = import.meta.glob('../songs/*.js', {
+    query: '?raw',
+    import: 'default',
+    eager: true
+});
+const demoSongSourceByFile = new Map(
+    Object.entries(demoSongModules)
+        .filter(([modulePath]) => !modulePath.endsWith('/index.js'))
+        .map(([modulePath, source]) => [modulePath.split('/').pop(), source])
+);
+
 // --- Global State ---
 let currentSongFilename = null;
 let currentSongDisplayName = ''; // Store the display name for restoration
-let lastBakedData = null;
-let lastBakedMeta = null;
+let lastExportedData = null;
+let lastExportedMeta = null;
 let autoSaveTimeout = null; // Debounce timer for auto-save
 let isPreviewPlaying = false;
 let playingSongFilename = null;
 let pendingExternalUrl = null;
+let statusFadeClearTimeout = null;
+let renameDebounceTimeout = null;
 
 // --- DOM Elements ---
 const dom = {
@@ -27,11 +43,11 @@ const dom = {
     sidebarTitle: document.getElementById('sidebarTitle'),
     songList: document.getElementById('songList'),
     songNameInput: document.getElementById('songNameInput'),
-    saveSongNameBtn: document.getElementById('saveSongNameBtn'),
     playBtn: document.getElementById('playBtn'),
-    bakeBtn: document.getElementById('bakeBtn'),
+    exportBtn: document.getElementById('exportBtn'),
     newSongBtn: document.getElementById('newSongBtn'),
     statusMsg: document.getElementById('statusMsg'),
+    demoModeBadge: document.getElementById('demoModeBadge'),
     
     // Views
     welcomeView: document.getElementById('welcomeView'),
@@ -87,9 +103,9 @@ const dom = {
     maxChannelsInput: document.getElementById('maxChannelsInput'),
     normalizeLayers: document.getElementById('normalizeLayers'),
     closeExportSettings: document.getElementById('closeExportSettings'),
-    bakeResolutionHint: document.getElementById('bakeResolutionHint'),
-    bakeResolutionCustomWrap: document.getElementById('bakeResolutionCustomWrap'),
-    bakeResolutionCustom: document.getElementById('bakeResolutionCustom'),
+    exportResolutionHint: document.getElementById('exportResolutionHint'),
+    exportResolutionCustomWrap: document.getElementById('exportResolutionCustomWrap'),
+    exportResolutionCustom: document.getElementById('exportResolutionCustom'),
 };
 
 // --- View State Helpers ---
@@ -97,7 +113,7 @@ function showWelcome() {
     dom.welcomeView.style.display = 'flex';
     dom.editorContainer.style.display = 'none';
     dom.playBtn.style.visibility = 'hidden';
-    dom.bakeBtn.disabled = true;
+    dom.exportBtn.disabled = true;
     
     updateSongSelectionState(false);
     dom.previewPlayBtn.disabled = true;
@@ -107,21 +123,20 @@ function showWelcome() {
     currentSongFilename = null;
     playingSongFilename = null;
     dom.songNameInput.classList.add('hidden');
-    dom.saveSongNameBtn.style.display = 'none';
     if(dom.repl.editor) dom.repl.editor.stop();
     renderPlayButton();
     updateSongListVisualizer();
     
     // Clear preview
     dom.previewJson.innerText = '';
-    lastBakedData = null;
+    lastExportedData = null;
 }
 
 function showEditor() {
     dom.welcomeView.style.display = 'none';
     dom.editorContainer.style.display = 'flex';
     dom.playBtn.style.visibility = 'visible';
-    dom.bakeBtn.disabled = false;
+    dom.exportBtn.disabled = false;
     dom.songNameInput.classList.remove('hidden');
 }
 
@@ -144,6 +159,12 @@ async function init() {
     
     // 3. Load Songs List
     await refreshSongList();
+    if (DEMO_MODE && dom.newSongBtn) {
+        dom.newSongBtn.style.display = 'none';
+    }
+    if (dom.demoModeBadge) {
+        dom.demoModeBadge.classList.toggle('hidden', !DEMO_MODE);
+    }
     
     // 4. Initialize Instrument UI
     await initInstrumentUI();
@@ -254,6 +275,10 @@ export async function reloadInstruments() {
 let hotReloadTimeout = null;
 
 function setupAutoSave() {
+    if (DEMO_MODE) {
+        console.log('ℹ️ Demo mode: auto-save disabled');
+        return;
+    }
     console.log('setupAutoSave() called');
     let checkCount = 0;
     
@@ -341,6 +366,7 @@ function setupAutoSave() {
 
 // Save pending changes before page unload
 window.addEventListener('beforeunload', (e) => {
+    if (DEMO_MODE) return;
     if (autoSaveTimeout && currentSongFilename) {
         // There's a pending save - try to save synchronously
         clearTimeout(autoSaveTimeout);
@@ -361,22 +387,28 @@ window.addEventListener('beforeunload', (e) => {
 
 async function refreshSongList() {
     try {
-        const res = await fetch('/api/songs');
-        if (!res.ok) throw new Error('Failed to list songs');
-        const files = await res.json();
+        const files = DEMO_MODE
+            ? Array.from(demoSongSourceByFile.keys()).sort()
+            : await (async () => {
+                const res = await fetch('/api/songs');
+                if (!res.ok) throw new Error('Failed to list songs');
+                return res.json();
+            })();
         
         dom.songList.innerHTML = '';
         files.forEach(file => {
-            const fileName = file.replace('.js', '');
+            const fileName = decodeURIComponent(file.replace('.js', ''));
             const li = document.createElement('li');
             li.className = `song-item ${file === currentSongFilename ? 'active' : ''}`;
             
-            li.innerHTML = `
-                <span>${fileName}</span>
-                <div class="song-item-actions">
-                    <button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                </div>
-            `;
+            li.innerHTML = DEMO_MODE
+                ? `<span>${fileName}</span>`
+                : `
+                    <span>${fileName}</span>
+                    <div class="song-item-actions">
+                        <button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                `;
 
             // Click on text loads song
             li.querySelector('span').onclick = (e) => {
@@ -386,10 +418,12 @@ async function refreshSongList() {
             li.onclick = () => loadSong(file);
 
             // Delete button
-            li.querySelector('.sidebar-del-btn').onclick = (e) => {
-                e.stopPropagation();
-                showDeleteConfirmation(file);
-            };
+            if (!DEMO_MODE) {
+                li.querySelector('.sidebar-del-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    showDeleteConfirmation(file);
+                };
+            }
 
             dom.songList.appendChild(li);
         });
@@ -411,7 +445,10 @@ function updateSongListVisualizer() {
     listItems.forEach(li => {
         const span = li.querySelector('span');
         // Visualizer should track the PLAYING song, not necessarily the selected one
-        const isPlayingTarget = span && playingSongFilename && span.innerText === playingSongFilename.replace('.js', '');
+        const isPlayingTarget =
+            span &&
+            playingSongFilename &&
+            span.innerText === decodeURIComponent(playingSongFilename.replace('.js', ''));
         
         let canvas = li.querySelector('canvas.song-visualizer');
 
@@ -559,19 +596,27 @@ export const pattern = ${finalExpr};
 }
 
 async function loadSong(filename) {
-    setStatus(`Loading ${filename}...`);
-    
     // IMPORTANT: Clear any pending auto-save from the previous song
     // This prevents saving the new song's content to the old song's file
     if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
         autoSaveTimeout = null;
     }
+    if (renameDebounceTimeout) {
+        clearTimeout(renameDebounceTimeout);
+        renameDebounceTimeout = null;
+    }
     
     try {
-        const res = await fetch(`/api/song/${filename}`);
-        if (!res.ok) throw new Error('Failed to load song');
-        const fileCode = await res.text();
+        let fileCode = '';
+        if (DEMO_MODE) {
+            fileCode = demoSongSourceByFile.get(filename);
+            if (typeof fileCode !== 'string') throw new Error('Song not available in demo bundle');
+        } else {
+            const res = await fetch(`/api/song/${filename}`);
+            if (!res.ok) throw new Error('Failed to load song');
+            fileCode = await res.text();
+        }
         
         // Transform for Editor
         let editorCode = fileToEditor(fileCode);
@@ -591,16 +636,15 @@ async function loadSong(filename) {
         
         showEditor();
         currentSongFilename = filename;
-        currentSongDisplayName = filename.replace('.js', ''); // Store without extension
+        currentSongDisplayName = decodeURIComponent(filename.replace('.js', '')); // Store without extension
         originalSongName = currentSongDisplayName; // Track for rename detection
         dom.songNameInput.value = currentSongDisplayName;
-        dom.songNameInput.readOnly = false; // Make editable
+        dom.songNameInput.readOnly = DEMO_MODE; // Demo mode is read-only for song management
         dom.songNameInput.placeholder = '';
-        dom.saveSongNameBtn.style.display = 'none'; // Hide save button initially
         
         Array.from(dom.songList.children).forEach(li => {
             const span = li.querySelector('span');
-            const isActive = span && span.innerText === filename.replace('.js', '');
+            const isActive = span && span.innerText === decodeURIComponent(filename.replace('.js', ''));
             li.classList.toggle('active', isActive);
         });
         
@@ -612,10 +656,10 @@ async function loadSong(filename) {
             dom.repl.setAttribute('code', editorCode);
         }
         
-        dom.bakeBtn.disabled = false;
+        dom.exportBtn.disabled = false;
         
         // Clear preview and save status
-        lastBakedData = null;
+        lastExportedData = null;
         dom.previewJson.innerText = "// Click GENERATE to create ZzFXM song";
         hideSaveStatus();
         
@@ -627,7 +671,7 @@ async function loadSong(filename) {
         updateInstrumentUsage(editorCode);
         updateSongSelectionState(true);
 
-        setStatus('Loaded', 'success');
+        setStatus('');
     } catch (e) {
         console.error(e);
         setStatus(`Error loading ${filename}`, 'error');
@@ -635,6 +679,7 @@ async function loadSong(filename) {
 }
 
 async function loadSongMeta(filename) {
+    if (DEMO_MODE) return;
     try {
         const res = await fetch(`/api/song-meta/${filename}`);
         if (!res.ok) return;
@@ -642,29 +687,30 @@ async function loadSongMeta(filename) {
         const rowsPerCycle = parseInt(data?.rowsPerCycle, 10);
         if (!rowsPerCycle || Number.isNaN(rowsPerCycle)) return;
 
-        const resolutionInputs = document.querySelectorAll('input[name="bakeResolution"]');
+        const resolutionInputs = document.querySelectorAll('input[name="exportResolution"]');
         const isPreset = rowsPerCycle === 48 || rowsPerCycle === 96;
         resolutionInputs.forEach(input => {
             input.checked = input.value === String(isPreset ? rowsPerCycle : 'custom');
         });
-        if (!isPreset && dom.bakeResolutionCustom) {
-            dom.bakeResolutionCustom.value = String(rowsPerCycle);
+        if (!isPreset && dom.exportResolutionCustom) {
+            dom.exportResolutionCustom.value = String(rowsPerCycle);
         }
         const event = new Event('change', { bubbles: true });
-        document.querySelector('input[name="bakeResolution"]:checked')?.dispatchEvent(event);
+        document.querySelector('input[name="exportResolution"]:checked')?.dispatchEvent(event);
     } catch (e) {
         console.warn('Failed to load song meta', e);
     }
 }
 
 async function saveSongMeta() {
+    if (DEMO_MODE) return;
     if (!currentSongFilename) return;
-    const resolutionInput = document.querySelector('input[name="bakeResolution"]:checked');
+    const resolutionInput = document.querySelector('input[name="exportResolution"]:checked');
     let rowsPerCycle = 96;
     if (resolutionInput?.value === '48') {
         rowsPerCycle = 48;
     } else if (resolutionInput?.value === 'custom') {
-        const parsed = parseInt(dom.bakeResolutionCustom?.value, 10);
+        const parsed = parseInt(dom.exportResolutionCustom?.value, 10);
         if (parsed && !Number.isNaN(parsed)) rowsPerCycle = parsed;
     }
 
@@ -680,6 +726,7 @@ async function saveSongMeta() {
 }
 
 async function saveCurrentSong() {
+    if (DEMO_MODE) return;
     if (!currentSongFilename) return;
     
     try {
@@ -700,7 +747,19 @@ async function saveCurrentSong() {
 }
 
 async function createNewSong(name) {
-    if (!name.endsWith('.js')) name += '.js';
+    if (DEMO_MODE) {
+        setStatus('Demo mode: creating songs is disabled', 'normal');
+        return;
+    }
+    const normalizedBase = normalizeSongBaseName(name);
+    if (!normalizedBase) {
+        setStatus('Invalid name. Use letters, numbers, spaces, hyphens, or underscores.', 'error');
+        return;
+    }
+    if (normalizedBase !== String(name).trim()) {
+        setStatus(`Using normalized name: ${normalizedBase}`, 'normal');
+    }
+    name = `${normalizedBase}.js`;
     
     setStatus('Creating...');
     // Initial file content
@@ -708,7 +767,7 @@ async function createNewSong(name) {
 
 export const bpm = 120;
 
-export const pattern = note("c3 e3 g3").s("bd");
+export const pattern = note("c3 e3 g3").s("demo-kickdrum");
 `;
 
     try {
@@ -733,15 +792,15 @@ export const pattern = note("c3 e3 g3").s("bd");
 
 // --- BAKING LOGIC ---
 
-async function bakeCurrentSong() {
+async function exportCurrentSong() {
     if (!currentSongFilename) return;
     
     validateCode(dom.repl.editor.code);
     if (dom.statusMsg.innerText.startsWith('⚠️')) {
-        if (!confirm("Code contains unsafe functions for ZzFXM (e.g. reverb/delay). These will be ignored. Bake anyway?")) return;
+        if (!confirm("Code contains unsafe functions for ZzFXM (e.g. reverb/delay). These will be ignored. Export anyway?")) return;
     }
 
-    setStatus('Baking...');
+    setStatus('Exporting...');
     
     try {
         const code = dom.repl.editor.code;
@@ -768,45 +827,50 @@ async function bakeCurrentSong() {
         if (match) bpm = Number(match[1]);
         
         // 3. Get dynamic instruments from manager
-        const { array: instrumentArray, mapping: instrumentMapping, monophonicByIndex } = await getInstrumentsForBaker();
+        const { array: instrumentArray, mapping: instrumentMapping, monophonicByIndex } = await getInstrumentsForExporter();
         
         // 4. Get export settings
         const isLimitEnabled = dom.limitChannels.checked;
         const maxChannels = isLimitEnabled ? (parseInt(dom.maxChannelsInput.value) || 16) : Infinity;
         const normalizeLayers = dom.normalizeLayers?.checked || false;
-        const resolutionInput = document.querySelector('input[name="bakeResolution"]:checked');
+        const resolutionInput = document.querySelector('input[name="exportResolution"]:checked');
         let rowsPerCycle = 96;
         if (resolutionInput?.value === '48') {
             rowsPerCycle = 48;
         } else if (resolutionInput?.value === 'custom') {
-            const parsed = parseInt(dom.bakeResolutionCustom?.value, 10);
+            const parsed = parseInt(dom.exportResolutionCustom?.value, 10);
             if (parsed && !Number.isNaN(parsed)) rowsPerCycle = parsed;
         }
         
-        // 5. Bake!
-        const result = bakePattern(pattern, bpm, instrumentArray, instrumentMapping, 8, {
+        // 5. Export!
+        const result = exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 8, {
             maxVoicesPerInstrument: maxChannels,
             normalizeUnisonLayers: normalizeLayers,
             rowsPerCycle,
             monophonicByInstrumentIndex: monophonicByIndex
         });
         const songData = result.song;
-        const { channelCount, droppedNotes } = result.stats;
+        const {
+            channelCount,
+            droppedNotes,
+            unknownInstrumentNotes,
+            unknownInstrumentAliases = []
+        } = result.stats;
         
         // Store for preview
-        lastBakedData = songData;
-        lastBakedMeta = { monophonicByInstrumentIndex: monophonicByIndex };
+        lastExportedData = songData;
+        lastExportedMeta = { monophonicByInstrumentIndex: monophonicByIndex };
         dom.previewJson.innerText = JSON.stringify(songData, null, 2);
         
-        // 4. Send JSON to server
+        // 4. Send JSON to server (local mode only)
         const jsonFilename = currentSongFilename.replace('.js', '.json');
-        
-        const res = await fetch(`/api/save-baked/${jsonFilename}`, {
-            method: 'POST',
-            body: JSON.stringify(songData)
-        });
-        
-        if (!res.ok) throw new Error('Server failed to save JSON');
+        if (!DEMO_MODE) {
+            const res = await fetch(`/api/save-exported/${jsonFilename}`, {
+                method: 'POST',
+                body: JSON.stringify(songData)
+            });
+            if (!res.ok) throw new Error('Server failed to save JSON');
+        }
         
         // Enable preview playback buttons
         // Enable preview playback buttons
@@ -818,11 +882,23 @@ async function bakeCurrentSong() {
         if (droppedNotes > 0) {
             statusMsg += ` • ${droppedNotes} notes dropped`;
         }
-        setStatus(statusMsg, 'success');
+        if (unknownInstrumentNotes > 0) {
+            const incompatibleList = unknownInstrumentAliases.length
+                ? unknownInstrumentAliases.join(', ')
+                : `${unknownInstrumentNotes} unknown`;
+            dom.statusMsg.innerHTML = `${escapeHtml(statusMsg)} • <span style="color:#ff3333">Incompatible sounds: ${escapeHtml(incompatibleList)}</span>`;
+            dom.statusMsg.style.color = '#888';
+            dom.statusMsg.style.opacity = '1';
+        } else {
+            if (DEMO_MODE) {
+                statusMsg += ' • Demo mode: not written to /output';
+            }
+            setStatus(statusMsg, 'success');
+        }
         
     } catch (e) {
         console.error(e);
-        setStatus(`Bake failed: ${e.message}`, 'error');
+        setStatus(`Export failed: ${e.message}`, 'error');
     }
 }
 
@@ -833,7 +909,7 @@ const UNSAFE_FUNCS = [
     'delay', 'room', 'reverb', 'lpf', 'hpf', 'bp', 'vowel', 
     'phaser', 'leslie', 'crush', 'cutoff', 'resonance',
     'distort', 'saturate', 'chorus', 'flanger', 'tremolo',
-    'fit', 'legato', 'chop' // Timing effects that might not bake well?
+    'fit', 'legato', 'chop' // Timing effects that might not export well?
 ];
 
 function validateCode(code) {
@@ -848,7 +924,7 @@ function validateCode(code) {
     });
 
     if (findings.length > 0) {
-        setStatus(`⚠️ Unsafe for Baking: ${findings.join(', ')}`, 'error');
+        setStatus(`⚠️ Unsafe for Export: ${findings.join(', ')}`, 'error');
     } else {
         if (dom.statusMsg.innerText.startsWith('⚠️')) {
             setStatus('Ready', 'normal');
@@ -858,8 +934,32 @@ function validateCode(code) {
 
 
 function setStatus(msg, type = 'normal') {
+    if (statusFadeClearTimeout) {
+        clearTimeout(statusFadeClearTimeout);
+        statusFadeClearTimeout = null;
+    }
+
+    if (!msg) {
+        dom.statusMsg.style.opacity = '0';
+        statusFadeClearTimeout = setTimeout(() => {
+            dom.statusMsg.textContent = '';
+            statusFadeClearTimeout = null;
+        }, 220);
+        return;
+    }
+
     dom.statusMsg.innerText = msg;
     dom.statusMsg.style.color = type === 'error' ? '#ff3333' : (type === 'success' ? '#00ff66' : '#888');
+    dom.statusMsg.style.opacity = '1';
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 document.addEventListener('app:status', (e) => {
@@ -888,6 +988,13 @@ function hideSaveStatus() {
     }
 }
 
+function normalizeSongBaseName(input) {
+    return String(input || '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
 function openModal() {
     dom.newSongModal.classList.add('open');
     dom.newSongName.focus();
@@ -902,7 +1009,7 @@ function closeModal() {
 
 // Event Listeners ---
 
-dom.bakeBtn.addEventListener('click', bakeCurrentSong);
+dom.exportBtn.addEventListener('click', exportCurrentSong);
 
 dom.sidebarTitle.addEventListener('click', showWelcome);
 dom.newSongBtn.addEventListener('click', openModal);
@@ -923,7 +1030,7 @@ let songToDelete = null;
 
 function showDeleteConfirmation(filename) {
     songToDelete = filename;
-    dom.deleteConfirmText.innerHTML = `File: <strong>${filename}</strong><br>This action is irreversible.`;
+    dom.deleteConfirmText.innerHTML = `File: <strong>${decodeURIComponent(filename)}</strong><br>This action is irreversible.`;
     dom.deleteConfirmModal.classList.add('open');
 }
 
@@ -939,42 +1046,47 @@ dom.cancelDeleteBtn.addEventListener('click', closeDeleteModal);
 // Song Rename Functionality
 let originalSongName = '';
 
-// Track changes to song name input
+// Auto-save rename with debounce
 dom.songNameInput.addEventListener('input', () => {
     if (!currentSongFilename) return;
-    
-    const newName = dom.songNameInput.value.trim();
-    const hasChanged = newName !== originalSongName && newName !== '';
-    
-    // Show/hide save button based on whether name changed
-    dom.saveSongNameBtn.style.display = hasChanged ? 'block' : 'none';
-});
-
-// Save song name on button click
-dom.saveSongNameBtn.addEventListener('click', () => {
-    renameSong();
+    if (renameDebounceTimeout) clearTimeout(renameDebounceTimeout);
+    renameDebounceTimeout = setTimeout(() => {
+        renameSong({ quiet: true });
+    }, 1000);
 });
 
 // Save song name on Enter key
 dom.songNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         e.preventDefault();
+        if (renameDebounceTimeout) {
+            clearTimeout(renameDebounceTimeout);
+            renameDebounceTimeout = null;
+        }
         renameSong();
     }
 });
 
-async function renameSong() {
+async function renameSong(options = {}) {
+    if (DEMO_MODE) return;
+    const { quiet = false } = options;
     if (!currentSongFilename) return;
     
-    const newName = dom.songNameInput.value.trim();
-    if (!newName || newName === originalSongName) {
-        dom.saveSongNameBtn.style.display = 'none';
+    const rawName = dom.songNameInput.value.trim();
+    const newName = normalizeSongBaseName(rawName);
+    if (!newName) {
+        if (!quiet) {
+            setStatus('Invalid name. Use letters, numbers, spaces, hyphens, or underscores.', 'error');
+        }
         return;
     }
-    
-    // Validate name (no special characters that would break filenames)
-    if (!/^[a-zA-Z0-9_-]+$/.test(newName)) {
-        setStatus('Invalid name. Use only letters, numbers, hyphens, and underscores.', 'error');
+    if (dom.songNameInput.value !== newName) {
+        dom.songNameInput.value = newName;
+        if (!quiet && rawName !== newName) {
+            setStatus(`Using normalized name: ${newName}`, 'normal');
+        }
+    }
+    if (newName === originalSongName) {
         return;
     }
     
@@ -987,16 +1099,22 @@ async function renameSong() {
         const files = await res.json();
         
         if (files.includes(newFilename) && newFilename !== currentSongFilename) {
-            setStatus('A song with that name already exists', 'error');
+            if (!quiet) {
+                setStatus('A song with that name already exists', 'error');
+            }
             return;
         }
     } catch (e) {
         console.error(e);
-        setStatus('Error checking song names', 'error');
+        if (!quiet) {
+            setStatus('Error checking song names', 'error');
+        }
         return;
     }
     
-    setStatus('Renaming...');
+    if (!quiet) {
+        setStatus('Renaming...');
+    }
     
     try {
         // Rename via API
@@ -1017,22 +1135,23 @@ async function renameSong() {
         currentSongDisplayName = newName;
         originalSongName = newName;
         if (wasPlaying) playingSongFilename = newFilename;
-        
-        // Hide save button
-        dom.saveSongNameBtn.style.display = 'none';
+        renameDebounceTimeout = null;
         
         // Refresh song list
         await refreshSongList();
         
-        setStatus('Renamed successfully', 'success');
+        if (!quiet) {
+            setStatus('Renamed successfully', 'success');
+        }
         showSaveStatus('✅ Song renamed');
         
     } catch (e) {
         console.error(e);
-        setStatus('Error renaming song', 'error');
+        if (!quiet) {
+            setStatus('Error renaming song', 'error');
+        }
         // Restore original name on error
         dom.songNameInput.value = originalSongName;
-        dom.saveSongNameBtn.style.display = 'none';
     }
 }
 
@@ -1044,6 +1163,10 @@ dom.confirmDeleteBtn.addEventListener('click', async () => {
 });
 
 async function deleteSong(filename) {
+    if (DEMO_MODE) {
+        setStatus('Demo mode: deleting songs is disabled', 'normal');
+        return;
+    }
     setStatus('Deleting...');
     try {
         const res = await fetch(`/api/song/${filename}`, { method: 'DELETE' });
@@ -1083,8 +1206,8 @@ dom.previewPlayBtn.addEventListener('click', () => {
         return;
     }
 
-    if (!lastBakedData) {
-        setStatus('Nothing to play. Bake a song first.', 'error');
+    if (!lastExportedData) {
+        setStatus('Nothing to play. Export a song first.', 'error');
         return;
     }
     
@@ -1095,9 +1218,9 @@ dom.previewPlayBtn.addEventListener('click', () => {
         updatePlayState(false);
     }
     
-    playZzfxmSong(lastBakedData, getAudioContext(), () => {
+    playZzfxmSong(lastExportedData, getAudioContext(), () => {
         updatePreviewPlayButton(false);
-    }, lastBakedMeta);
+    }, lastExportedMeta);
     updatePreviewPlayButton(true);
 });
 
@@ -1113,7 +1236,11 @@ function updatePreviewPlayButton(playing) {
 document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        saveCurrentSong();
+        if (DEMO_MODE) {
+            setStatus('Demo mode: save is disabled', 'normal');
+        } else {
+            saveCurrentSong();
+        }
     }
 });
 
@@ -1135,8 +1262,14 @@ function togglePlay() {
         editor.stop();
         // UI update happens via state helper
         updatePlayState(false);
+    } else if (isRunning) {
+        // Another song is currently running. Switch to selected song and restart
+        // from the beginning of the selected song's timeline.
+        editor.stop();
+        editor.evaluate();
+        updatePlayState(true);
     } else {
-        // Start new song (implicitly replaces old one if running)
+        // Start selected song from the beginning.
         editor.evaluate();
         updatePlayState(true);
     }
@@ -1330,15 +1463,15 @@ function setupExportSettingsModal() {
         }
     });
 
-    const resolutionInputs = document.querySelectorAll('input[name="bakeResolution"]');
+    const resolutionInputs = document.querySelectorAll('input[name="exportResolution"]');
     const updateResolutionUi = () => {
-        const selected = document.querySelector('input[name="bakeResolution"]:checked');
+        const selected = document.querySelector('input[name="exportResolution"]:checked');
         const isCustom = selected?.value === 'custom';
-        if (dom.bakeResolutionHint) {
-            dom.bakeResolutionHint.style.display = selected?.value === '48' ? 'block' : 'none';
+        if (dom.exportResolutionHint) {
+            dom.exportResolutionHint.style.display = selected?.value === '48' ? 'block' : 'none';
         }
-        if (dom.bakeResolutionCustomWrap) {
-            dom.bakeResolutionCustomWrap.classList.toggle('hidden', !isCustom);
+        if (dom.exportResolutionCustomWrap) {
+            dom.exportResolutionCustomWrap.classList.toggle('hidden', !isCustom);
         }
     };
     resolutionInputs.forEach(input => {
@@ -1347,7 +1480,7 @@ function setupExportSettingsModal() {
             saveSongMeta();
         });
     });
-    dom.bakeResolutionCustom?.addEventListener('input', () => {
+    dom.exportResolutionCustom?.addEventListener('input', () => {
         updateResolutionUi();
         saveSongMeta();
     });

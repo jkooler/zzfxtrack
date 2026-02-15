@@ -1618,10 +1618,10 @@ function handleDownloadInstruments() {
 
 
 /**
- * Get current instruments for baker
+ * Get current instruments for exporter
  * Called by repl-app.js when baking
  */
-export async function getInstrumentsForBaker() {
+export async function getInstrumentsForExporter() {
     const { getInstrumentMapping, getInstrumentArray, getMonophonicArray } = await import('./instrument-manager.js');
     return {
         mapping: getInstrumentMapping(),

@@ -1,4 +1,7 @@
 import { getDefragmentedInstruments, getInstrumentMapping } from './instrument-manager.js';
+const DEMO_MODE =
+    import.meta.env.MODE === 'demo' ||
+    (import.meta.env.PROD && import.meta.env.VITE_DEMO_MODE === 'true');
 
 /**
  * File Generator
@@ -108,7 +111,7 @@ export function generateInstrumentsFile() {
     content += `};\n\n`;
     
     // Export instrumentArray
-    content += `// Also export as array for the baker (ordered by channel index)\n`;
+    content += `// Also export as array for the exporter (ordered by channel index)\n`;
     content += `export const instrumentArray = [\n`;
     
     defragged.forEach((inst, index, arr) => {
@@ -153,6 +156,10 @@ export async function autoUpdateInstrumentsFile() {
     
     // Store in sessionStorage for easy access
     sessionStorage.setItem('instruments-js-content', content);
+    if (DEMO_MODE) {
+        console.log('[FileGenerator] Demo mode: skipped writing instruments.js to server');
+        return content;
+    }
     
     // Write to the actual file using the API
     try {

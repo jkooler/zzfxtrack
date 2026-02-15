@@ -4,7 +4,7 @@
 
 Strudel supports chord notation like `note("[c, e, g]").s("piano")`, which plays multiple notes simultaneously on the same instrument. When exported to ZzFXM format, only **one note** is preserved because ZzFXM is a tracker format where each channel can only play one note at a time.
 
-Currently in `baker-logic.js`, when multiple events occur at the same grid position for the same instrument, subsequent events overwrite previous ones:
+Currently in `export-logic.js`, when multiple events occur at the same grid position for the same instrument, subsequent events overwrite previous ones:
 
 ```javascript
 // Current behavior (line 80)
@@ -113,7 +113,7 @@ When building final `patternData`:
 
 ## File Changes
 
-### [MODIFY] [baker-logic.js](file:///Users/jkoole/dev/strudel-to-zzfxfm-baker/src/baker-logic.js)
+### [MODIFY] [export-logic.js](file:///Users/jkoole/dev/strudel-to-zzfxfm-exporter/src/export-logic.js)
 
 | Section      | Change                                                            |
 | ------------ | ----------------------------------------------------------------- |
@@ -123,11 +123,11 @@ When building final `patternData`:
 | New function | Add `getAvailableVoice(instIndex, gridIndex, maxVoices)` helper   |
 | Export       | Accept optional `options` parameter with `maxVoicesPerInstrument` |
 
-### [MODIFY] [repl-app.js](file:///Users/jkoole/dev/strudel-to-zzfxfm-baker/src/repl-app.js)
+### [MODIFY] [repl-app.js](file:///Users/jkoole/dev/strudel-to-zzfxfm-exporter/src/repl-app.js)
 
 | Section       | Change                                               |
 | ------------- | ---------------------------------------------------- |
-| Bake function | Pass limiter options to `bakePattern()`              |
+| Export function | Pass limiter options to `exportPattern()`              |
 | Status UI     | Display channel count (informational, not a warning) |
 
 ### [NEW] Export Settings UI
@@ -224,11 +224,11 @@ When enabled:
 - [ ] Implement `voiceTracker` and `getAvailableVoice()`
 - [ ] Update event processing loop
 - [ ] Update channel flattening
-- [ ] Return channel count from `bakePattern()`
+- [ ] Return channel count from `exportPattern()`
 
 ### Phase 2: Optional Limiter (Estimated: 1.5 hours)
 
-- [ ] Add `options` parameter to `bakePattern()`
+- [ ] Add `options` parameter to `exportPattern()`
 - [ ] Implement voice limiting logic
 - [ ] Track and return dropped note count
 - [ ] Add limiter UI controls (toggle + number input)

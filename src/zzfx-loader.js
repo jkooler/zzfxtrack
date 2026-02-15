@@ -307,7 +307,7 @@ export function loadZzFXInstruments(instrumentMap, options = {}) {
             const source = audioCtx.createBufferSource();
             source.buffer = buffer;
             
-            // Playback rate is now 1.0 because we baked the pitch in!
+            // Playback rate is now 1.0 because we exported the pitch in!
             source.playbackRate.value = 1.0;
 
             const gainNode = audioCtx.createGain();

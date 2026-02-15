@@ -39,18 +39,18 @@ function getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoices = Infin
 }
 
 /**
- * Bake a Strudel pattern into ZzFXM format.
+ * Export a Strudel pattern into ZzFXM format.
  * @param {Pattern} pattern - Strudel pattern
  * @param {number} bpm - Beats per minute
  * @param {Array} instrumentArray - Array of ZzFX instrument definitions
  * @param {Object} instrumentMapping - Map of instrument names to indices
- * @param {number} cycles - Number of cycles to bake (default: 8)
+ * @param {number} cycles - Number of cycles to export (default: 8)
  * @param {Object} options - Optional settings
  * @param {number} options.maxVoicesPerInstrument - Max voices per instrument (default: Infinity)
  * @param {Array} options.monophonicByInstrumentIndex - Boolean array aligned to instrumentArray (default: [])
  * @returns {Object} { song: ZzFXM song array, stats: { channelCount, droppedNotes } }
  */
-export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8, options = {}) {
+export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8, options = {}) {
     const { maxVoicesPerInstrument = Infinity, normalizeUnisonLayers = false, rowsPerCycle = DEFAULT_ROWS_PER_CYCLE, monophonicByInstrumentIndex = [] } = options;
     
     const totalRows = cycles * rowsPerCycle;
@@ -62,8 +62,10 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
     const voiceTracker = {};
     // Statistics
     let droppedNotes = 0;
+    let unknownInstrumentNotes = 0;
+    const unknownInstrumentAliases = new Set();
 
-    console.log("Baker Stats:", {
+    console.log("Exporter Stats:", {
         instrCount: instrumentArray?.length,
         mappingKeys: Object.keys(instrumentMapping || {}).length,
         mappingPreview: instrumentMapping,
@@ -72,17 +74,20 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
 
     // Helper to resolve instrument index from event
     function resolveInstIndex(e) {
-        let instIndex = 0;
         let s = e.value.s;
-        if (typeof s !== 'undefined') {
-            if (instrumentMapping[s] !== undefined) {
-                instIndex = instrumentMapping[s];
-            } else {
-                instIndex = parseInt(s);
-                if (isNaN(instIndex)) instIndex = 0;
-            }
+        if (typeof s === 'undefined') return 0;
+
+        if (instrumentMapping?.[s] !== undefined) {
+            return instrumentMapping[s];
         }
-        return instIndex;
+
+        const parsed = Number(s);
+        if (Number.isInteger(parsed) && parsed >= 0) {
+            return parsed;
+        }
+
+        // Unknown string alias (e.g. "bd"): mark invalid so caller can skip.
+        return -1;
     }
 
     // Helper to calculate semitone shift for an event
@@ -107,9 +112,11 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
     const unisonMap = new Map();
     if (normalizeUnisonLayers) {
         events.forEach((e) => {
+            const instIndex = resolveInstIndex(e);
+            if (instIndex < 0 || instIndex >= (instrumentArray?.length || 0)) return;
+
             const gridIndex = Math.floor(e.whole.begin.valueOf() * rowsPerCycle);
             if (gridIndex < totalRows) {
-                const instIndex = resolveInstIndex(e);
                 const semitone = Math.round(calculateSemitone(e, instIndex));
                 const key = `${instIndex}-${gridIndex}-${semitone}`;
                 unisonMap.set(key, (unisonMap.get(key) || 0) + 1);
@@ -120,6 +127,14 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
     // --- PASS 2: Process events ---
     events.forEach((e) => {
         const instIndex = resolveInstIndex(e);
+        if (instIndex < 0 || instIndex >= (instrumentArray?.length || 0)) {
+            unknownInstrumentNotes++;
+            droppedNotes++;
+            if (typeof e.value?.s === 'string' && e.value.s.trim()) {
+                unknownInstrumentAliases.add(e.value.s.trim());
+            }
+            return;
+        }
         const gridIndex = Math.floor(e.whole.begin.valueOf() * rowsPerCycle);
         
         if (gridIndex < totalRows) {
@@ -198,9 +213,11 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
 
     const channelCount = patternData.length;
     
-    console.log("Baker Output:", {
+    console.log("Exporter Output:", {
         channelCount,
         droppedNotes,
+        unknownInstrumentNotes,
+        unknownInstrumentAliases: Array.from(unknownInstrumentAliases),
         maxVoicesPerInstrument: maxVoicesPerInstrument === Infinity ? 'unlimited' : maxVoicesPerInstrument
     });
 
@@ -216,7 +233,9 @@ export function bakePattern(pattern, bpm, instrumentArray, instrumentMapping, cy
         song,
         stats: {
             channelCount,
-            droppedNotes
+            droppedNotes,
+            unknownInstrumentNotes,
+            unknownInstrumentAliases: Array.from(unknownInstrumentAliases)
         }
     };
 }

@@ -1,12 +1,13 @@
 {
-  "name": "strudel-to-zzfxfm",
+  "name": "strudel-to-zzfxm",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "bake": "node bake.js",
-    "bake:all": "node bake.js --all"
+    "dev:demo": "vite --mode demo",
+    "export": "node export.js",
+    "export:all": "node export.js --all"
   },
   "keywords": [],
   "author": "",

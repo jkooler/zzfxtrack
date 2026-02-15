@@ -76,7 +76,7 @@ export const instruments = {
     "demo-kickdrum": zzfxm_demo_kickdrum
 };
 
-// Also export as array for the baker (ordered by channel index)
+// Also export as array for the exporter (ordered by channel index)
 export const instrumentArray = [
     zzfxm_test_cp,
     zzfxm_test_enterprise,

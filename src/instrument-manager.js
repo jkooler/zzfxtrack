@@ -171,7 +171,7 @@ export function getDefragmentedInstruments() {
 }
 
 /**
- * Generate instrument mapping for baker (Strudel alias → defragmented channel)
+ * Generate instrument mapping for exporter (Strudel alias → defragmented channel)
  * @returns {Object} Mapping object
  */
 export function getInstrumentMapping() {
@@ -186,7 +186,7 @@ export function getInstrumentMapping() {
 }
 
 /**
- * Generate instrument array for baker (defragmented, sequential)
+ * Generate instrument array for exporter (defragmented, sequential)
  * @returns {Array} Array of parameter arrays
  */
 export function getInstrumentArray() {
@@ -195,7 +195,7 @@ export function getInstrumentArray() {
 }
 
 /**
- * Get monophonic flag array for baker (defragmented, sequential)
+ * Get monophonic flag array for exporter (defragmented, sequential)
  * @returns {Array} Array of booleans aligned to getInstrumentArray()
  */
 export function getMonophonicArray() {

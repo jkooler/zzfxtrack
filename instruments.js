@@ -82,7 +82,31 @@ export const instruments = {
     "demo-horn": zzfxm_demo_horn
 };
 
-// Also export as array for the baker (ordered by channel index)
+// Per-instrument playback settings
+export const instrumentMonophonic = {
+    "test-cp": false,
+    "test-enterprise": false,
+    "test-sine": false,
+    "test-tri": false,
+    "test-saw": false,
+    "test-tan": false,
+    "test-minimal": false,
+    "test-noise": false,
+    "test-square": false,
+    "test-kick": false,
+    "demo-snare": false,
+    "demo-synth-stab": false,
+    "demo-hh-closed": false,
+    "demo-pad": false,
+    "demo-cowbell": false,
+    "demo-bass": false,
+    "demo-hh-open": false,
+    "demo-kickdrum": false,
+    "demo-elpiano": false,
+    "demo-horn": true
+};
+
+// Also export as array for the exporter (ordered by channel index)
 export const instrumentArray = [
     zzfxm_test_cp,
     zzfxm_test_enterprise,

@@ -184,6 +184,11 @@ input[readonly]:focus-visible {
   display: none !important;
 }
 
+#statusMsg {
+  opacity: 1;
+  transition: opacity 220ms ease;
+}
+
 .song-item {
   @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 relative overflow-hidden text-sm;
 }
