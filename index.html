@@ -524,7 +524,7 @@
         id="welcomeView"
         class="welcome-view flex-1 flex-col items-center justify-center text-center p-10 text-muted-foreground animate-in fade-in zoom-in-95 duration-500 flex"
       >
-        <div class="max-w-lg space-y-6">
+        <div class="max-w-lg flex flex-col gap-6">
           <h1
             class="text-5xl font-extrabold tracking-tight text-primary drop-shadow-sm font-mono"
           >
@@ -556,12 +556,13 @@
               >ZzFXM</a
             >.
           </p>
-          <div class="mt-8 pt-6 border-t border-border text-sm opacity-80">
+          <div class="text-sm opacity-80">
             <strong class="text-foreground">NOTE:</strong> Ensure your game or project
             uses <strong>ZzFXMicro</strong> (standard for ZzFXM).<br />The
             parameter mapping differs from the full ZzFX library.
           </div>
-          <div class="mt-4 flex items-center justify-center gap-2">
+          <div class="h-px bg-border"></div>
+          <div class="flex items-center justify-center gap-2">
             <button
               id="openChangelogModalBtn"
               class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
@@ -572,12 +573,9 @@
               id="openLicenseModalBtn"
               class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
             >
-              See Licensing And Attribution Notes
+              Licenses & Credits
             </button>
           </div>
-          <p class="text-xs text-muted-foreground/90 leading-relaxed">
-            Disclaimer: Currently this app is solely made for my specific needs, but I'm always happy to hear if you have found it useful! -Jarno Koole (jarno@koole.fi)
-          </p>
         </div>
       </div>
 
@@ -731,6 +729,10 @@
           <p>
             For full repository-level attribution details, see
             <code>THIRD_PARTY_NOTICES.md</code> in the project root.
+          </p>
+          <div class="h-px bg-border my-2"></div>
+          <p class="text-xs text-muted-foreground/90 leading-relaxed">
+            Disclaimer: At current state the app is made for my specific needs, but I'm always happy to hear if you have found it useful! -Jarno K
           </p>
         </div>
         <div class="flex justify-end">
