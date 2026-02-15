@@ -11,9 +11,7 @@ import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, previewArrangementStateOnce, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
 
-const DEMO_MODE =
-    import.meta.env.MODE === 'demo' ||
-    (import.meta.env.PROD && import.meta.env.VITE_DEMO_MODE === 'true');
+const DEMO_MODE = import.meta.env.MODE === 'demo';
 const demoSongModules = import.meta.glob('../songs/*.js', {
     query: '?raw',
     import: 'default',
