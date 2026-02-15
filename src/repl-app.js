@@ -10,6 +10,7 @@ import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, upd
 import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, previewArrangementStateOnce, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
+import JSZip from 'jszip';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 const demoSongModules = import.meta.glob('../songs/*.js', {
@@ -17,8 +18,28 @@ const demoSongModules = import.meta.glob('../songs/*.js', {
     import: 'default',
     eager: true
 });
+const demoBlockModules = import.meta.glob('../blocks/*.js', {
+    query: '?raw',
+    import: 'default',
+    eager: true
+});
+const demoArrangementModules = import.meta.glob('../arrangements/*.js', {
+    query: '?raw',
+    import: 'default',
+    eager: true
+});
 const demoSongSourceByFile = new Map(
     Object.entries(demoSongModules)
+        .filter(([modulePath]) => !modulePath.endsWith('/index.js'))
+        .map(([modulePath, source]) => [modulePath.split('/').pop(), source])
+);
+const demoBlockSourceByFile = new Map(
+    Object.entries(demoBlockModules)
+        .filter(([modulePath]) => !modulePath.endsWith('/index.js'))
+        .map(([modulePath, source]) => [modulePath.split('/').pop(), source])
+);
+const demoArrangementSourceByFile = new Map(
+    Object.entries(demoArrangementModules)
         .filter(([modulePath]) => !modulePath.endsWith('/index.js'))
         .map(([modulePath, source]) => [modulePath.split('/').pop(), source])
 );
@@ -54,6 +75,7 @@ const dom = {
     // Preview Panel
     previewJson: document.getElementById('previewJson'),
     previewPlayBtn: document.getElementById('previewPlayBtn'),
+    downloadProjectBtn: document.getElementById('downloadProjectBtn'),
     
     // Modals
     newSongModal: document.getElementById('newSongModal'),
@@ -87,6 +109,11 @@ const dom = {
     changelogModal: document.getElementById('changelogModal'),
     closeChangelogModalBtn: document.getElementById('closeChangelogModalBtn'),
     closeChangelogModalBottomBtn: document.getElementById('closeChangelogModalBottomBtn'),
+
+    // Demo Mode Modal
+    demoModeModal: document.getElementById('demoModeModal'),
+    closeDemoModeModalBtn: document.getElementById('closeDemoModeModalBtn'),
+    closeDemoModeModalBottomBtn: document.getElementById('closeDemoModeModalBottomBtn'),
 
     // External Link Modal
     externalLinkModal: document.getElementById('externalLinkModal'),
@@ -1000,6 +1027,185 @@ function openModal() {
     dom.newSongName.focus();
 }
 
+function triggerFileDownload(filename, content, mime = 'text/plain;charset=utf-8') {
+    const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = decodeURIComponent(filename);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function buildBlockSourceFromApi(item) {
+    const name = item?.name || 'Block';
+    const description = item?.description || '';
+    const pattern = item?.pattern || '';
+    const trackerState = item?.trackerState ?? null;
+    return `// Block: ${name}
+// ${description || 'No description'}
+
+export const name = "${String(name).replace(/"/g, '\\"')}";
+export const description = "${String(description).replace(/"/g, '\\"')}";
+
+export const pattern = \`${String(pattern).replace(/`/g, '\\`')}\`;
+
+// Optional: Tracker state for re-editing
+export const trackerState = ${JSON.stringify(trackerState, null, 2)};
+`;
+}
+
+function buildArrangementSourceFromApi(item) {
+    const name = item?.name || 'Arrangement';
+    const arrangementState = item?.arrangementState ?? null;
+    return `// Arrangement: ${name}
+
+export const name = "${String(name).replace(/"/g, '\\"')}";
+
+export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
+`;
+}
+
+async function getInstrumentsFileContent() {
+    const cached = sessionStorage.getItem('instruments-js-content');
+    if (cached && cached.trim()) {
+        return cached;
+    }
+
+    const res = await fetch('/instruments.js');
+    if (!res.ok) return '';
+    const fileCode = await res.text();
+    return fileCode.trim() ? fileCode : '';
+}
+
+async function downloadSongsAndInstruments() {
+    try {
+        const zip = new JSZip();
+
+        let downloadedInstruments = 0;
+        const instrumentsContent = await getInstrumentsFileContent();
+        if (instrumentsContent) {
+            zip.file('instruments.js', instrumentsContent);
+            downloadedInstruments = 1;
+        }
+
+        const files = DEMO_MODE
+            ? Array.from(demoSongSourceByFile.keys()).sort()
+            : await (async () => {
+                const res = await fetch('/api/songs');
+                if (!res.ok) throw new Error('Failed to list songs');
+                return res.json();
+            })();
+
+        let downloadedSongs = 0;
+        for (const filename of files) {
+            let fileCode = '';
+            if (filename === currentSongFilename && dom.repl.editor?.code) {
+                fileCode = editorToFile(dom.repl.editor.code);
+            } else if (DEMO_MODE) {
+                fileCode = demoSongSourceByFile.get(filename) || '';
+            } else {
+                const res = await fetch(`/api/song/${filename}`);
+                if (!res.ok) continue;
+                fileCode = await res.text();
+            }
+
+            if (!fileCode.trim()) continue;
+            zip.file(`songs/${decodeURIComponent(filename)}`, fileCode);
+            downloadedSongs++;
+        }
+
+        let downloadedBlocks = 0;
+        if (DEMO_MODE) {
+            const blockFiles = Array.from(demoBlockSourceByFile.keys()).sort();
+            for (const filename of blockFiles) {
+                const code = demoBlockSourceByFile.get(filename) || '';
+                if (!code.trim()) continue;
+                zip.file(`blocks/${decodeURIComponent(filename)}`, code);
+                downloadedBlocks++;
+            }
+        } else {
+            const listRes = await fetch('/api/blocks');
+            if (listRes.ok) {
+                const blockItems = await listRes.json();
+                for (const item of blockItems || []) {
+                    const filename = item?.filename;
+                    if (!filename) continue;
+                    let code = '';
+                    const rawRes = await fetch(`/blocks/${filename}`);
+                    if (rawRes.ok) {
+                        code = await rawRes.text();
+                    } else {
+                        const detailRes = await fetch(`/api/blocks/${filename}`);
+                        if (detailRes.ok) {
+                            const detail = await detailRes.json();
+                            code = buildBlockSourceFromApi(detail);
+                        }
+                    }
+                    if (!code.trim()) continue;
+                    zip.file(`blocks/${decodeURIComponent(filename)}`, code);
+                    downloadedBlocks++;
+                }
+            }
+        }
+
+        let downloadedArrangements = 0;
+        if (DEMO_MODE) {
+            const arrangementFiles = Array.from(demoArrangementSourceByFile.keys()).sort();
+            for (const filename of arrangementFiles) {
+                const code = demoArrangementSourceByFile.get(filename) || '';
+                if (!code.trim()) continue;
+                zip.file(`arrangements/${decodeURIComponent(filename)}`, code);
+                downloadedArrangements++;
+            }
+        } else {
+            const listRes = await fetch('/api/arrangements');
+            if (listRes.ok) {
+                const arrangementItems = await listRes.json();
+                for (const item of arrangementItems || []) {
+                    const filename = item?.filename;
+                    if (!filename) continue;
+                    let code = '';
+                    const rawRes = await fetch(`/arrangements/${filename}`);
+                    if (rawRes.ok) {
+                        code = await rawRes.text();
+                    } else {
+                        const detailRes = await fetch(`/api/arrangements/${filename}`);
+                        if (detailRes.ok) {
+                            const detail = await detailRes.json();
+                            code = buildArrangementSourceFromApi(detail);
+                        }
+                    }
+                    if (!code.trim()) continue;
+                    zip.file(`arrangements/${decodeURIComponent(filename)}`, code);
+                    downloadedArrangements++;
+                }
+            }
+        }
+
+        if (!downloadedSongs && !downloadedBlocks && !downloadedArrangements && !downloadedInstruments) {
+            setStatus('Nothing to download', 'error');
+            return;
+        }
+
+        const stamp = new Date().toISOString().replace(/[:]/g, '-').replace(/\..+/, '');
+        const zipName = `strudel-project-bundle-${stamp}.zip`;
+        const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+        triggerFileDownload(zipName, zipBlob, 'application/zip');
+
+        const instrumentsLabel = downloadedInstruments ? ' + instruments.js' : ' (no instruments.js)';
+        setStatus(
+            `Downloaded ZIP: ${downloadedSongs} song${downloadedSongs === 1 ? '' : 's'}, ${downloadedBlocks} block${downloadedBlocks === 1 ? '' : 's'}, ${downloadedArrangements} arrangement${downloadedArrangements === 1 ? '' : 's'}${instrumentsLabel}`,
+            'success'
+        );
+    } catch (e) {
+        console.error(e);
+        setStatus(`Download failed: ${e.message}`, 'error');
+    }
+}
+
 function closeModal() {
     dom.newSongModal.classList.remove('open');
     dom.newSongName.value = '';
@@ -1010,6 +1216,7 @@ function closeModal() {
 // Event Listeners ---
 
 dom.exportBtn.addEventListener('click', exportCurrentSong);
+if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadSongsAndInstruments);
 
 dom.sidebarTitle.addEventListener('click', showWelcome);
 dom.newSongBtn.addEventListener('click', openModal);
@@ -1388,6 +1595,31 @@ if (dom.changelogModal) {
     dom.changelogModal.addEventListener('click', (e) => {
         if (e.target === dom.changelogModal) {
             closeChangelogModal();
+        }
+    });
+}
+
+// --- Demo Mode Modal Logic ---
+function openDemoModeModal() {
+    dom.demoModeModal?.classList.add('open');
+}
+
+function closeDemoModeModal() {
+    dom.demoModeModal?.classList.remove('open');
+}
+
+if (dom.demoModeBadge) {
+    dom.demoModeBadge.addEventListener('click', () => {
+        if (!DEMO_MODE) return;
+        openDemoModeModal();
+    });
+}
+if (dom.closeDemoModeModalBtn) dom.closeDemoModeModalBtn.addEventListener('click', closeDemoModeModal);
+if (dom.closeDemoModeModalBottomBtn) dom.closeDemoModeModalBottomBtn.addEventListener('click', closeDemoModeModal);
+if (dom.demoModeModal) {
+    dom.demoModeModal.addEventListener('click', (e) => {
+        if (e.target === dom.demoModeModal) {
+            closeDemoModeModal();
         }
     });
 }

@@ -39,7 +39,7 @@ const dom = {
     // Buttons
     newSongBtn: document.getElementById('newSongBtn'),
     newInstrumentBtn: document.getElementById('newInstrumentBtn'),
-    downloadInstrumentsBtn: document.getElementById('downloadInstrumentsBtn'),
+    downloadProjectBtn: document.getElementById('downloadProjectBtn'),
     instrumentControls: document.getElementById('instrumentControls'),
     usedInstrumentsOnly: document.getElementById('usedInstrumentsOnly'),
     
@@ -161,9 +161,6 @@ function setupEventListeners() {
         event.preventDefault();
         handleCreateInstrument();
     });
-    
-    // Download instruments.js
-    dom.downloadInstrumentsBtn.addEventListener('click', handleDownloadInstruments);
     
     // Delete instrument
     dom.cancelDeleteInstrument.addEventListener('click', closeDeleteInstrumentModal);
@@ -995,8 +992,6 @@ function switchView(view) {
         dom.newInstrumentBtn.classList.add('hidden');
         dom.newInstrumentBtn.classList.remove('inline-flex');
         
-        dom.downloadInstrumentsBtn.classList.add('hidden');
-        dom.downloadInstrumentsBtn.classList.remove('inline-flex');
     } else {
         dom.songsTab.classList.remove('active');
         dom.instrumentsTab.classList.add('active');
@@ -1012,8 +1007,6 @@ function switchView(view) {
         dom.newInstrumentBtn.classList.remove('hidden');
         dom.newInstrumentBtn.classList.add('inline-flex');
         
-        dom.downloadInstrumentsBtn.classList.remove('hidden');
-        dom.downloadInstrumentsBtn.classList.add('inline-flex');
     }
     
     refreshInstrumentControlsVisibility();
@@ -1591,35 +1584,8 @@ function handleConfirmImport() {
 }
 
 /**
- * Handle download instruments.js button
- */
-function handleDownloadInstruments() {
-    import('./file-generator.js').then(({ getCurrentInstrumentsContent }) => {
-        const content = getCurrentInstrumentsContent();
-        
-        if (!content) {
-            alert('No instruments.js content available. Try creating or editing an instrument first.');
-            return;
-        }
-        
-        // Create blob and download
-        const blob = new Blob([content], { type: 'text/javascript' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'instruments.js';
-        a.click();
-        URL.revokeObjectURL(url);
-        
-        console.log('[InstrumentUI] Downloaded instruments.js');
-    });
-}
-
-
-
-/**
  * Get current instruments for exporter
- * Called by repl-app.js when baking
+ * Called by repl-app.js when exporting
  */
 export async function getInstrumentsForExporter() {
     const { getInstrumentMapping, getInstrumentArray, getMonophonicArray } = await import('./instrument-manager.js');
