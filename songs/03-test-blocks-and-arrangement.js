@@ -2,7 +2,7 @@ import { stack, arrange, note, s, slow, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
 
-// This is a testing song for Blocks and Arrangements
+// Testing Blocks and Arrangements
 
 // The feature is found top right corner and is experimental
 // Goal of the feature is to merge traditional tools with Strudel

@@ -6,7 +6,7 @@ export const bpm = 120;
 
 // 1. Audio processing effects will not carry on to exported .json file that ZzFXM plays.
 // 2. Make sure to use the "Instruments" instead of the synthesis provided by Strudel.
-// 3. Any sound produced by Strudel will not carry on to the exported ZzFXM songs.
+// 3. Any sound produced by Strudel's own sound generation will not carry on to the exported ZzFXM songs.
 
 
 export const pattern = stack(
@@ -20,4 +20,4 @@ export const pattern = stack(
 )
 
 // If you look down, you'll see the "Export ZzFXM" button.
-// Clicking it will generate the song data and is the main feature of this app.;
+// Clicking it will generate the song data, that is compatible with ZzFXM.;
