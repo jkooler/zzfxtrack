@@ -135,13 +135,21 @@
         class="instrument-list flex-1 overflow-y-auto p-2 space-y-1"
       ></ul>
 
-      <div class="p-3 border-t border-border bg-card">
+      <div class="p-3 border-t border-border bg-card flex items-center gap-2">
+        <span class="text-xs text-muted-foreground font-medium">Data:</span>
         <button
           id="downloadProjectBtn"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-4 w-full flex items-center justify-center gap-2"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
         >
-          Download songs and instruments
+          Download
         </button>
+        <button
+          id="uploadProjectBtn"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
+        >
+          Upload
+        </button>
+        <input id="uploadProjectInput" type="file" accept=".zip" class="hidden" />
       </div>
     </aside>
 
@@ -833,6 +841,70 @@
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
           >
             Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Project Modal -->
+    <div
+      id="uploadProjectModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-2xl max-h-[85vh] gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+      >
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">Upload Data ZIP</h2>
+          <button id="closeUploadProjectModalBtn" class="text-muted-foreground hover:text-foreground">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+
+        <div class="text-sm text-muted-foreground space-y-2 overflow-y-auto pr-1">
+          <p id="uploadProjectFilename" class="text-xs font-mono text-foreground/90"></p>
+          <p id="uploadProjectSummary"></p>
+          <div id="uploadProjectWarnings" class="hidden rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200 space-y-1"></div>
+
+          <div class="h-px bg-border my-1"></div>
+
+          <div class="space-y-2">
+            <p class="text-xs uppercase tracking-wider font-semibold text-foreground/80">Include</p>
+            <label class="flex items-center gap-2"><input id="uploadIncludeSongs" type="checkbox" class="w-4 h-4" checked /> Songs</label>
+            <label class="flex items-center gap-2"><input id="uploadIncludeBlocks" type="checkbox" class="w-4 h-4" checked /> Blocks</label>
+            <label class="flex items-center gap-2"><input id="uploadIncludeArrangements" type="checkbox" class="w-4 h-4" checked /> Arrangements</label>
+            <label class="flex items-center gap-2"><input id="uploadIncludeInstruments" type="checkbox" class="w-4 h-4" checked /> instruments.js</label>
+          </div>
+
+          <div class="h-px bg-border my-1"></div>
+
+          <div class="space-y-2">
+            <p class="text-xs uppercase tracking-wider font-semibold text-foreground/80">Import Mode</p>
+            <label class="flex items-center gap-2"><input id="uploadModeMerge" type="radio" name="uploadMode" value="merge" class="w-4 h-4" checked /> Merge (rename conflicts)</label>
+            <label class="flex items-center gap-2"><input id="uploadModeReplace" type="radio" name="uploadMode" value="replace" class="w-4 h-4" /> Replace existing files</label>
+          </div>
+
+          <div class="h-px bg-border my-1"></div>
+
+          <div class="space-y-2">
+            <p class="text-xs uppercase tracking-wider font-semibold text-foreground/80">Instruments Handling</p>
+            <label class="flex items-center gap-2"><input id="uploadInstrumentsKeep" type="radio" name="uploadInstrumentsMode" value="keep" class="w-4 h-4" checked /> Keep current instruments</label>
+            <label class="flex items-center gap-2"><input id="uploadInstrumentsReplace" type="radio" name="uploadInstrumentsMode" value="replace" class="w-4 h-4" /> Replace instruments with imported file</label>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <button
+            id="cancelUploadProjectBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+          >
+            Cancel
+          </button>
+          <button
+            id="confirmUploadProjectBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm"
+          >
+            Import
           </button>
         </div>
       </div>

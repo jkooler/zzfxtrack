@@ -55,6 +55,8 @@ let playingSongFilename = null;
 let pendingExternalUrl = null;
 let statusFadeClearTimeout = null;
 let renameDebounceTimeout = null;
+let pendingUploadBundle = null;
+let pendingUploadConflicts = null;
 
 // --- DOM Elements ---
 const dom = {
@@ -76,6 +78,23 @@ const dom = {
     previewJson: document.getElementById('previewJson'),
     previewPlayBtn: document.getElementById('previewPlayBtn'),
     downloadProjectBtn: document.getElementById('downloadProjectBtn'),
+    uploadProjectBtn: document.getElementById('uploadProjectBtn'),
+    uploadProjectInput: document.getElementById('uploadProjectInput'),
+    uploadProjectModal: document.getElementById('uploadProjectModal'),
+    closeUploadProjectModalBtn: document.getElementById('closeUploadProjectModalBtn'),
+    cancelUploadProjectBtn: document.getElementById('cancelUploadProjectBtn'),
+    confirmUploadProjectBtn: document.getElementById('confirmUploadProjectBtn'),
+    uploadProjectFilename: document.getElementById('uploadProjectFilename'),
+    uploadProjectSummary: document.getElementById('uploadProjectSummary'),
+    uploadProjectWarnings: document.getElementById('uploadProjectWarnings'),
+    uploadIncludeSongs: document.getElementById('uploadIncludeSongs'),
+    uploadIncludeBlocks: document.getElementById('uploadIncludeBlocks'),
+    uploadIncludeArrangements: document.getElementById('uploadIncludeArrangements'),
+    uploadIncludeInstruments: document.getElementById('uploadIncludeInstruments'),
+    uploadModeMerge: document.getElementById('uploadModeMerge'),
+    uploadModeReplace: document.getElementById('uploadModeReplace'),
+    uploadInstrumentsKeep: document.getElementById('uploadInstrumentsKeep'),
+    uploadInstrumentsReplace: document.getElementById('uploadInstrumentsReplace'),
     
     // Modals
     newSongModal: document.getElementById('newSongModal'),
@@ -1068,6 +1087,38 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
 `;
 }
 
+function parseBlockSource(content) {
+    const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
+    const descMatch = content.match(/export\s+const\s+description\s*=\s*["']([^"']*)["']/);
+    const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*([`"'])([\s\S]*?)\1\s*;?/);
+    const trackerStateMatch = content.match(/export\s+const\s+trackerState\s*=\s*(\{[\s\S]*?\})\s*;/);
+
+    let trackerState = null;
+    if (trackerStateMatch) {
+        try { trackerState = JSON.parse(trackerStateMatch[1]); } catch (_e) { trackerState = null; }
+    }
+
+    return {
+        name: nameMatch ? nameMatch[1] : 'Block',
+        description: descMatch ? descMatch[1] : '',
+        pattern: patternMatch ? patternMatch[2].trim() : '',
+        trackerState
+    };
+}
+
+function parseArrangementSource(content) {
+    const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
+    const arrangementStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
+    let arrangementState = { version: 1, name: nameMatch ? nameMatch[1] : 'Arrangement', bpm: 120, rows: [] };
+    if (arrangementStateMatch) {
+        try { arrangementState = JSON.parse(arrangementStateMatch[1]); } catch (_e) { /* keep fallback */ }
+    }
+    return {
+        name: nameMatch ? nameMatch[1] : arrangementState?.name || 'Arrangement',
+        arrangementState
+    };
+}
+
 async function getInstrumentsFileContent() {
     const cached = sessionStorage.getItem('instruments-js-content');
     if (cached && cached.trim()) {
@@ -1206,6 +1257,332 @@ async function downloadSongsAndInstruments() {
     }
 }
 
+function normalizeZipEntryPath(name) {
+    return String(name || '').replace(/\\/g, '/').replace(/^\.?\//, '');
+}
+
+function getFilenameFromSection(pathname, section) {
+    const match = pathname.match(new RegExp(`(?:^|/)${section}/(.+\\.js)$`, 'i'));
+    if (!match) return '';
+    const file = match[1].split('/').pop() || '';
+    if (!file || file.includes('..') || !file.endsWith('.js')) return '';
+    return file;
+}
+
+async function buildUploadBundle(file) {
+    const zip = await JSZip.loadAsync(file);
+    const entries = Object.values(zip.files).filter((entry) => !entry.dir);
+
+    const songs = new Map();
+    const blocks = new Map();
+    const arrangements = new Map();
+    let instrumentsContent = '';
+    const unknownPaths = [];
+
+    for (const entry of entries) {
+        const normalized = normalizeZipEntryPath(entry.name);
+        const content = await entry.async('string');
+        if (!content.trim()) continue;
+
+        if (normalized.toLowerCase().endsWith('/instruments.js') || normalized === 'instruments.js') {
+            instrumentsContent = content;
+            continue;
+        }
+
+        const songFile = getFilenameFromSection(normalized, 'songs');
+        if (songFile) {
+            songs.set(songFile, content);
+            continue;
+        }
+
+        const blockFile = getFilenameFromSection(normalized, 'blocks');
+        if (blockFile) {
+            blocks.set(blockFile, content);
+            continue;
+        }
+
+        const arrangementFile = getFilenameFromSection(normalized, 'arrangements');
+        if (arrangementFile) {
+            arrangements.set(arrangementFile, content);
+            continue;
+        }
+
+        unknownPaths.push(normalized);
+    }
+
+    return {
+        fileName: file.name || 'upload.zip',
+        songs: Array.from(songs, ([filename, content]) => ({ filename, content })),
+        blocks: Array.from(blocks, ([filename, content]) => ({ filename, content })),
+        arrangements: Array.from(arrangements, ([filename, content]) => ({ filename, content })),
+        instrumentsContent,
+        unknownPaths,
+    };
+}
+
+async function getExistingNamesBySection() {
+    if (DEMO_MODE) {
+        return {
+            songs: new Set(Array.from(demoSongSourceByFile.keys(), (f) => f.toLowerCase())),
+            blocks: new Set(Array.from(demoBlockSourceByFile.keys(), (f) => f.toLowerCase())),
+            arrangements: new Set(Array.from(demoArrangementSourceByFile.keys(), (f) => f.toLowerCase())),
+        };
+    }
+
+    const [songs, blocks, arrangements] = await Promise.all([
+        fetch('/api/songs').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+        fetch('/api/blocks').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+        fetch('/api/arrangements').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    ]);
+
+    return {
+        songs: new Set((songs || []).map((f) => String(f || '').toLowerCase())),
+        blocks: new Set((blocks || []).map((b) => String(b?.filename || '').toLowerCase())),
+        arrangements: new Set((arrangements || []).map((a) => String(a?.filename || '').toLowerCase())),
+    };
+}
+
+function makeImportedFilename(originalFilename, existingSet) {
+    const safe = String(originalFilename || 'imported.js');
+    const ext = safe.endsWith('.js') ? '.js' : '';
+    const base = ext ? safe.slice(0, -3) : safe;
+    let i = 1;
+    let candidate = `${base}-import-${i}.js`;
+    while (existingSet.has(candidate.toLowerCase())) {
+        i++;
+        candidate = `${base}-import-${i}.js`;
+    }
+    return candidate;
+}
+
+function normalizeContent(content) {
+    return String(content || '').replace(/\r\n/g, '\n').trim();
+}
+
+async function fetchExistingContent(section, filename) {
+    if (DEMO_MODE) {
+        if (section === 'songs') return demoSongSourceByFile.get(filename) || '';
+        if (section === 'blocks') return demoBlockSourceByFile.get(filename) || '';
+        if (section === 'arrangements') return demoArrangementSourceByFile.get(filename) || '';
+        return '';
+    }
+
+    if (section === 'songs') {
+        const res = await fetch(`/api/song/${encodeURIComponent(filename)}`);
+        return res.ok ? res.text() : '';
+    }
+    if (section === 'blocks') {
+        const res = await fetch(`/blocks/${encodeURIComponent(filename)}`);
+        if (res.ok) return res.text();
+        const detailRes = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
+        if (detailRes.ok) {
+            const detail = await detailRes.json();
+            return buildBlockSourceFromApi(detail);
+        }
+    }
+    if (section === 'arrangements') {
+        const res = await fetch(`/arrangements/${encodeURIComponent(filename)}`);
+        if (res.ok) return res.text();
+        const detailRes = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`);
+        if (detailRes.ok) {
+            const detail = await detailRes.json();
+            return buildArrangementSourceFromApi(detail);
+        }
+    }
+    return '';
+}
+
+async function writeImportedFile(section, filename, content) {
+    if (DEMO_MODE) {
+        if (section === 'songs') demoSongSourceByFile.set(filename, content);
+        if (section === 'blocks') demoBlockSourceByFile.set(filename, content);
+        if (section === 'arrangements') demoArrangementSourceByFile.set(filename, content);
+        return true;
+    }
+
+    if (section === 'songs') {
+        const res = await fetch(`/api/song/${encodeURIComponent(filename)}`, { method: 'POST', body: content });
+        return res.ok;
+    }
+    if (section === 'blocks') {
+        const parsed = parseBlockSource(content);
+        const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsed),
+        });
+        return res.ok;
+    }
+    if (section === 'arrangements') {
+        const parsed = parseArrangementSource(content);
+        const res = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsed),
+        });
+        return res.ok;
+    }
+    return false;
+}
+
+function closeUploadProjectModal() {
+    pendingUploadBundle = null;
+    pendingUploadConflicts = null;
+    dom.uploadProjectModal?.classList.remove('open');
+}
+
+function openUploadProjectModal(bundle, conflicts) {
+    pendingUploadBundle = bundle;
+    pendingUploadConflicts = conflicts;
+
+    if (dom.uploadProjectFilename) {
+        dom.uploadProjectFilename.textContent = `File: ${bundle.fileName}`;
+    }
+    if (dom.uploadProjectSummary) {
+        dom.uploadProjectSummary.textContent = `${bundle.songs.length} songs, ${bundle.blocks.length} blocks, ${bundle.arrangements.length} arrangements${bundle.instrumentsContent ? ', instruments.js' : ''}`;
+    }
+
+    const warnings = [];
+    if (bundle.unknownPaths.length) warnings.push(`Ignored ${bundle.unknownPaths.length} unknown path(s).`);
+    if (conflicts.songs > 0 || conflicts.blocks > 0 || conflicts.arrangements > 0) {
+        warnings.push(`Conflicts found: ${conflicts.songs} songs, ${conflicts.blocks} blocks, ${conflicts.arrangements} arrangements.`);
+    }
+    if (DEMO_MODE) {
+        warnings.push('Demo mode import updates in-browser session data only.');
+    }
+
+    if (dom.uploadProjectWarnings) {
+        dom.uploadProjectWarnings.innerHTML = warnings.map((w) => `<p>${escapeHtml(w)}</p>`).join('');
+        dom.uploadProjectWarnings.classList.toggle('hidden', warnings.length === 0);
+    }
+
+    const setToggleState = (input, enabled, checked) => {
+        if (!input) return;
+        input.disabled = !enabled;
+        input.checked = enabled ? checked : false;
+    };
+    setToggleState(dom.uploadIncludeSongs, bundle.songs.length > 0, true);
+    setToggleState(dom.uploadIncludeBlocks, bundle.blocks.length > 0, true);
+    setToggleState(dom.uploadIncludeArrangements, bundle.arrangements.length > 0, true);
+    setToggleState(dom.uploadIncludeInstruments, Boolean(bundle.instrumentsContent), Boolean(bundle.instrumentsContent));
+
+    if (dom.uploadModeMerge) dom.uploadModeMerge.checked = true;
+    if (dom.uploadModeReplace) dom.uploadModeReplace.checked = false;
+    if (dom.uploadInstrumentsKeep) dom.uploadInstrumentsKeep.checked = true;
+    if (dom.uploadInstrumentsReplace) dom.uploadInstrumentsReplace.checked = false;
+
+    dom.uploadProjectModal?.classList.add('open');
+}
+
+async function importSectionItems(section, items, include, mode, existingSet) {
+    const stats = { written: 0, renamed: 0, replaced: 0, skipped: 0 };
+    if (!include || !Array.isArray(items) || !items.length) return stats;
+
+    for (const item of items) {
+        const originalFilename = item.filename;
+        let targetFilename = originalFilename;
+        const exists = existingSet.has(originalFilename.toLowerCase());
+
+        if (exists && mode === 'merge') {
+            const existingContent = await fetchExistingContent(section, originalFilename);
+            if (normalizeContent(existingContent) === normalizeContent(item.content)) {
+                stats.skipped++;
+                continue;
+            }
+            targetFilename = makeImportedFilename(originalFilename, existingSet);
+            stats.renamed++;
+        } else if (exists && mode === 'replace') {
+            stats.replaced++;
+        }
+
+        const ok = await writeImportedFile(section, targetFilename, item.content);
+        if (ok) {
+            stats.written++;
+            existingSet.add(targetFilename.toLowerCase());
+        }
+    }
+
+    return stats;
+}
+
+async function applyUploadProject() {
+    if (!pendingUploadBundle || !pendingUploadConflicts) return;
+
+    const includeSongs = Boolean(dom.uploadIncludeSongs?.checked);
+    const includeBlocks = Boolean(dom.uploadIncludeBlocks?.checked);
+    const includeArrangements = Boolean(dom.uploadIncludeArrangements?.checked);
+    const includeInstruments = Boolean(dom.uploadIncludeInstruments?.checked);
+
+    if (!includeSongs && !includeBlocks && !includeArrangements && !includeInstruments) {
+        setStatus('Select at least one data section to import', 'error');
+        return;
+    }
+
+    const mode = dom.uploadModeReplace?.checked ? 'replace' : 'merge';
+    const replaceInstruments = dom.uploadInstrumentsReplace?.checked;
+
+    try {
+        setStatus('Importing ZIP...', 'normal');
+        const existing = await getExistingNamesBySection();
+
+        const songsStats = await importSectionItems('songs', pendingUploadBundle.songs, includeSongs, mode, existing.songs);
+        const blocksStats = await importSectionItems('blocks', pendingUploadBundle.blocks, includeBlocks, mode, existing.blocks);
+        const arrangementsStats = await importSectionItems('arrangements', pendingUploadBundle.arrangements, includeArrangements, mode, existing.arrangements);
+
+        let instrumentsImported = 0;
+        if (includeInstruments && pendingUploadBundle.instrumentsContent && replaceInstruments) {
+            if (DEMO_MODE) {
+                sessionStorage.setItem('instruments-js-content', pendingUploadBundle.instrumentsContent);
+                instrumentsImported = 1;
+            } else {
+                const res = await fetch('/api/update-instruments', {
+                    method: 'POST',
+                    body: pendingUploadBundle.instrumentsContent,
+                });
+                if (res.ok) instrumentsImported = 1;
+            }
+        }
+
+        await refreshSongList();
+        if (instrumentsImported) await reloadInstruments();
+
+        setStatus(
+            `Imported songs ${songsStats.written} (renamed ${songsStats.renamed}, skipped ${songsStats.skipped}), blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), instruments ${instrumentsImported}`,
+            'success'
+        );
+        closeUploadProjectModal();
+    } catch (e) {
+        console.error(e);
+        setStatus(`Upload failed: ${e.message}`, 'error');
+    } finally {
+        if (dom.uploadProjectInput) dom.uploadProjectInput.value = '';
+    }
+}
+
+async function handleUploadSelection(file) {
+    if (!file) return;
+    try {
+        const bundle = await buildUploadBundle(file);
+        if (!bundle.songs.length && !bundle.blocks.length && !bundle.arrangements.length && !bundle.instrumentsContent) {
+            setStatus('ZIP does not contain importable project data', 'error');
+            return;
+        }
+
+        const existing = await getExistingNamesBySection();
+        const conflicts = {
+            songs: bundle.songs.filter((s) => existing.songs.has(s.filename.toLowerCase())).length,
+            blocks: bundle.blocks.filter((b) => existing.blocks.has(b.filename.toLowerCase())).length,
+            arrangements: bundle.arrangements.filter((a) => existing.arrangements.has(a.filename.toLowerCase())).length,
+        };
+        openUploadProjectModal(bundle, conflicts);
+    } catch (e) {
+        console.error(e);
+        setStatus(`Upload failed: ${e.message}`, 'error');
+    } finally {
+        if (dom.uploadProjectInput) dom.uploadProjectInput.value = '';
+    }
+}
+
 function closeModal() {
     dom.newSongModal.classList.remove('open');
     dom.newSongName.value = '';
@@ -1217,6 +1594,23 @@ function closeModal() {
 
 dom.exportBtn.addEventListener('click', exportCurrentSong);
 if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadSongsAndInstruments);
+if (dom.uploadProjectBtn) dom.uploadProjectBtn.addEventListener('click', () => dom.uploadProjectInput?.click());
+if (dom.uploadProjectInput) {
+    dom.uploadProjectInput.addEventListener('change', (e) => {
+        const file = e.target?.files?.[0];
+        if (file) handleUploadSelection(file);
+    });
+}
+if (dom.closeUploadProjectModalBtn) dom.closeUploadProjectModalBtn.addEventListener('click', closeUploadProjectModal);
+if (dom.cancelUploadProjectBtn) dom.cancelUploadProjectBtn.addEventListener('click', closeUploadProjectModal);
+if (dom.confirmUploadProjectBtn) dom.confirmUploadProjectBtn.addEventListener('click', applyUploadProject);
+if (dom.uploadProjectModal) {
+    dom.uploadProjectModal.addEventListener('click', (e) => {
+        if (e.target === dom.uploadProjectModal) {
+            closeUploadProjectModal();
+        }
+    });
+}
 
 dom.sidebarTitle.addEventListener('click', showWelcome);
 dom.newSongBtn.addEventListener('click', openModal);
