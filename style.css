@@ -316,7 +316,7 @@ strudel-editor {
 
 /* Input inside slider */
 .multislider-input {
-  @apply w-full h-5 text-sm font-mono text-center bg-input-bg border border-border rounded-[3px] text-foreground mt-1 p-0 focus:border-primary focus:outline-none;
+  @apply w-full h-5 text-sm font-sans text-center bg-input-bg border border-border rounded-[3px] text-foreground mt-1 p-0 focus:border-primary focus:outline-none;
   -moz-appearance: textfield;
   appearance: none;
 }
@@ -332,7 +332,8 @@ strudel-editor {
 }
 
 .multislider-track {
-  @apply flex-1 flex flex-col items-center justify-end h-full relative bg-input-bg rounded border border-border pt-1 pb-1 transition-colors;
+  /* No bottom padding: otherwise we get a visible gap under the label row. */
+  @apply flex-1 flex flex-col items-center justify-end h-full relative bg-input-bg rounded border border-border pt-1 pb-0 transition-colors;
 }
 
 /* Active track highlight */
@@ -345,6 +346,60 @@ strudel-editor {
   -webkit-appearance: slider-vertical; /* Standard for vertical sliders in WebKit */
   appearance: slider-vertical;
   @apply w-full h-auto flex-1 min-h-0 m-0 cursor-ns-resize bg-transparent opacity-80 transition-opacity hover:opacity-100;
+}
+
+.multislider-label {
+  /* Plain CSS here (not @apply) to avoid any Tailwind processing edge-cases.
+     This label must not change size on hover; we swap via opacity only. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 1.5rem; /* 24px */
+  min-height: 1.5rem;
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 500;
+  line-height: 1;
+  color: var(--foreground);
+  cursor: pointer;
+  user-select: none;
+}
+
+.multislider-label-text,
+.multislider-label-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+  transform: none;
+}
+
+.multislider-label-text {
+  opacity: 1;
+  line-height: 1;
+}
+
+.multislider-label-icon {
+  opacity: 0;
+}
+
+.multislider-label:hover .multislider-label-text,
+.multislider-label:focus-within .multislider-label-text {
+  opacity: 0;
+}
+
+.multislider-label:hover .multislider-label-icon,
+.multislider-label:focus-within .multislider-label-icon {
+  opacity: 1;
+}
+
+.multislider-label-icon svg {
+  display: block;
+  width: 0.75rem; /* w-3 */
+  height: 0.75rem; /* h-3 */
 }
 
 .param-label {

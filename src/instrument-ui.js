@@ -663,10 +663,12 @@ function reorganizeParameters(useArrayOrder) {
                     range.title = ''; // Suppress native tooltip
                     
                     const labelEl = document.createElement('div');
-                    labelEl.className = 'multislider-label group flex items-center justify-center';
+                    labelEl.className = 'multislider-label group';
                     labelEl.innerHTML = `
-                        <span class="group-hover:hidden">${label}</span>
-                        <i data-lucide="refresh-ccw" class="hidden group-hover:block w-3 h-3"></i>
+                        <span class="multislider-label-text">${label}</span>
+                        <span class="multislider-label-icon">
+                          <i data-lucide="refresh-ccw" class="w-3 h-3"></i>
+                        </span>
                     `;
                     
                     // Reset on click
