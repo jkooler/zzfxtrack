@@ -13,8 +13,8 @@ export const pattern = stack(
   note("c2 a1(3,8) c2(2,8) g1 bb1 g1(3,8) c2(2,8) [- g1]").slow(4).s("demo-bass"),
   sound("demo-hh-closed(16,16), [- demo-hh-open]*4"),
   sound("- - - - - - - [demo-cowbell] - - - - - - [- demo-cowbell] [demo-cowbell]").slow(4),
-  note("- c2 - c2").s("demo-snare"),
-  note("g4 [bb3 c4] f3 [f4 eb4]").s("demo-synth-stab"),
+  note("[- c2]*2").s("demo-snare"),
+  note("[d4|f4|g4] [bb3 c4] f3 [f4 eb4]").s("demo-synth-stab"),
   note("<c2 [eb2 g2]> <[c4,f4,bb3]@2 [c3,eb4,bb4] [d4,f4,a4]>*2").s("demo-pad").slow(2)
 )
 
