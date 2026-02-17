@@ -6,7 +6,7 @@ export const bpm = 120;
 
 // Check out the instrument's tab. It's a good place to start making sounds.
 
-// If you're new to Strudel, it's recommended to read the official docs:
+// If you're new to Strudel, it's recommended to read the official docs.
 // https://patterns.slab.org/learn/getting-started/
 
 
