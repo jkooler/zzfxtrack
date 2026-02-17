@@ -1656,6 +1656,16 @@ dom.songNameInput.addEventListener('input', () => {
     }, 1000);
 });
 
+// Save song name immediately when leaving the input
+dom.songNameInput.addEventListener('blur', () => {
+    if (!currentSongFilename) return;
+    if (renameDebounceTimeout) {
+        clearTimeout(renameDebounceTimeout);
+        renameDebounceTimeout = null;
+    }
+    renameSong({ quiet: true });
+});
+
 // Save song name on Enter key
 dom.songNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
