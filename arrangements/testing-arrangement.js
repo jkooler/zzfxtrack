@@ -1,23 +1,34 @@
-// Arrangement: Testing arrangement
+// Arrangement: Test arrangement
 
-export const name = "Testing arrangement";
+export const name = "Test arrangement";
 
 export const arrangementState = {
   "version": 1,
-  "name": "Testing arrangement",
+  "name": "Test arrangement",
   "bpm": 120,
   "rows": [
     {
-      "repeats": 1,
+      "repeats": 4,
       "blocks": [
-        "bassline.js"
+        "simple-chord-pattern.js",
+        "simple-bass-line.js"
       ]
     },
     {
       "repeats": 4,
       "blocks": [
-        "bassline.js",
+        "simple-beat.js",
+        "simple-bass-line.js",
         "simple-chord-pattern.js"
+      ]
+    },
+    {
+      "repeats": 8,
+      "blocks": [
+        "simple-bass-line.js",
+        "simple-beat.js",
+        "simple-chord-pattern.js",
+        "synth-stab.js"
       ]
     }
   ]

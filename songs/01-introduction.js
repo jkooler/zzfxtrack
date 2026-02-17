@@ -2,7 +2,7 @@ import { stack, note, s, slow, arrange, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
 
-// Demo song for Strudel to ZzFXM
+// Introduction song for Strudel to ZzFXM
 
 // If you're new to Strudel, it's recommended to read the official docs.
 // https://patterns.slab.org/learn/getting-started/
