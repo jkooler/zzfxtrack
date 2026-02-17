@@ -10,6 +10,17 @@ import { playTestNote } from './instrument-preview.js';
 import { createIcons, icons } from 'lucide';
 import { setupScrubInteraction } from './instrument-ui.js';
 
+const DEMO_MODE = import.meta.env.MODE === 'demo';
+const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+
+function isDeveloperModeEnabled() {
+  try {
+    return localStorage.getItem(DEVELOPER_MODE_KEY) === '1';
+  } catch (_e) {
+    return false;
+  }
+}
+
 // Keyboard to note mapping (zxcvb row = C3-B3, qwerty row = C4-B4)
 const KEYBOARD_MAP = {
   // Lower row (C3 - B3)
@@ -64,6 +75,7 @@ let editMode = {
   blockFilename: null,
   blockName: null,
   blockDescription: null,
+  blockScope: 'user',
   onSave: null, // Callback for save action
   returnToBlocksOnClose: false,
 };
@@ -200,6 +212,7 @@ function cacheElements() {
     blockBpmInput: document.getElementById('trackerBlockBpm'),
     blockRowsPreset: document.getElementById('trackerBlockRowsPreset'),
     blockRowsCustom: document.getElementById('trackerBlockRowsCustom'),
+    blockAdvancedSettingsBtn: document.getElementById('trackerBlockAdvancedSettingsBtn'),
     title: document.querySelector('#trackerModal h2'),
   };
 }
@@ -598,6 +611,19 @@ function setupEventListeners() {
 
   // Preview button
   elements.previewBtn?.addEventListener('click', togglePreview);
+  elements.blockAdvancedSettingsBtn?.addEventListener('click', () => {
+    if (!editMode.isEditing) return;
+    if (!isDeveloperModeEnabled() || DEMO_MODE) return;
+    const name = (elements.blockNameInput?.value || editMode.blockName || '').trim();
+    document.dispatchEvent(new CustomEvent('resource-scope:open', {
+      detail: {
+        type: 'block',
+        filename: editMode.blockFilename,
+        name,
+        scope: editMode.blockScope === 'example' ? 'example' : 'user',
+      }
+    }));
+  });
 
   if (elements.blockBpmInput) {
     elements.blockBpmInput.addEventListener('input', (e) => {
@@ -652,6 +678,19 @@ function setupEventListeners() {
       }
     });
   }
+
+  document.addEventListener('resource-scope:changed', (e) => {
+    const detail = e?.detail || {};
+    if (detail.type !== 'block') return;
+    if (!editMode.isEditing) return;
+    if (editMode.blockFilename && detail.filename !== editMode.blockFilename) return;
+    if (!editMode.blockFilename && detail.filename) return;
+    editMode.blockScope = detail.scope === 'example' ? 'example' : 'user';
+  });
+
+  document.addEventListener('developer-mode:changed', () => {
+    updateEditModeUI();
+  });
 
   // Keyboard input
   document.addEventListener('keydown', handleKeyDown);
@@ -1705,6 +1744,7 @@ export function openTracker(instrumentList) {
   editMode.isEditing = true;
   editMode.isNewBlock = true;
   editMode.returnToBlocksOnClose = true;
+  editMode.blockScope = 'user';
   state.bpm = 120;
   setSteps(16);
   
@@ -1733,6 +1773,7 @@ export function openTrackerForEdit(instrumentList, blockData) {
   editMode.blockFilename = blockData.filename;
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
+  editMode.blockScope = blockData.scope === 'example' ? 'example' : 'user';
   
   // Update UI for edit mode
   updateEditModeUI();
@@ -1765,6 +1806,7 @@ function resetEditMode() {
   editMode.blockFilename = null;
   editMode.blockName = null;
   editMode.blockDescription = null;
+  editMode.blockScope = 'user';
   editMode.onSave = null;
   editMode.returnToBlocksOnClose = false;
 }
@@ -1811,6 +1853,11 @@ function updateEditModeUI() {
     // Ensure icons render when the block props row is revealed.
     createIcons({ icons });
   }
+
+  if (elements.blockAdvancedSettingsBtn) {
+    const shouldShow = editMode.isEditing && isDeveloperModeEnabled() && !DEMO_MODE;
+    elements.blockAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
+  }
   
   // Show/hide save button
   if (elements.saveBtn) {
@@ -1849,6 +1896,7 @@ function handleSaveBlock() {
       filename: editMode.blockFilename,
       name: name,
       description: editMode.blockDescription,
+      scope: editMode.blockScope,
       pattern,
       trackerState,
     }

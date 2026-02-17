@@ -21,10 +21,23 @@ import { createIcons, icons } from 'lucide';
 import { getInstrumentAnalyser } from './zzfx-loader.js';
 import { ScopeVisualizer } from './visualizer.js';
 
+const DEMO_MODE = import.meta.env.MODE === 'demo';
+
 // State
 let currentInstrumentId = null;
 let currentView = 'songs'; // 'songs' or 'instruments'
 let hasSelectedSong = false;
+const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-instruments-v1';
+let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, example: true });
+const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+
+function isDeveloperModeEnabled() {
+    try {
+        return localStorage.getItem(DEVELOPER_MODE_KEY) === '1';
+    } catch (_e) {
+        return false;
+    }
+}
 
 // DOM Elements
 const dom = {
@@ -54,6 +67,7 @@ const dom = {
     instStrudelAlias: document.getElementById('instStrudelAlias'),
     instChannel: document.getElementById('instChannel'),
     instMonophonic: document.getElementById('instMonophonic'),
+    openInstrumentAdvancedSettingsBtn: document.getElementById('openInstrumentAdvancedSettingsBtn'),
     
     // Modals
     newInstrumentModal: document.getElementById('newInstrumentModal'),
@@ -88,6 +102,32 @@ for (let i = 0; i <= 20; i++) {
     paramInputs[i] = document.getElementById(`param${i}`);
 }
 
+function normalizeScope(value) {
+    return value === 'example' ? 'example' : 'user';
+}
+
+function loadFolderState(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return { ...fallback };
+        const parsed = JSON.parse(raw);
+        return {
+            user: typeof parsed?.user === 'boolean' ? parsed.user : fallback.user,
+            example: typeof parsed?.example === 'boolean' ? parsed.example : fallback.example,
+        };
+    } catch (_e) {
+        return { ...fallback };
+    }
+}
+
+function saveFolderState(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (_e) {
+        // Ignore localStorage failures.
+    }
+}
+
 /**
  * Initialize instrument UI
  */
@@ -110,10 +150,17 @@ export async function initInstrumentUI() {
 
     // Render instrument list
     renderInstrumentList();
+    if (dom.openInstrumentAdvancedSettingsBtn) {
+        dom.openInstrumentAdvancedSettingsBtn.classList.add('dev-only-hidden');
+    }
 
     hideInitOverlay();
 
     console.log('[InstrumentUI] Initialized');
+}
+
+export function refreshInstrumentListUI() {
+    renderInstrumentList();
 }
 
 /**
@@ -174,6 +221,21 @@ function setupEventListeners() {
     // Drawer
     dom.closeDrawerBtn.addEventListener('click', closeDrawer);
     dom.testInstrumentBtn.addEventListener('click', handleTestInstrument);
+    if (dom.openInstrumentAdvancedSettingsBtn) {
+        dom.openInstrumentAdvancedSettingsBtn.addEventListener('click', () => {
+            if (!isDeveloperModeEnabled() || DEMO_MODE) return;
+            const instrument = currentInstrumentId ? getInstrumentById(currentInstrumentId) : null;
+            if (!instrument) return;
+            document.dispatchEvent(new CustomEvent('resource-scope:open', {
+                detail: {
+                    type: 'instrument',
+                    id: instrument.id,
+                    name: instrument.strudelAlias,
+                    scope: normalizeScope(instrument.scope),
+                }
+            }));
+        });
+    }
     
     // Drawer inputs - auto-save and preview on change
     dom.instExportName.addEventListener('input', handleDrawerChange);
@@ -189,6 +251,24 @@ function setupEventListeners() {
     
     // Parameter ordering toggle
     setupParameterOrdering();
+
+    document.addEventListener('resource-scope:changed', (e) => {
+        if (e?.detail?.type !== 'instrument') return;
+        renderInstrumentList();
+        if (currentInstrumentId) {
+            openDrawer(currentInstrumentId);
+        }
+    });
+
+    document.addEventListener('developer-mode:changed', () => {
+        renderInstrumentList();
+        if (currentInstrumentId) {
+            openDrawer(currentInstrumentId);
+        }
+        if (!isDeveloperModeEnabled() && dom.openInstrumentAdvancedSettingsBtn) {
+            dom.openInstrumentAdvancedSettingsBtn.classList.add('dev-only-hidden');
+        }
+    });
 }
 
 function showInitOverlay() {
@@ -1029,72 +1109,124 @@ function renderInstrumentList() {
 
     const instruments = loadInstruments();
     dom.instrumentList.innerHTML = '';
+    const devMode = isDeveloperModeEnabled();
     
     const filterUsed = dom.usedInstrumentsOnly && dom.usedInstrumentsOnly.checked;
     
     // Reverse order so newest (highest channel) appears first
-    const reversed = [...instruments].reverse();
-    
-    reversed.forEach((inst, index) => {
-        // Filter if needed
-        if (filterUsed && lastKnownCode) {
-            const regex = new RegExp(`["']${inst.strudelAlias}["']|\\b${inst.strudelAlias}\\b`, 'g');
-            if (!regex.test(lastKnownCode)) return;
-        }
-
-        const li = document.createElement('li');
-        li.className = `instrument-item ${inst.id === currentInstrumentId ? 'active' : ''}`;
-        li.draggable = true;
-        li.dataset.instrumentId = inst.id;
-        li.dataset.alias = inst.strudelAlias; // For DOM lookups
-        
-        li.innerHTML = `
-            <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
-            <div class="instrument-info" style="cursor: move; display: flex; align-items: center; gap: 8px;">
-                <canvas class="instrument-scope w-8 h-8 rounded bg-black/20 border border-border/20 hidden md:block opacity-50 transition-opacity" width="64" height="64"></canvas>
-                <div class="min-w-0">
-                    <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
-                    <div class="instrument-alias opacity-70">${inst.exportName}</div>
-                    <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">CH: ${inst.channel}</div>
-                </div>
-            </div>
-            <div class="song-item-actions">
-                <button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-            </div>
-        `;
-        
-        // Attach Visualizer
-        const canvas = li.querySelector('canvas');
-        if (canvas) {
-            const analyser = getInstrumentAnalyser(inst.strudelAlias);
-            if (analyser) {
-                const viz = new ScopeVisualizer(analyser);
-                viz.attach(canvas);
-                activeVisualizers.push(viz);
-            }
-        }
-
-        // Click to edit
-        li.querySelector('.instrument-info').addEventListener('click', () => {
-             openDrawer(inst.id);
-             playTestNoteDebounced(inst.params, null, 0);
-        });
-        
-        // Delete button
-        li.querySelector('.sidebar-del-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            showDeleteInstrumentConfirmation(inst.id);
-        });
-        
-        // Drag and drop events
-        li.addEventListener('dragstart', handleDragStart);
-        li.addEventListener('dragover', handleDragOver);
-        li.addEventListener('dragleave', handleDragLeave);
-        li.addEventListener('drop', handleDrop);
-        li.addEventListener('dragend', handleDragEnd);
-        
-        dom.instrumentList.appendChild(li);
+    const filtered = [...instruments].reverse().filter((inst) => {
+        if (!filterUsed || !lastKnownCode) return true;
+        const regex = new RegExp(`["']${inst.strudelAlias}["']|\\b${inst.strudelAlias}\\b`, 'g');
+        return regex.test(lastKnownCode);
     });
+    const userInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'user');
+    const exampleInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'example');
+
+    const appendFolder = (scope, label, items) => {
+        const folderItem = document.createElement('li');
+        folderItem.className = 'mb-1';
+
+        const expanded = scope === 'example'
+            ? instrumentFolderState.example
+            : instrumentFolderState.user;
+        const icon = expanded ? 'chevron-down' : 'chevron-right';
+
+        folderItem.innerHTML = `
+            <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
+                <span class="inline-flex items-center gap-1.5">
+                    <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+                    ${label}
+                </span>
+                <span class="opacity-70">${items.length}</span>
+            </button>
+            <ul class="list-none m-0 p-0 pl-2 border-l border-border/40 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-folder-items="${scope}"></ul>
+        `;
+
+        const button = folderItem.querySelector(`[data-folder-scope="${scope}"]`);
+        const list = folderItem.querySelector(`[data-folder-items="${scope}"]`);
+        button?.addEventListener('click', () => {
+            if (scope === 'example') {
+                instrumentFolderState.example = !instrumentFolderState.example;
+            } else {
+                instrumentFolderState.user = !instrumentFolderState.user;
+            }
+            saveFolderState(INSTRUMENT_FOLDER_STATE_KEY, instrumentFolderState);
+            renderInstrumentList();
+        });
+
+        if (items.length === 0) {
+            const empty = document.createElement('li');
+            empty.className = 'text-xs text-muted-foreground px-2 py-1';
+            empty.textContent = scope === 'user'
+                ? 'No user instruments yet. Create one to get started.'
+                : 'No example instruments available.';
+            list?.appendChild(empty);
+        }
+
+        items.forEach((inst) => {
+            const instScope = normalizeScope(inst.scope);
+            const isExample = instScope === 'example';
+            const isImmutable = isExample && !devMode;
+
+            const li = document.createElement('li');
+            li.className = `instrument-item ${inst.id === currentInstrumentId ? 'active' : ''}`;
+            li.draggable = !isExample;
+            li.dataset.instrumentId = inst.id;
+            li.dataset.alias = inst.strudelAlias;
+            li.dataset.scope = instScope;
+
+            li.innerHTML = `
+                <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
+                <div class="instrument-info" style="cursor: ${isExample ? 'pointer' : 'move'}; display: flex; align-items: center; gap: 8px;">
+                    <canvas class="instrument-scope w-8 h-8 rounded bg-black/20 border border-border/20 hidden md:block opacity-50 transition-opacity" width="64" height="64"></canvas>
+                    <div class="min-w-0">
+                        <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
+                        <div class="instrument-alias opacity-70">${inst.exportName}</div>
+                        <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">CH: ${inst.channel}${isExample ? ' • EXAMPLE' : ''}</div>
+                    </div>
+                </div>
+                <div class="song-item-actions">
+                    ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
+                </div>
+            `;
+
+            const canvas = li.querySelector('canvas');
+            if (canvas) {
+                const analyser = getInstrumentAnalyser(inst.strudelAlias);
+                if (analyser) {
+                    const viz = new ScopeVisualizer(analyser);
+                    viz.attach(canvas);
+                    activeVisualizers.push(viz);
+                }
+            }
+
+            li.querySelector('.instrument-info').addEventListener('click', () => {
+                openDrawer(inst.id);
+                playTestNoteDebounced(inst.params, null, 0);
+            });
+
+            const deleteBtn = li.querySelector('.sidebar-del-btn');
+            deleteBtn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showDeleteInstrumentConfirmation(inst.id);
+            });
+
+            if (!isExample) {
+                li.addEventListener('dragstart', handleDragStart);
+                li.addEventListener('dragover', handleDragOver);
+                li.addEventListener('dragleave', handleDragLeave);
+                li.addEventListener('drop', handleDrop);
+                li.addEventListener('dragend', handleDragEnd);
+            }
+
+            list?.appendChild(li);
+        });
+
+        dom.instrumentList.appendChild(folderItem);
+    };
+
+    appendFolder('user', 'User', userInstruments);
+    appendFolder('example', 'Examples', exampleInstruments);
     
     createIcons({ icons });
 
@@ -1163,10 +1295,11 @@ function handleDragOver(e) {
     
     const target = e.currentTarget;
     if (draggedElement !== target) {
-        // Get all list items
-        const items = Array.from(dom.instrumentList.children);
+        // Reorder is limited to user-scoped instruments.
+        const items = Array.from(dom.instrumentList.querySelectorAll('.instrument-item[data-scope="user"]'));
         const draggedIndex = items.indexOf(draggedElement);
         const targetIndex = items.indexOf(target);
+        if (draggedIndex === -1 || targetIndex === -1) return false;
         
         // Clear both borders first
         target.style.borderTop = '';
@@ -1213,34 +1346,29 @@ function handleDrop(e) {
         
         // Get all instruments
         const instruments = loadInstruments();
-        
-        // Find indices (in reversed array since that's what we display)
-        const reversed = [...instruments].reverse();
-        const draggedIndex = reversed.findIndex(inst => inst.id === draggedId);
-        const targetIndex = reversed.findIndex(inst => inst.id === targetId);
-        
-        if (draggedIndex !== -1 && targetIndex !== -1) {
-            // Reorder in the reversed array
-            const [movedInst] = reversed.splice(draggedIndex, 1);
-            reversed.splice(targetIndex, 0, movedInst);
-            
-            // Reverse back to get original order and save
-            const reordered = [...reversed].reverse();
-            
-            // Update channel numbers based on new order
-            reordered.forEach((inst, index) => {
-                inst.channel = index;
-            });
-            
-            // Save and update
-            import('./instrument-manager.js').then(({ saveInstruments }) => {
-                saveInstruments(reordered);
-                renderInstrumentList();
-                autoUpdateInstrumentsFile();
-                reloadInstruments(); // Reload instruments into Strudel
-                console.log('[InstrumentUI] Reordered instruments');
-            });
-        }
+
+        const examples = instruments.filter((inst) => normalizeScope(inst.scope) === 'example');
+        const users = instruments.filter((inst) => normalizeScope(inst.scope) !== 'example');
+        const displayedUsers = [...users].reverse();
+        const draggedIndex = displayedUsers.findIndex((inst) => inst.id === draggedId);
+        const targetIndex = displayedUsers.findIndex((inst) => inst.id === targetId);
+        if (draggedIndex === -1 || targetIndex === -1) return false;
+
+        const [moved] = displayedUsers.splice(draggedIndex, 1);
+        displayedUsers.splice(targetIndex, 0, moved);
+        const reorderedUsers = [...displayedUsers].reverse();
+        const reordered = [...examples, ...reorderedUsers];
+        reordered.forEach((inst, index) => {
+            inst.channel = index;
+        });
+
+        import('./instrument-manager.js').then(({ saveInstruments }) => {
+            saveInstruments(reordered);
+            renderInstrumentList();
+            autoUpdateInstrumentsFile();
+            reloadInstruments(); // Reload instruments into Strudel
+            console.log('[InstrumentUI] Reordered user instruments');
+        });
     }
     
     return false;
@@ -1265,6 +1393,8 @@ function handleDragEnd(e) {
 function openDrawer(instrumentId) {
     const instrument = getInstrumentById(instrumentId);
     if (!instrument) return;
+    const isExample = normalizeScope(instrument.scope) === 'example';
+    const isImmutable = isExample && !isDeveloperModeEnabled();
     
     currentInstrumentId = instrumentId;
     
@@ -1273,16 +1403,25 @@ function openDrawer(instrumentId) {
     dom.instExportName.value = instrument.exportName;
     dom.instStrudelAlias.value = instrument.strudelAlias;
     dom.instChannel.value = instrument.channel;
+    dom.instStrudelAlias.readOnly = isImmutable;
+    dom.instStrudelAlias.classList.toggle('opacity-60', isImmutable);
+    dom.instStrudelAlias.classList.toggle('cursor-not-allowed', isImmutable);
     if (dom.instMonophonic) {
         dom.instMonophonic.checked = Boolean(instrument.monophonic);
+        dom.instMonophonic.disabled = isImmutable;
     }
 
     // Populate parameters
     instrument.params.forEach((value, index) => {
         if (paramInputs[index]) {
             paramInputs[index].value = value;
+            paramInputs[index].disabled = isImmutable;
         }
     });
+    if (dom.openInstrumentAdvancedSettingsBtn) {
+        const shouldShow = !DEMO_MODE && isDeveloperModeEnabled();
+        dom.openInstrumentAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
+    }
     
     // Show drawer
     dom.instrumentDrawer.classList.add('active');
@@ -1304,6 +1443,9 @@ function openDrawer(instrumentId) {
 function closeDrawer() {
     dom.instrumentDrawer.classList.remove('active');
     currentInstrumentId = null;
+    if (dom.openInstrumentAdvancedSettingsBtn) {
+        dom.openInstrumentAdvancedSettingsBtn.classList.add('dev-only-hidden');
+    }
     renderInstrumentList();
 }
 
@@ -1313,6 +1455,8 @@ function closeDrawer() {
  */
 function handleDrawerChange() {
     if (!currentInstrumentId) return;
+    const current = getInstrumentById(currentInstrumentId);
+    if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
     
     const rawAlias = dom.instStrudelAlias.value;
     const strudelAlias = sanitizeStrudelAlias(rawAlias);
@@ -1337,6 +1481,8 @@ function handleDrawerChange() {
 
 function handleMonophonicChange() {
     if (!currentInstrumentId) return;
+    const current = getInstrumentById(currentInstrumentId);
+    if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
     updateInstrument(currentInstrumentId, { monophonic: Boolean(dom.instMonophonic.checked) });
     renderInstrumentList();
     autoUpdateInstrumentsFile();
@@ -1384,6 +1530,7 @@ function handleParamChange(paramIndex) {
     
     const instrument = getInstrumentById(currentInstrumentId);
     if (!instrument) return;
+    if (normalizeScope(instrument.scope) === 'example' && !isDeveloperModeEnabled()) return;
     
     // Update parameter
     const newParams = [...instrument.params];
@@ -1475,6 +1622,10 @@ let instrumentToDelete = null;
 function showDeleteInstrumentConfirmation(instrumentId) {
     const instrument = getInstrumentById(instrumentId);
     if (!instrument) return;
+    if (normalizeScope(instrument.scope) === 'example' && !isDeveloperModeEnabled()) {
+        alert('Example instruments cannot be deleted.');
+        return;
+    }
     
     instrumentToDelete = instrumentId;
     dom.deleteInstrumentText.innerHTML = `Instrument: <strong>${instrument.exportName}</strong><br>This action is irreversible.`;
@@ -1495,7 +1646,12 @@ function closeDeleteInstrumentModal() {
 function handleDeleteInstrument() {
     if (!instrumentToDelete) return;
     
-    deleteInstrument(instrumentToDelete);
+    const deleted = deleteInstrument(instrumentToDelete);
+    if (!deleted) {
+        alert('Example instruments cannot be deleted.');
+        closeDeleteInstrumentModal();
+        return;
+    }
     
     if (instrumentToDelete === currentInstrumentId) {
         closeDrawer();

@@ -3,6 +3,7 @@
 
 export const name = "Drums";
 export const description = "Created in tracker";
+export const scope = "example";
 
 export const pattern = `stack(
   note("a#2 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ a#2 ~ ~ ~ a#2 ~ ~ ~ ~ ~ ~ ~ a#2 ~ a#2 ~ d4 ~ ~ ~").s("demo-kickdrum"),

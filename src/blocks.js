@@ -19,13 +19,64 @@ let selectedBlockIndex = null;
 // DOM Elements
 let elements = {};
 	let blockToDelete = null;
-	let arrangementsCache = [];
-	let selectedArrangementIndex = null;
-	let arrangementEditMode = {
+let arrangementsCache = [];
+let selectedArrangementIndex = null;
+let arrangementEditMode = {
 	  isEditing: false,
 	  filename: null,
+    scope: 'user',
 	};
 let arrangementToDelete = null;
+const BLOCKS_FOLDER_STATE_KEY = 'zzfxm-folder-state-blocks-v1';
+const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v1';
+let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: true });
+let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, example: true });
+const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+const DEMO_MODE = import.meta.env.MODE === 'demo';
+
+function normalizeScope(value) {
+  return value === 'example' ? 'example' : 'user';
+}
+
+function isDeveloperModeEnabled() {
+  try {
+    return localStorage.getItem(DEVELOPER_MODE_KEY) === '1';
+  } catch (_e) {
+    return false;
+  }
+}
+
+function getDeveloperModeHeaders() {
+  return isDeveloperModeEnabled() ? { 'X-Developer-Mode': '1' } : {};
+}
+
+function updateArrangementAdvancedSettingsVisibility() {
+  if (!elements.arrangementAdvancedSettingsBtn) return;
+  const shouldShow = !DEMO_MODE && isDeveloperModeEnabled() && elements.arrangementModal?.classList.contains('open');
+  elements.arrangementAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
+}
+
+function loadFolderState(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return { ...fallback };
+    const parsed = JSON.parse(raw);
+    return {
+      user: typeof parsed?.user === 'boolean' ? parsed.user : fallback.user,
+      example: typeof parsed?.example === 'boolean' ? parsed.example : fallback.example,
+    };
+  } catch (_e) {
+    return { ...fallback };
+  }
+}
+
+function saveFolderState(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (_e) {
+    // Ignore storage errors.
+  }
+}
 
 function emitStatus(message, type = 'normal') {
   document.dispatchEvent(new CustomEvent('app:status', { detail: { message, type } }));
@@ -63,6 +114,7 @@ function cacheElements() {
     saveArrangementBtn: document.getElementById('saveArrangementBtn'),
     addArrangementRowBtn: document.getElementById('addArrangementRowBtn'),
     arrangementName: document.getElementById('arrangementName'),
+    arrangementAdvancedSettingsBtn: document.getElementById('arrangementAdvancedSettingsBtn'),
     arrangementBpm: document.getElementById('arrangementBpm'),
     arrangementRows: document.getElementById('arrangementRows'),
     closeBtn: document.getElementById('closeBlocksBtn'),
@@ -107,11 +159,47 @@ function setupEventListeners() {
     renderArrangementRows();
   });
   elements.saveArrangementBtn?.addEventListener('click', saveArrangementFromEditor);
+  elements.arrangementAdvancedSettingsBtn?.addEventListener('click', () => {
+    if (!isDeveloperModeEnabled() || DEMO_MODE) return;
+    const name = (elements.arrangementName?.value || arrangementDraft.name || '').trim();
+    document.dispatchEvent(new CustomEvent('resource-scope:open', {
+      detail: {
+        type: 'arrangement',
+        filename: arrangementEditMode.filename,
+        name,
+        scope: normalizeScope(arrangementEditMode.scope),
+      }
+    }));
+  });
 
   if (elements.arrangementBpm) {
     setupScrubInteraction(elements.arrangementBpm);
   }
-}
+
+	  document.addEventListener('resource-scope:changed', async (e) => {
+	    const detail = e?.detail || {};
+	    if (detail.type === 'block') {
+	      await loadBlocksList();
+	      return;
+	    }
+	    if (detail.type === 'arrangement') {
+	      if (
+	        (arrangementEditMode.filename && detail.filename === arrangementEditMode.filename) ||
+	        (!arrangementEditMode.filename && !detail.filename)
+	      ) {
+	        arrangementEditMode.scope = normalizeScope(detail.scope);
+	      }
+	      await loadArrangementsList();
+	    }
+	  });
+
+	  document.addEventListener('developer-mode:changed', () => {
+	    // Re-render to show/hide immutable actions without forcing a reload.
+	    renderBlocksList();
+	    renderArrangementsList();
+	    updateArrangementAdvancedSettingsVisibility();
+	  });
+	}
 
 function previewArrangementDraft() {
   const name = (elements.arrangementName?.value || arrangementDraft.name || 'Arrangement').trim() || 'Arrangement';
@@ -184,42 +272,98 @@ function renderArrangementsList() {
     return;
   }
 
-  arrangementsCache.forEach((arr, index) => {
-    const el = document.createElement('div');
-    el.className = 'block-item';
-    el.dataset.index = index;
-    el.tabIndex = 0;
-    el.innerHTML = `
-      <div class="min-w-0">
-        <div class="block-name font-bold text-sm text-foreground">${escapeHtml(arr.name)}</div>
-        <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(`BPM ${arr.bpm ?? 120}`)}</div>
-      </div>
-      <div class="song-item-actions">
-        <button class="sidebar-edit-btn" title="Edit ${escapeHtml(arr.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
-        <button class="sidebar-del-btn" title="Delete ${escapeHtml(arr.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-      </div>
+  const appendFolder = (scope, label, entries) => {
+    const devMode = isDeveloperModeEnabled();
+    const expanded = scope === 'example'
+      ? arrangementFolderState.example
+      : arrangementFolderState.user;
+    const icon = expanded ? 'chevron-down' : 'chevron-right';
+
+    const folder = document.createElement('div');
+    folder.className = 'mb-2';
+    folder.innerHTML = `
+      <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-arr-folder="${scope}">
+        <span class="inline-flex items-center gap-1.5">
+          <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+          ${label}
+        </span>
+        <span class="opacity-70">${entries.length}</span>
+      </button>
+      <div class="pl-2 border-l border-border/40 space-y-2 mt-1 ${expanded ? '' : 'hidden'}" data-arr-folder-items="${scope}"></div>
     `;
-
-    el.addEventListener('click', () => selectArrangement(index));
-    el.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      selectArrangement(index);
+    const list = folder.querySelector(`[data-arr-folder-items="${scope}"]`);
+    folder.querySelector(`[data-arr-folder="${scope}"]`)?.addEventListener('click', () => {
+      if (scope === 'example') {
+        arrangementFolderState.example = !arrangementFolderState.example;
+      } else {
+        arrangementFolderState.user = !arrangementFolderState.user;
+      }
+      saveFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, arrangementFolderState);
+      renderArrangementsList();
     });
 
-    el.querySelector('.sidebar-edit-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      selectArrangement(index);
-      void openArrangementEditor(arrangementsCache[index]);
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'text-xs text-muted-foreground px-2 py-1';
+      empty.textContent = scope === 'user'
+        ? 'No user arrangements yet. Create one to start arranging your blocks.'
+        : 'No example arrangements available.';
+      list?.appendChild(empty);
+    }
+
+    entries.forEach(({ arr, index }) => {
+      const isExample = normalizeScope(arr.scope) === 'example';
+      const isImmutable = isExample && !devMode;
+      const el = document.createElement('div');
+      el.className = 'block-item';
+      el.dataset.index = index;
+      el.tabIndex = 0;
+      el.innerHTML = `
+        <div class="min-w-0">
+          <div class="block-name font-bold text-sm text-foreground">${escapeHtml(arr.name)}</div>
+          <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(`BPM ${arr.bpm ?? 120}${isExample ? ' • Example' : ''}`)}</div>
+        </div>
+        <div class="song-item-actions">
+          <button class="sidebar-edit-btn" title="Edit ${escapeHtml(arr.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
+          ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${escapeHtml(arr.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
+        </div>
+      `;
+
+      el.addEventListener('click', () => selectArrangement(index));
+      el.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        selectArrangement(index);
+      });
+
+      el.querySelector('.sidebar-edit-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectArrangement(index);
+        void openArrangementEditor(arrangementsCache[index]);
+      });
+
+      el.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openDeleteArrangementModal(index);
+      });
+
+      list?.appendChild(el);
     });
 
-	    el.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
-	      e.stopPropagation();
-	      openDeleteArrangementModal(index);
-	    });
+    elements.arrangementsList.appendChild(folder);
+  };
 
-    elements.arrangementsList.appendChild(el);
+  const userEntries = [];
+  const exampleEntries = [];
+  arrangementsCache.forEach((arr, index) => {
+    if (normalizeScope(arr.scope) === 'example') {
+      exampleEntries.push({ arr, index });
+    } else {
+      userEntries.push({ arr, index });
+    }
   });
+  appendFolder('user', 'User', userEntries);
+  appendFolder('example', 'Examples', exampleEntries);
 
   createIcons({ icons });
 }
@@ -245,18 +389,22 @@ function selectArrangement(index) {
   }
 }
 
-	async function deleteArrangementByIndex(index) {
-	  const arr = arrangementsCache[index];
-	  if (!arr?.filename) return;
-	  try {
-    const res = await fetch(`/api/arrangements/${arr.filename}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Delete failed');
-    await loadArrangementsList();
-  } catch (err) {
-    console.error('[Arranger] Delete failed:', err);
-    alert('Failed to delete arrangement. See console for details.');
-	  }
-	}
+		async function deleteArrangementByIndex(index) {
+		  const arr = arrangementsCache[index];
+		  if (!arr?.filename) return;
+	    if (normalizeScope(arr.scope) === 'example' && !isDeveloperModeEnabled()) {
+	      alert('Example arrangements cannot be deleted.');
+	      return;
+	    }
+		  try {
+	    const res = await fetch(`/api/arrangements/${arr.filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
+	    if (!res.ok) throw new Error('Delete failed');
+	    await loadArrangementsList();
+	  } catch (err) {
+	    console.error('[Arranger] Delete failed:', err);
+	    alert('Failed to delete arrangement. See console for details.');
+		  }
+		}
 
 	function openDeleteArrangementModal(index) {
 	  const arr = arrangementsCache[index];
@@ -274,22 +422,27 @@ function selectArrangement(index) {
 	  elements.deleteArrangementModal?.classList.remove('open');
 	}
 
-	async function confirmDeleteArrangement() {
-	  if (!arrangementToDelete?.filename) {
-	    closeDeleteArrangementModal();
-	    return;
-	  }
-	  const filename = arrangementToDelete.filename;
-	  closeDeleteArrangementModal();
-	  try {
-	    const res = await fetch(`/api/arrangements/${filename}`, { method: 'DELETE' });
-	    if (!res.ok) throw new Error('Delete failed');
-	    await loadArrangementsList();
-	  } catch (err) {
-	    console.error('[Arranger] Delete failed:', err);
-	    alert('Failed to delete arrangement. See console for details.');
-	  }
-	}
+async function confirmDeleteArrangement() {
+  if (!arrangementToDelete?.filename) {
+		    closeDeleteArrangementModal();
+		    return;
+		  }
+  const filename = arrangementToDelete.filename;
+  if (normalizeScope(arrangementToDelete.scope) === 'example' && !isDeveloperModeEnabled()) {
+    closeDeleteArrangementModal();
+    alert('Example arrangements cannot be deleted.');
+    return;
+  }
+  closeDeleteArrangementModal();
+		  try {
+		    const res = await fetch(`/api/arrangements/${filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
+		    if (!res.ok) throw new Error('Delete failed');
+		    await loadArrangementsList();
+		  } catch (err) {
+		    console.error('[Arranger] Delete failed:', err);
+		    alert('Failed to delete arrangement. See console for details.');
+		  }
+		}
 
 function getSelectedArrangement() {
   const selectedEl = document.querySelector('#arrangementsList .block-item.selected');
@@ -328,6 +481,7 @@ async function openArrangementEditor(arrangement = null) {
 
   arrangementEditMode.isEditing = !!arrangement;
   arrangementEditMode.filename = arrangement?.filename || null;
+  arrangementEditMode.scope = normalizeScope(arrangement?.scope);
 
   const state = arrangement?.arrangementState || null;
   arrangementDraft = {
@@ -352,12 +506,15 @@ async function openArrangementEditor(arrangement = null) {
 
   renderArrangementRows();
   elements.arrangementModal.classList.add('open');
+  updateArrangementAdvancedSettingsVisibility();
   elements.arrangementName?.focus();
   createIcons({ icons });
 }
 
 function closeArrangementEditor() {
   elements.arrangementModal?.classList.remove('open');
+  arrangementEditMode.scope = 'user';
+  updateArrangementAdvancedSettingsVisibility();
 }
 
 function renderArrangementRows() {
@@ -512,14 +669,14 @@ async function saveArrangementFromEditor() {
   console.log('[Arranger] arrangementState payload:', arrangementState);
 
   try {
-    if (arrangementEditMode.isEditing && arrangementEditMode.filename) {
-      const res = await fetch(`/api/arrangements/${arrangementEditMode.filename}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: arrangementDraft.name, arrangementState })
-      });
-      if (!res.ok) throw new Error('Update failed');
-    } else {
+	    if (arrangementEditMode.isEditing && arrangementEditMode.filename) {
+	      const res = await fetch(`/api/arrangements/${arrangementEditMode.filename}`, {
+	        method: 'PUT',
+	        headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
+	        body: JSON.stringify({ name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope })
+	      });
+	      if (!res.ok) throw new Error('Update failed');
+	    } else {
       const existingFilenames = new Set(existing.map(a => String(a?.filename || '').toLowerCase()));
       const baseSlug = sanitizeBase(arrangementDraft.name);
       let uniqueSlug = baseSlug;
@@ -532,7 +689,7 @@ async function saveArrangementFromEditor() {
       const res = await fetch('/api/arrangements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, name: arrangementDraft.name, arrangementState })
+        body: JSON.stringify({ filename, name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope || 'user' })
       });
       if (!res.ok) throw new Error('Save failed');
       arrangementEditMode.filename = filename;
@@ -586,55 +743,110 @@ function renderBlocksList() {
     `;
     return;
   }
-  
-  blocksCache.forEach((block, index) => {
-    const bpm = Number.isFinite(block?.trackerState?.bpm) ? block.trackerState.bpm : null;
-    const steps = Number.isFinite(block?.trackerState?.steps)
-      ? block.trackerState.steps
-      : (Array.isArray(block?.trackerState?.grid?.[0]) ? block.trackerState.grid[0].length : null);
-    const blockMeta = (bpm != null && steps != null)
-      ? `BPM ${bpm} • ${steps} row${steps === 1 ? '' : 's'}`
-      : (block.description || 'No block metadata');
 
-    const blockEl = document.createElement('div');
-    blockEl.className = 'block-item';
-    blockEl.dataset.index = index;
-    blockEl.dataset.filename = block.filename;
-    blockEl.tabIndex = 0;
-    
-    blockEl.innerHTML = `
-      <div class="min-w-0">
-        <div class="block-name font-bold text-sm text-foreground">${escapeHtml(block.name)}</div>
-        <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(blockMeta)}</div>
-      </div>
-      <div class="song-item-actions">
-        <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
-        <button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-      </div>
+  const appendFolder = (scope, label, entries) => {
+    const devMode = isDeveloperModeEnabled();
+    const expanded = scope === 'example'
+      ? blockFolderState.example
+      : blockFolderState.user;
+    const icon = expanded ? 'chevron-down' : 'chevron-right';
+    const folder = document.createElement('div');
+    folder.className = 'mb-2';
+    folder.innerHTML = `
+      <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-block-folder="${scope}">
+        <span class="inline-flex items-center gap-1.5">
+          <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+          ${label}
+        </span>
+        <span class="opacity-70">${entries.length}</span>
+      </button>
+      <div class="pl-2 border-l border-border/40 space-y-2 mt-1 ${expanded ? '' : 'hidden'}" data-block-folder-items="${scope}"></div>
     `;
-    
-    blockEl.addEventListener('click', () => selectBlock(index));
-    blockEl.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      selectBlock(index);
+    const list = folder.querySelector(`[data-block-folder-items="${scope}"]`);
+    folder.querySelector(`[data-block-folder="${scope}"]`)?.addEventListener('click', () => {
+      if (scope === 'example') {
+        blockFolderState.example = !blockFolderState.example;
+      } else {
+        blockFolderState.user = !blockFolderState.user;
+      }
+      saveFolderState(BLOCKS_FOLDER_STATE_KEY, blockFolderState);
+      renderBlocksList();
     });
 
-    const editBtn = blockEl.querySelector('.sidebar-edit-btn');
-    editBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      selectBlock(index);
-      openTrackerForEdit(index);
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'text-xs text-muted-foreground px-2 py-1';
+      empty.textContent = scope === 'user'
+        ? 'No user blocks yet. Click \"Create Block\" to make your first pattern.'
+        : 'No example blocks available.';
+      list?.appendChild(empty);
+    }
+
+    entries.forEach(({ block, index }) => {
+      const isExample = normalizeScope(block.scope) === 'example';
+      const isImmutable = isExample && !devMode;
+      const bpm = Number.isFinite(block?.trackerState?.bpm) ? block.trackerState.bpm : null;
+      const steps = Number.isFinite(block?.trackerState?.steps)
+        ? block.trackerState.steps
+        : (Array.isArray(block?.trackerState?.grid?.[0]) ? block.trackerState.grid[0].length : null);
+      const blockMeta = (bpm != null && steps != null)
+        ? `BPM ${bpm} • ${steps} row${steps === 1 ? '' : 's'}${isExample ? ' • Example' : ''}`
+        : `${block.description || 'No block metadata'}${isExample ? ' • Example' : ''}`;
+
+      const blockEl = document.createElement('div');
+      blockEl.className = 'block-item';
+      blockEl.dataset.index = index;
+      blockEl.dataset.filename = block.filename;
+      blockEl.tabIndex = 0;
+
+      blockEl.innerHTML = `
+        <div class="min-w-0">
+          <div class="block-name font-bold text-sm text-foreground">${escapeHtml(block.name)}</div>
+          <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(blockMeta)}</div>
+        </div>
+        <div class="song-item-actions">
+          <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
+          ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
+        </div>
+      `;
+
+      blockEl.addEventListener('click', () => selectBlock(index));
+      blockEl.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        selectBlock(index);
+      });
+
+      const editBtn = blockEl.querySelector('.sidebar-edit-btn');
+      editBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectBlock(index);
+        openTrackerForEdit(index);
+      });
+
+      const deleteBtn = blockEl.querySelector('.sidebar-del-btn');
+      deleteBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteBlockByIndex(index);
+      });
+
+      list?.appendChild(blockEl);
     });
 
-    const deleteBtn = blockEl.querySelector('.sidebar-del-btn');
-    deleteBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteBlockByIndex(index);
-    });
-    
-    elements.blocksList.appendChild(blockEl);
+    elements.blocksList.appendChild(folder);
+  };
+
+  const userEntries = [];
+  const exampleEntries = [];
+  blocksCache.forEach((block, index) => {
+    if (normalizeScope(block.scope) === 'example') {
+      exampleEntries.push({ block, index });
+    } else {
+      userEntries.push({ block, index });
+    }
   });
+  appendFolder('user', 'User', userEntries);
+  appendFolder('example', 'Examples', exampleEntries);
 
   createIcons({ icons });
 }
@@ -644,12 +856,12 @@ function renderBlocksList() {
  */
 function selectBlock(index) {
   // Remove previous selection
-  document.querySelectorAll('.block-item').forEach(el => {
+  document.querySelectorAll('#blocksList .block-item').forEach(el => {
     el.classList.remove('selected', 'bg-accent', 'border-primary');
   });
   
   // Add selection to clicked item
-  const selectedEl = document.querySelector(`.block-item[data-index="${index}"]`);
+  const selectedEl = document.querySelector(`#blocksList .block-item[data-index="${index}"]`);
   if (selectedEl) {
     selectedEl.classList.add('selected', 'bg-accent', 'border-primary');
   }
@@ -664,7 +876,7 @@ function selectBlock(index) {
     elements.insertBlockBtn.disabled = selectedBlockIndex == null;
   }
   if (elements.deleteBlockBtn) {
-    elements.deleteBlockBtn.disabled = selectedBlockIndex == null;
+    elements.deleteBlockBtn.disabled = selectedBlockIndex == null || (normalizeScope(block?.scope) === 'example' && !isDeveloperModeEnabled());
   }
   // Trigger preview on selection
   if (block) {
@@ -701,7 +913,7 @@ async function previewBlock(block) {
  * Get the currently selected block
  */
 function getSelectedBlock() {
-  const selectedEl = document.querySelector('.block-item.selected');
+  const selectedEl = document.querySelector('#blocksList .block-item.selected');
   if (!selectedEl) return null;
   
   const index = parseInt(selectedEl.dataset.index, 10);
@@ -723,7 +935,7 @@ function openTrackerForNewBlock() {
  * Open tracker to edit the selected block
  */
 async function openTrackerForEdit(index = null) {
-  const block = Number.isInteger(index) ? blocksCache[index] : getSelectedBlock();
+  let block = Number.isInteger(index) ? blocksCache[index] : getSelectedBlock();
   if (!block) return;
   
   closeBlocksModal();
@@ -738,6 +950,9 @@ async function openTrackerForEdit(index = null) {
       if (response.ok) {
         const fullBlock = await response.json();
         trackerState = fullBlock.trackerState;
+        if (fullBlock?.scope) {
+          block = { ...block, scope: fullBlock.scope };
+        }
       }
     } catch (err) {
       console.warn('[Blocks] Could not fetch full block data:', err);
@@ -809,6 +1024,10 @@ async function deleteBlockByIndex(index) {
 
 function showDeleteBlockConfirmation(block) {
   if (!block) return;
+  if (normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled()) {
+    alert('Example blocks cannot be deleted.');
+    return;
+  }
   blockToDelete = block;
   if (elements.deleteBlockText) {
     elements.deleteBlockText.innerHTML = `Block: <strong>${escapeHtml(block.name)}</strong><br>This action is irreversible.`;
@@ -824,9 +1043,15 @@ function closeDeleteBlockModal() {
 async function confirmDeleteBlock() {
   if (!blockToDelete) return;
   const block = blockToDelete;
+  if (normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled()) {
+    closeDeleteBlockModal();
+    alert('Example blocks cannot be deleted.');
+    return;
+  }
   try {
     const response = await fetch(`/api/blocks/${block.filename}`, {
       method: 'DELETE',
+      headers: getDeveloperModeHeaders(),
     });
     
     if (!response.ok) throw new Error('Delete failed');
@@ -857,7 +1082,7 @@ function clearBlockSelection() {
 /**
  * Save a new block from tracker data
  */
-export async function saveBlock(name, description, pattern, trackerState) {
+export async function saveBlock(name, description, pattern, trackerState, scope = 'user') {
   try {
     const sanitizeBase = (raw) => (raw || 'block')
       .toLowerCase()
@@ -891,6 +1116,7 @@ export async function saveBlock(name, description, pattern, trackerState) {
       description: description || '',
       pattern,
       trackerState,
+      scope: normalizeScope(scope),
     };
     
     const response = await fetch('/api/blocks', {
@@ -914,7 +1140,7 @@ export async function saveBlock(name, description, pattern, trackerState) {
 /**
  * Update an existing block with new data
  */
-export async function updateBlock(filename, name, description, pattern, trackerState) {
+export async function updateBlock(filename, name, description, pattern, trackerState, scope = 'user') {
   try {
     const existing = await fetch('/api/blocks').then(r => r.ok ? r.json() : []).catch(() => []);
     const currentFilename = String(filename || '').toLowerCase();
@@ -938,11 +1164,12 @@ export async function updateBlock(filename, name, description, pattern, trackerS
       description: description || '',
       pattern,
       trackerState,
+      scope: normalizeScope(scope),
     };
     
     const response = await fetch(`/api/blocks/${filename}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
       body: JSON.stringify(blockData),
     });
     

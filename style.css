@@ -104,6 +104,13 @@
   }
 }
 
+@layer utilities {
+  /* Used for dev-only controls; keep it scoped so we don't break Strudel internals. */
+  .dev-only-hidden {
+    display: none !important;
+  }
+}
+
 /* Base style resets and global defaults */
 body {
   @apply bg-background text-foreground font-sans antialiased overflow-hidden h-screen;

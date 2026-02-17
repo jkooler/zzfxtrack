@@ -4,6 +4,38 @@
  */
 
 const STORAGE_KEY = "zzfxm-instruments";
+const VALID_SCOPES = new Set(["user", "example"]);
+const DEVELOPER_MODE_KEY = "zzfxm-developer-mode";
+
+function isDeveloperModeEnabled() {
+  try {
+    return localStorage.getItem(DEVELOPER_MODE_KEY) === "1";
+  } catch (_e) {
+    return false;
+  }
+}
+
+function normalizeScope(value, fallback = "user") {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  return VALID_SCOPES.has(normalized) ? normalized : fallback;
+}
+
+function inferLegacyScope(instrument) {
+  const alias = String(instrument?.strudelAlias || "").toLowerCase();
+  if (alias.startsWith("demo-") || alias.startsWith("test-")) {
+    return "example";
+  }
+  return "user";
+}
+
+function normalizeInstrument(record) {
+  if (!record || typeof record !== "object") return null;
+  return {
+    ...record,
+    scope: normalizeScope(record.scope, inferLegacyScope(record)),
+  };
+}
 
 function parseMonophonicFlag(value, fallback = false) {
   if (typeof value === "boolean") return value;
@@ -29,7 +61,9 @@ export function loadInstruments() {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return [];
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeInstrument).filter(Boolean);
   } catch (e) {
     console.error("[InstrumentManager] Failed to load instruments:", e);
     return [];
@@ -79,6 +113,7 @@ export function createInstrument(
     channel: channel ?? instruments.length,
     params: params.length === 21 ? params : defaultParams,
     monophonic: false,
+    scope: "user",
   };
 
   instruments.push(instrument);
@@ -102,7 +137,19 @@ export function updateInstrument(id, changes) {
     return null;
   }
 
-  instruments[index] = { ...instruments[index], ...changes };
+  const current = instruments[index];
+  const currentScope = normalizeScope(current?.scope, inferLegacyScope(current));
+  const changeKeys = Object.keys(changes || {});
+  const isScopeOnlyChange = changeKeys.length > 0 && changeKeys.every((key) => key === "scope");
+  if (currentScope === "example" && !isDeveloperModeEnabled() && !isScopeOnlyChange) {
+    console.warn("[InstrumentManager] Example instruments are immutable:", id);
+    return current;
+  }
+
+  const next = { ...current, ...changes };
+  next.scope = normalizeScope(next.scope, currentScope);
+
+  instruments[index] = next;
   saveInstruments(instruments);
 
   return instruments[index];
@@ -115,6 +162,15 @@ export function updateInstrument(id, changes) {
  */
 export function deleteInstrument(id) {
   const instruments = loadInstruments();
+  const target = instruments.find((inst) => inst.id === id);
+  if (
+    target &&
+    normalizeScope(target.scope, inferLegacyScope(target)) === "example" &&
+    !isDeveloperModeEnabled()
+  ) {
+    console.warn("[InstrumentManager] Example instruments are immutable:", id);
+    return false;
+  }
   const filtered = instruments.filter((inst) => inst.id !== id);
 
   if (filtered.length === instruments.length) {
@@ -124,6 +180,10 @@ export function deleteInstrument(id) {
 
   saveInstruments(filtered);
   return true;
+}
+
+export function setInstrumentScope(id, scope) {
+  return updateInstrument(id, { scope: normalizeScope(scope, "user") });
 }
 
 /**
@@ -275,6 +335,7 @@ export function migrateFromFile(importedData) {
           channel: ch,
           params,
           monophonic: parseMonophonicFlag(monoFromFile, parseMonophonicFlag(prev?.monophonic, false)),
+          scope: normalizeScope(prev?.scope, "example"),
         });
       } else {
         console.warn(`[InstrumentManager] Could not find params for ${alias}`);

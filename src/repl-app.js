@@ -6,13 +6,47 @@ import { exportPattern } from './export-logic.js';
 import { playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
-import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState } from './instrument-ui.js';
+import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState, refreshInstrumentListUI } from './instrument-ui.js';
+import { setInstrumentScope } from './instrument-manager.js';
+import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, previewArrangementStateOnce, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
 import JSZip from 'jszip';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
+const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+
+function isDeveloperModeEnabled() {
+    if (DEMO_MODE) return false;
+    try {
+        return localStorage.getItem(DEVELOPER_MODE_KEY) === '1';
+    } catch (_e) {
+        return false;
+    }
+}
+
+function setDeveloperModeEnabled(enabled) {
+    if (DEMO_MODE) return;
+    try {
+        localStorage.setItem(DEVELOPER_MODE_KEY, enabled ? '1' : '0');
+    } catch (_e) {
+        // Ignore localStorage failures.
+    }
+    document.dispatchEvent(new CustomEvent('developer-mode:changed', { detail: { enabled: Boolean(enabled) } }));
+}
+
+function getDeveloperModeHeaders() {
+    return isDeveloperModeEnabled() ? { 'X-Developer-Mode': '1' } : {};
+}
+
+function updateAdvancedSettingsButtonsVisibility() {
+    const show = !DEMO_MODE && isDeveloperModeEnabled();
+    if (dom.openSongAdvancedSettingsBtn) {
+        const shouldShow = show && Boolean(currentSongFilename) && !dom.songNameInput.classList.contains('hidden');
+        dom.openSongAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
+    }
+}
 const demoSongModules = import.meta.glob('../songs/*.js', {
     query: '?raw',
     import: 'default',
@@ -57,6 +91,9 @@ let statusFadeClearTimeout = null;
 let renameDebounceTimeout = null;
 let pendingUploadBundle = null;
 let pendingUploadConflicts = null;
+let songEntriesCache = [];
+let currentSongScope = 'user';
+let pendingAdvancedSettingsContext = null;
 
 // --- DOM Elements ---
 const dom = {
@@ -64,6 +101,7 @@ const dom = {
     sidebarTitle: document.getElementById('sidebarTitle'),
     songList: document.getElementById('songList'),
     songNameInput: document.getElementById('songNameInput'),
+    openSongAdvancedSettingsBtn: document.getElementById('openSongAdvancedSettingsBtn'),
     playBtn: document.getElementById('playBtn'),
     exportBtn: document.getElementById('exportBtn'),
     newSongBtn: document.getElementById('newSongBtn'),
@@ -95,6 +133,13 @@ const dom = {
     uploadModeReplace: document.getElementById('uploadModeReplace'),
     uploadInstrumentsKeep: document.getElementById('uploadInstrumentsKeep'),
     uploadInstrumentsReplace: document.getElementById('uploadInstrumentsReplace'),
+
+    // System Settings Modal
+    openSystemSettingsModalBtn: document.getElementById('openSystemSettingsModalBtn'),
+    systemSettingsModal: document.getElementById('systemSettingsModal'),
+    closeSystemSettingsModalBtn: document.getElementById('closeSystemSettingsModalBtn'),
+    closeSystemSettingsModalBottomBtn: document.getElementById('closeSystemSettingsModalBottomBtn'),
+    systemSettingsDevModeToggle: document.getElementById('systemSettingsDevModeToggle'),
     
     // Modals
     newSongModal: document.getElementById('newSongModal'),
@@ -156,7 +201,67 @@ const dom = {
     exportResolutionHint: document.getElementById('exportResolutionHint'),
     exportResolutionCustomWrap: document.getElementById('exportResolutionCustomWrap'),
     exportResolutionCustom: document.getElementById('exportResolutionCustom'),
+
+    // Advanced Settings Modal
+    advancedSettingsModal: document.getElementById('advancedSettingsModal'),
+    advancedSettingsTitle: document.getElementById('advancedSettingsTitle'),
+    advancedSettingsResourceLabel: document.getElementById('advancedSettingsResourceLabel'),
+    advancedSettingsExamplesToggle: document.getElementById('advancedSettingsExamplesToggle'),
+    closeAdvancedSettingsModalBtn: document.getElementById('closeAdvancedSettingsModalBtn'),
+    cancelAdvancedSettingsBtn: document.getElementById('cancelAdvancedSettingsBtn'),
+    saveAdvancedSettingsBtn: document.getElementById('saveAdvancedSettingsBtn'),
 };
+
+const SONG_FOLDER_STATE_KEY = 'zzfxm-folder-state-songs-v1';
+let songFolderState = loadFolderState(SONG_FOLDER_STATE_KEY, { user: true, example: true });
+
+function normalizeScope(value) {
+    return value === 'example' ? 'example' : 'user';
+}
+
+function loadFolderState(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return { ...fallback };
+        const parsed = JSON.parse(raw);
+        return {
+            user: typeof parsed?.user === 'boolean' ? parsed.user : fallback.user,
+            example: typeof parsed?.example === 'boolean' ? parsed.example : fallback.example,
+        };
+    } catch (_e) {
+        return { ...fallback };
+    }
+}
+
+function saveFolderState(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (_e) {
+        // Ignore localStorage failures.
+    }
+}
+
+function normalizeSongEntries(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload
+        .map((item) => {
+            if (typeof item === 'string') {
+                return { filename: item, scope: 'user' };
+            }
+            if (!item || typeof item !== 'object' || typeof item.filename !== 'string') {
+                return null;
+            }
+            return {
+                filename: item.filename,
+                scope: normalizeScope(item.scope),
+            };
+        })
+        .filter(Boolean);
+}
+
+function getSongEntry(filename) {
+    return songEntriesCache.find((entry) => entry.filename === filename) || null;
+}
 
 // --- View State Helpers ---
 function showWelcome() {
@@ -168,9 +273,11 @@ function showWelcome() {
     updateSongSelectionState(false);
     dom.previewPlayBtn.disabled = true;
     if(dom.showJsonBtn) dom.showJsonBtn.disabled = true;
+    updateAdvancedSettingsButtonsVisibility();
     
     // Clear state
     currentSongFilename = null;
+    currentSongScope = 'user';
     playingSongFilename = null;
     dom.songNameInput.classList.add('hidden');
     if(dom.repl.editor) dom.repl.editor.stop();
@@ -192,6 +299,7 @@ function showIntroduction() {
     dom.welcomeView.style.display = 'flex';
     dom.editorContainer.style.display = 'none';
     dom.songNameInput.classList.add('hidden');
+    updateAdvancedSettingsButtonsVisibility();
 
     // Keep controls available so the user can stop playback while reading intro.
     dom.playBtn.style.visibility = 'visible';
@@ -207,6 +315,7 @@ function showEditor() {
     dom.playBtn.style.visibility = 'visible';
     dom.exportBtn.disabled = false;
     dom.songNameInput.classList.remove('hidden');
+    updateAdvancedSettingsButtonsVisibility();
 }
 
 // --- Initialization ---
@@ -383,20 +492,22 @@ function setupAutoSave() {
                     // Update indicators in sidebar
                     updateInstrumentUsage(currentCode);
                     
-                    // IMMEDIATELY save to localStorage as backup
-                    localStorage.setItem(`unsaved_${currentSongFilename}`, currentCode);
-                    
-                    // Clear existing auto-save timeout
-                    if (autoSaveTimeout) {
-                        clearTimeout(autoSaveTimeout);
+                    if (currentSongScope !== 'example') {
+                        // IMMEDIATELY save to localStorage as backup
+                        localStorage.setItem(`unsaved_${currentSongFilename}`, currentCode);
+                        
+                        // Clear existing auto-save timeout
+                        if (autoSaveTimeout) {
+                            clearTimeout(autoSaveTimeout);
+                        }
+                        
+                        // Set new timeout for 1 second (debounced server save)
+                        autoSaveTimeout = setTimeout(() => {
+                            saveCurrentSong();
+                            // Clear localStorage after successful server save
+                            localStorage.removeItem(`unsaved_${currentSongFilename}`);
+                        }, 1000);
                     }
-                    
-                    // Set new timeout for 1 second (debounced server save)
-                    autoSaveTimeout = setTimeout(() => {
-                        saveCurrentSong();
-                        // Clear localStorage after successful server save
-                        localStorage.removeItem(`unsaved_${currentSongFilename}`);
-                    }, 1000);
                     
                     // HOT-RELOAD: Auto-evaluate if REPL is playing
                     if (dom.repl.editor.repl.scheduler.started) {
@@ -438,6 +549,7 @@ function setupAutoSave() {
 // Save pending changes before page unload
 window.addEventListener('beforeunload', (e) => {
     if (DEMO_MODE) return;
+    if (currentSongScope === 'example' && !isDeveloperModeEnabled()) return;
     if (autoSaveTimeout && currentSongFilename) {
         // There's a pending save - try to save synchronously
         clearTimeout(autoSaveTimeout);
@@ -445,9 +557,20 @@ window.addEventListener('beforeunload', (e) => {
         const editorCode = dom.repl.editor.code;
         const fileCode = editorToFile(editorCode);
         
-        // Use sendBeacon for reliable delivery even as page closes
-        const blob = new Blob([fileCode], { type: 'text/plain' });
-        navigator.sendBeacon(`/api/song/${currentSongFilename}`, blob);
+        // Use sendBeacon for reliable delivery even as page closes.
+        // Note: sendBeacon cannot send custom headers, so for developer mode (which needs a header)
+        // we use fetch({ keepalive: true }) instead.
+        if (currentSongScope === 'example' && isDeveloperModeEnabled()) {
+            fetch(`/api/song/${currentSongFilename}`, {
+                method: 'POST',
+                headers: getDeveloperModeHeaders(),
+                body: fileCode,
+                keepalive: true,
+            }).catch(() => {});
+        } else {
+            const blob = new Blob([fileCode], { type: 'text/plain' });
+            navigator.sendBeacon(`/api/song/${currentSongFilename}`, blob);
+        }
         
         // Also keep in localStorage as backup
         localStorage.setItem(`unsaved_${currentSongFilename}`, editorCode);
@@ -458,49 +581,109 @@ window.addEventListener('beforeunload', (e) => {
 
 async function refreshSongList() {
     try {
-        const files = DEMO_MODE
-            ? Array.from(demoSongSourceByFile.keys()).sort()
+        const entries = DEMO_MODE
+            ? Array.from(demoSongSourceByFile.keys())
+                .sort()
+                .map((filename) => ({ filename, scope: 'example' }))
             : await (async () => {
                 const res = await fetch('/api/songs');
                 if (!res.ok) throw new Error('Failed to list songs');
-                return res.json();
+                const payload = await res.json();
+                return normalizeSongEntries(payload).sort((a, b) => a.filename.localeCompare(b.filename));
             })();
-        
+
+        songEntriesCache = entries;
         dom.songList.innerHTML = '';
-        files.forEach(file => {
-            const fileName = decodeURIComponent(file.replace('.js', ''));
-            const li = document.createElement('li');
-            li.className = `song-item ${file === currentSongFilename ? 'active' : ''}`;
-            
-            li.innerHTML = DEMO_MODE
-                ? `<span>${fileName}</span>`
-                : `
-                    <span>${fileName}</span>
-                    <div class="song-item-actions">
-                        <button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                    </div>
-                `;
 
-            // Click on text loads song
-            li.querySelector('span').onclick = (e) => {
-                e.stopPropagation();
-                loadSong(file);
-            };
-            li.onclick = () => loadSong(file);
+        if (!entries.length) {
+            dom.songList.innerHTML = `
+                <li class="text-xs text-muted-foreground px-3 py-2">No songs available.</li>
+            `;
+            updateSongListVisualizer();
+            createIcons({ icons });
+            return;
+        }
 
-            // Delete button
-            if (!DEMO_MODE) {
-                li.querySelector('.sidebar-del-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    showDeleteConfirmation(file);
-                };
+        const appendFolder = (scope, label, items) => {
+            const expanded = scope === 'example' ? songFolderState.example : songFolderState.user;
+            const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
+
+            const folderLi = document.createElement('li');
+            folderLi.className = 'mb-1';
+            folderLi.innerHTML = `
+                <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-song-folder="${scope}">
+                    <span class="inline-flex items-center gap-1.5">
+                        <i data-lucide="${folderIcon}" class="w-3.5 h-3.5"></i>
+                        ${label}
+                    </span>
+                    <span class="opacity-70">${items.length}</span>
+                </button>
+                <ul class="list-none m-0 p-0 pl-2 border-l border-border/40 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-song-folder-items="${scope}"></ul>
+            `;
+            const list = folderLi.querySelector(`[data-song-folder-items="${scope}"]`);
+            folderLi.querySelector(`[data-song-folder="${scope}"]`)?.addEventListener('click', () => {
+                if (scope === 'example') {
+                    songFolderState.example = !songFolderState.example;
+                } else {
+                    songFolderState.user = !songFolderState.user;
+                }
+                saveFolderState(SONG_FOLDER_STATE_KEY, songFolderState);
+                refreshSongList();
+            });
+
+            if (items.length === 0) {
+                const empty = document.createElement('li');
+                empty.className = 'text-xs text-muted-foreground px-2 py-1';
+                empty.textContent = scope === 'user'
+                    ? 'No user songs yet. Create a new song to get started.'
+                    : 'No example songs available.';
+                list?.appendChild(empty);
             }
 
-            dom.songList.appendChild(li);
-        });
+            items.forEach((entry) => {
+                const file = entry.filename;
+                const fileName = decodeURIComponent(file.replace('.js', ''));
+                const isExample = normalizeScope(entry.scope) === 'example';
+                const devMode = isDeveloperModeEnabled();
+                const isImmutable = isExample && !devMode;
+                const li = document.createElement('li');
+                li.className = `song-item ${file === currentSongFilename ? 'active' : ''}`;
+                li.dataset.scope = normalizeScope(entry.scope);
+                li.dataset.filename = file;
+
+                li.innerHTML = (DEMO_MODE || isImmutable)
+                    ? `<span>${fileName}</span>`
+                    : `
+                        <span>${fileName}</span>
+                        <div class="song-item-actions">
+                            <button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    `;
+
+                li.querySelector('span').onclick = (e) => {
+                    e.stopPropagation();
+                    loadSong(file);
+                };
+                li.onclick = () => loadSong(file);
+
+                if (!DEMO_MODE && !isImmutable) {
+                    li.querySelector('.sidebar-del-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        showDeleteConfirmation(file);
+                    };
+                }
+
+                list?.appendChild(li);
+            });
+
+            dom.songList.appendChild(folderLi);
+        };
+
+        const userEntries = entries.filter((entry) => normalizeScope(entry.scope) !== 'example');
+        const exampleEntries = entries.filter((entry) => normalizeScope(entry.scope) === 'example');
+        appendFolder('user', 'User', userEntries);
+        appendFolder('example', 'Examples', exampleEntries);
         
-        updateSongListVisualizer();
-        updateSongListVisualizer();
         updateSongListVisualizer();
         createIcons({ icons });
     } catch (e) {
@@ -510,7 +693,7 @@ async function refreshSongList() {
 }
 
 function updateSongListVisualizer() {
-    const listItems = Array.from(dom.songList.children);
+    const listItems = Array.from(dom.songList.querySelectorAll('.song-item'));
     let visualizerAttached = false;
     
     listItems.forEach(li => {
@@ -680,6 +863,9 @@ async function loadSong(filename) {
     
     try {
         let fileCode = '';
+        const loadedSongScope = DEMO_MODE
+            ? 'example'
+            : normalizeScope(getSongEntry(filename)?.scope);
         if (DEMO_MODE) {
             fileCode = demoSongSourceByFile.get(filename);
             if (typeof fileCode !== 'string') throw new Error('Song not available in demo bundle');
@@ -693,30 +879,35 @@ async function loadSong(filename) {
         let editorCode = fileToEditor(fileCode);
         
         // Check if there's an unsaved version in localStorage
-        const unsavedCode = localStorage.getItem(`unsaved_${filename}`);
-        if (unsavedCode) {
-            // Recover from localStorage
-            editorCode = unsavedCode;
-            setStatus('⚠️ Recovered unsaved changes from cache', 'error');
-            setTimeout(() => {
-                // Auto-save the recovered content
-                saveCurrentSong();
-                localStorage.removeItem(`unsaved_${filename}`);
-            }, 500);
+        if (loadedSongScope !== 'example' || isDeveloperModeEnabled()) {
+            const unsavedCode = localStorage.getItem(`unsaved_${filename}`);
+            if (unsavedCode) {
+                // Recover from localStorage
+                editorCode = unsavedCode;
+                setStatus('⚠️ Recovered unsaved changes from cache', 'error');
+                setTimeout(() => {
+                    // Auto-save the recovered content
+                    saveCurrentSong();
+                    localStorage.removeItem(`unsaved_${filename}`);
+                }, 500);
+            }
         }
         
         showEditor();
         currentSongFilename = filename;
+        currentSongScope = loadedSongScope;
         currentSongDisplayName = decodeURIComponent(filename.replace('.js', '')); // Store without extension
         originalSongName = currentSongDisplayName; // Track for rename detection
         dom.songNameInput.value = currentSongDisplayName;
-        dom.songNameInput.readOnly = DEMO_MODE; // Demo mode is read-only for song management
+        dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
         dom.songNameInput.placeholder = '';
+        if (dom.openSongAdvancedSettingsBtn) {
+            updateAdvancedSettingsButtonsVisibility();
+        }
         
-        Array.from(dom.songList.children).forEach(li => {
-            const span = li.querySelector('span');
-            const isActive = span && span.innerText === decodeURIComponent(filename.replace('.js', ''));
-            li.classList.toggle('active', isActive);
+        Array.from(dom.songList.querySelectorAll('.song-item')).forEach(li => {
+            const isActive = li.dataset.filename === filename;
+            li.classList.toggle('active', Boolean(isActive));
         });
         
         updateSongListVisualizer();
@@ -755,6 +946,10 @@ async function loadSongMeta(filename) {
         const res = await fetch(`/api/song-meta/${filename}`);
         if (!res.ok) return;
         const data = await res.json();
+        if (typeof data?.scope === 'string') {
+            currentSongScope = normalizeScope(data.scope);
+            dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
+        }
         const rowsPerCycle = parseInt(data?.rowsPerCycle, 10);
         if (!rowsPerCycle || Number.isNaN(rowsPerCycle)) return;
 
@@ -786,10 +981,19 @@ async function saveSongMeta() {
     }
 
     try {
+        let existing = {};
+        try {
+            const res = await fetch(`/api/song-meta/${currentSongFilename}`);
+            if (res.ok) {
+                existing = await res.json();
+            }
+        } catch (_e) {
+            existing = {};
+        }
         await fetch(`/api/song-meta/${currentSongFilename}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rowsPerCycle })
+            body: JSON.stringify({ ...(existing || {}), rowsPerCycle })
         });
     } catch (e) {
         console.warn('Failed to save song meta', e);
@@ -799,6 +1003,7 @@ async function saveSongMeta() {
 async function saveCurrentSong() {
     if (DEMO_MODE) return;
     if (!currentSongFilename) return;
+    if (currentSongScope === 'example' && !isDeveloperModeEnabled()) return;
     
     try {
         const editorCode = dom.repl.editor.code;
@@ -806,6 +1011,7 @@ async function saveCurrentSong() {
         
         const res = await fetch(`/api/song/${currentSongFilename}`, {
             method: 'POST',
+            headers: getDeveloperModeHeaders(),
             body: fileCode
         });
         
@@ -1066,6 +1272,138 @@ function normalizeSongBaseName(input) {
         .replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
+async function updateSongScope(filename, scope) {
+    const res = await fetch(`/api/song-meta/${encodeURIComponent(filename)}`);
+    const existing = res.ok ? await res.json() : {};
+    const updated = { ...(existing || {}), scope: normalizeScope(scope) };
+    const writeRes = await fetch(`/api/song-meta/${encodeURIComponent(filename)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+    });
+    if (!writeRes.ok) throw new Error('Failed to update song scope');
+}
+
+async function updateBlockScope(filename, scope) {
+    const detailRes = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
+    if (!detailRes.ok) throw new Error('Failed to load block details');
+    const detail = await detailRes.json();
+    const writeRes = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: detail?.name || filename.replace(/\.js$/, ''),
+            description: detail?.description || '',
+            pattern: detail?.pattern || '',
+            trackerState: detail?.trackerState ?? null,
+            scope: normalizeScope(scope),
+        }),
+    });
+    if (!writeRes.ok) throw new Error('Failed to update block scope');
+}
+
+async function updateArrangementScope(filename, scope) {
+    const detailRes = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`);
+    if (!detailRes.ok) throw new Error('Failed to load arrangement details');
+    const detail = await detailRes.json();
+    const writeRes = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: detail?.name || filename.replace(/\.js$/, ''),
+            arrangementState: detail?.arrangementState ?? null,
+            scope: normalizeScope(scope),
+        }),
+    });
+    if (!writeRes.ok) throw new Error('Failed to update arrangement scope');
+}
+
+function openAdvancedSettingsModal(context) {
+    if (!context) return;
+    pendingAdvancedSettingsContext = {
+        ...context,
+        scope: normalizeScope(context.scope),
+    };
+    const typeLabel = String(context.type || 'resource');
+    const resourceName = String(context.name || context.filename || context.id || '').trim();
+    if (dom.advancedSettingsTitle) {
+        dom.advancedSettingsTitle.textContent = 'Advanced settings';
+    }
+    if (dom.advancedSettingsResourceLabel) {
+        dom.advancedSettingsResourceLabel.textContent = resourceName
+            ? `${typeLabel[0].toUpperCase()}${typeLabel.slice(1)}: ${resourceName}`
+            : `${typeLabel[0].toUpperCase()}${typeLabel.slice(1)}`;
+    }
+    if (dom.advancedSettingsExamplesToggle) {
+        dom.advancedSettingsExamplesToggle.checked = pendingAdvancedSettingsContext.scope === 'example';
+        dom.advancedSettingsExamplesToggle.disabled = DEMO_MODE;
+    }
+    if (dom.saveAdvancedSettingsBtn) {
+        dom.saveAdvancedSettingsBtn.disabled = DEMO_MODE;
+    }
+    dom.advancedSettingsModal?.classList.add('open');
+    createIcons({ icons });
+}
+
+function closeAdvancedSettingsModal() {
+    dom.advancedSettingsModal?.classList.remove('open');
+    pendingAdvancedSettingsContext = null;
+}
+
+async function applyAdvancedSettings() {
+    if (!pendingAdvancedSettingsContext) return;
+    if (DEMO_MODE) {
+        setStatus('Demo mode: updating example visibility is disabled', 'normal');
+        closeAdvancedSettingsModal();
+        return;
+    }
+    const nextScope = dom.advancedSettingsExamplesToggle?.checked ? 'example' : 'user';
+    const context = pendingAdvancedSettingsContext;
+
+    try {
+        if (context.type === 'song') {
+            if (!context.filename) throw new Error('No song selected');
+            await updateSongScope(context.filename, nextScope);
+            const entry = getSongEntry(context.filename);
+            if (entry) entry.scope = nextScope;
+                if (context.filename === currentSongFilename) {
+                    currentSongScope = nextScope;
+                    dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
+                }
+            await refreshSongList();
+        } else if (context.type === 'instrument') {
+            if (!context.id) throw new Error('No instrument selected');
+            const updated = setInstrumentScope(context.id, nextScope);
+            if (!updated) throw new Error('Failed to update instrument scope');
+            autoUpdateInstrumentsFile();
+            reloadInstruments();
+            refreshInstrumentListUI();
+        } else if (context.type === 'block') {
+            if (context.filename) {
+                await updateBlockScope(context.filename, nextScope);
+            }
+        } else if (context.type === 'arrangement') {
+            if (context.filename) {
+                await updateArrangementScope(context.filename, nextScope);
+            }
+        } else {
+            throw new Error('Unsupported resource type');
+        }
+
+        document.dispatchEvent(new CustomEvent('resource-scope:changed', {
+            detail: {
+                ...context,
+                scope: nextScope,
+            }
+        }));
+        setStatus('Advanced settings updated', 'success');
+        closeAdvancedSettingsModal();
+    } catch (e) {
+        console.error(e);
+        setStatus(`Failed to update settings: ${e.message}`, 'error');
+    }
+}
+
 function openModal() {
     dom.newSongModal.classList.add('open');
     dom.newSongName.focus();
@@ -1088,11 +1426,13 @@ function buildBlockSourceFromApi(item) {
     const description = item?.description || '';
     const pattern = item?.pattern || '';
     const trackerState = item?.trackerState ?? null;
+    const scope = normalizeScope(item?.scope);
     return `// Block: ${name}
 // ${description || 'No description'}
 
 export const name = "${String(name).replace(/"/g, '\\"')}";
 export const description = "${String(description).replace(/"/g, '\\"')}";
+export const scope = "${scope}";
 
 export const pattern = \`${String(pattern).replace(/`/g, '\\`')}\`;
 
@@ -1104,9 +1444,11 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
 function buildArrangementSourceFromApi(item) {
     const name = item?.name || 'Arrangement';
     const arrangementState = item?.arrangementState ?? null;
+    const scope = normalizeScope(item?.scope);
     return `// Arrangement: ${name}
 
 export const name = "${String(name).replace(/"/g, '\\"')}";
+export const scope = "${scope}";
 
 export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
 `;
@@ -1115,6 +1457,7 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
 function parseBlockSource(content) {
     const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
     const descMatch = content.match(/export\s+const\s+description\s*=\s*["']([^"']*)["']/);
+    const scopeMatch = content.match(/export\s+const\s+scope\s*=\s*["']([^"']+)["']/);
     const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*([`"'])([\s\S]*?)\1\s*;?/);
     const trackerStateMatch = content.match(/export\s+const\s+trackerState\s*=\s*(\{[\s\S]*?\})\s*;/);
 
@@ -1126,6 +1469,7 @@ function parseBlockSource(content) {
     return {
         name: nameMatch ? nameMatch[1] : 'Block',
         description: descMatch ? descMatch[1] : '',
+        scope: normalizeScope(scopeMatch ? scopeMatch[1] : 'user'),
         pattern: patternMatch ? patternMatch[2].trim() : '',
         trackerState
     };
@@ -1133,6 +1477,7 @@ function parseBlockSource(content) {
 
 function parseArrangementSource(content) {
     const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
+    const scopeMatch = content.match(/export\s+const\s+scope\s*=\s*["']([^"']+)["']/);
     const arrangementStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
     let arrangementState = { version: 1, name: nameMatch ? nameMatch[1] : 'Arrangement', bpm: 120, rows: [] };
     if (arrangementStateMatch) {
@@ -1140,6 +1485,7 @@ function parseArrangementSource(content) {
     }
     return {
         name: nameMatch ? nameMatch[1] : arrangementState?.name || 'Arrangement',
+        scope: normalizeScope(scopeMatch ? scopeMatch[1] : 'user'),
         arrangementState
     };
 }
@@ -1172,7 +1518,8 @@ async function downloadSongsAndInstruments() {
             : await (async () => {
                 const res = await fetch('/api/songs');
                 if (!res.ok) throw new Error('Failed to list songs');
-                return res.json();
+                const payload = await res.json();
+                return normalizeSongEntries(payload).map((entry) => entry.filename);
             })();
 
         let downloadedSongs = 0;
@@ -1361,7 +1708,7 @@ async function getExistingNamesBySection() {
     ]);
 
     return {
-        songs: new Set((songs || []).map((f) => String(f || '').toLowerCase())),
+        songs: new Set(normalizeSongEntries(songs || []).map((entry) => String(entry.filename || '').toLowerCase())),
         blocks: new Set((blocks || []).map((b) => String(b?.filename || '').toLowerCase())),
         arrangements: new Set((arrangements || []).map((a) => String(a?.filename || '').toLowerCase())),
     };
@@ -1426,14 +1773,18 @@ async function writeImportedFile(section, filename, content) {
     }
 
     if (section === 'songs') {
-        const res = await fetch(`/api/song/${encodeURIComponent(filename)}`, { method: 'POST', body: content });
+        const res = await fetch(`/api/song/${encodeURIComponent(filename)}`, {
+            method: 'POST',
+            headers: getDeveloperModeHeaders(),
+            body: content
+        });
         return res.ok;
     }
     if (section === 'blocks') {
         const parsed = parseBlockSource(content);
         const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
             body: JSON.stringify(parsed),
         });
         return res.ok;
@@ -1442,7 +1793,7 @@ async function writeImportedFile(section, filename, content) {
         const parsed = parseArrangementSource(content);
         const res = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
             body: JSON.stringify(parsed),
         });
         return res.ok;
@@ -1640,6 +1991,24 @@ if (dom.uploadProjectModal) {
 dom.sidebarTitle.addEventListener('click', showIntroduction);
 dom.newSongBtn.addEventListener('click', openModal);
 dom.cancelNewSong.addEventListener('click', closeModal);
+if (dom.openSongAdvancedSettingsBtn) {
+    dom.openSongAdvancedSettingsBtn.addEventListener('click', () => {
+        if (!isDeveloperModeEnabled()) return;
+        if (!currentSongFilename) return;
+        openAdvancedSettingsModal({
+            type: 'song',
+            filename: currentSongFilename,
+            name: currentSongDisplayName || currentSongFilename.replace(/\.js$/, ''),
+            scope: currentSongScope,
+        });
+    });
+}
+document.addEventListener('resource-scope:open', (e) => {
+    if (!isDeveloperModeEnabled()) return;
+    const detail = e?.detail || null;
+    if (!detail) return;
+    openAdvancedSettingsModal(detail);
+});
 dom.confirmNewSong.addEventListener('click', () => {
     const name = dom.newSongName.value.trim();
     if (name) createNewSong(name);
@@ -1650,11 +2019,26 @@ dom.newSongName.addEventListener('keydown', (event) => {
     const name = dom.newSongName.value.trim();
     if (name) createNewSong(name);
 });
+if (dom.closeAdvancedSettingsModalBtn) dom.closeAdvancedSettingsModalBtn.addEventListener('click', closeAdvancedSettingsModal);
+if (dom.cancelAdvancedSettingsBtn) dom.cancelAdvancedSettingsBtn.addEventListener('click', closeAdvancedSettingsModal);
+if (dom.saveAdvancedSettingsBtn) dom.saveAdvancedSettingsBtn.addEventListener('click', applyAdvancedSettings);
+if (dom.advancedSettingsModal) {
+    dom.advancedSettingsModal.addEventListener('click', (e) => {
+        if (e.target === dom.advancedSettingsModal) {
+            closeAdvancedSettingsModal();
+        }
+    });
+}
 
 // Delete Confirmation
 let songToDelete = null;
 
 function showDeleteConfirmation(filename) {
+    const scope = normalizeScope(getSongEntry(filename)?.scope);
+    if (scope === 'example' && !isDeveloperModeEnabled()) {
+        setStatus('Example songs cannot be deleted', 'normal');
+        return;
+    }
     songToDelete = filename;
     dom.deleteConfirmText.innerHTML = `File: <strong>${decodeURIComponent(filename)}</strong><br>This action is irreversible.`;
     dom.deleteConfirmModal.classList.add('open');
@@ -1675,6 +2059,7 @@ let originalSongName = '';
 // Auto-save rename with debounce
 dom.songNameInput.addEventListener('input', () => {
     if (!currentSongFilename) return;
+    if (DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled())) return;
     if (renameDebounceTimeout) clearTimeout(renameDebounceTimeout);
     renameDebounceTimeout = setTimeout(() => {
         renameSong({ quiet: true });
@@ -1684,6 +2069,7 @@ dom.songNameInput.addEventListener('input', () => {
 // Save song name immediately when leaving the input
 dom.songNameInput.addEventListener('blur', () => {
     if (!currentSongFilename) return;
+    if (DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled())) return;
     if (renameDebounceTimeout) {
         clearTimeout(renameDebounceTimeout);
         renameDebounceTimeout = null;
@@ -1695,6 +2081,7 @@ dom.songNameInput.addEventListener('blur', () => {
 dom.songNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         e.preventDefault();
+        if (DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled())) return;
         if (renameDebounceTimeout) {
             clearTimeout(renameDebounceTimeout);
             renameDebounceTimeout = null;
@@ -1707,6 +2094,10 @@ async function renameSong(options = {}) {
     if (DEMO_MODE) return;
     const { quiet = false } = options;
     if (!currentSongFilename) return;
+    if (currentSongScope === 'example' && !isDeveloperModeEnabled()) {
+        if (!quiet) setStatus('Example songs are immutable', 'normal');
+        return;
+    }
     
     const rawName = dom.songNameInput.value.trim();
     const newName = normalizeSongBaseName(rawName);
@@ -1732,7 +2123,8 @@ async function renameSong(options = {}) {
     try {
         const res = await fetch('/api/songs');
         if (!res.ok) throw new Error('Failed to check existing songs');
-        const files = await res.json();
+        const payload = await res.json();
+        const files = normalizeSongEntries(payload).map((entry) => entry.filename);
         
         if (files.includes(newFilename) && newFilename !== currentSongFilename) {
             if (!quiet) {
@@ -1756,7 +2148,7 @@ async function renameSong(options = {}) {
         // Rename via API
         const res = await fetch('/api/rename-song', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
             body: JSON.stringify({
                 oldName: currentSongFilename,
                 newName: newFilename
@@ -1803,9 +2195,13 @@ async function deleteSong(filename) {
         setStatus('Demo mode: deleting songs is disabled', 'normal');
         return;
     }
+    if (normalizeScope(getSongEntry(filename)?.scope) === 'example' && !isDeveloperModeEnabled()) {
+        setStatus('Example songs cannot be deleted', 'normal');
+        return;
+    }
     setStatus('Deleting...');
     try {
-        const res = await fetch(`/api/song/${filename}`, { method: 'DELETE' });
+        const res = await fetch(`/api/song/${filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
         if (!res.ok) throw new Error('Delete failed');
         
         if (filename === playingSongFilename) {
@@ -2049,6 +2445,49 @@ if (dom.changelogModal) {
     });
 }
 
+// --- System Settings Modal Logic ---
+function openSystemSettingsModal() {
+    if (!dom.systemSettingsModal) return;
+    if (dom.systemSettingsDevModeToggle) {
+        dom.systemSettingsDevModeToggle.checked = isDeveloperModeEnabled();
+        dom.systemSettingsDevModeToggle.disabled = DEMO_MODE;
+    }
+    dom.systemSettingsModal.classList.add('open');
+    createIcons({ icons });
+}
+
+function closeSystemSettingsModal() {
+    dom.systemSettingsModal?.classList.remove('open');
+}
+
+if (dom.openSystemSettingsModalBtn) dom.openSystemSettingsModalBtn.addEventListener('click', openSystemSettingsModal);
+if (dom.closeSystemSettingsModalBtn) dom.closeSystemSettingsModalBtn.addEventListener('click', closeSystemSettingsModal);
+if (dom.closeSystemSettingsModalBottomBtn) dom.closeSystemSettingsModalBottomBtn.addEventListener('click', closeSystemSettingsModal);
+if (dom.systemSettingsModal) {
+    dom.systemSettingsModal.addEventListener('click', (e) => {
+        if (e.target === dom.systemSettingsModal) closeSystemSettingsModal();
+    });
+}
+if (dom.systemSettingsDevModeToggle) {
+    dom.systemSettingsDevModeToggle.addEventListener('change', () => {
+        setDeveloperModeEnabled(Boolean(dom.systemSettingsDevModeToggle.checked));
+    });
+}
+
+document.addEventListener('developer-mode:changed', () => {
+    // Immediately update local read-only flags and rerender lists.
+    if (dom.songNameInput) {
+        dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
+    }
+    updateAdvancedSettingsButtonsVisibility();
+    void refreshSongList();
+    try {
+        refreshInstrumentListUI?.();
+    } catch (_e) {
+        // ignore
+    }
+});
+
 // --- Demo Mode Modal Logic ---
 function openDemoModeModal() {
     dom.demoModeModal?.classList.add('open');
@@ -2264,6 +2703,7 @@ async function openTrackerModalForEdit(block, trackerState) {
         filename: block.filename,
         name: block.name,
         description: block.description,
+        scope: normalizeScope(block.scope),
         trackerState: trackerState,
     };
     
@@ -2689,6 +3129,7 @@ function setupBlocksEventListeners() {
             // Also save to server
             fetch(`/api/song/${currentSongFilename}`, {
                 method: 'POST',
+                headers: getDeveloperModeHeaders(),
                 body: fileCode
             });
             
@@ -3023,6 +3464,7 @@ function setupBlocksEventListeners() {
 
         fetch(`/api/song/${currentSongFilename}`, {
             method: 'POST',
+            headers: getDeveloperModeHeaders(),
             body: fileCode
         });
 
@@ -3130,11 +3572,11 @@ function setupBlocksEventListeners() {
 
 // Listen for tracker:saveBlock event (when saving edits)
 document.addEventListener('tracker:saveBlock', async (e) => {
-    const { isNewBlock, filename, name, description, pattern, trackerState } = e.detail;
+    const { isNewBlock, filename, name, description, pattern, trackerState, scope } = e.detail;
     
     if (isNewBlock) {
         // Handle new block creation
-        const success = await saveBlock(name, description || "Created in tracker", pattern, trackerState);
+        const success = await saveBlock(name, description || "Created in tracker", pattern, trackerState, scope || 'user');
         if (success) {
             setStatus(`Block "${name}" created successfully`, 'success');
             // Close tracker and return to blocks list
@@ -3146,7 +3588,7 @@ document.addEventListener('tracker:saveBlock', async (e) => {
     } else {
         // Handle existing block update
         // Update the block
-        const success = await updateBlock(filename, name, description, pattern, trackerState);
+        const success = await updateBlock(filename, name, description, pattern, trackerState, scope || 'user');
         if (success) {
             setStatus(`Block "${name}" updated successfully`, 'success');
             // Close tracker and return to blocks list

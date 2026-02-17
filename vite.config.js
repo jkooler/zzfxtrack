@@ -9,6 +9,34 @@ const SONGS_DIR = path.resolve(__dirname, 'songs');
 const OUTPUT_DIR = path.resolve(__dirname, 'output');
 const BLOCKS_DIR = path.resolve(__dirname, 'blocks');
 const ARRANGEMENTS_DIR = path.resolve(__dirname, 'arrangements');
+const VALID_SCOPES = new Set(['user', 'example']);
+
+function normalizeScope(value, fallback = 'user') {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim().toLowerCase();
+  return VALID_SCOPES.has(normalized) ? normalized : fallback;
+}
+
+function readScopeFromContent(content, fallback = 'user') {
+  if (typeof content !== 'string') return fallback;
+  const scopeMatch = content.match(/export\s+const\s+scope\s*=\s*["']([^"']+)["']\s*;?/);
+  return normalizeScope(scopeMatch ? scopeMatch[1] : null, fallback);
+}
+
+function songMetaPath(songFilename) {
+  return path.join(SONGS_DIR, songFilename.replace(/\.js$/, '.meta.json'));
+}
+
+function readSongScope(songFilename) {
+  try {
+    const metaPath = songMetaPath(songFilename);
+    if (!fs.existsSync(metaPath)) return 'user';
+    const parsed = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    return normalizeScope(parsed?.scope, 'user');
+  } catch (_e) {
+    return 'user';
+  }
+}
 
 /**
  * Custom Vite Plugin to provide a simple API for:
@@ -20,6 +48,13 @@ const ARRANGEMENTS_DIR = path.resolve(__dirname, 'arrangements');
 const apiPlugin = () => ({
   name: 'strudel-export-api',
   configureServer(server) {
+    const isDeveloperModeRequest = (req) => {
+      try {
+        return String(req?.headers?.['x-developer-mode'] || '') === '1';
+      } catch (_e) {
+        return false;
+      }
+    };
     
     // API: List Songs
     // GET /api/songs
@@ -30,8 +65,12 @@ const apiPlugin = () => ({
                 fs.mkdirSync(SONGS_DIR, { recursive: true });
             }
             const files = fs.readdirSync(SONGS_DIR).filter(f => f.endsWith('.js') && f !== 'index.js');
+            const songs = files.map((filename) => ({
+                filename,
+                scope: readSongScope(filename),
+            }));
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(files));
+            res.end(JSON.stringify(songs));
         } catch (e) {
             res.statusCode = 500;
             res.end(JSON.stringify({ error: e.message }));
@@ -82,6 +121,11 @@ const apiPlugin = () => ({
         
         // POST - Save song content
         if (req.method === 'POST') {
+            if (readSongScope(resolvedSongName) === 'example' && !isDeveloperModeRequest(req)) {
+                res.statusCode = 403;
+                res.end('Example songs are immutable');
+                return;
+            }
             let body = '';
             req.on('data', chunk => body += chunk);
             req.on('end', () => {
@@ -94,6 +138,11 @@ const apiPlugin = () => ({
         // DELETE - Delete song
         if (req.method === 'DELETE') {
              if (fs.existsSync(filePath)) {
+                 if (readSongScope(resolvedSongName) === 'example' && !isDeveloperModeRequest(req)) {
+                     res.statusCode = 403;
+                     res.end('Example songs are immutable and cannot be removed');
+                     return;
+                 }
                  fs.unlinkSync(filePath);
                  const metaPath = path.join(SONGS_DIR, resolvedSongName.replace(/\.js$/, '.meta.json'));
                  if (fs.existsSync(metaPath)) {
@@ -214,8 +263,8 @@ const apiPlugin = () => ({
      
      // API: Rename Song
      // POST /api/rename-song
-     server.middlewares.use('/api/rename-song', (req, res, next) => {
-       if (req.method === 'POST') {
+	     server.middlewares.use('/api/rename-song', (req, res, next) => {
+	       if (req.method === 'POST') {
          let body = '';
          req.on('data', chunk => body += chunk);
          req.on('end', () => {
@@ -235,11 +284,16 @@ const apiPlugin = () => ({
              const newPath = path.join(SONGS_DIR, newName);
              
              // Check if old file exists
-             if (!fs.existsSync(oldPath)) {
+	             if (!fs.existsSync(oldPath)) {
                res.statusCode = 404;
                res.end('Song not found');
                return;
              }
+	             if (readSongScope(oldName) === 'example' && !isDeveloperModeRequest(req)) {
+	               res.statusCode = 403;
+	               res.end('Example songs are immutable');
+	               return;
+	             }
              
              // Check if new name already exists
              if (fs.existsSync(newPath) && oldPath !== newPath) {
@@ -250,6 +304,11 @@ const apiPlugin = () => ({
              
              // Rename the file
              fs.renameSync(oldPath, newPath);
+             const oldMetaPath = songMetaPath(oldName);
+             const newMetaPath = songMetaPath(newName);
+             if (fs.existsSync(oldMetaPath)) {
+               fs.renameSync(oldMetaPath, newMetaPath);
+             }
              
              console.log(`[API] Renamed song: ${oldName} -> ${newName}`);
              res.end('Song renamed successfully');
@@ -289,6 +348,7 @@ const apiPlugin = () => ({
                 const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*([`"'])([\s\S]*?)\1\s*;?/);
                 // Extract trackerState if present
                 const trackerStateMatch = content.match(/export\s+const\s+trackerState\s*=\s*(\{[\s\S]*?\})\s*;/);
+                const scope = readScopeFromContent(content, 'user');
                 let trackerState = null;
                 if (trackerStateMatch) {
                   try {
@@ -303,10 +363,11 @@ const apiPlugin = () => ({
                   name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
                   description: descMatch ? descMatch[1] : '',
                   pattern: patternMatch ? patternMatch[2].trim() : '',
-                  trackerState
+                  trackerState,
+                  scope
                 };
               } catch (e) {
-                return { filename, name: filename.replace('.js', ''), description: '', pattern: '', trackerState: null };
+                return { filename, name: filename.replace('.js', ''), description: '', pattern: '', trackerState: null, scope: 'user' };
               }
             });
            
@@ -326,7 +387,8 @@ const apiPlugin = () => ({
          req.on('end', () => {
            try {
              const blockData = JSON.parse(body);
-             const { filename, name, description, pattern, trackerState } = blockData;
+             const { filename, name, description, pattern, trackerState, scope } = blockData;
+             const normalizedScope = normalizeScope(scope, 'user');
              
              // Validate filename
              if (!filename || filename.includes('..') || !filename.endsWith('.js')) {
@@ -347,6 +409,7 @@ const apiPlugin = () => ({
 
 export const name = "${name}";
 export const description = "${description || ''}";
+export const scope = "${normalizedScope}";
 
 export const pattern = \`${pattern}\`;
 
@@ -399,6 +462,7 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
               const descMatch = content.match(/export\s+const\s+description\s*=\s*["']([^"']*)["']/);
               const patternMatch = content.match(/export\s+const\s+pattern\s*=\s*([`"'])([\s\S]*?)\1\s*;?/);
               const trackerStateMatch = content.match(/export\s+const\s+trackerState\s*=\s*(\{[\s\S]*?\})\s*;/);
+              const scope = readScopeFromContent(content, 'user');
               
               let trackerState = null;
               if (trackerStateMatch) {
@@ -415,7 +479,8 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
                 name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
                 description: descMatch ? descMatch[1] : '',
                 pattern: patternMatch ? patternMatch[2].trim() : '',
-                trackerState
+                trackerState,
+                scope
               }));
             } catch (e) {
               res.statusCode = 500;
@@ -430,6 +495,17 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
         
         if (req.method === 'DELETE') {
           if (fs.existsSync(filePath)) {
+            try {
+              const content = fs.readFileSync(filePath, 'utf-8');
+              const scope = readScopeFromContent(content, 'user');
+              if (scope === 'example' && !isDeveloperModeRequest(req)) {
+                res.statusCode = 403;
+                res.end('Example blocks are immutable and cannot be removed');
+                return;
+              }
+            } catch (_e) {
+              // Continue with delete for malformed files.
+            }
             fs.unlinkSync(filePath);
             console.log(`[API] Deleted block: ${filename}`);
             res.end('Block deleted successfully');
@@ -446,7 +522,21 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
           req.on('end', () => {
             try {
               const blockData = JSON.parse(body);
-              const { name, description, pattern, trackerState } = blockData;
+              const { name, description, pattern, trackerState, scope } = blockData;
+              let existingScope = 'user';
+              if (fs.existsSync(filePath)) {
+                try {
+                  existingScope = readScopeFromContent(fs.readFileSync(filePath, 'utf-8'), 'user');
+                } catch (_e) {
+                  existingScope = 'user';
+                }
+              }
+              const normalizedScope = normalizeScope(scope, existingScope);
+              if (existingScope === 'example' && normalizedScope === 'example' && !isDeveloperModeRequest(req)) {
+                res.statusCode = 403;
+                res.end('Example blocks are immutable');
+                return;
+              }
               
               if (!fs.existsSync(BLOCKS_DIR)) {
                 fs.mkdirSync(BLOCKS_DIR, { recursive: true });
@@ -458,6 +548,7 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
 
 export const name = "${name}";
 export const description = "${description || ''}";
+export const scope = "${normalizedScope}";
 
 export const pattern = \`${pattern}\`;
 
@@ -498,6 +589,7 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
                const content = fs.readFileSync(filePath, 'utf-8');
                const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
                const arrangementStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
+               const scope = readScopeFromContent(content, 'user');
                let arrangementState = null;
                if (arrangementStateMatch) {
                  try {
@@ -511,10 +603,11 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
                  filename,
                  name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
                  bpm: arrangementState?.bpm ?? 120,
-                 arrangementState
+                 arrangementState,
+                 scope
                };
              } catch (e) {
-               return { filename, name: filename.replace('.js', ''), bpm: 120, arrangementState: null };
+               return { filename, name: filename.replace('.js', ''), bpm: 120, arrangementState: null, scope: 'user' };
              }
            });
 
@@ -534,7 +627,8 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
          req.on('end', () => {
            try {
              const arrangementData = JSON.parse(body);
-             const { filename, name, arrangementState } = arrangementData;
+             const { filename, name, arrangementState, scope } = arrangementData;
+             const normalizedScope = normalizeScope(scope, 'user');
 
              if (!filename || filename.includes('..') || !filename.endsWith('.js')) {
                res.statusCode = 400;
@@ -550,6 +644,7 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
              const fileContent = `// Arrangement: ${name}
 
 export const name = "${name}";
+export const scope = "${normalizedScope}";
 
 export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
 `;
@@ -593,6 +688,7 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
               const content = fs.readFileSync(filePath, 'utf-8');
               const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
               const arrangementStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
+              const scope = readScopeFromContent(content, 'user');
               let arrangementState = null;
               if (arrangementStateMatch) {
                 try {
@@ -607,7 +703,8 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
                 filename,
                 name: nameMatch ? nameMatch[1] : filename.replace('.js', ''),
                 bpm: arrangementState?.bpm ?? 120,
-                arrangementState
+                arrangementState,
+                scope
               }));
             } catch (e) {
               res.statusCode = 500;
@@ -622,6 +719,17 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
 
         if (req.method === 'DELETE') {
           if (fs.existsSync(filePath)) {
+            try {
+              const content = fs.readFileSync(filePath, 'utf-8');
+              const scope = readScopeFromContent(content, 'user');
+              if (scope === 'example' && !isDeveloperModeRequest(req)) {
+                res.statusCode = 403;
+                res.end('Example arrangements are immutable and cannot be removed');
+                return;
+              }
+            } catch (_e) {
+              // Continue with delete for malformed files.
+            }
             fs.unlinkSync(filePath);
             console.log(`[API] Deleted arrangement: ${filename}`);
             res.end('Deleted');
@@ -638,7 +746,21 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
           req.on('end', () => {
             try {
               const arrangementData = JSON.parse(body);
-              const { name, arrangementState } = arrangementData;
+              const { name, arrangementState, scope } = arrangementData;
+              let existingScope = 'user';
+              if (fs.existsSync(filePath)) {
+                try {
+                  existingScope = readScopeFromContent(fs.readFileSync(filePath, 'utf-8'), 'user');
+                } catch (_e) {
+                  existingScope = 'user';
+                }
+              }
+              const normalizedScope = normalizeScope(scope, existingScope);
+              if (existingScope === 'example' && normalizedScope === 'example' && !isDeveloperModeRequest(req)) {
+                res.statusCode = 403;
+                res.end('Example arrangements are immutable');
+                return;
+              }
 
               if (!fs.existsSync(ARRANGEMENTS_DIR)) {
                 fs.mkdirSync(ARRANGEMENTS_DIR, { recursive: true });
@@ -647,6 +769,7 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
               const fileContent = `// Arrangement: ${name}
 
 export const name = "${name}";
+export const scope = "${normalizedScope}";
 
 export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
 `;
