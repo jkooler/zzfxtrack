@@ -7,7 +7,7 @@ export const bpm = 120;
 // If you're new to Strudel, it's recommended to read the official docs.
 // https://patterns.slab.org/learn/getting-started/
 
-// Check the instrument's tab. It's a good place to start making sounds.
+// I'd first check out the instrument's tab. It's a good place to start making sounds.
 
 
 export const pattern = stack(
@@ -26,4 +26,4 @@ export const pattern = stack(
 // 1. Audio processing effects will not carry over to exported .json file.
 // 2. Some more advanced Strudel pattern logic may also be only partially compatible.
 // 3. Make sure to use the "Instruments" instead of the synthesis provided by Strudel.
-// 4. Sounds produced by Strudel's inherit sound engines will not carry as well.;
+// 4. Sounds produced by Strudel's inherit sound engines will not carry to ZzFXM export.;
