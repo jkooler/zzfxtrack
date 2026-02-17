@@ -588,6 +588,14 @@ function renderBlocksList() {
   }
   
   blocksCache.forEach((block, index) => {
+    const bpm = Number.isFinite(block?.trackerState?.bpm) ? block.trackerState.bpm : null;
+    const steps = Number.isFinite(block?.trackerState?.steps)
+      ? block.trackerState.steps
+      : (Array.isArray(block?.trackerState?.grid?.[0]) ? block.trackerState.grid[0].length : null);
+    const blockMeta = (bpm != null && steps != null)
+      ? `BPM ${bpm} • ${steps} row${steps === 1 ? '' : 's'}`
+      : (block.description || 'No block metadata');
+
     const blockEl = document.createElement('div');
     blockEl.className = 'block-item';
     blockEl.dataset.index = index;
@@ -597,7 +605,7 @@ function renderBlocksList() {
     blockEl.innerHTML = `
       <div class="min-w-0">
         <div class="block-name font-bold text-sm text-foreground">${escapeHtml(block.name)}</div>
-        <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(block.description || 'No description')}</div>
+        <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(blockMeta)}</div>
       </div>
       <div class="song-item-actions">
         <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>

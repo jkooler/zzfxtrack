@@ -7,6 +7,8 @@ export const bpm = 120;
 // If you're new to Strudel, it's recommended to read the official docs.
 // https://patterns.slab.org/learn/getting-started/
 
+// Check the instrument's tab. It's a good place to start making sounds.
+
 
 export const pattern = stack(
   note("bb2 bb2(-1,2) bb2 [bb2(2,8) d4] bb2 bb2(-1,2) bb2(3,8) [[bb2 bb4] bb2 d4 bb2]").s("demo-kickdrum").slow(4),
