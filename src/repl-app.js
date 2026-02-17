@@ -492,7 +492,7 @@ function setupAutoSave() {
                     // Update indicators in sidebar
                     updateInstrumentUsage(currentCode);
                     
-                    if (currentSongScope !== 'example') {
+                    if (currentSongScope !== 'example' || isDeveloperModeEnabled()) {
                         // IMMEDIATELY save to localStorage as backup
                         localStorage.setItem(`unsaved_${currentSongFilename}`, currentCode);
                         
