@@ -580,6 +580,12 @@
               Change Log
             </button>
             <button
+              id="openTechnicalDetailsModalBtn"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
+            >
+              Technical details
+            </button>
+            <button
               id="openLicenseModalBtn"
               class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
             >
@@ -748,6 +754,94 @@
         <div class="flex justify-end">
           <button
             id="closeLicenseModalBottomBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Details Modal -->
+    <div
+      id="technicalDetailsModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-3xl max-h-[85vh] gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+      >
+        <div class="flex items-center justify-between">
+          <h2
+            class="text-lg font-semibold leading-none tracking-tight text-primary"
+          >
+            Technical details
+          </h2>
+          <button
+            id="closeTechnicalDetailsModalBtn"
+            class="text-muted-foreground hover:text-foreground"
+            aria-label="Close"
+          >
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+        <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
+          <p class="text-foreground/90 leading-relaxed">
+            This app is a browser-based composition and export tool. It combines Strudel as the pattern language and live-coding interface, ZzFXMicro as the synth engine for sound generation, and an export pipeline whose main output is ZzFXM-compatible song JSON.
+          </p>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">Composition UI and runtime</h3>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>The editor is the embedded <code>&lt;strudel-editor&gt;</code> REPL component. When you press Play (or run code via Strudel shortcuts), Strudel evaluates your code and drives timing/scheduling in the browser.</li>
+              <li>Sound is produced by ZzFXMicro instruments: the app maps instrument definitions to ZzFXMicro parameters and uses them for preview playback and for export.</li>
+              <li>The app keeps a small amount of UI state (selected song, play state, export settings) and mirrors it into the sidebar and preview panel.</li>
+              <li>Auto-save is event-driven: changes are debounced to avoid excessive writes, but key actions (like leaving certain inputs) can trigger immediate saves.</li>
+            </ul>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">Project files</h3>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Songs are JavaScript modules stored under <code>songs/</code>. A selected song is loaded into the editor and also used as the source of truth for export and playback.</li>
+              <li>Blocks are reusable patterns stored under <code>blocks/</code>. They can include an embedded <code>trackerState</code> object so the Tracker can re-open them for editing.</li>
+              <li>Arrangements live under <code>arrangements/</code> and reference blocks, letting you build longer pieces out of smaller patterns.</li>
+              <li>Instruments are stored in <code>instruments.js</code> and mapped to ZzFXMicro parameters for both preview and export.</li>
+            </ul>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">Local API (dev server)</h3>
+            <p class="leading-relaxed">
+              During development, the app talks to a small local API exposed by Vite middleware (endpoints like <code>/api/songs</code>, <code>/api/song/&lt;name&gt;</code>, <code>/api/blocks</code>, and rename endpoints). These endpoints read and write files in the project directories so your edits persist as real modules you can commit.
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">Tracker and blocks</h3>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>The Tracker modal is a lightweight step sequencer. When you save a block, it generates a Strudel pattern string and stores the underlying grid state (<code>trackerState</code>) for later edits.</li>
+              <li>When inserting a block into a song, the app can optionally keep the block BPM, and it passes the block’s row count so insertion can align musically.</li>
+            </ul>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">Export and preview</h3>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Export is the main feature: it turns your composition into a ZzFXM song array <code>[instruments, patterns, sequence, BPM]</code> (plus optional stats), designed to be deterministic and engine-friendly.</li>
+              <li>Preview uses the same exported ZzFXM structure and ZzFXMicro synthesis to let you verify the result before downloading.</li>
+            </ul>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">Demo mode</h3>
+            <p class="leading-relaxed">
+              In demo mode, song management is read-only and edits are kept in memory for the session. You can still download a ZIP to move the project files into a local workspace.
+            </p>
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button
+            id="closeTechnicalDetailsModalBottomBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
           >
             Close

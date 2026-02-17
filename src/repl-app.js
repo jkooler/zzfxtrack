@@ -122,6 +122,12 @@ const dom = {
     licenseAttributionModal: document.getElementById('licenseAttributionModal'),
     closeLicenseModalBtn: document.getElementById('closeLicenseModalBtn'),
     closeLicenseModalBottomBtn: document.getElementById('closeLicenseModalBottomBtn'),
+
+    // Technical Details Modal
+    openTechnicalDetailsModalBtn: document.getElementById('openTechnicalDetailsModalBtn'),
+    technicalDetailsModal: document.getElementById('technicalDetailsModal'),
+    closeTechnicalDetailsModalBtn: document.getElementById('closeTechnicalDetailsModalBtn'),
+    closeTechnicalDetailsModalBottomBtn: document.getElementById('closeTechnicalDetailsModalBottomBtn'),
     
     // Change Log Modal
     openChangelogModalBtn: document.getElementById('openChangelogModalBtn'),
@@ -1979,6 +1985,27 @@ if (dom.licenseAttributionModal) {
     dom.licenseAttributionModal.addEventListener('click', (e) => {
         if (e.target === dom.licenseAttributionModal) {
             closeLicenseModal();
+        }
+    });
+}
+
+// --- Technical Details Modal Logic ---
+function openTechnicalDetailsModal() {
+    dom.technicalDetailsModal?.classList.add('open');
+    createIcons({ icons });
+}
+
+function closeTechnicalDetailsModal() {
+    dom.technicalDetailsModal?.classList.remove('open');
+}
+
+if (dom.openTechnicalDetailsModalBtn) dom.openTechnicalDetailsModalBtn.addEventListener('click', openTechnicalDetailsModal);
+if (dom.closeTechnicalDetailsModalBtn) dom.closeTechnicalDetailsModalBtn.addEventListener('click', closeTechnicalDetailsModal);
+if (dom.closeTechnicalDetailsModalBottomBtn) dom.closeTechnicalDetailsModalBottomBtn.addEventListener('click', closeTechnicalDetailsModal);
+if (dom.technicalDetailsModal) {
+    dom.technicalDetailsModal.addEventListener('click', (e) => {
+        if (e.target === dom.technicalDetailsModal) {
+            closeTechnicalDetailsModal();
         }
     });
 }
