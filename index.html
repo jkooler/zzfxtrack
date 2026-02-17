@@ -139,15 +139,15 @@
         <span class="text-xs text-muted-foreground font-medium">Data:</span>
         <button
           id="downloadProjectBtn"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
+          class="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
         >
-          Download
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
         </button>
         <button
           id="uploadProjectBtn"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
+          class="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
         >
-          Upload
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload
         </button>
         <input id="uploadProjectInput" type="file" accept=".zip" class="hidden" />
       </div>
@@ -874,11 +874,12 @@
         <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
           <div class="border border-border rounded-md p-3 bg-card/50">
             <p class="text-foreground font-semibold">v0.1.0-alpha.1</p>
-            <p class="text-xs opacity-80">2026-02-14</p>
+            <p class="text-xs opacity-80">2026-02-17</p>
             <ul class="list-disc pl-5 mt-2 space-y-1">
               <li>First public alpha release.</li>
               <li>Strudel composition workflow with ZzFX instrument support.</li>
               <li>ZzFXM-compatible export and preview flow.</li>
+              <li>Experimental Blocks feature.</li>
               <li>In-app licensing and attribution modal.</li>
             </ul>
           </div>

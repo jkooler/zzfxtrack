@@ -182,6 +182,25 @@ function showWelcome() {
     lastExportedData = null;
 }
 
+function showIntroduction() {
+    // If no song is loaded, the introduction view is also the "empty" state.
+    if (!currentSongFilename) {
+        showWelcome();
+        return;
+    }
+
+    dom.welcomeView.style.display = 'flex';
+    dom.editorContainer.style.display = 'none';
+    dom.songNameInput.classList.add('hidden');
+
+    // Keep controls available so the user can stop playback while reading intro.
+    dom.playBtn.style.visibility = 'visible';
+    dom.exportBtn.disabled = false;
+
+    renderPlayButton();
+    updateSongListVisualizer();
+}
+
 function showEditor() {
     dom.welcomeView.style.display = 'none';
     dom.editorContainer.style.display = 'flex';
@@ -1618,7 +1637,7 @@ if (dom.uploadProjectModal) {
     });
 }
 
-dom.sidebarTitle.addEventListener('click', showWelcome);
+dom.sidebarTitle.addEventListener('click', showIntroduction);
 dom.newSongBtn.addEventListener('click', openModal);
 dom.cancelNewSong.addEventListener('click', closeModal);
 dom.confirmNewSong.addEventListener('click', () => {
