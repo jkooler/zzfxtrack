@@ -2,6 +2,11 @@
 
 Browser-based tool to compose with Strudel patterns, preview generated sound, and export song/instrument data compatible with ZzFXM playback.
 
+## Requirements
+
+- Node.js: `^20.19.0 || >=22.12.0` (matches Vite's engine requirement in `package-lock.json`)
+- npm (any version that supports lockfile v3 is fine)
+
 ## What This App Is For
 
 - Compose music using a Strudel REPL workflow.
@@ -31,6 +36,7 @@ npm run export -- --all --combined
 
 - `songs/`: song definitions.
 - `instruments.js`: ZzFX instrument parameter definitions.
+- `export.js`: CLI exporter that writes JSON to `output/`.
 - `src/export-logic.js`: Strudel-to-ZzFXM export conversion logic.
 - `output/`: generated export output.
 

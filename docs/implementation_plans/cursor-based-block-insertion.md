@@ -1,18 +1,22 @@
 # Cursor-Based Block Insertion Implementation Plan
 
+Status: Partially implemented (last verified 2026-02-18)
+
 ## Overview
-Currently, inserting a block replaces the entire pattern definition in a song. This plan outlines implementing non-destructive cursor-based insertion, allowing users to insert block patterns at their current cursor position in the Strudel editor.
+Block insertion is now non-destructive, but it is not truly "cursor-based". The current implementation inserts a block as a named layer and updates `export const pattern = ...` to include that layer, rather than mapping the editor cursor position into the stored file and inserting arbitrary code.
 
 ## Current Behavior
-- Block insertion removes the existing `export const pattern = ...` declaration
-- New pattern is appended at the end of the file
-- The entire song pattern is replaced, not inserted
+- Block insertion creates (or reuses) a `// BLOCKS START` ... `// BLOCKS END` section in the song file.
+- The block is inserted as a `const <block_name> = ...` within that section.
+- `export const pattern = ...` is updated to include the new layer:
+  - If the existing pattern is `stack(...)`, the new layer is appended as another argument.
+  - Otherwise, the exporter wraps the existing pattern in `stack(existing, newLayer)`.
 
 ## Desired Behavior
-- Block pattern is inserted at the current cursor position
-- Existing code is preserved
-- Multiple blocks can be combined in a single pattern
-- Works with both pre-made blocks and tracker-created blocks
+- Insert a block pattern at the current cursor position in the Strudel editor view.
+- Preserve existing code even if the user is editing custom non-pattern helper code.
+- Avoid relying on regex edits of `export const pattern = ...` where possible.
+- Provide a clear fallback when insertion is ambiguous (for example, outside a pattern expression).
 
 ## Technical Challenges
 
@@ -191,10 +195,10 @@ Blocks appear in sidebar, clicking inserts at cursor with smart wrapping.
 
 ## Recommendation
 
-Implement **Phase 1 and Phase 2** as the MVP:
+Keep the current "layer insertion" flow (it is robust and non-destructive) and implement cursor-based insertion as an optional mode:
 1. Track cursor position
-2. Implement smart insertion with context detection
-3. Add simple UI toggle for insertion mode
+2. Implement safe insertion only when the cursor is clearly inside the `export const pattern = ...` expression in editor coordinates
+3. Fall back to layer insertion when ambiguous
 
 This provides immediate value while keeping complexity manageable. Phases 3-5 can be added incrementally based on user feedback.
 
@@ -228,7 +232,7 @@ This provides immediate value while keeping complexity manageable. Phases 3-5 ca
 
 ## Notes
 
-- Keep the current "replace entire pattern" behavior as an option
+- Keep the current "layer insertion" behavior as an option
 - Consider adding keyboard shortcut for quick insertion (e.g., Ctrl+Shift+Enter)
 - May need to expose more CodeMirror APIs from Strudel REPL component
 - Test thoroughly with complex patterns containing nested functions

@@ -1,20 +1,20 @@
-# ZzFXM Chord Support Implementation Plan
+# ZzFXM Chord Support
+
+Status: Implemented (last verified 2026-02-18)
 
 ## Problem Statement
 
-Strudel supports chord notation like `note("[c, e, g]").s("piano")`, which plays multiple notes simultaneously on the same instrument. When exported to ZzFXM format, only **one note** is preserved because ZzFXM is a tracker format where each channel can only play one note at a time.
+Strudel supports chord notation like `note("[c, e, g]").s("piano")`, which plays multiple notes simultaneously on the same instrument.
 
-Currently in `export-logic.js`, when multiple events occur at the same grid position for the same instrument, subsequent events overwrite previous ones:
+Historically, exports could lose notes when multiple events landed on the same row. This repo addresses that by expanding chords into multiple ZzFXM channels ("voices") because ZzFXM is monophonic per channel.
 
-```javascript
-// Current behavior (line 80)
-tracks[instIndex][gridIndex] = [instIndex, attenuation, semitone];
-// If two notes land on same gridIndex, second overwrites first
-```
+ZzFXM is monophonic per channel, so exporting chords requires expanding a single Strudel instrument into multiple ZzFXM channels ("voices") when multiple notes land on the same row.
+
+This repo implements voice expansion in `src/export-logic.js` and exposes controls in the UI (`src/repl-app.js`) to limit voices and optionally force specific instruments to be monophonic.
 
 ---
 
-## Proposed Solution: Channel Expansion
+## Current Implementation: Voice Expansion
 
 Expand chords into multiple ZzFXM channels, each playing one note of the chord using the same instrument definition.
 
@@ -22,7 +22,7 @@ Expand chords into multiple ZzFXM channels, each playing one note of the chord u
 
 **Unlimited by default.** ZzFXM has no inherent channel limit - it's a flexible JavaScript format. This tool should export full fidelity audio without artificial constraints.
 
-For users targeting **js13k** or other size/performance-constrained scenarios, an **optional channel limiter** setting allows capping polyphony.
+For users targeting **js13k** or other size/performance-constrained scenarios, an optional channel limiter allows capping polyphony (dropping notes when the limit is reached).
 
 ### How It Works
 
@@ -54,45 +54,22 @@ Channel 2 (piano): G3
 
 ---
 
-## Technical Design
+## Notes On The Implementation
 
-### New Data Structure
+### Data Structures
 
 Replace single-track storage with a voice-aware structure:
 
 ```javascript
-// Current
-const tracks = {}; // { instIndex: Array[totalRows] }
-
-// Proposed
-const voiceTracker = {}; // { instIndex: { gridIndex: voiceCount } }
+// Voice-aware track storage
 const tracks = {}; // { "instIndex-voice": Array[totalRows] }
+const voiceTracker = {}; // { instIndex: { "gridIndex-voice": true } }
 ```
 
-### Algorithm
+### Allocation Algorithm (Conceptual)
 
 ```javascript
-function getAvailableVoice(instIndex, gridIndex, maxVoices = Infinity) {
-  const key = `${instIndex}`;
-  if (!voiceTracker[key]) voiceTracker[key] = {};
-
-  // Find next available voice for this instrument at this time
-  let voice = 0;
-  while (voiceTracker[key][`${gridIndex}-${voice}`]) {
-    voice++;
-  }
-
-  // Apply limit if set (for js13k mode)
-  if (voice >= maxVoices) {
-    return -1; // Signal: cannot allocate, skip this note
-  }
-
-  voiceTracker[key][`${gridIndex}-${voice}`] = true;
-  return voice;
-}
-
-// In event processing loop:
-const voice = getAvailableVoice(instIndex, gridIndex, options.maxVoicesPerInstrument);
+const voice = getAvailableVoice(voiceTracker, instIndex, gridIndex, options.maxVoicesPerInstrument);
 if (voice === -1) continue; // Skip note if limit reached
 
 const trackKey = `${instIndex}-${voice}`;
@@ -111,152 +88,19 @@ When building final `patternData`:
 
 ---
 
-## File Changes
+## Where To Look In This Repo
 
-### [MODIFY] [export-logic.js](file:///Users/jkoole/dev/strudel-to-zzfxfm-exporter/src/export-logic.js)
+- `src/export-logic.js`: `getAvailableVoice()` + voice-aware track flattening, plus stats like `channelCount` and `droppedNotes`.
+- `src/repl-app.js`: export UI that wires:
+  - `maxVoicesPerInstrument` (via "Limit channels")
+  - `normalizeUnisonLayers`
+  - `rowsPerCycle` (export resolution)
+  - `monophonicByInstrumentIndex` (per-instrument monophonic toggle)
 
-| Section      | Change                                                            |
-| ------------ | ----------------------------------------------------------------- |
-| Lines 15-21  | Add `voiceTracker` data structure                                 |
-| Lines 38-41  | Replace direct track assignment with voice-aware allocation       |
-| Lines 83-109 | Update channel flattening to handle voice tracks                  |
-| New function | Add `getAvailableVoice(instIndex, gridIndex, maxVoices)` helper   |
-| Export       | Accept optional `options` parameter with `maxVoicesPerInstrument` |
+## Remaining Gaps (If You Still Want "True" Chords)
 
-### [MODIFY] [repl-app.js](file:///Users/jkoole/dev/strudel-to-zzfxfm-exporter/src/repl-app.js)
-
-| Section       | Change                                               |
-| ------------- | ---------------------------------------------------- |
-| Export function | Pass limiter options to `exportPattern()`              |
-| Status UI     | Display channel count (informational, not a warning) |
-
-### [NEW] Export Settings UI
-
-Add optional limiter controls to the export workflow:
-
-| Element              | Description                                                  |
-| -------------------- | ------------------------------------------------------------ |
-| Channel Limit Toggle | Enable/disable channel limiting                              |
-| Max Channels Input   | Number input (default: unlimited, suggested: 8-16 for js13k) |
-| Per-Instrument Limit | Optional: max voices per instrument (e.g., 4)                |
-
----
-
-## UI Enhancements
-
-### Channel Usage Indicator
-
-Add informational feedback after export:
-
-```
-✓ Exported: 12 channels
-```
-
-If limiter is enabled and notes were dropped:
-
-```
-✓ Exported: 16 channels (4 notes dropped due to limit)
-```
-
-### Export Statistics (JSON Preview)
-
-Include in the preview modal:
-
-- Total channels used
-- Notes exported vs. dropped (if limiter active)
-- Voice distribution per instrument
-
----
-
-## Optional: js13k Mode Preset
-
-Consider a quick toggle or preset:
-
-```
-[ ] js13k Mode (limit to 8 channels)
-```
-
-When enabled:
-
-- Sets max channels to 8
-- May enable other size optimizations in future
-
----
-
-## Edge Cases
-
-| Scenario                              | Handling                                              |
-| ------------------------------------- | ----------------------------------------------------- |
-| Empty chord `[]`                      | Skip (no notes to place)                              |
-| Single note (not a chord)             | Works as before (voice 0)                             |
-| Limiter active, note can't fit        | Skip the note, increment dropped counter              |
-| Same note played twice simultaneously | Allocate separate voices (may be intentional)         |
-| No limiter, 50+ channels              | Export all (user's choice, no artificial restriction) |
-
----
-
-## Testing Strategy
-
-### Unit Tests
-
-1. **Single note** → 1 channel, correct pitch
-2. **Two-note chord** → 2 channels, same instrument, different pitches
-3. **Three-note chord** → 3 channels
-4. **Multiple instruments** → Correct instrument indices preserved
-5. **Chord + melody on same instrument** → Voices correctly allocated
-6. **Limiter: 2 voices, 3-note chord** → 2 notes exported, 1 dropped
-7. **No limiter: complex song** → All notes exported regardless of count
-
-### Manual Testing
-
-1. Create a song with `note("[c3, e3, g3]").s("piano")`
-2. Export to ZzFXM (no limit)
-3. Verify all 3 notes play
-4. Enable limiter (max 2 voices)
-5. Verify 2 notes play, status shows "1 note dropped"
-
----
-
-## Implementation Phases
-
-### Phase 1: Core Logic (Estimated: 2 hours)
-
-- [ ] Implement `voiceTracker` and `getAvailableVoice()`
-- [ ] Update event processing loop
-- [ ] Update channel flattening
-- [ ] Return channel count from `exportPattern()`
-
-### Phase 2: Optional Limiter (Estimated: 1.5 hours)
-
-- [ ] Add `options` parameter to `exportPattern()`
-- [ ] Implement voice limiting logic
-- [ ] Track and return dropped note count
-- [ ] Add limiter UI controls (toggle + number input)
-
-### Phase 3: UI Feedback (Estimated: 1 hour)
-
-- [ ] Display channel count in status
-- [ ] Show dropped notes if limiter active
-- [ ] Update JSON preview with statistics
-
-### Phase 4: Testing & Polish (Estimated: 1 hour)
-
-- [ ] Test unlimited export
-- [ ] Test with various limiter values
-- [ ] Edge case testing
-- [ ] Documentation update
-
----
-
-## Risks & Mitigations
-
-| Risk                         | Mitigation                                            |
-| ---------------------------- | ----------------------------------------------------- |
-| Performance with many voices | Inform user of channel count; they can enable limiter |
-| Dropped notes confusing      | Clear UI feedback showing what was limited            |
-| js13k users forget limiter   | Consider optional preset or reminder in export flow   |
-
----
+- ZzFXM has no single-channel polyphony, so any "true chord" export still has to be represented as multiple channels (voices).
+- If you want deterministic voice assignment across exports (for diff-friendly output), consider persisting voice allocation choices per instrument and time region.
 
 ## Future Enhancements
 
