@@ -234,7 +234,7 @@ function setActiveTab(tab) {
   if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null;
   if (elements.description) {
     elements.description.textContent = blocksActive
-      ? 'Blocks are reusable musical patterns. Create a block with the tracker, then insert it into any song.'
+      ? 'Blocks are reusable musical patterns. Create a block and insert it into a song or create arrangements from multiple blocks.'
       : 'Create arrangements with Blocks to quickly test out your song ideas.';
   }
   if (!blocksActive) {
