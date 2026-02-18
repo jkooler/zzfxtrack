@@ -4,7 +4,7 @@ export const bpm = 120;
 
 // Feature test: Monophonic horn instrument with polyphonic epiano.
 
-// This uses the external ZzFXMicro pipeline and works with both Strudel and ZzFXM playback.
+// This uses the external ZzFXMicro engine and works with both Strudel and ZzFXM playback.
 // Note: Chords will obviously not work if instrument is defined as monophonic.
 
 // Monophonic horn

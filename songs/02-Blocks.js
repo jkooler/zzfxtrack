@@ -2,11 +2,11 @@ import { stack, arrange, note, s, slow, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
 
-// Feature test: Blocks and Arrangements
+// This is the introduction song made with Blocks and Arrangements -feature.
 
-// This feature is found top right corner and is experimental
-// Goal of the feature is to merge traditional tools with Strudel
-// It's still in very early alpha. Needs better sequencing logic output and better naming conventions.
+// This feature is found top right corner and is consider experimental alpha.
+// Goal of the feature is to merge traditional tools with Strudel.
+// The thing you see here is the output the feature spits out.
 
 // BLOCKS START
 const block_simple_chord_pattern_js = (stack(
