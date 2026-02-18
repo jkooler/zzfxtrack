@@ -1139,14 +1139,14 @@ function renderInstrumentList() {
         const icon = expanded ? 'folder-open' : 'folder';
 
         folderItem.innerHTML = `
-            <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
+            <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
                 <span class="inline-flex items-center gap-1.5">
                     <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
                     ${label}
                 </span>
                 <span class="opacity-70">${items.length}</span>
             </button>
-            <ul class="list-none m-0 p-0 pl-2 border-l border-border/40 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-folder-items="${scope}"></ul>
+            <ul class="list-none m-0 p-0 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-folder-items="${scope}"></ul>
         `;
 
         const button = folderItem.querySelector(`[data-folder-scope="${scope}"]`);

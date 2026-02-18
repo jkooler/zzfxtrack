@@ -197,7 +197,7 @@ input[readonly]:focus-visible {
 }
 
 .song-item {
-  @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 relative overflow-hidden text-sm;
+  @apply flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 relative overflow-hidden text-sm;
 }
 .song-item.active {
   @apply bg-accent text-accent-foreground;
@@ -218,7 +218,7 @@ input[readonly]:focus-visible {
 }
 
 .instrument-item {
-  @apply flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 text-sm relative;
+  @apply flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 text-sm relative;
 }
 .instrument-item.active {
   background-color: color-mix(in srgb, var(--tertiary), transparent 50%);

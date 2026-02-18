@@ -611,14 +611,14 @@ async function refreshSongList() {
             const folderLi = document.createElement('li');
             folderLi.className = 'mb-1';
             folderLi.innerHTML = `
-                <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-song-folder="${scope}">
+                <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-song-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
                         <i data-lucide="${folderIcon}" class="w-3.5 h-3.5"></i>
                         ${label}
                     </span>
                     <span class="opacity-70">${items.length}</span>
                 </button>
-                <ul class="list-none m-0 p-0 pl-2 border-l border-border/40 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-song-folder-items="${scope}"></ul>
+                <ul class="list-none m-0 p-0 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-song-folder-items="${scope}"></ul>
             `;
             const list = folderLi.querySelector(`[data-song-folder-items="${scope}"]`);
             folderLi.querySelector(`[data-song-folder="${scope}"]`)?.addEventListener('click', () => {

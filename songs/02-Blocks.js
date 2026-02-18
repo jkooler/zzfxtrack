@@ -6,7 +6,8 @@ export const bpm = 120;
 
 // This feature is found top right corner and is consider experimental alpha.
 // Goal of the feature is to merge traditional tools with Strudel.
-// The thing you see here is the output the feature spits out.
+
+// The thing you see below is the output the feature spits out.
 
 // BLOCKS START
 const block_simple_chord_pattern_js = (stack(
