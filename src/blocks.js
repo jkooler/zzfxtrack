@@ -280,16 +280,16 @@ function renderArrangementsList() {
     const icon = expanded ? 'folder-open' : 'folder';
 
     const folder = document.createElement('div');
-    folder.className = 'mb-2';
+    folder.className = 'mb-0 py-px';
     folder.innerHTML = `
-      <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-arr-folder="${scope}">
+      <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-arr-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-3.5 h-3.5 ${expanded ? 'text-primary' : ''}"></i>
+          <i data-lucide="${icon}" class="w-4 h-4 ${expanded ? 'text-primary' : ''}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
       </button>
-      <div class="pl-2 border-l border-border/40 space-y-2 mt-1 ${expanded ? '' : 'hidden'}" data-arr-folder-items="${scope}"></div>
+      <div class="space-y-2 mt-1 ${expanded ? '' : 'hidden'}" data-arr-folder-items="${scope}"></div>
     `;
     const list = folder.querySelector(`[data-arr-folder-items="${scope}"]`);
     folder.querySelector(`[data-arr-folder="${scope}"]`)?.addEventListener('click', () => {
@@ -751,16 +751,16 @@ function renderBlocksList() {
       : blockFolderState.user;
     const icon = expanded ? 'folder-open' : 'folder';
     const folder = document.createElement('div');
-    folder.className = 'mb-2';
+    folder.className = 'mb-0 py-px';
     folder.innerHTML = `
-      <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-block-folder="${scope}">
+      <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-block-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-3.5 h-3.5 ${expanded ? 'text-primary' : ''}"></i>
+          <i data-lucide="${icon}" class="w-4 h-4 ${expanded ? 'text-primary' : ''}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
       </button>
-      <div class="pl-2 border-l border-border/40 space-y-2 mt-1 ${expanded ? '' : 'hidden'}" data-block-folder-items="${scope}"></div>
+      <div class="space-y-2 mt-1 ${expanded ? '' : 'hidden'}" data-block-folder-items="${scope}"></div>
     `;
     const list = folder.querySelector(`[data-block-folder-items="${scope}"]`);
     folder.querySelector(`[data-block-folder="${scope}"]`)?.addEventListener('click', () => {

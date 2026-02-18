@@ -565,6 +565,10 @@ strudel-editor {
   @apply space-y-2;
 }
 
+.blocks-list > div.mb-0 {
+  margin-bottom: 0;
+}
+
 .block-item {
   @apply p-3 rounded-md border border-border bg-card cursor-pointer transition-all hover:border-primary/50 hover:bg-accent/10 flex items-center justify-between gap-3;
 }
