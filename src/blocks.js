@@ -277,7 +277,7 @@ function renderArrangementsList() {
     const expanded = scope === 'example'
       ? arrangementFolderState.example
       : arrangementFolderState.user;
-    const icon = expanded ? 'chevron-down' : 'chevron-right';
+    const icon = expanded ? 'folder-open' : 'folder';
 
     const folder = document.createElement('div');
     folder.className = 'mb-2';
@@ -749,7 +749,7 @@ function renderBlocksList() {
     const expanded = scope === 'example'
       ? blockFolderState.example
       : blockFolderState.user;
-    const icon = expanded ? 'chevron-down' : 'chevron-right';
+    const icon = expanded ? 'folder-open' : 'folder';
     const folder = document.createElement('div');
     folder.className = 'mb-2';
     folder.innerHTML = `

@@ -606,7 +606,7 @@ async function refreshSongList() {
 
         const appendFolder = (scope, label, items) => {
             const expanded = scope === 'example' ? songFolderState.example : songFolderState.user;
-            const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
+            const folderIcon = expanded ? 'folder-open' : 'folder';
 
             const folderLi = document.createElement('li');
             folderLi.className = 'mb-1';

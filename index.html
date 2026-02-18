@@ -143,6 +143,7 @@
         >
           <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
         </button>
+        <span aria-hidden="true" class="h-5 w-px shrink-0 bg-border/80"></span>
         <button
           id="uploadProjectBtn"
           class="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
@@ -1442,10 +1443,10 @@
     <!-- Advanced Settings Modal -->
     <div
       id="advancedSettingsModal"
-      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+      class="modal-overlay fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
     >
       <div
-        class="modal fixed z-50 grid w-full max-w-md gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+        class="modal fixed z-[81] grid w-full max-w-md gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
       >
         <div class="flex items-center justify-between">
           <h2
@@ -1501,10 +1502,10 @@
     <!-- System Settings Modal -->
     <div
       id="systemSettingsModal"
-      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+      class="modal-overlay fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
     >
       <div
-        class="modal fixed z-50 grid w-full max-w-md gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
+        class="modal fixed z-[81] grid w-full max-w-md gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg"
       >
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">

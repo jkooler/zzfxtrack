@@ -106,6 +106,13 @@ function normalizeScope(value) {
     return value === 'example' ? 'example' : 'user';
 }
 
+function getWaveShapeLabel(params) {
+    const shapeValue = Number(Array.isArray(params) ? params[6] : 0);
+    const shapeIndex = Number.isFinite(shapeValue) ? Math.max(0, Math.min(5, Math.round(shapeValue))) : 0;
+    const labels = ['sine', 'tri', 'saw', 'tan', 'noise', 'square'];
+    return labels[shapeIndex] || 'sine';
+}
+
 function loadFolderState(key, fallback) {
     try {
         const raw = localStorage.getItem(key);
@@ -1129,7 +1136,7 @@ function renderInstrumentList() {
         const expanded = scope === 'example'
             ? instrumentFolderState.example
             : instrumentFolderState.user;
-        const icon = expanded ? 'chevron-down' : 'chevron-right';
+        const icon = expanded ? 'folder-open' : 'folder';
 
         folderItem.innerHTML = `
             <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
@@ -1167,6 +1174,7 @@ function renderInstrumentList() {
             const instScope = normalizeScope(inst.scope);
             const isExample = instScope === 'example';
             const isImmutable = isExample && !devMode;
+            const waveShapeLabel = getWaveShapeLabel(inst.params);
 
             const li = document.createElement('li');
             li.className = `instrument-item ${inst.id === currentInstrumentId ? 'active' : ''}`;
@@ -1181,8 +1189,7 @@ function renderInstrumentList() {
                     <canvas class="instrument-scope w-8 h-8 rounded bg-black/20 border border-border/20 hidden md:block opacity-50 transition-opacity" width="64" height="64"></canvas>
                     <div class="min-w-0">
                         <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
-                        <div class="instrument-alias opacity-70">${inst.exportName}</div>
-                        <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">CH: ${inst.channel}${isExample ? ' • EXAMPLE' : ''}</div>
+                        <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">${waveShapeLabel} • CH: ${inst.channel}</div>
                     </div>
                 </div>
                 <div class="song-item-actions">
