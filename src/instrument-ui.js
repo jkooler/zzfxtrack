@@ -1131,7 +1131,7 @@ function renderInstrumentList() {
 
     const appendFolder = (scope, label, items) => {
         const folderItem = document.createElement('li');
-        folderItem.className = 'mb-1';
+        folderItem.className = 'mt-1 pb-1 border-b border-border/40';
 
         const expanded = scope === 'example'
             ? instrumentFolderState.example
@@ -1141,7 +1141,7 @@ function renderInstrumentList() {
         folderItem.innerHTML = `
             <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
                 <span class="inline-flex items-center gap-1.5">
-                    <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+                    <i data-lucide="${icon}" class="w-4 h-4 ${expanded ? 'text-primary' : ''}"></i>
                     ${label}
                 </span>
                 <span class="opacity-70">${items.length}</span>
@@ -1165,7 +1165,7 @@ function renderInstrumentList() {
             const empty = document.createElement('li');
             empty.className = 'text-xs text-muted-foreground px-2 py-1';
             empty.textContent = scope === 'user'
-                ? 'No user instruments yet. Create one to get started.'
+                ? 'Create one to get started.'
                 : 'No example instruments available.';
             list?.appendChild(empty);
         }

@@ -111,6 +111,8 @@ const dom = {
     // Views
     welcomeView: document.getElementById('welcomeView'),
     editorContainer: document.getElementById('editorContainer'),
+    mainHeader: document.getElementById('mainHeader'),
+    mainFooter: document.getElementById('mainFooter'),
     
     // Preview Panel
     previewJson: document.getElementById('previewJson'),
@@ -267,6 +269,8 @@ function getSongEntry(filename) {
 function showWelcome() {
     dom.welcomeView.style.display = 'flex';
     dom.editorContainer.style.display = 'none';
+    if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
+    if (dom.mainFooter) dom.mainFooter.classList.add('hidden');
     dom.playBtn.style.visibility = 'hidden';
     dom.exportBtn.disabled = true;
     
@@ -298,6 +302,8 @@ function showIntroduction() {
 
     dom.welcomeView.style.display = 'flex';
     dom.editorContainer.style.display = 'none';
+    if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
+    if (dom.mainFooter) dom.mainFooter.classList.add('hidden');
     dom.songNameInput.classList.add('hidden');
     updateAdvancedSettingsButtonsVisibility();
 
@@ -312,6 +318,8 @@ function showIntroduction() {
 function showEditor() {
     dom.welcomeView.style.display = 'none';
     dom.editorContainer.style.display = 'flex';
+    if (dom.mainHeader) dom.mainHeader.classList.remove('hidden');
+    if (dom.mainFooter) dom.mainFooter.classList.remove('hidden');
     dom.playBtn.style.visibility = 'visible';
     dom.exportBtn.disabled = false;
     dom.songNameInput.classList.remove('hidden');
@@ -609,11 +617,11 @@ async function refreshSongList() {
             const folderIcon = expanded ? 'folder-open' : 'folder';
 
             const folderLi = document.createElement('li');
-            folderLi.className = 'mb-1';
+            folderLi.className = 'mt-1 pb-1 border-b border-border/40';
             folderLi.innerHTML = `
                 <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-song-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
-                        <i data-lucide="${folderIcon}" class="w-3.5 h-3.5"></i>
+                        <i data-lucide="${folderIcon}" class="w-4 h-4 ${expanded ? 'text-primary' : ''}"></i>
                         ${label}
                     </span>
                     <span class="opacity-70">${items.length}</span>
@@ -635,7 +643,7 @@ async function refreshSongList() {
                 const empty = document.createElement('li');
                 empty.className = 'text-xs text-muted-foreground px-2 py-1';
                 empty.textContent = scope === 'user'
-                    ? 'No user songs yet. Create a new song to get started.'
+                    ? 'Create a new song to get started.'
                     : 'No example songs available.';
                 list?.appendChild(empty);
             }
@@ -652,9 +660,9 @@ async function refreshSongList() {
                 li.dataset.filename = file;
 
                 li.innerHTML = (DEMO_MODE || isImmutable)
-                    ? `<span>${fileName}</span>`
+                    ? `<span class="font-bold">${fileName}</span>`
                     : `
-                        <span>${fileName}</span>
+                        <span class="font-bold">${fileName}</span>
                         <div class="song-item-actions">
                             <button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
@@ -693,10 +701,42 @@ async function refreshSongList() {
 }
 
 function updateSongListVisualizer() {
-    const listItems = Array.from(dom.songList.querySelectorAll('.song-item'));
+    const playingEntry = songEntriesCache.find((e) => e.filename === playingSongFilename);
+    const playingScope = playingEntry ? normalizeScope(playingEntry.scope) : null;
     let visualizerAttached = false;
-    
-    listItems.forEach(li => {
+
+    // When the playing song's folder is collapsed, show the scope visualizer on the folder row
+    const folderRows = Array.from(dom.songList.children).filter((li) =>
+        li.querySelector('[data-song-folder]')
+    );
+    folderRows.forEach((folderLi) => {
+        const folderButton = folderLi.querySelector('[data-song-folder]');
+        const scope = folderButton?.getAttribute('data-song-folder');
+        const itemsUl = folderLi.querySelector('[data-song-folder-items]');
+        const isCollapsed = itemsUl?.classList.contains('hidden');
+        const isPlayingInThisFolder = playingScope === scope && playingSongFilename;
+
+        if (isCollapsed && isPlayingInThisFolder) {
+            let canvas = folderLi.querySelector('canvas.song-visualizer');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.className = 'song-visualizer';
+                folderLi.classList.add('relative', 'overflow-hidden');
+                folderLi.insertBefore(canvas, folderLi.firstChild);
+            }
+            canvas.width = folderLi.clientWidth;
+            canvas.height = folderLi.clientHeight;
+            attachVisualizer(canvas);
+            visualizerAttached = true;
+        } else {
+            const canvas = folderLi.querySelector('canvas.song-visualizer');
+            if (canvas) canvas.remove();
+            folderLi.classList.remove('relative', 'overflow-hidden');
+        }
+    });
+
+    const listItems = Array.from(dom.songList.querySelectorAll('.song-item'));
+    listItems.forEach((li) => {
         const span = li.querySelector('span');
         // Visualizer should track the PLAYING song, not necessarily the selected one
         const isPlayingTarget =
@@ -706,7 +746,7 @@ function updateSongListVisualizer() {
         
         let canvas = li.querySelector('canvas.song-visualizer');
 
-        if (isPlayingTarget) {
+        if (isPlayingTarget && !visualizerAttached) {
             if (!canvas) {
                 canvas = document.createElement('canvas');
                 canvas.className = 'song-visualizer';

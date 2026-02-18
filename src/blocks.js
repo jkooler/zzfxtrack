@@ -284,7 +284,7 @@ function renderArrangementsList() {
     folder.innerHTML = `
       <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-arr-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+          <i data-lucide="${icon}" class="w-3.5 h-3.5 ${expanded ? 'text-primary' : ''}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
@@ -755,7 +755,7 @@ function renderBlocksList() {
     folder.innerHTML = `
       <button type="button" class="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-block-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+          <i data-lucide="${icon}" class="w-3.5 h-3.5 ${expanded ? 'text-primary' : ''}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
