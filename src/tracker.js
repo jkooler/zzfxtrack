@@ -49,6 +49,12 @@ const KEYBOARD_MAP = {
   'y': 'a4',
   '7': 'a#4',
   'u': 'b4',
+  // Upper row continuation (C5 - E5)
+  'i': 'c5',
+  '9': 'c#5',
+  'o': 'd5',
+  '0': 'd#5',
+  'p': 'e5',
 };
 
 // Reverse mapping for display
@@ -77,7 +83,9 @@ let editMode = {
   blockDescription: null,
   blockScope: 'user',
   onSave: null, // Callback for save action
+  returnToArrangementsOnClose: false,
   returnToBlocksOnClose: false,
+  arrangementInsertRowIndex: null,
 };
 
 // Preview playback state
@@ -89,6 +97,43 @@ let previewState = {
   playingStep: null,
 };
 
+const arrangementPreviewState = {
+  audioContext: null,
+  playingSource: null,
+  playingSources: [],
+  isPlaying: false,
+  bufferDuration: 0,
+  loopDuration: 0,
+  startTime: null,
+  nextStartTime: null,
+  schedulerId: null,
+  audioBuffer: null,
+  secondsPerStep: 0,
+  totalSteps: 0,
+  rowBounds: [],
+  playheadRafId: null,
+  playingRowIndex: null,
+  playingRowProgress: null,
+  arrangementState: null,
+  trackerStateByFilename: null,
+  instrumentList: null,
+  bpm: 120,
+  overridesByFilename: new Map(),
+  overridesByRowIndex: new Map(),
+  pendingUpdate: null,
+};
+
+function ensureArrangementAudioContext() {
+  if (!arrangementPreviewState.audioContext) {
+    arrangementPreviewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  const ctx = arrangementPreviewState.audioContext;
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+  return ctx;
+}
+
 export function primePreviewAudioContext() {
   if (!previewState.audioContext) {
     previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -98,12 +143,19 @@ export function primePreviewAudioContext() {
     // Fire-and-forget; callers invoke this from a user gesture handler.
     ctx.resume().catch(() => {});
   }
+  if (arrangementPreviewState.audioContext) {
+    const arrangementCtx = arrangementPreviewState.audioContext;
+    if (arrangementCtx && arrangementCtx.state === 'suspended') {
+      arrangementCtx.resume().catch(() => {});
+    }
+  }
 }
 
 let octaveOffset = 0;
 let effectPreviewTimeout = null;
 let effectPreviewRequest = null;
 const EFFECT_PREVIEW_DEBOUNCE_MS = 150;
+let liveArrangementUpdateTimeout = null;
 
 // DOM Elements
 let elements = {};
@@ -329,6 +381,8 @@ function renderGrid() {
     for (let step = 0; step < state.steps; step++) {
       const rowEl = document.createElement('div');
       rowEl.className = 'tracker-row';
+      rowEl.dataset.step = step;
+      rowEl.dataset.channel = ch;
 
       const cellEl = document.createElement('div');
       cellEl.className = 'tracker-cell';
@@ -868,7 +922,12 @@ function handleKeyDown(e) {
     return;
   }
 
-  if (key === ' ') {
+  const isInsertKey = key === 'insert'
+    || key === 'ins'
+    || e.code === 'Insert'
+    || e.keyCode === 45
+    || e.which === 45;
+  if (isInsertKey) {
     e.preventDefault();
     insertBlankRowAtStep(state.focusedChannel, state.focusedStep);
     const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
@@ -876,8 +935,7 @@ function handleKeyDown(e) {
     return;
   }
 
-  // Clear note
-  if (key === 'delete') {
+  if (key === ' ') {
     e.preventDefault();
     setNote(state.focusedChannel, state.focusedStep, null);
     const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
@@ -885,7 +943,7 @@ function handleKeyDown(e) {
     return;
   }
 
-  if (key === 'backspace') {
+  if (key === 'delete') {
     e.preventDefault();
     if (state.focusedStep === 0) {
       setNote(state.focusedChannel, state.focusedStep, null);
@@ -894,6 +952,14 @@ function handleKeyDown(e) {
       shiftColumnUpFromStep(state.focusedChannel, state.focusedStep - 1);
       setFocus(state.focusedChannel, state.focusedStep - 1);
     }
+    return;
+  }
+
+  // Clear note
+  if (key === 'backspace') {
+    e.preventDefault();
+    setNote(state.focusedChannel, state.focusedStep, null);
+    setFocus(state.focusedChannel, state.focusedStep);
     return;
   }
 
@@ -1066,6 +1132,7 @@ function updateOutput() {
 
   if (patterns.length === 0) {
     elements.output.value = '// Select instruments and add notes to generate pattern';
+    scheduleArrangementLiveEditUpdate();
     return;
   }
 
@@ -1082,6 +1149,29 @@ function updateOutput() {
   } else {
     elements.output.value = `stack(\n  ${lines.join(',\n  ')}\n)`;
   }
+
+  scheduleArrangementLiveEditUpdate();
+}
+
+function scheduleArrangementLiveEditUpdate() {
+  if (!editMode.isEditing || !editMode.returnToArrangementsOnClose) return;
+  const hasTarget = !!editMode.blockFilename || Number.isInteger(editMode.arrangementInsertRowIndex);
+  if (!hasTarget) return;
+  if (liveArrangementUpdateTimeout) {
+    clearTimeout(liveArrangementUpdateTimeout);
+  }
+  liveArrangementUpdateTimeout = setTimeout(() => {
+    liveArrangementUpdateTimeout = null;
+    const trackerState = serializeTrackerState();
+    document.dispatchEvent(new CustomEvent('tracker:stateChanged', {
+      detail: {
+        filename: editMode.blockFilename,
+        trackerState,
+        arrangementInsertRowIndex: editMode.arrangementInsertRowIndex,
+        isNewBlock: editMode.isNewBlock,
+      }
+    }));
+  }, 120);
 }
 
 // Note: keep explicit step timing; no compression.
@@ -1370,11 +1460,7 @@ function startPlayhead({ ctx, secondsPerStep, totalSteps }) {
     const step = Math.floor(elapsed / secondsPerStep) % totalSteps;
 
     if (step !== previewState.playingStep) {
-      if (stepHasPlayableNote(step)) {
-        setPlayingStep(step);
-      } else {
-        setPlayingStep(null);
-      }
+      setPlayingStep(step);
     }
 
     previewState.playheadRafId = requestAnimationFrame(tick);
@@ -1401,6 +1487,11 @@ function setPlayingStep(step) {
     document.querySelectorAll(`.tracker-cell[data-step="${prev}"]`).forEach(el => {
       el.classList.remove('playing-step');
     });
+    document.querySelectorAll(`.tracker-row[data-step="${prev}"]`).forEach(el => {
+      el.classList.remove('playing-step');
+    });
+    const prevTime = document.querySelector(`.tracker-timetrack-row[data-step="${prev}"]`);
+    prevTime?.classList.remove('playing-step');
   }
 
   previewState.playingStep = step;
@@ -1410,6 +1501,11 @@ function setPlayingStep(step) {
   document.querySelectorAll(`.tracker-cell[data-step="${step}"]`).forEach(el => {
     el.classList.add('playing-step');
   });
+  document.querySelectorAll(`.tracker-row[data-step="${step}"]`).forEach(el => {
+    el.classList.add('playing-step');
+  });
+  const timeRow = document.querySelector(`.tracker-timetrack-row[data-step="${step}"]`);
+  timeRow?.classList.add('playing-step');
 }
 
 /**
@@ -1625,28 +1721,49 @@ export function previewArrangementStateOnce(arrangementState, trackerStateByFile
 
   stopPreview();
 
+  const rendered = renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm);
+  if (!rendered?.mixBuffer) return;
+  playMixBuffer(rendered.mixBuffer, rendered.sampleRate);
+}
+
+function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, overrides = {}) {
+  if (!arrangementState || !instrumentList) return null;
+
   const secondsPerBeat = 60 / bpm;
-  const secondsPerStep = secondsPerBeat / 4; // 16th notes
+  const secondsPerStep = secondsPerBeat / 4; // 16th notes (ideal)
   const sampleRate = 44100;
   const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
+  const secondsPerStepExact = samplesPerStep / sampleRate; // what we actually render/play
 
   const rows = Array.isArray(arrangementState.rows) ? arrangementState.rows : [];
-  if (!rows.length) return;
+  if (!rows.length) return null;
+
+  const overridesByFilename = overrides?.byFilename instanceof Map ? overrides.byFilename : null;
+  const overridesByRowIndex = overrides?.byRowIndex instanceof Map ? overrides.byRowIndex : null;
 
   // Strudel's arrange() treats the first number as the number of cycles the section lasts for.
   // In our tracker, 1 cycle == 16 steps (16th notes).
-  const rowDescriptors = rows.map(r => {
+  const rowDescriptors = rows.map((r, rowIndex) => {
     const cycles = Number.isInteger(r?.repeats) ? Math.min(Math.max(r.repeats, 1), 99) : 1;
     const files = Array.isArray(r?.blocks) ? r.blocks.filter(Boolean) : [];
-    const states = files.map(f => trackerStateByFilename?.[f]).filter(Boolean);
+    const states = files
+      .map(f => overridesByFilename?.get(f) || trackerStateByFilename?.[f])
+      .filter(Boolean);
+    const rowOverride = overridesByRowIndex?.get(rowIndex);
+    if (rowOverride) states.push(rowOverride);
     return { cycles, files, states };
   });
 
   const totalCycles = rowDescriptors.reduce((sum, r) => sum + r.cycles, 0);
-  if (!totalCycles) return;
+  if (!totalCycles) return null;
 
-  const tailSamples = sampleRate; // 1 second tail at end
-  const totalSamples = totalCycles * 16 * samplesPerStep + tailSamples;
+  // Render an exact-length musical loop + a post-loop tail region.
+  // We do NOT wrap the tail into the start of the loop; instead, playback schedules
+  // overlapping cycles so tails can ring out without "bleeding" into time 0.
+  const loopSamples = totalCycles * 16 * samplesPerStep;
+  if (loopSamples <= 0) return null;
+  const tailSamples = Math.min(sampleRate, loopSamples); // <= 1 loop => at most 2 overlapping sources
+  const totalSamples = loopSamples + tailSamples;
   const mixBuffer = new Float32Array(totalSamples);
 
   let writeOffset = 0;
@@ -1721,7 +1838,7 @@ export function previewArrangementStateOnce(arrangementState, trackerStateByFile
   }
   if (!anyMixed || maxAmp === 0) {
     console.warn('[Arranger] Preview produced silence. Check block trackerState instruments match current instruments.');
-    return;
+    return null;
   }
   if (maxAmp > 0) {
     const scale = 0.5 / maxAmp;
@@ -1730,20 +1847,361 @@ export function previewArrangementStateOnce(arrangementState, trackerStateByFile
     }
   }
 
-  playMixBuffer(mixBuffer, sampleRate);
+  return {
+    mixBuffer,
+    sampleRate,
+    secondsPerStep: secondsPerStepExact,
+    totalSteps: totalCycles * 16,
+  };
+}
+
+function computeArrangementRowBounds(arrangementState) {
+  const rows = Array.isArray(arrangementState?.rows) ? arrangementState.rows : [];
+  let cursor = 0;
+  return rows.map((row, index) => {
+    const cycles = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 99) : 1;
+    const steps = cycles * 16;
+    const start = cursor;
+    const end = start + steps;
+    cursor = end;
+    return { index, start, end, steps };
+  });
+}
+
+function emitArrangementPlayhead(rowIndex, progress) {
+  document.dispatchEvent(new CustomEvent('arrangements:playhead', {
+    detail: {
+      rowIndex,
+      progress,
+    }
+  }));
+}
+
+function stopArrangementPlayhead() {
+  if (arrangementPreviewState.playheadRafId != null) {
+    cancelAnimationFrame(arrangementPreviewState.playheadRafId);
+    arrangementPreviewState.playheadRafId = null;
+  }
+  if (arrangementPreviewState.playingRowIndex != null) {
+    arrangementPreviewState.playingRowIndex = null;
+    arrangementPreviewState.playingRowProgress = null;
+    emitArrangementPlayhead(null, 0);
+  }
+}
+
+function startArrangementPlayhead() {
+  stopArrangementPlayhead();
+  const ctx = arrangementPreviewState.audioContext;
+  if (!ctx) return;
+
+  const tick = () => {
+    if (!arrangementPreviewState.isPlaying || arrangementPreviewState.startTime == null) return;
+    const secondsPerStep = arrangementPreviewState.secondsPerStep;
+    const totalSteps = arrangementPreviewState.totalSteps;
+    const rowBounds = arrangementPreviewState.rowBounds || [];
+    if (!secondsPerStep || !totalSteps || rowBounds.length === 0) {
+      arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+      return;
+    }
+
+    const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
+    const elapsedSteps = ((elapsed / secondsPerStep) % totalSteps + totalSteps) % totalSteps;
+    let current = rowBounds[rowBounds.length - 1];
+    for (const row of rowBounds) {
+      if (elapsedSteps < row.end) {
+        current = row;
+        break;
+      }
+    }
+    const progress = current.steps > 0 ? (elapsedSteps - current.start) / current.steps : 0;
+    const clamped = Math.min(Math.max(progress, 0), 1);
+    const prevIndex = arrangementPreviewState.playingRowIndex;
+    const prevProgress = arrangementPreviewState.playingRowProgress;
+    if (prevIndex !== current.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
+      arrangementPreviewState.playingRowIndex = current.index;
+      arrangementPreviewState.playingRowProgress = clamped;
+      emitArrangementPlayhead(current.index, clamped);
+    }
+
+    arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+  };
+
+  arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+}
+
+function stopArrangementPlaybackSources() {
+  if (arrangementPreviewState.schedulerId) {
+    clearTimeout(arrangementPreviewState.schedulerId);
+    arrangementPreviewState.schedulerId = null;
+  }
+  arrangementPreviewState.nextStartTime = null;
+
+  const sources = Array.isArray(arrangementPreviewState.playingSources)
+    ? arrangementPreviewState.playingSources
+    : [];
+  for (const src of sources) {
+    try {
+      src.stop();
+    } catch (_e) {
+      // ignore
+    }
+  }
+  arrangementPreviewState.playingSources = [];
+
+  if (arrangementPreviewState.playingSource) {
+    try {
+      arrangementPreviewState.playingSource.stop();
+    } catch (_e) {
+      // ignore
+    }
+  }
+  arrangementPreviewState.playingSource = null;
+  arrangementPreviewState.audioBuffer = null;
+}
+
+function scheduleArrangementLoopStarts() {
+  if (!arrangementPreviewState.isPlaying) return;
+
+  const ctx = arrangementPreviewState.audioContext;
+  const audioBuffer = arrangementPreviewState.audioBuffer;
+  const loopDuration = arrangementPreviewState.loopDuration;
+  if (!ctx || !audioBuffer || !loopDuration) return;
+
+  const lookaheadSeconds = 0.25;
+  const pollMs = 50;
+  const now = ctx.currentTime;
+
+  if (arrangementPreviewState.nextStartTime == null) {
+    arrangementPreviewState.nextStartTime = now + loopDuration;
+  }
+
+  // If we fell behind (tab inactive, long task), jump to the next boundary.
+  if (arrangementPreviewState.nextStartTime < now - 0.01) {
+    const startTime = arrangementPreviewState.startTime ?? now;
+    const loopsElapsed = Math.floor((now - startTime) / loopDuration);
+    arrangementPreviewState.nextStartTime = startTime + (loopsElapsed + 1) * loopDuration;
+  }
+
+  while (arrangementPreviewState.nextStartTime < now + lookaheadSeconds) {
+    const startAt = arrangementPreviewState.nextStartTime;
+    const source = ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.loop = false;
+    source.connect(ctx.destination);
+    source.onended = () => {
+      arrangementPreviewState.playingSources = arrangementPreviewState.playingSources.filter(s => s !== source);
+      if (arrangementPreviewState.playingSource === source) {
+        arrangementPreviewState.playingSource = null;
+      }
+    };
+
+    try {
+      source.start(startAt, 0);
+    } catch (err) {
+      console.warn('[Arranger] Failed to schedule loop start:', err);
+      break;
+    }
+
+    arrangementPreviewState.playingSources.push(source);
+    arrangementPreviewState.playingSource = source;
+    arrangementPreviewState.nextStartTime += loopDuration;
+  }
+
+  arrangementPreviewState.schedulerId = setTimeout(scheduleArrangementLoopStarts, pollMs);
+}
+
+function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition } = {}) {
+  if (!mixBuffer || mixBuffer.length === 0) return false;
+
+  const ctx = ensureArrangementAudioContext();
+  if (!ctx) return false;
+
+  const loopDuration = arrangementPreviewState.totalSteps && arrangementPreviewState.secondsPerStep
+    ? arrangementPreviewState.totalSteps * arrangementPreviewState.secondsPerStep
+    : 0;
+
+  let phase = 0;
+  if (keepPosition && arrangementPreviewState.isPlaying && arrangementPreviewState.startTime != null && loopDuration > 0) {
+    const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
+    phase = ((elapsed % loopDuration) + loopDuration) % loopDuration;
+  }
+
+  // Restart playback with the new buffer at the current musical phase.
+  stopArrangementPlaybackSources();
+
+  const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
+  audioBuffer.getChannelData(0).set(mixBuffer);
+
+  arrangementPreviewState.loopDuration = loopDuration;
+  arrangementPreviewState.bufferDuration = audioBuffer.duration;
+  arrangementPreviewState.audioBuffer = audioBuffer;
+
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.loop = false;
+  source.connect(ctx.destination);
+  source.onended = () => {
+    arrangementPreviewState.playingSources = arrangementPreviewState.playingSources.filter(s => s !== source);
+    if (arrangementPreviewState.playingSource === source) {
+      arrangementPreviewState.playingSource = null;
+    }
+  };
+
+  const startAt = ctx.currentTime;
+  const offsetSeconds = loopDuration > 0 ? (phase % loopDuration) : 0;
+  try {
+    source.start(startAt, offsetSeconds);
+  } catch (err) {
+    console.warn('[Arranger] Failed to start arrangement preview:', err);
+    return false;
+  }
+
+  arrangementPreviewState.playingSources = [source];
+  arrangementPreviewState.playingSource = source;
+  arrangementPreviewState.isPlaying = true;
+  arrangementPreviewState.startTime = startAt - offsetSeconds;
+  arrangementPreviewState.nextStartTime = arrangementPreviewState.startTime + loopDuration;
+
+  scheduleArrangementLoopStarts();
+  return true;
+}
+
+export function startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, { keepPosition = false } = {}) {
+  arrangementPreviewState.arrangementState = arrangementState || null;
+  arrangementPreviewState.trackerStateByFilename = trackerStateByFilename || null;
+  arrangementPreviewState.instrumentList = instrumentList || null;
+  arrangementPreviewState.bpm = bpm || 120;
+
+  const rendered = renderArrangementStateToMixBuffer(
+    arrangementPreviewState.arrangementState,
+    arrangementPreviewState.trackerStateByFilename,
+    arrangementPreviewState.instrumentList,
+    arrangementPreviewState.bpm,
+    { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex }
+  );
+
+  if (!rendered?.mixBuffer) return false;
+  arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
+  arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
+  arrangementPreviewState.rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+  const started = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, { keepPosition });
+  if (started) {
+    startArrangementPlayhead();
+  }
+  return started;
+}
+
+export function updateArrangementPreview({ arrangementState, trackerStateByFilename, instrumentList, bpm, keepPosition = true } = {}) {
+  if (arrangementState) arrangementPreviewState.arrangementState = arrangementState;
+  if (trackerStateByFilename) arrangementPreviewState.trackerStateByFilename = trackerStateByFilename;
+  if (instrumentList) arrangementPreviewState.instrumentList = instrumentList;
+  if (Number.isFinite(bpm)) arrangementPreviewState.bpm = bpm;
+
+  if (!arrangementPreviewState.isPlaying) return false;
+
+  const rendered = renderArrangementStateToMixBuffer(
+    arrangementPreviewState.arrangementState,
+    arrangementPreviewState.trackerStateByFilename,
+    arrangementPreviewState.instrumentList,
+    arrangementPreviewState.bpm,
+    { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex }
+  );
+  if (!rendered?.mixBuffer) return false;
+  arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
+  arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
+  arrangementPreviewState.rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+  const updated = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, { keepPosition });
+  if (updated) {
+    startArrangementPlayhead();
+  }
+  return updated;
+}
+
+function scheduleArrangementPreviewUpdate() {
+  if (!arrangementPreviewState.isPlaying) return;
+  if (arrangementPreviewState.pendingUpdate) {
+    clearTimeout(arrangementPreviewState.pendingUpdate);
+  }
+  arrangementPreviewState.pendingUpdate = setTimeout(() => {
+    arrangementPreviewState.pendingUpdate = null;
+    updateArrangementPreview({ keepPosition: true });
+  }, 120);
+}
+
+export function setArrangementLiveOverride({ filename, rowIndex, trackerState }) {
+  if (!trackerState) return;
+  if (filename) {
+    arrangementPreviewState.overridesByFilename.set(filename, trackerState);
+  }
+  if (Number.isInteger(rowIndex)) {
+    arrangementPreviewState.overridesByRowIndex.set(rowIndex, trackerState);
+  }
+  scheduleArrangementPreviewUpdate();
+}
+
+export function clearArrangementLiveOverride({ filename, rowIndex, scheduleUpdate = true } = {}) {
+  if (filename) arrangementPreviewState.overridesByFilename.delete(filename);
+  if (Number.isInteger(rowIndex)) arrangementPreviewState.overridesByRowIndex.delete(rowIndex);
+  if (scheduleUpdate) {
+    scheduleArrangementPreviewUpdate();
+  } else if (arrangementPreviewState.pendingUpdate) {
+    clearTimeout(arrangementPreviewState.pendingUpdate);
+    arrangementPreviewState.pendingUpdate = null;
+  }
+}
+
+export function clearArrangementLiveOverrides({ scheduleUpdate = true } = {}) {
+  arrangementPreviewState.overridesByFilename.clear();
+  arrangementPreviewState.overridesByRowIndex.clear();
+  if (scheduleUpdate) {
+    scheduleArrangementPreviewUpdate();
+  } else if (arrangementPreviewState.pendingUpdate) {
+    clearTimeout(arrangementPreviewState.pendingUpdate);
+    arrangementPreviewState.pendingUpdate = null;
+  }
+}
+
+export function stopArrangementPreview() {
+  stopArrangementPlaybackSources();
+  stopArrangementPlayhead();
+  if (arrangementPreviewState.pendingUpdate) {
+    clearTimeout(arrangementPreviewState.pendingUpdate);
+    arrangementPreviewState.pendingUpdate = null;
+  }
+  arrangementPreviewState.overridesByFilename.clear();
+  arrangementPreviewState.overridesByRowIndex.clear();
+  arrangementPreviewState.isPlaying = false;
+  arrangementPreviewState.bufferDuration = 0;
+  arrangementPreviewState.loopDuration = 0;
+  arrangementPreviewState.startTime = null;
+  arrangementPreviewState.nextStartTime = null;
+  arrangementPreviewState.audioBuffer = null;
+  arrangementPreviewState.secondsPerStep = 0;
+  arrangementPreviewState.totalSteps = 0;
+  arrangementPreviewState.rowBounds = [];
+}
+
+export function isArrangementPreviewPlaying() {
+  return arrangementPreviewState.isPlaying;
 }
 
 /**
  * Open the tracker modal
  */
-export function openTracker(instrumentList) {
+export function openTracker(instrumentList, options = {}) {
   // Reset edit mode
   resetEditMode();
   
   // Enable editing for new blocks so we can save them
   editMode.isEditing = true;
   editMode.isNewBlock = true;
-  editMode.returnToBlocksOnClose = true;
+  editMode.returnToArrangementsOnClose = !!options.returnToArrangementsOnClose;
+  editMode.returnToBlocksOnClose = typeof options.returnToBlocksOnClose === 'boolean'
+    ? options.returnToBlocksOnClose
+    : !editMode.returnToArrangementsOnClose;
+  editMode.arrangementInsertRowIndex = Number.isInteger(options.arrangementInsertRowIndex)
+    ? options.arrangementInsertRowIndex
+    : null;
   editMode.blockScope = 'user';
   state.bpm = 120;
   setSteps(16);
@@ -1769,7 +2227,13 @@ export function openTrackerForEdit(instrumentList, blockData) {
   // Set edit mode
   editMode.isEditing = true;
   editMode.isNewBlock = false;
-  editMode.returnToBlocksOnClose = true;
+  editMode.returnToArrangementsOnClose = !!blockData.returnToArrangementsOnClose;
+  editMode.returnToBlocksOnClose = typeof blockData.returnToBlocksOnClose === 'boolean'
+    ? blockData.returnToBlocksOnClose
+    : !editMode.returnToArrangementsOnClose;
+  editMode.arrangementInsertRowIndex = Number.isInteger(blockData.arrangementInsertRowIndex)
+    ? blockData.arrangementInsertRowIndex
+    : null;
   editMode.blockFilename = blockData.filename;
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
@@ -1808,7 +2272,9 @@ function resetEditMode() {
   editMode.blockDescription = null;
   editMode.blockScope = 'user';
   editMode.onSave = null;
+  editMode.returnToArrangementsOnClose = false;
   editMode.returnToBlocksOnClose = false;
+  editMode.arrangementInsertRowIndex = null;
 }
 
 /**
@@ -1858,6 +2324,12 @@ function updateEditModeUI() {
     const shouldShow = editMode.isEditing && isDeveloperModeEnabled() && !DEMO_MODE;
     elements.blockAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
   }
+
+  if (elements.previewBtn) {
+    const shouldHide = editMode.isEditing && editMode.returnToArrangementsOnClose;
+    elements.previewBtn.classList.toggle('hidden', shouldHide);
+    elements.previewBtn.style.display = shouldHide ? 'none' : '';
+  }
   
   // Show/hide save button
   if (elements.saveBtn) {
@@ -1899,6 +2371,8 @@ function handleSaveBlock() {
       scope: editMode.blockScope,
       pattern,
       trackerState,
+      returnToArrangementsOnClose: editMode.returnToArrangementsOnClose,
+      arrangementInsertRowIndex: editMode.arrangementInsertRowIndex,
     }
   });
   document.dispatchEvent(event);
@@ -1909,6 +2383,7 @@ function handleSaveBlock() {
  */
 export function closeTracker() {
   const shouldReturnToBlocks = !!editMode.returnToBlocksOnClose;
+  const shouldReturnToArrangements = !!editMode.returnToArrangementsOnClose;
   // Stop any playing preview
   stopPreview();
   
@@ -1918,7 +2393,7 @@ export function closeTracker() {
   resetEditMode();
   updateEditModeUI();
 
-  document.dispatchEvent(new CustomEvent('tracker:closed', { detail: { returnToBlocksOnClose: shouldReturnToBlocks } }));
+  document.dispatchEvent(new CustomEvent('tracker:closed', { detail: { returnToBlocksOnClose: shouldReturnToBlocks, returnToArrangementsOnClose: shouldReturnToArrangements } }));
 }
 
 /**

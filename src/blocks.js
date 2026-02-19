@@ -1,6 +1,6 @@
 import { createIcons, icons } from 'lucide';
 import { setupScrubInteraction } from './instrument-ui.js';
-import { primePreviewAudioContext } from './tracker.js';
+import { primePreviewAudioContext, isArrangementPreviewPlaying, stopArrangementPreview, stopTrackerPreviewPlayback } from './tracker.js';
 
 /**
  * Blocks Module
@@ -21,6 +21,7 @@ let elements = {};
 	let blockToDelete = null;
 let arrangementsCache = [];
 let selectedArrangementIndex = null;
+let playingArrangementRowIndex = null;
 let arrangementEditMode = {
 	  isEditing: false,
 	  filename: null,
@@ -80,6 +81,96 @@ function saveFolderState(key, value) {
 
 function emitStatus(message, type = 'normal') {
   document.dispatchEvent(new CustomEvent('app:status', { detail: { message, type } }));
+}
+
+function getBlockSteps(block) {
+  const steps = Number.isInteger(block?.trackerState?.steps)
+    ? block.trackerState.steps
+    : (Array.isArray(block?.trackerState?.grid?.[0]) ? block.trackerState.grid[0].length : null);
+  if (Number.isInteger(steps) && steps > 0) return steps;
+  return 16;
+}
+
+function updateArrangementChipSteps(blocks = []) {
+  if (!Array.isArray(blocks) || !blocks.length) return;
+  const blockByFilename = new Map(blocks.map(b => [b.filename, b]));
+  blocksCache = blocksCache.map(b => {
+    const update = blockByFilename.get(b.filename);
+    return update?.trackerState ? { ...b, trackerState: update.trackerState } : b;
+  });
+
+  const chips = elements.arrangementRows?.querySelectorAll('.arr-chip[data-filename]') || [];
+  chips.forEach((chip) => {
+    const filename = chip.dataset.filename;
+    const update = blockByFilename.get(filename);
+    if (!update?.trackerState) return;
+    const steps = getBlockSteps(update);
+    chip.dataset.blockSteps = String(steps);
+  });
+}
+
+function suspendArrangementModal() {
+  if (!elements.arrangementModal) return;
+  elements.arrangementModal.classList.add('open');
+  elements.arrangementModal.classList.add('is-suspended');
+}
+
+function resumeArrangementModal() {
+  if (!elements.arrangementModal) return;
+  elements.arrangementModal.classList.remove('is-suspended');
+}
+
+function suspendBlocksModal() {
+  if (!elements.modal) return;
+  elements.modal.classList.add('open');
+  elements.modal.classList.add('is-suspended');
+}
+
+function resumeBlocksModal() {
+  if (!elements.modal) return;
+  elements.modal.classList.remove('is-suspended');
+}
+
+function getArrangementDraftState() {
+  const name = (elements.arrangementName?.value || arrangementDraft.name || 'Arrangement').trim() || 'Arrangement';
+  const bpmVal = parseInt(elements.arrangementBpm?.value || String(arrangementDraft.bpm || 120), 10);
+  const bpm = Number.isFinite(bpmVal) ? Math.min(Math.max(bpmVal, 20), 300) : 120;
+
+  return {
+    arrangementState: {
+      version: 1,
+      name,
+      bpm,
+      rows: arrangementDraft.rows.map(r => ({
+        repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
+        blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+      })),
+    },
+    name,
+    bpm,
+  };
+}
+
+function emitArrangementStateChanged(extraDetail = {}) {
+  const { arrangementState, name, bpm } = getArrangementDraftState();
+  document.dispatchEvent(new CustomEvent('arrangements:stateChanged', {
+    detail: {
+      arrangementState,
+      name,
+      bpm,
+      ...extraDetail,
+    }
+  }));
+}
+
+function updateArrangementPreviewButtonState() {
+  if (!elements.previewArrangementBtn) return;
+  if (isArrangementPreviewPlaying()) {
+    elements.previewArrangementBtn.innerHTML = '<i data-lucide="square" class="w-5 h-5 fill-current"></i>';
+  } else {
+    elements.previewArrangementBtn.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
+  }
+  createIcons({ icons });
 }
 
 /**
@@ -157,6 +248,7 @@ function setupEventListeners() {
   elements.addArrangementRowBtn?.addEventListener('click', () => {
     arrangementDraft.rows.push({ repeats: 1, blocks: [] });
     renderArrangementRows();
+    emitArrangementStateChanged();
   });
   elements.saveArrangementBtn?.addEventListener('click', saveArrangementFromEditor);
   elements.arrangementAdvancedSettingsBtn?.addEventListener('click', () => {
@@ -193,34 +285,106 @@ function setupEventListeners() {
 	    }
 	  });
 
-	  document.addEventListener('developer-mode:changed', () => {
-	    // Re-render to show/hide immutable actions without forcing a reload.
-	    renderBlocksList();
-	    renderArrangementsList();
-	    updateArrangementAdvancedSettingsVisibility();
-	  });
-	}
+  document.addEventListener('developer-mode:changed', () => {
+    // Re-render to show/hide immutable actions without forcing a reload.
+    renderBlocksList();
+    renderArrangementsList();
+    updateArrangementAdvancedSettingsVisibility();
+  });
+
+  document.addEventListener('arrangements:blockCreated', (e) => {
+    const detail = e?.detail || {};
+    const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
+    const filename = detail.block?.filename || detail.filename;
+    if (rowIndex == null || !filename) return;
+    const row = arrangementDraft.rows?.[rowIndex];
+    if (!row) return;
+    if (!Array.isArray(row.blocks)) row.blocks = [];
+    if (!row.blocks.includes(filename)) {
+      row.blocks.push(filename);
+    }
+    renderArrangementRows();
+    emitArrangementStateChanged({ addedRowIndex: rowIndex, addedFilename: filename });
+  });
+
+  document.addEventListener('tracker:closed', (e) => {
+    if (!e?.detail?.returnToArrangementsOnClose) return;
+    renderArrangementRows();
+    resumeArrangementModal();
+    updateArrangementAdvancedSettingsVisibility();
+    elements.arrangementName?.focus();
+    updateArrangementPreviewButtonState();
+  });
+
+  document.addEventListener('tracker:closed', (e) => {
+    if (!e?.detail?.returnToBlocksOnClose) return;
+    resumeBlocksModal();
+  });
+
+  document.addEventListener('arrangements:previewState', () => {
+    updateArrangementPreviewButtonState();
+  });
+
+  document.addEventListener('arrangements:blocksLoaded', (e) => {
+    const blocks = e?.detail?.blocks || [];
+    updateArrangementChipSteps(blocks);
+  });
+
+  document.addEventListener('arrangements:playhead', (e) => {
+    const detail = e?.detail || {};
+    const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
+    const progress = typeof detail.progress === 'number' ? detail.progress : 0;
+
+    if (playingArrangementRowIndex != null && playingArrangementRowIndex !== rowIndex) {
+      const prevEl = elements.arrangementRows?.querySelector(`.arr-row[data-row="${playingArrangementRowIndex}"]`);
+      if (prevEl) {
+        prevEl.classList.remove('playing');
+        prevEl.style.removeProperty('--arr-row-play-progress');
+        prevEl.querySelectorAll('.arr-chip').forEach((chip) => {
+          chip.style.removeProperty('--arr-chip-play-progress');
+        });
+      }
+    }
+
+    if (rowIndex == null) {
+      playingArrangementRowIndex = null;
+      return;
+    }
+
+    const rowEl = elements.arrangementRows?.querySelector(`.arr-row[data-row="${rowIndex}"]`);
+    if (rowEl) {
+      rowEl.classList.add('playing');
+      const pct = Math.max(0, Math.min(progress, 1)) * 100;
+      rowEl.style.setProperty('--arr-row-play-progress', `${pct.toFixed(2)}%`);
+
+      const row = arrangementDraft.rows?.[rowIndex];
+      const rowSteps = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 99) * 16 : 16;
+      const progressSteps = Math.max(0, Math.min(progress, 1)) * rowSteps;
+      rowEl.querySelectorAll('.arr-chip').forEach((chip) => {
+        const blockSteps = parseInt(chip.dataset.blockSteps || '16', 10);
+        const steps = Number.isInteger(blockSteps) && blockSteps > 0 ? blockSteps : 16;
+        const local = steps > 0 ? (progressSteps % steps) / steps : 0;
+        const localPct = Math.max(0, Math.min(local, 1)) * 100;
+        chip.style.setProperty('--arr-chip-play-progress', `${localPct.toFixed(2)}%`);
+      });
+    }
+    playingArrangementRowIndex = rowIndex;
+  });
+}
 
 function previewArrangementDraft() {
-  const name = (elements.arrangementName?.value || arrangementDraft.name || 'Arrangement').trim() || 'Arrangement';
-  const bpmVal = parseInt(elements.arrangementBpm?.value || String(arrangementDraft.bpm || 120), 10);
-  const bpm = Number.isFinite(bpmVal) ? Math.min(Math.max(bpmVal, 20), 300) : 120;
+  if (isArrangementPreviewPlaying()) {
+    stopArrangementPreview();
+    updateArrangementPreviewButtonState();
+    return;
+  }
 
-  const arrangementState = {
-    version: 1,
-    name,
-    bpm,
-    rows: arrangementDraft.rows.map(r => ({
-      repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
-      blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
-    })),
-  };
-
+  const { arrangementState, name } = getArrangementDraftState();
   primePreviewAudioContext();
-  emitStatus(`Previewing arrangement "${name}"...`, 'normal');
   console.log('[Arranger] Previewing draft:', arrangementState);
   const event = new CustomEvent('arrangements:preview', { detail: { arrangement: { name, arrangementState } } });
   document.dispatchEvent(event);
+  setTimeout(updateArrangementPreviewButtonState, 200);
 }
 
 function setActiveTab(tab) {
@@ -229,6 +393,9 @@ function setActiveTab(tab) {
   elements.arrangerTabPanel?.classList.toggle('hidden', blocksActive);
   elements.blocksTabBtn?.classList.toggle('active', blocksActive);
   elements.arrangerTabBtn?.classList.toggle('active', !blocksActive);
+  if (!blocksActive) {
+    stopTrackerPreviewPlayback();
+  }
   // Keep insert buttons consistent: only enabled when an item is selected.
   if (elements.insertBlockBtn) elements.insertBlockBtn.disabled = selectedBlockIndex == null;
   if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null;
@@ -338,7 +505,7 @@ function renderArrangementsList() {
 
       el.querySelector('.sidebar-edit-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        selectArrangement(index);
+        selectArrangement(index, { preview: false });
         void openArrangementEditor(arrangementsCache[index]);
       });
 
@@ -368,7 +535,7 @@ function renderArrangementsList() {
   createIcons({ icons });
 }
 
-function selectArrangement(index) {
+function selectArrangement(index, { preview = true } = {}) {
   document.querySelectorAll('#arrangementsList .block-item').forEach(el => {
     el.classList.remove('selected', 'bg-accent', 'border-primary');
   });
@@ -379,10 +546,11 @@ function selectArrangement(index) {
   selectedArrangementIndex = index;
   if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null;
 
+  if (!preview) return;
+
   const arrangement = arrangementsCache[index];
   if (arrangement?.arrangementState) {
     primePreviewAudioContext();
-    emitStatus(`Previewing arrangement "${arrangement.name}"...`, 'normal');
     console.log('[Arranger] Preview request:', arrangement);
     const event = new CustomEvent('arrangements:preview', { detail: { arrangement } });
     document.dispatchEvent(event);
@@ -456,7 +624,7 @@ function insertSelectedArrangement() {
   if (!arr?.arrangementState) return;
   const event = new CustomEvent('arrangements:insert', { detail: { arrangement: arr } });
   document.dispatchEvent(event);
-  closeBlocksModal();
+  closeBlocksModal('blocks');
 }
 
 let arrangementDraft = {
@@ -506,25 +674,36 @@ async function openArrangementEditor(arrangement = null) {
 
   renderArrangementRows();
   elements.arrangementModal.classList.add('open');
+  elements.arrangementModal.classList.remove('is-suspended');
   updateArrangementAdvancedSettingsVisibility();
   elements.arrangementName?.focus();
   createIcons({ icons });
+  updateArrangementPreviewButtonState();
 }
 
 function closeArrangementEditor() {
   elements.arrangementModal?.classList.remove('open');
   arrangementEditMode.scope = 'user';
   updateArrangementAdvancedSettingsVisibility();
+  if (isArrangementPreviewPlaying()) {
+    stopArrangementPreview();
+  }
+  updateArrangementPreviewButtonState();
 }
 
 function renderArrangementRows() {
   if (!elements.arrangementRows) return;
   elements.arrangementRows.innerHTML = '';
+  playingArrangementRowIndex = null;
 
   arrangementDraft.rows.forEach((row, rowIndex) => {
     const rowEl = document.createElement('div');
     rowEl.className = 'arr-row';
     rowEl.dataset.row = rowIndex;
+
+    const rowNumberEl = document.createElement('span');
+    rowNumberEl.className = 'arr-row-number';
+    rowNumberEl.textContent = String(rowIndex + 1);
 
     const repeatsEl = document.createElement('input');
     repeatsEl.type = 'number';
@@ -536,6 +715,7 @@ function renderArrangementRows() {
     repeatsEl.addEventListener('input', () => {
       const val = parseInt(repeatsEl.value, 10);
       row.repeats = Number.isFinite(val) ? Math.min(Math.max(val, 1), 99) : 1;
+      emitArrangementStateChanged();
     });
     setupScrubInteraction(repeatsEl);
 
@@ -557,15 +737,22 @@ function renderArrangementRows() {
 	        const block = blocksCache.find(b => b.filename === filename);
 	        const chip = document.createElement('div');
         chip.className = 'arr-chip';
+        chip.dataset.filename = filename;
+        chip.dataset.blockSteps = String(getBlockSteps(block));
         chip.innerHTML = `
           <span class="arr-chip-label">${escapeHtml(block?.name || filename)}</span>
           <button type="button" class="arr-chip-del" title="Remove"><i data-lucide="x" class="w-3 h-3"></i></button>
         `;
+	        chip.addEventListener('click', (event) => {
+	          if (event.target?.closest('.arr-chip-del')) return;
+	          void openTrackerForArrangementBlock(filename);
+	        });
 	        chip.querySelector('.arr-chip-del')?.addEventListener('click', () => {
 	          row.blocks.splice(i, 1);
 	          renderChips();
 	          updateSelectDisabled(selectEl);
 	          createIcons({ icons });
+          emitArrangementStateChanged();
 	        });
 	        chipsEl.appendChild(chip);
 	      });
@@ -573,7 +760,7 @@ function renderArrangementRows() {
 
 	    const selectEl = document.createElement('select');
 	    selectEl.className = 'arr-block-select';
-	    selectEl.innerHTML = `<option value="">Add block…</option>` + blocksCache
+	    selectEl.innerHTML = `<option value="">Add block…</option><option value="__create__">Create new…</option>` + blocksCache
 	      .map(b => {
 	        const disabled = row.blocks.includes(b.filename) ? ' disabled' : '';
 	        return `<option value="${escapeHtml(b.filename)}"${disabled}>${escapeHtml(b.name)}</option>`;
@@ -582,6 +769,11 @@ function renderArrangementRows() {
     selectEl.addEventListener('change', () => {
       const val = selectEl.value;
       if (!val) return;
+      if (val === '__create__') {
+        selectEl.value = '';
+        openTrackerForNewBlockFromArrangement(rowIndex);
+        return;
+      }
       if (!row.blocks.includes(val)) {
         row.blocks.push(val);
       }
@@ -590,6 +782,7 @@ function renderArrangementRows() {
       renderChips();
       updateSelectDisabled(selectEl);
       createIcons({ icons });
+      emitArrangementStateChanged();
     });
 
     const removeRowBtn = document.createElement('button');
@@ -605,8 +798,10 @@ function renderArrangementRows() {
       }
       renderArrangementRows();
       createIcons({ icons });
+      emitArrangementStateChanged();
     });
 
+	    rowEl.appendChild(rowNumberEl);
 	    rowEl.appendChild(repeatsEl);
 	    rowEl.appendChild(chipsEl);
 	    rowEl.appendChild(selectEl);
@@ -924,10 +1119,22 @@ function getSelectedBlock() {
  * Open tracker to create a new block
  */
 function openTrackerForNewBlock() {
-  closeBlocksModal();
+  suspendBlocksModal();
   
   // Dispatch event to open tracker in "block creation mode"
   const event = new CustomEvent('blocks:create');
+  document.dispatchEvent(event);
+}
+
+function openTrackerForNewBlockFromArrangement(rowIndex) {
+  closeBlocksModal('arrangement');
+  suspendArrangementModal();
+  const event = new CustomEvent('blocks:create', {
+    detail: {
+      returnToArrangementsOnClose: true,
+      arrangementInsertRowIndex: rowIndex,
+    }
+  });
   document.dispatchEvent(event);
 }
 
@@ -938,7 +1145,7 @@ async function openTrackerForEdit(index = null) {
   let block = Number.isInteger(index) ? blocksCache[index] : getSelectedBlock();
   if (!block) return;
   
-  closeBlocksModal();
+  suspendBlocksModal();
   
   // Fetch the full block data including trackerState
   let trackerState = block.trackerState;
@@ -964,6 +1171,40 @@ async function openTrackerForEdit(index = null) {
     detail: { 
       block: block,
       trackerState: trackerState
+    }
+  });
+  document.dispatchEvent(event);
+}
+
+async function openTrackerForArrangementBlock(filename) {
+  if (!filename) return;
+  let block = blocksCache.find(b => b.filename === filename) || { filename, name: filename, description: '' };
+  let trackerState = block.trackerState;
+
+  if (!trackerState && block.filename) {
+    try {
+      const response = await fetch(`/api/blocks/${block.filename}`);
+      if (response.ok) {
+        const fullBlock = await response.json();
+        trackerState = fullBlock.trackerState;
+        if (fullBlock?.scope) {
+          block = { ...block, scope: fullBlock.scope, name: fullBlock.name || block.name, description: fullBlock.description || block.description };
+        }
+      }
+    } catch (err) {
+      console.warn('[Arranger] Could not fetch full block data:', err);
+    }
+  }
+
+  if (!trackerState) return;
+
+  closeBlocksModal('arrangement');
+  suspendArrangementModal();
+  const event = new CustomEvent('blocks:edit', {
+    detail: {
+      block,
+      trackerState,
+      returnToArrangementsOnClose: true,
     }
   });
   document.dispatchEvent(event);
@@ -1006,7 +1247,7 @@ async function insertSelectedBlock() {
   });
   document.dispatchEvent(event);
   
-  closeBlocksModal();
+  closeBlocksModal('blocks');
 }
 
 /**
@@ -1130,7 +1371,7 @@ export async function saveBlock(name, description, pattern, trackerState, scope 
     // Reload the list
     await loadBlocksList();
     
-    return true;
+    return { ok: true, block: blockData };
   } catch (err) {
     console.error('[Blocks] Failed to save block:', err);
     return false;
@@ -1190,6 +1431,7 @@ export async function updateBlock(filename, name, description, pattern, trackerS
  */
 export function openBlocksModal() {
   elements.modal?.classList.add('open');
+  elements.modal?.classList.remove('is-suspended');
   setActiveTab('blocks');
   loadBlocksList(); // Refresh list when opening
   document.dispatchEvent(new CustomEvent('blocks:modalOpen'));
@@ -1198,9 +1440,10 @@ export function openBlocksModal() {
 /**
  * Close the blocks modal
  */
-export function closeBlocksModal() {
+export function closeBlocksModal(reason = null) {
   elements.modal?.classList.remove('open');
-  document.dispatchEvent(new CustomEvent('blocks:modalClose'));
+  elements.modal?.classList.remove('is-suspended');
+  document.dispatchEvent(new CustomEvent('blocks:modalClose', { detail: { reason } }));
 }
 
 /**

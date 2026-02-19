@@ -555,6 +555,20 @@ strudel-editor {
   @apply border-transparent;
 }
 
+.tracker-row.playing-step {
+  @apply bg-primary/5 rounded;
+}
+
+.tracker-row.playing-step .tracker-vol-input,
+.tracker-row.playing-step .tracker-reps-input,
+.tracker-row.playing-step .tracker-nd-input {
+  @apply bg-transparent border-transparent;
+}
+
+.tracker-timetrack-row.playing-step {
+  @apply text-primary bg-primary/10 rounded;
+}
+
 /* Keyboard mapping hint overlay */
 .tracker-keyboard-hint {
   @apply fixed bottom-4 right-4 bg-card border border-border rounded-lg p-3 shadow-lg text-xs;
@@ -597,14 +611,41 @@ strudel-editor {
 .arr-row {
   @apply flex items-center gap-2 p-2 rounded-md border border-border/50 bg-background/30;
 }
+.arr-row-number {
+  @apply inline-flex h-8 items-center justify-center text-xs font-mono text-muted-foreground;
+  width: calc(var(--spacing) * 4);
+}
+.arr-row.playing .arr-row-number {
+  @apply text-primary;
+}
 .arr-repeats {
-  @apply w-16 h-8 rounded-md border border-input bg-input-bg px-2 py-1 text-sm font-mono text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply w-16 h-8 rounded-md border border-input bg-input-bg px-2 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  background-image: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    var(--accent) var(--arr-row-play-progress, 0%),
+    transparent var(--arr-row-play-progress, 0%),
+    transparent 100%
+  );
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: left top;
 }
 .arr-chips {
   @apply flex flex-wrap gap-2 flex-1 min-w-0;
 }
 .arr-chip {
-  @apply inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted border border-border text-xs text-foreground;
+  @apply inline-flex items-center gap-1 px-2 py-1 h-8 rounded-md bg-muted border border-border text-xs text-foreground cursor-pointer;
+  background-image: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    var(--accent) var(--arr-chip-play-progress, 0%),
+    transparent var(--arr-chip-play-progress, 0%),
+    transparent 100%
+  );
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: left top;
 }
 .arr-chip-del {
   @apply text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded-md;
@@ -614,4 +655,18 @@ strudel-editor {
 }
 .arr-row-del {
   @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0;
+}
+
+.modal-overlay.is-suspended {
+  pointer-events: auto;
+}
+
+.modal-overlay.is-suspended .modal {
+  pointer-events: none;
+  opacity: 0.4;
+  transform: scale(0.98);
+}
+
+#trackerModal {
+  z-index: 60;
 }

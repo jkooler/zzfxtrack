@@ -10,7 +10,7 @@ import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, upd
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, previewArrangementStateOnce, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
 import JSZip from 'jszip';
 
@@ -94,6 +94,16 @@ let pendingUploadConflicts = null;
 let songEntriesCache = [];
 let currentSongScope = 'user';
 let pendingAdvancedSettingsContext = null;
+let arrangementPreviewContext = {
+    arrangementState: null,
+    trackerStateByFilename: {},
+    instrumentList: null,
+    bpm: 120,
+};
+let arrangementLiveEditSession = {
+    active: false,
+    committed: false,
+};
 
 // --- DOM Elements ---
 const dom = {
@@ -2687,7 +2697,8 @@ async function initTrackerWithInstruments() {
 function setupTrackerEventListeners() {
 
     document.addEventListener('tracker:closed', (e) => {
-        const { returnToBlocksOnClose } = e.detail || {};
+        const { returnToBlocksOnClose, returnToArrangementsOnClose } = e.detail || {};
+        if (returnToArrangementsOnClose) return;
         if (!returnToBlocksOnClose) return;
         if (isBlocksModalOpen()) return;
         openBlocksModal();
@@ -2709,7 +2720,12 @@ function setupTrackerEventListeners() {
 /**
  * Open the tracker modal with current instruments
  */
-async function openTrackerModal() {
+async function openTrackerModal(options = {}) {
+    if (options?.returnToArrangementsOnClose) {
+        arrangementLiveEditSession = { active: true, committed: false };
+    } else {
+        arrangementLiveEditSession = { active: false, committed: false };
+    }
     const { getDefragmentedInstruments } = await import('./instrument-manager.js');
     const instruments = getDefragmentedInstruments();
     
@@ -2719,7 +2735,7 @@ async function openTrackerModal() {
         params: inst.params,
     }));
     
-    openTracker(instrumentList);
+    openTracker(instrumentList, options);
 }
 
 // Expose tracker open function globally for button access
@@ -2728,7 +2744,12 @@ window.openTrackerModal = openTrackerModal;
 /**
  * Open the tracker modal for editing an existing block
  */
-async function openTrackerModalForEdit(block, trackerState) {
+async function openTrackerModalForEdit(block, trackerState, options = {}) {
+    if (options?.returnToArrangementsOnClose) {
+        arrangementLiveEditSession = { active: true, committed: false };
+    } else {
+        arrangementLiveEditSession = { active: false, committed: false };
+    }
     const { getDefragmentedInstruments } = await import('./instrument-manager.js');
     const instruments = getDefragmentedInstruments();
     
@@ -2745,6 +2766,8 @@ async function openTrackerModalForEdit(block, trackerState) {
         description: block.description,
         scope: normalizeScope(block.scope),
         trackerState: trackerState,
+        returnToArrangementsOnClose: options.returnToArrangementsOnClose,
+        returnToBlocksOnClose: options.returnToBlocksOnClose,
     };
     
     openTrackerForEdit(instrumentList, blockData);
@@ -2767,21 +2790,27 @@ function setupBlocksEventListeners() {
 	        }
 	    });
 
-	    // Stop any tracker-based preview playback when exiting the Blocks modal.
-	    document.addEventListener('blocks:modalClose', () => {
-	        stopTrackerPreviewPlayback();
-	    });
+    // Stop any tracker-based preview playback when exiting the Blocks modal.
+    document.addEventListener('blocks:modalClose', (e) => {
+        if (e?.detail?.reason === 'arrangement') return;
+        stopTrackerPreviewPlayback();
+    });
 	    
 	    // Listen for blocks:create event (from Blocks modal)
-	    document.addEventListener('blocks:create', () => {
-	        openTrackerModal();
+    document.addEventListener('blocks:create', (e) => {
+        const detail = e?.detail || {};
+        openTrackerModal({
+            returnToArrangementsOnClose: !!detail.returnToArrangementsOnClose,
+            returnToBlocksOnClose: typeof detail.returnToBlocksOnClose === 'boolean' ? detail.returnToBlocksOnClose : undefined,
+            arrangementInsertRowIndex: detail.arrangementInsertRowIndex,
+        });
 
     });
     
     // Listen for blocks:edit event (from Blocks modal)
     document.addEventListener('blocks:edit', async (e) => {
-        const { block, trackerState } = e.detail;
-        await openTrackerModalForEdit(block, trackerState);
+        const { block, trackerState, returnToArrangementsOnClose, returnToBlocksOnClose } = e.detail;
+        await openTrackerModalForEdit(block, trackerState, { returnToArrangementsOnClose, returnToBlocksOnClose });
     });
     
     // Listen for blocks:insert event
@@ -3534,8 +3563,7 @@ function setupBlocksEventListeners() {
 	        if (!arrangementState) return;
 
 	        try {
-	            setStatus(`Previewing arrangement "${arrangement?.name || 'arrangement'}"...`, 'normal');
-	            console.log('[Arranger] Preview start:', arrangementState);
+            console.log('[Arranger] Preview start:', arrangementState);
 	            const { getDefragmentedInstruments } = await import('./instrument-manager.js');
 	            const instruments = getDefragmentedInstruments();
 	            const instrumentList = instruments.map(inst => ({
@@ -3559,24 +3587,26 @@ function setupBlocksEventListeners() {
 	                });
 	            };
 
-	            const trackerStateByFilename = {};
-	            let fetched = 0;
-	            let playable = 0;
-	            for (const filename of wantedBlockFiles) {
-	                try {
-	                    const res = await fetch(`/api/blocks/${filename}`);
-	                    if (!res.ok) continue;
-	                    fetched++;
-	                    const block = await res.json();
-	                    console.log('[Arranger] Preview fetched block:', filename, 'trackerState?', !!block?.trackerState);
-	                    if (block?.trackerState) {
-	                        trackerStateByFilename[filename] = block.trackerState;
-	                        if (isPlayableTrackerState(block.trackerState)) playable++;
-	                    }
-	                } catch (err) {
-	                    console.warn('[Arranger] Failed to fetch block for preview:', filename, err);
-	                }
-	            }
+            const trackerStateByFilename = {};
+            const previewBlocks = [];
+            let fetched = 0;
+            let playable = 0;
+            for (const filename of wantedBlockFiles) {
+                try {
+                    const res = await fetch(`/api/blocks/${filename}`);
+                    if (!res.ok) continue;
+                    fetched++;
+                    const block = await res.json();
+                    console.log('[Arranger] Preview fetched block:', filename, 'trackerState?', !!block?.trackerState);
+                    if (block?.trackerState) {
+                        trackerStateByFilename[filename] = block.trackerState;
+                        previewBlocks.push({ filename, trackerState: block.trackerState });
+                        if (isPlayableTrackerState(block.trackerState)) playable++;
+                    }
+                } catch (err) {
+                    console.warn('[Arranger] Failed to fetch block for preview:', filename, err);
+                }
+            }
 
 	            if (wantedBlockFiles.length > 0 && fetched === 0) {
 	                setStatus('Arrangement preview failed: could not load blocks.', 'error');
@@ -3587,14 +3617,91 @@ function setupBlocksEventListeners() {
 	                return;
 	            }
 
-	            const bpm = arrangementState.bpm || 120;
-	            console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
-	            previewArrangementStateOnce(arrangementState, trackerStateByFilename, instrumentList, bpm);
-	        } catch (err) {
-	            console.error('[Arranger] Preview failed:', err);
-	            setStatus('Arrangement preview failed (see console).', 'error');
-	        }
-	    });
+            const bpm = arrangementState.bpm || 120;
+            console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
+            arrangementPreviewContext = {
+                arrangementState,
+                trackerStateByFilename,
+                instrumentList,
+                bpm,
+            };
+            clearArrangementLiveOverrides({ scheduleUpdate: false });
+            if (previewBlocks.length) {
+                document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
+            }
+            const started = startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm, { keepPosition: false });
+            if (!started) {
+                setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
+            }
+            document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: started } }));
+        } catch (err) {
+            console.error('[Arranger] Preview failed:', err);
+            setStatus('Arrangement preview failed (see console).', 'error');
+        }
+    });
+
+        document.addEventListener('arrangements:stateChanged', (e) => {
+            if (!isArrangementPreviewPlaying()) return;
+            const arrangementState = e?.detail?.arrangementState;
+            if (!arrangementState) return;
+            arrangementPreviewContext = {
+                ...arrangementPreviewContext,
+                arrangementState,
+                bpm: arrangementState.bpm || arrangementPreviewContext.bpm,
+            };
+            const addedRowIndex = e?.detail?.addedRowIndex;
+            const addedFilename = e?.detail?.addedFilename;
+            if (Number.isInteger(addedRowIndex)) {
+                clearArrangementLiveOverride({ rowIndex: addedRowIndex, scheduleUpdate: false });
+            }
+            if (addedFilename) {
+                clearArrangementLiveOverride({ filename: addedFilename, scheduleUpdate: false });
+            }
+            updateArrangementPreview({
+                arrangementState,
+                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
+                instrumentList: arrangementPreviewContext.instrumentList,
+                bpm: arrangementPreviewContext.bpm,
+                keepPosition: true,
+            });
+        });
+
+        document.addEventListener('tracker:stateChanged', (e) => {
+            if (!isArrangementPreviewPlaying()) return;
+            const { filename, trackerState, arrangementInsertRowIndex } = e.detail || {};
+            if (!trackerState) return;
+            if (filename) {
+                setArrangementLiveOverride({ filename, trackerState });
+                return;
+            }
+            if (Number.isInteger(arrangementInsertRowIndex)) {
+                setArrangementLiveOverride({ rowIndex: arrangementInsertRowIndex, trackerState });
+            }
+        });
+
+        document.addEventListener('tracker:closed', (e) => {
+            if (!e?.detail?.returnToArrangementsOnClose) return;
+            const wasCommitted = arrangementLiveEditSession.active && arrangementLiveEditSession.committed;
+            arrangementLiveEditSession = { active: false, committed: false };
+            clearArrangementLiveOverrides({ scheduleUpdate: false });
+            if (!isArrangementPreviewPlaying()) return;
+            if (!arrangementPreviewContext?.arrangementState) return;
+            if (wasCommitted) return;
+            const rerender = () => {
+                updateArrangementPreview({
+                    arrangementState: arrangementPreviewContext.arrangementState,
+                    trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
+                    instrumentList: arrangementPreviewContext.instrumentList,
+                    bpm: arrangementPreviewContext.bpm,
+                    keepPosition: true,
+                });
+            };
+            if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                window.requestIdleCallback(rerender, { timeout: 200 });
+            } else {
+                setTimeout(rerender, 0);
+            }
+        });
     
     // Keyboard shortcut for blocks (Ctrl/Cmd + B)
     document.addEventListener('keydown', (e) => {
@@ -3612,16 +3719,38 @@ function setupBlocksEventListeners() {
 
 // Listen for tracker:saveBlock event (when saving edits)
 document.addEventListener('tracker:saveBlock', async (e) => {
-    const { isNewBlock, filename, name, description, pattern, trackerState, scope } = e.detail;
+    const { isNewBlock, filename, name, description, pattern, trackerState, scope, returnToArrangementsOnClose, arrangementInsertRowIndex } = e.detail;
     
     if (isNewBlock) {
         // Handle new block creation
-        const success = await saveBlock(name, description || "Created in tracker", pattern, trackerState, scope || 'user');
-        if (success) {
+        const result = await saveBlock(name, description || "Created in tracker", pattern, trackerState, scope || 'user');
+        if (result) {
             setStatus(`Block "${name}" created successfully`, 'success');
+            if (returnToArrangementsOnClose && Number.isInteger(arrangementInsertRowIndex)) {
+                const createdBlock = result?.block || null;
+                if (createdBlock?.filename) {
+                    document.dispatchEvent(new CustomEvent('arrangements:blockCreated', {
+                        detail: {
+                            rowIndex: arrangementInsertRowIndex,
+                            block: createdBlock,
+                        }
+                    }));
+                }
+            }
+            if (returnToArrangementsOnClose) {
+                arrangementLiveEditSession.committed = true;
+                if (isArrangementPreviewPlaying()) {
+                    const createdBlock = result?.block || null;
+                    if (createdBlock?.filename) {
+                        arrangementPreviewContext.trackerStateByFilename[createdBlock.filename] = trackerState;
+                    }
+                }
+            }
             // Close tracker and return to blocks list
             closeTracker();
-            openBlocksModal();
+            if (!returnToArrangementsOnClose) {
+                openBlocksModal();
+            }
         } else {
             setStatus('Failed to create block', 'error');
         }
@@ -3631,9 +3760,18 @@ document.addEventListener('tracker:saveBlock', async (e) => {
         const success = await updateBlock(filename, name, description, pattern, trackerState, scope || 'user');
         if (success) {
             setStatus(`Block "${name}" updated successfully`, 'success');
+            if (returnToArrangementsOnClose) {
+                arrangementLiveEditSession.committed = true;
+                if (isArrangementPreviewPlaying() && filename) {
+                    arrangementPreviewContext.trackerStateByFilename[filename] = trackerState;
+                    clearArrangementLiveOverride({ filename, scheduleUpdate: false });
+                }
+            }
             // Close tracker and return to blocks list
             closeTracker();
-            openBlocksModal();
+            if (!returnToArrangementsOnClose) {
+                openBlocksModal();
+            }
         } else {
             setStatus('Failed to update block', 'error');
         }
