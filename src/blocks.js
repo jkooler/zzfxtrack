@@ -441,17 +441,19 @@ function renderArrangementsList() {
 
   const appendFolder = (scope, label, entries) => {
     const devMode = isDeveloperModeEnabled();
-    const expanded = scope === 'example'
-      ? arrangementFolderState.example
-      : arrangementFolderState.user;
+    const isEmpty = entries.length === 0;
+    const expanded = isEmpty
+      ? true
+      : (scope === 'example' ? arrangementFolderState.example : arrangementFolderState.user);
     const icon = expanded ? 'folder-open' : 'folder';
+    const highlightIcon = expanded && (scope !== 'user' || entries.length > 0);
 
     const folder = document.createElement('div');
     folder.className = 'mb-0 py-px';
     folder.innerHTML = `
       <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-arr-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-4 h-4 ${expanded ? 'text-primary' : ''}"></i>
+          <i data-lucide="${icon}" class="w-4 h-4 ${highlightIcon ? 'text-primary' : ''}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
@@ -460,6 +462,7 @@ function renderArrangementsList() {
     `;
     const list = folder.querySelector(`[data-arr-folder-items="${scope}"]`);
     folder.querySelector(`[data-arr-folder="${scope}"]`)?.addEventListener('click', () => {
+      if (isEmpty) return;
       if (scope === 'example') {
         arrangementFolderState.example = !arrangementFolderState.example;
       } else {
@@ -941,16 +944,18 @@ function renderBlocksList() {
 
   const appendFolder = (scope, label, entries) => {
     const devMode = isDeveloperModeEnabled();
-    const expanded = scope === 'example'
-      ? blockFolderState.example
-      : blockFolderState.user;
+    const isEmpty = entries.length === 0;
+    const expanded = isEmpty
+      ? true
+      : (scope === 'example' ? blockFolderState.example : blockFolderState.user);
     const icon = expanded ? 'folder-open' : 'folder';
+    const highlightIcon = expanded && (scope !== 'user' || entries.length > 0);
     const folder = document.createElement('div');
     folder.className = 'mb-0 py-px';
     folder.innerHTML = `
       <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-block-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-4 h-4 ${expanded ? 'text-primary' : ''}"></i>
+          <i data-lucide="${icon}" class="w-4 h-4 ${highlightIcon ? 'text-primary' : ''}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
@@ -959,6 +964,7 @@ function renderBlocksList() {
     `;
     const list = folder.querySelector(`[data-block-folder-items="${scope}"]`);
     folder.querySelector(`[data-block-folder="${scope}"]`)?.addEventListener('click', () => {
+      if (isEmpty) return;
       if (scope === 'example') {
         blockFolderState.example = !blockFolderState.example;
       } else {

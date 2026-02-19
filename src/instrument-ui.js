@@ -1133,15 +1133,17 @@ function renderInstrumentList() {
         const folderItem = document.createElement('li');
         folderItem.className = 'mt-1 pb-1 border-b border-border/40';
 
-        const expanded = scope === 'example'
-            ? instrumentFolderState.example
-            : instrumentFolderState.user;
+        const isEmpty = items.length === 0;
+        const expanded = isEmpty
+            ? true
+            : (scope === 'example' ? instrumentFolderState.example : instrumentFolderState.user);
         const icon = expanded ? 'folder-open' : 'folder';
+        const highlightIcon = expanded && (scope !== 'user' || items.length > 0);
 
         folderItem.innerHTML = `
             <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
                 <span class="inline-flex items-center gap-1.5">
-                    <i data-lucide="${icon}" class="w-4 h-4 ${expanded ? 'text-primary' : ''}"></i>
+                    <i data-lucide="${icon}" class="w-4 h-4 ${highlightIcon ? 'text-primary' : ''}"></i>
                     ${label}
                 </span>
                 <span class="opacity-70">${items.length}</span>
@@ -1152,6 +1154,7 @@ function renderInstrumentList() {
         const button = folderItem.querySelector(`[data-folder-scope="${scope}"]`);
         const list = folderItem.querySelector(`[data-folder-items="${scope}"]`);
         button?.addEventListener('click', () => {
+            if (isEmpty) return;
             if (scope === 'example') {
                 instrumentFolderState.example = !instrumentFolderState.example;
             } else {

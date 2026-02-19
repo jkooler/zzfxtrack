@@ -1,4 +1,4 @@
-import { stack, note, sound, s, slow, arrange, silence, gain } from "@strudel/core";
+import { stack, note, s, slow, arrange, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
 

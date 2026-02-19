@@ -623,15 +623,19 @@ async function refreshSongList() {
         }
 
         const appendFolder = (scope, label, items) => {
-            const expanded = scope === 'example' ? songFolderState.example : songFolderState.user;
+            const isEmpty = items.length === 0;
+            const expanded = isEmpty
+                ? true
+                : (scope === 'example' ? songFolderState.example : songFolderState.user);
             const folderIcon = expanded ? 'folder-open' : 'folder';
+            const highlightIcon = expanded && (scope !== 'user' || items.length > 0);
 
             const folderLi = document.createElement('li');
             folderLi.className = 'mt-1 pb-1 border-b border-border/40';
             folderLi.innerHTML = `
                 <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-song-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
-                        <i data-lucide="${folderIcon}" class="w-4 h-4 ${expanded ? 'text-primary' : ''}"></i>
+                        <i data-lucide="${folderIcon}" class="w-4 h-4 ${highlightIcon ? 'text-primary' : ''}"></i>
                         ${label}
                     </span>
                     <span class="opacity-70">${items.length}</span>
@@ -640,6 +644,7 @@ async function refreshSongList() {
             `;
             const list = folderLi.querySelector(`[data-song-folder-items="${scope}"]`);
             folderLi.querySelector(`[data-song-folder="${scope}"]`)?.addEventListener('click', () => {
+                if (isEmpty) return;
                 if (scope === 'example') {
                     songFolderState.example = !songFolderState.example;
                 } else {
