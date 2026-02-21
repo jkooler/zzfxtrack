@@ -1,20 +1,26 @@
-// Block: Bass
-// User copy of Bass
+// Block: Demo-Chords
+// Created in tracker
 
-export const name = "Bass";
-export const description = "User copy of Bass";
-export const scope = "user";
+export const name = "Demo-Chords";
+export const description = "Created in tracker";
+export const scope = "example";
 
-export const pattern = `// Select instruments and add notes to generate pattern`;
+export const pattern = `stack(
+  note("c2 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ d#2 ~ ~ ~ ~ ~ ~ ~ g2 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~").s("demo-pad"),
+  note("~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ c4 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ c3 ~ ~ ~ ~ ~ ~ ~ d4 ~ ~ ~ ~ ~ ~ ~").s("demo-pad"),
+  note("~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ f4 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ d#4 ~ ~ ~ ~ ~ ~ ~ f4 ~ ~ ~ ~ ~ ~ ~").s("demo-pad"),
+  note("~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ a#3 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ a#4 ~ ~ ~ ~ ~ ~ ~ a4 ~ ~ ~ ~ ~ ~ ~").s("demo-pad")
+)`;
 
 // Optional: Tracker state for re-editing
 export const trackerState = {
   "version": 1,
-  "channels": 1,
+  "channels": 4,
   "steps": 64,
   "bpm": 120,
   "grid": [
     [
+      "c2",
       null,
       null,
       null,
@@ -46,6 +52,7 @@ export const trackerState = {
       null,
       null,
       null,
+      "d#2",
       null,
       null,
       null,
@@ -53,9 +60,7 @@ export const trackerState = {
       null,
       null,
       null,
-      null,
-      null,
-      null,
+      "g2",
       null,
       null,
       null,
@@ -97,6 +102,7 @@ export const trackerState = {
       null,
       null,
       null,
+      "c4",
       null,
       null,
       null,
@@ -128,6 +134,7 @@ export const trackerState = {
       null,
       null,
       null,
+      "c3",
       null,
       null,
       null,
@@ -135,9 +142,7 @@ export const trackerState = {
       null,
       null,
       null,
-      null,
-      null,
-      null,
+      "d4",
       null,
       null,
       null,
@@ -163,6 +168,7 @@ export const trackerState = {
       null,
       null,
       null,
+      "f4",
       null,
       null,
       null,
@@ -194,6 +200,7 @@ export const trackerState = {
       null,
       null,
       null,
+      "d#4",
       null,
       null,
       null,
@@ -201,9 +208,7 @@ export const trackerState = {
       null,
       null,
       null,
-      null,
-      null,
-      null,
+      "f4",
       null,
       null,
       null,
@@ -229,6 +234,7 @@ export const trackerState = {
       null,
       null,
       null,
+      "a#3",
       null,
       null,
       null,
@@ -260,6 +266,7 @@ export const trackerState = {
       null,
       null,
       null,
+      "a#4",
       null,
       null,
       null,
@@ -267,9 +274,7 @@ export const trackerState = {
       null,
       null,
       null,
-      null,
-      null,
-      null,
+      "a4",
       null,
       null,
       null,
@@ -2134,10 +2139,10 @@ export const trackerState = {
     ]
   ],
   "channelInstruments": [
-    "",
-    "",
-    "",
-    "",
+    "demo-pad",
+    "demo-pad",
+    "demo-pad",
+    "demo-pad",
     "",
     "",
     "",

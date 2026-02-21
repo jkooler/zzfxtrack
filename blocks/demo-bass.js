@@ -1,11 +1,11 @@
-// Block: Bass
-// User copy of Bass
+// Block: Demo-Bass
+// Created in tracker
 
-export const name = "Bass";
-export const description = "User copy of Bass";
-export const scope = "user";
+export const name = "Demo-Bass";
+export const description = "Created in tracker";
+export const scope = "example";
 
-export const pattern = `// Select instruments and add notes to generate pattern`;
+export const pattern = `note("c2 ~ ~ ~ ~ ~ ~ ~ a1 ~ ~ a1 ~ ~ a1 ~ c2 ~ ~ ~ c2 ~ ~ ~ g1 ~ ~ ~ ~ ~ ~ ~ a#1 ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ g1 ~ ~ g1 ~ c2 ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ ~").s("demo-bass")`;
 
 // Optional: Tracker state for re-editing
 export const trackerState = {
@@ -15,6 +15,7 @@ export const trackerState = {
   "bpm": 120,
   "grid": [
     [
+      "c2",
       null,
       null,
       null,
@@ -22,6 +23,23 @@ export const trackerState = {
       null,
       null,
       null,
+      "a1",
+      null,
+      null,
+      "a1",
+      null,
+      null,
+      "a1",
+      null,
+      "c2",
+      null,
+      null,
+      null,
+      "c2",
+      null,
+      null,
+      null,
+      "g1",
       null,
       null,
       null,
@@ -29,6 +47,7 @@ export const trackerState = {
       null,
       null,
       null,
+      "a#1",
       null,
       null,
       null,
@@ -36,6 +55,19 @@ export const trackerState = {
       null,
       null,
       null,
+      "g1",
+      null,
+      null,
+      "g1",
+      null,
+      null,
+      "g1",
+      null,
+      "c2",
+      null,
+      null,
+      null,
+      "c2",
       null,
       null,
       null,
@@ -43,39 +75,7 @@ export const trackerState = {
       null,
       null,
       null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
+      "g1",
       null,
       null,
       null
@@ -2134,10 +2134,10 @@ export const trackerState = {
     ]
   ],
   "channelInstruments": [
-    "",
-    "",
-    "",
-    "",
+    "demo-bass",
+    "demo-pad",
+    "demo-pad",
+    "demo-pad",
     "",
     "",
     "",
