@@ -3,3 +3,27 @@ node_modules/
 output/
 dist/
 .agent/
+
+# songs: ignore everything by default
+songs/*.js
+songs/*.meta.json
+
+# keep required file tracked
+!songs/index.js
+
+# keep curated user starters tracked
+!songs/01-Introduction.js
+!songs/02-Blocks.js
+!songs/03-Monophonic-Horn.js
+
+# keep curated examples tracked
+!songs/00-Introduction-Demo.js
+!songs/01-Monophon-Horn-Demo.js
+!songs/02-Blocks-Demo.js
+!songs/03-Diagnostic-sound.js
+
+# keep curated scope metadata tracked
+!songs/00-Introduction-Demo.meta.json
+!songs/01-Monophon-Horn-Demo.meta.json
+!songs/02-Blocks-Demo.meta.json
+!songs/03-Diagnostic-sound.meta.json

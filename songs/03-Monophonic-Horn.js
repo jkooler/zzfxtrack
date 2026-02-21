@@ -1,6 +1,6 @@
 import { stack, arrange, note, s, slow, cat, silence, gain } from "@strudel/core";
 
-export const bpm = 125;
+export const bpm = 122;
 
 // Feature test: Monophonic horn instrument with polyphonic epiano.
 
