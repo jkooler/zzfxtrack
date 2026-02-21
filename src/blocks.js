@@ -63,6 +63,22 @@ function updateArrangementAdvancedSettingsVisibility() {
   elements.arrangementAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
 }
 
+function updateArrangementSaveGuardUI() {
+  const isReadonlyExample = arrangementEditMode.scope === 'example' && !isDeveloperModeEnabled();
+  if (elements.arrangementName) {
+    elements.arrangementName.readOnly = isReadonlyExample;
+  }
+  if (elements.arrangementBpm) {
+    elements.arrangementBpm.readOnly = isReadonlyExample;
+  }
+  if (elements.saveArrangementBtn) {
+    elements.saveArrangementBtn.disabled = isReadonlyExample;
+    elements.saveArrangementBtn.title = isReadonlyExample
+      ? 'Enable developer mode to edit example arrangements'
+      : '';
+  }
+}
+
 function loadFolderState(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -363,6 +379,7 @@ function setupEventListeners() {
 	        (!arrangementEditMode.filename && !detail.filename)
 	      ) {
 	        arrangementEditMode.scope = normalizeScope(detail.scope);
+          updateArrangementSaveGuardUI();
 	      }
 	      await loadArrangementsList();
 	    }
@@ -373,6 +390,7 @@ function setupEventListeners() {
     renderBlocksList();
     renderArrangementsList();
     updateArrangementAdvancedSettingsVisibility();
+    updateArrangementSaveGuardUI();
   });
 
   document.addEventListener('arrangements:blockCreated', (e) => {
@@ -878,6 +896,7 @@ async function openArrangementEditor(arrangement = null) {
   elements.arrangementModal.classList.add('open');
   elements.arrangementModal.classList.remove('is-suspended');
   updateArrangementAdvancedSettingsVisibility();
+  updateArrangementSaveGuardUI();
   elements.arrangementName?.focus();
   createIcons({ icons });
   updateArrangementPreviewButtonState();
@@ -887,6 +906,7 @@ function closeArrangementEditor() {
   elements.arrangementModal?.classList.remove('open');
   arrangementEditMode.scope = 'user';
   updateArrangementAdvancedSettingsVisibility();
+  updateArrangementSaveGuardUI();
   if (isArrangementPreviewPlaying()) {
     stopArrangementPreview();
     playingArrangementFilename = null;
@@ -1206,6 +1226,10 @@ function renderArrangementRows() {
 	}
 
 async function saveArrangementFromEditor() {
+  if (arrangementEditMode.scope === 'example' && !isDeveloperModeEnabled()) {
+    emitStatus('Example arrangements are read-only. Enable developer mode to edit.', 'error');
+    return;
+  }
   const rawName = elements.arrangementName?.value?.trim() || '';
   if (!rawName) {
     alert('Please enter an arrangement name.');
@@ -1787,24 +1811,19 @@ export async function saveBlock(name, description, pattern, trackerState, scope 
  */
 export async function updateBlock(filename, name, description, pattern, trackerState, scope = 'user') {
   try {
-    const existing = await fetch('/api/blocks').then(r => r.ok ? r.json() : []).catch(() => []);
-    const currentFilename = String(filename || '').toLowerCase();
-    const existingNames = new Set(
-      existing
-        .filter(b => String(b?.filename || '').toLowerCase() !== currentFilename)
-        .map(b => String(b?.name || '').toLowerCase())
-    );
+    const sanitizeBase = (raw) => (raw || 'block')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'block';
 
     const baseName = String(name || '').trim() || 'block';
-    let uniqueName = baseName;
-    let suffix = 1;
-    while (existingNames.has(uniqueName.toLowerCase())) {
-      suffix++;
-      uniqueName = `${baseName}_${suffix}`;
-    }
+    const uniqueName = baseName;
+    const baseSlug = sanitizeBase(baseName);
+    const nextFilename = `${baseSlug}.js`;
 
     const blockData = {
       filename,
+      newFilename: nextFilename,
       name: uniqueName,
       description: description || '',
       pattern,
@@ -1818,25 +1837,55 @@ export async function updateBlock(filename, name, description, pattern, trackerS
       body: JSON.stringify(blockData),
     });
     
-    if (!response.ok) throw new Error('Update failed');
+    if (!response.ok) {
+      const msg = await response.text().catch(() => 'Update failed');
+      throw new Error(msg || 'Update failed');
+    }
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_e) {
+      payload = null;
+    }
+    const updatedFilename = payload?.filename || nextFilename;
+    const previousFilename = payload?.previousFilename || filename;
+
+    if (updatedFilename !== previousFilename && arrangementDraft?.rows?.length) {
+      arrangementDraft.rows = arrangementDraft.rows.map((row) => ({
+        ...row,
+        blocks: Array.isArray(row?.blocks)
+          ? row.blocks.map((b) => (b === previousFilename ? updatedFilename : b))
+          : [],
+      }));
+      if (playingBlockFilename === previousFilename) playingBlockFilename = updatedFilename;
+      if (Array.isArray(playingArrangementRowBlocks) && playingArrangementRowBlocks.length) {
+        playingArrangementRowBlocks = playingArrangementRowBlocks.map((b) => (b === previousFilename ? updatedFilename : b));
+      }
+      emitArrangementStateChanged();
+    }
     
-    // Reload the list
+    // Reload lists (blocks + arrangements because arrangement rows reference block filenames)
     await loadBlocksList();
+    await loadArrangementsList();
+    // If arrangement editor is currently open, re-render chips/labels immediately so renamed block names are visible.
+    if (elements.arrangementModal?.classList.contains('open')) {
+      renderArrangementRows();
+    }
     
-    return true;
+    return { ok: true, filename: updatedFilename, previousFilename };
   } catch (err) {
     console.error('[Blocks] Failed to update block:', err);
-    return false;
+    return { ok: false, error: err?.message || 'Failed to update block' };
   }
 }
 
 /**
  * Open the blocks modal
  */
-export function openBlocksModal() {
+export function openBlocksModal(initialTab = 'arranger') {
   elements.modal?.classList.add('open');
   elements.modal?.classList.remove('is-suspended');
-  setActiveTab('arranger');
+  setActiveTab(initialTab === 'blocks' ? 'blocks' : 'arranger');
   loadBlocksList(); // Refresh list when opening
   document.dispatchEvent(new CustomEvent('blocks:modalOpen'));
 }
@@ -1845,6 +1894,10 @@ export function openBlocksModal() {
  * Close the blocks modal
  */
 export function closeBlocksModal(reason = null) {
+  // Always stop any Blocks/Arrangement preview audio when modal closes.
+  stopTrackerPreviewPlayback();
+  stopArrangementPreview();
+
   elements.modal?.classList.remove('open');
   elements.modal?.classList.remove('is-suspended');
   playingArrangementFilename = null;

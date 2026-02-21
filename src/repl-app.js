@@ -2923,7 +2923,7 @@ function setupTrackerEventListeners() {
         if (returnToArrangementsOnClose) return;
         if (!returnToBlocksOnClose) return;
         if (isBlocksModalOpen()) return;
-        openBlocksModal();
+        openBlocksModal('blocks');
     });
 
     
@@ -2981,12 +2981,31 @@ async function openTrackerModalForEdit(block, trackerState, options = {}) {
         params: inst.params,
     }));
     
+    // Resolve latest block scope/name from API so immutable example safeguards are accurate.
+    let resolvedBlock = { ...block };
+    if (block?.filename) {
+        try {
+            const response = await fetch(`/api/blocks/${block.filename}`);
+            if (response.ok) {
+                const fullBlock = await response.json();
+                resolvedBlock = {
+                    ...resolvedBlock,
+                    scope: fullBlock?.scope ?? resolvedBlock.scope,
+                    name: fullBlock?.name || resolvedBlock.name,
+                    description: fullBlock?.description || resolvedBlock.description,
+                };
+            }
+        } catch (_e) {
+            // Keep existing block metadata if lookup fails.
+        }
+    }
+
     // Prepare block data for edit mode
     const blockData = {
-        filename: block.filename,
-        name: block.name,
-        description: block.description,
-        scope: normalizeScope(block.scope),
+        filename: resolvedBlock.filename,
+        name: resolvedBlock.name,
+        description: resolvedBlock.description,
+        scope: normalizeScope(resolvedBlock.scope),
         trackerState: trackerState,
         returnToArrangementsOnClose: options.returnToArrangementsOnClose,
         returnToBlocksOnClose: options.returnToBlocksOnClose,
@@ -3972,7 +3991,7 @@ document.addEventListener('tracker:saveBlock', async (e) => {
             // Close tracker and return to blocks list
             closeTracker();
             if (!returnToArrangementsOnClose) {
-                openBlocksModal();
+                openBlocksModal('blocks');
             }
         } else {
             setStatus('Failed to create block', 'error');
@@ -3980,23 +3999,41 @@ document.addEventListener('tracker:saveBlock', async (e) => {
     } else {
         // Handle existing block update
         // Update the block
-        const success = await updateBlock(filename, name, description, pattern, trackerState, scope || 'user');
-        if (success) {
+        const updateResult = await updateBlock(filename, name, description, pattern, trackerState, scope || 'user');
+        if (updateResult && updateResult.ok !== false) {
+            const updatedFilename = updateResult.filename || filename;
+            const previousFilename = updateResult.previousFilename || filename;
             setStatus(`Block "${name}" updated successfully`, 'success');
-            if (returnToArrangementsOnClose) {
-                arrangementLiveEditSession.committed = true;
-                if (isArrangementPreviewPlaying() && filename) {
-                    arrangementPreviewContext.trackerStateByFilename[filename] = trackerState;
-                    clearArrangementLiveOverride({ filename, scheduleUpdate: false });
+            try {
+                if (returnToArrangementsOnClose) {
+                    arrangementLiveEditSession.committed = true;
+                    if (isArrangementPreviewPlaying() && updatedFilename) {
+                        if (!arrangementPreviewContext.trackerStateByFilename || typeof arrangementPreviewContext.trackerStateByFilename !== 'object') {
+                            arrangementPreviewContext.trackerStateByFilename = {};
+                        }
+                        if (previousFilename && previousFilename !== updatedFilename) {
+                            const oldState = arrangementPreviewContext.trackerStateByFilename?.[previousFilename];
+                            if (oldState && !arrangementPreviewContext.trackerStateByFilename?.[updatedFilename]) {
+                                arrangementPreviewContext.trackerStateByFilename[updatedFilename] = oldState;
+                            }
+                            if (arrangementPreviewContext.trackerStateByFilename) {
+                                delete arrangementPreviewContext.trackerStateByFilename[previousFilename];
+                            }
+                            clearArrangementLiveOverride({ filename: previousFilename, scheduleUpdate: false });
+                        }
+                        arrangementPreviewContext.trackerStateByFilename[updatedFilename] = trackerState;
+                        clearArrangementLiveOverride({ filename: updatedFilename, scheduleUpdate: false });
+                    }
                 }
+            } catch (syncErr) {
+                console.error('[Tracker Save] Arrangement sync failed:', syncErr);
             }
-            // Close tracker and return to blocks list
             closeTracker();
             if (!returnToArrangementsOnClose) {
-                openBlocksModal();
+                openBlocksModal('blocks');
             }
         } else {
-            setStatus('Failed to update block', 'error');
+            setStatus(`Failed to update block${updateResult?.error ? `: ${updateResult.error}` : ''}`, 'error');
         }
     }
 });

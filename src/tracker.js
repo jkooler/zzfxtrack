@@ -2404,6 +2404,10 @@ function resetEditMode() {
  * Update UI based on edit mode state
  */
 function updateEditModeUI() {
+  const isReadonlyExample = editMode.isEditing
+    && editMode.blockScope === 'example'
+    && !isDeveloperModeEnabled();
+
   // Update title
   if (elements.title) {
     if (editMode.isEditing) {
@@ -2421,6 +2425,7 @@ function updateEditModeUI() {
       elements.blockProps.classList.remove('hidden');
       if (elements.blockNameInput) {
         elements.blockNameInput.value = editMode.blockName || '';
+        elements.blockNameInput.readOnly = isReadonlyExample;
       }
       if (elements.blockBpmInput) {
         elements.blockBpmInput.value = String(state.bpm || 120);
@@ -2459,8 +2464,14 @@ function updateEditModeUI() {
   if (elements.saveBtn) {
     if (editMode.isEditing) {
       elements.saveBtn.classList.remove('hidden');
+      elements.saveBtn.disabled = isReadonlyExample;
+      elements.saveBtn.title = isReadonlyExample
+        ? 'Enable developer mode to edit example blocks'
+        : '';
     } else {
       elements.saveBtn.classList.add('hidden');
+      elements.saveBtn.disabled = false;
+      elements.saveBtn.title = '';
     }
   }
 }
@@ -2470,6 +2481,7 @@ function updateEditModeUI() {
  */
 function handleSaveBlock() {
   if (!editMode.isEditing) return;
+  if (editMode.blockScope === 'example' && !isDeveloperModeEnabled()) return;
   
   // Get and validate name
   let name = editMode.blockName;

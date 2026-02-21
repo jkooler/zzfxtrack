@@ -522,7 +522,7 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
           req.on('end', () => {
             try {
               const blockData = JSON.parse(body);
-              const { name, description, pattern, trackerState, scope } = blockData;
+              const { name, description, pattern, trackerState, scope, newFilename } = blockData;
               let existingScope = 'user';
               if (fs.existsSync(filePath)) {
                 try {
@@ -541,6 +541,21 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
               if (!fs.existsSync(BLOCKS_DIR)) {
                 fs.mkdirSync(BLOCKS_DIR, { recursive: true });
               }
+
+              const targetFilename = (typeof newFilename === 'string' && newFilename.trim())
+                ? newFilename.trim()
+                : filename;
+              if (targetFilename.includes('..') || !targetFilename.endsWith('.js')) {
+                res.statusCode = 400;
+                res.end('Invalid filename');
+                return;
+              }
+              const targetPath = path.join(BLOCKS_DIR, targetFilename);
+              if (targetFilename !== filename && fs.existsSync(targetPath)) {
+                res.statusCode = 409;
+                res.end('Target filename already exists');
+                return;
+              }
               
               // Generate block file content
               const fileContent = `// Block: ${name}
@@ -555,10 +570,68 @@ export const pattern = \`${pattern}\`;
 // Optional: Tracker state for re-editing
 export const trackerState = ${JSON.stringify(trackerState, null, 2)};
 `;
-              
-              fs.writeFileSync(filePath, fileContent);
-              console.log(`[API] Updated block: ${filename}`);
-              res.end('Block updated successfully');
+
+              fs.writeFileSync(targetPath, fileContent);
+              if (targetFilename !== filename && fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+              }
+
+              // If filename changed, rewrite arrangement row references from old -> new.
+              let renamedReferences = 0;
+              if (targetFilename !== filename && fs.existsSync(ARRANGEMENTS_DIR)) {
+                const arrangementFiles = fs.readdirSync(ARRANGEMENTS_DIR)
+                  .filter(f => f.endsWith('.js') && f !== 'index.js');
+                for (const arrFile of arrangementFiles) {
+                  const arrPath = path.join(ARRANGEMENTS_DIR, arrFile);
+                  try {
+                    const content = fs.readFileSync(arrPath, 'utf-8');
+                    const arrNameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
+                    const arrStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
+                    if (!arrStateMatch) continue;
+                    const arrScope = readScopeFromContent(content, 'user');
+                    if (arrScope === 'example' && !isDeveloperModeRequest(req)) continue;
+                    const arrName = arrNameMatch ? arrNameMatch[1] : arrFile.replace('.js', '');
+                    const arrangementState = JSON.parse(arrStateMatch[1]);
+                    if (!Array.isArray(arrangementState?.rows)) continue;
+
+                    let touched = false;
+                    arrangementState.rows = arrangementState.rows.map((row) => {
+                      const blocks = Array.isArray(row?.blocks) ? row.blocks : [];
+                      const replaced = blocks.map((b) => {
+                        if (b === filename) {
+                          touched = true;
+                          renamedReferences++;
+                          return targetFilename;
+                        }
+                        return b;
+                      });
+                      return { ...row, blocks: replaced };
+                    });
+
+                    if (touched) {
+                      const fileContent = `// Arrangement: ${arrName}
+
+export const name = "${arrName}";
+export const scope = "${arrScope}";
+
+export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
+`;
+                      fs.writeFileSync(arrPath, fileContent);
+                    }
+                  } catch (arrErr) {
+                    console.error(`[API] Failed to update arrangement references in ${arrFile}:`, arrErr);
+                  }
+                }
+              }
+
+              console.log(`[API] Updated block: ${filename}${targetFilename !== filename ? ` -> ${targetFilename}` : ''}`);
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({
+                ok: true,
+                filename: targetFilename,
+                previousFilename: filename,
+                renamedReferences
+              }));
             } catch (e) {
               console.error('[API] Update block error:', e);
               res.statusCode = 500;

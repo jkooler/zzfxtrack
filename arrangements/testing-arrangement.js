@@ -11,25 +11,25 @@ export const arrangementState = {
     {
       "repeats": 4,
       "blocks": [
-        "simple-chord-pattern.js",
-        "simple-bass-line.js"
+        "chords.js",
+        "bass.js"
       ]
     },
     {
       "repeats": 4,
       "blocks": [
-        "simple-beat.js",
-        "simple-bass-line.js",
-        "simple-chord-pattern.js"
+        "drums.js",
+        "chords.js",
+        "bass.js"
       ]
     },
     {
       "repeats": 8,
       "blocks": [
-        "simple-bass-line.js",
-        "simple-beat.js",
-        "simple-chord-pattern.js",
-        "synth-stab.js"
+        "drums.js",
+        "chords.js",
+        "synths.js",
+        "bass.js"
       ]
     }
   ]
