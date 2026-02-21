@@ -8,8 +8,131 @@ import { noteToMidi } from '@strudel/core';
 
 // Default resolution (supports 16th, 8th, 32nd, triplets)
 const DEFAULT_ROWS_PER_CYCLE = 96;
-const BASE_RESOLUTION = 16; 
+const BASE_RESOLUTION = 16;
 const MAX_ATTENUATION = 20;
+/** Single upfront query window used for period detection and finite-length inference. */
+const PERIOD_LOOKAHEAD_CYCLES = 64;
+/** Quantization precision for robust structural comparisons. */
+const TIME_QUANTIZE_DECIMALS = 6;
+
+function toNumber(value) {
+    if (value == null) return NaN;
+    if (typeof value.valueOf === 'function') {
+        const n = Number(value.valueOf());
+        return Number.isFinite(n) ? n : NaN;
+    }
+    const n = Number(value);
+    return Number.isFinite(n) ? n : NaN;
+}
+
+function quantizeTime(value) {
+    return Number(value.toFixed(TIME_QUANTIZE_DECIMALS));
+}
+
+function normalizeTriggerValue(value) {
+    if (Array.isArray(value)) return JSON.stringify(value);
+    if (value && typeof value === 'object') return JSON.stringify(value);
+    if (value == null) return '';
+    return String(value);
+}
+
+function normalizePrimaryTrigger(eventValue) {
+    const sampleRaw = eventValue?.s ?? eventValue?.sound ?? eventValue?.sample;
+    const noteRaw = eventValue?.note ?? eventValue?.n;
+    const sampleValue = normalizeTriggerValue(
+        (typeof sampleRaw === 'string' || typeof sampleRaw === 'number') ? sampleRaw : ''
+    );
+    const noteValue = normalizeTriggerValue(
+        (typeof noteRaw === 'string' || typeof noteRaw === 'number') ? noteRaw : ''
+    );
+    return `s:${sampleValue}|n:${noteValue}`;
+}
+
+function buildEventSignature(event, windowStart, windowEnd) {
+    const begin = toNumber(event?.whole?.begin);
+    const end = toNumber(event?.whole?.end);
+    if (!Number.isFinite(begin) || !Number.isFinite(end)) return null;
+    // Ignore cross-window carry notes for period detection.
+    // They create edge artifacts (especially with slow/long notes) that can
+    // make two otherwise identical windows look different.
+    if (begin < windowStart || end > windowEnd) return null;
+
+    const clampedBegin = quantizeTime(begin - windowStart);
+    const clampedEnd = quantizeTime(end - windowStart);
+    const noteValue = normalizeTriggerValue(event?.value?.note ?? event?.value?.n);
+    const sampleValue = normalizeTriggerValue(event?.value?.s ?? event?.value?.sound ?? event?.value?.sample);
+    return `${clampedBegin}|${clampedEnd}|n:${noteValue}|s:${sampleValue}`;
+}
+
+function signaturesForWindow(events, windowStart, periodCycles) {
+    const windowEnd = windowStart + periodCycles;
+    const signatures = [];
+    for (const event of events) {
+        const signature = buildEventSignature(event, windowStart, windowEnd);
+        if (signature) signatures.push(signature);
+    }
+    signatures.sort();
+    return signatures;
+}
+
+function signaturesEqual(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+    }
+    return true;
+}
+
+function detectPeriodCycles(events, lookaheadCycles, rowsPerCycle) {
+    function buildWindowSignature(windowStart, periodCycles) {
+        const periodRows = Math.floor(periodCycles * rowsPerCycle);
+        if (periodRows <= 0) return [];
+        const windowEnd = windowStart + periodCycles;
+        const rows = Array.from({ length: periodRows }, () => []);
+
+        for (const event of events) {
+            const begin = toNumber(event?.whole?.begin);
+            if (!Number.isFinite(begin) || begin < windowStart || begin >= windowEnd) continue;
+            const relative = begin - windowStart;
+            // Round to reduce float drift between repeated windows
+            const row = Math.round(relative * rowsPerCycle);
+            if (row < 0 || row >= periodRows) continue;
+            rows[row].push(normalizePrimaryTrigger(event?.value));
+        }
+        for (const row of rows) row.sort();
+        return rows;
+    }
+
+    const maxCandidate = Math.floor(lookaheadCycles / 2);
+    for (let period = 1; period <= maxCandidate; period++) {
+        const periodRows = Math.floor(period * rowsPerCycle);
+        if (periodRows <= 0 || (period * 2) > lookaheadCycles) continue;
+        const first = buildWindowSignature(0, period);
+        const second = buildWindowSignature(period, period);
+        if (!first.length || !second.length) continue;
+
+        let hasActivity = false;
+        let equal = true;
+        for (let row = 0; row < periodRows; row++) {
+            if ((first[row]?.length || 0) > 0 || (second[row]?.length || 0) > 0) hasActivity = true;
+            if (!signaturesEqual(first[row] || [], second[row] || [])) {
+                equal = false;
+                break;
+            }
+        }
+        if (hasActivity && equal) return period;
+    }
+    return null;
+}
+
+function getMaxEndCycle(events) {
+    let maxEnd = 0;
+    for (const event of events) {
+        const end = toNumber(event?.whole?.end);
+        if (Number.isFinite(end)) maxEnd = Math.max(maxEnd, end);
+    }
+    return maxEnd;
+}
 
 /**
  * Find an available voice for an instrument at a specific grid position.
@@ -52,9 +175,30 @@ function getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoices = Infin
  */
 export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8, options = {}) {
     const { maxVoicesPerInstrument = Infinity, normalizeUnisonLayers = false, rowsPerCycle = DEFAULT_ROWS_PER_CYCLE, monophonicByInstrumentIndex = [] } = options;
-    
-    const totalRows = cycles * rowsPerCycle;
-    const events = pattern.queryArc(0, cycles);
+
+    // Single upfront query (avoid repeated expensive Strudel evaluations)
+    const detectionEvents = pattern.queryArc(0, PERIOD_LOOKAHEAD_CYCLES);
+    const detectedPeriod = detectPeriodCycles(detectionEvents, PERIOD_LOOKAHEAD_CYCLES, rowsPerCycle);
+    const maxEndCycle = getMaxEndCycle(detectionEvents);
+    const finiteCycles = maxEndCycle > 0 ? Math.ceil(maxEndCycle) : 0;
+
+    // Choose export length:
+    // - detected period for repeating patterns
+    // - finite length when clearly shorter than lookahead
+    // - fallback to caller intent (cycles, currently 8)
+    let exportLengthMode = 'fallback';
+    let exportCycles = detectedPeriod ?? Math.max(cycles, 1);
+    if (detectedPeriod != null) {
+        exportLengthMode = 'period';
+    }
+    if (detectedPeriod == null && finiteCycles > 0 && finiteCycles < PERIOD_LOOKAHEAD_CYCLES) {
+        exportCycles = Math.max(finiteCycles, 1);
+        exportLengthMode = 'finite';
+    }
+    exportCycles = Math.min(exportCycles, PERIOD_LOOKAHEAD_CYCLES);
+
+    const totalRows = exportCycles * rowsPerCycle;
+    const events = detectionEvents;
     
     // Voice-aware track storage: { "instIndex-voice": Array[totalRows] }
     const tracks = {};
@@ -69,7 +213,11 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
         instrCount: instrumentArray?.length,
         mappingKeys: Object.keys(instrumentMapping || {}).length,
         mappingPreview: instrumentMapping,
-        normalizeUnisonLayers
+        normalizeUnisonLayers,
+        detectedPeriod,
+        finiteCycles,
+        cycles: exportCycles,
+        totalRows
     });
 
     // Helper to resolve instrument index from event
@@ -235,7 +383,14 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
             channelCount,
             droppedNotes,
             unknownInstrumentNotes,
-            unknownInstrumentAliases: Array.from(unknownInstrumentAliases)
+            unknownInstrumentAliases: Array.from(unknownInstrumentAliases),
+            exportDebug: {
+                mode: exportLengthMode,
+                detectedPeriod,
+                finiteCycles,
+                lookaheadCycles: PERIOD_LOOKAHEAD_CYCLES,
+                exportCycles
+            }
         }
     };
 }

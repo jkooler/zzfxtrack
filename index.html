@@ -71,7 +71,7 @@
       class="sidebar bg-card border-r border-border flex flex-col h-full overflow-hidden w-[256px] col-start-1"
     >
       <div
-        class="sidebar-header p-3 border-b border-border flex flex-col gap-3"
+        class="sidebar-header p-3 border-b border-border flex flex-col gap-2"
       >
         <h1
           id="sidebarTitle"
@@ -641,13 +641,14 @@
             id="exportBtn"
             class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-2 uppercase"
           >
-            <i data-lucide="wand-2" class="w-4 h-4"></i> Export ZzFXM
+            <i data-lucide="file-music" class="w-4 h-4"></i> Export ZzFXM
           </button>
           <button
             id="previewPlayBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 w-9 p-0 flex items-center justify-center"
             title="Play ZzFXM"
             disabled
+            style="display: none"
           >
             <i data-lucide="play" class="w-4 h-4"></i>
           </button>
@@ -655,8 +656,9 @@
             id="showJsonBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 flex items-center gap-2"
             disabled
+            style="display: none"
           >
-            <i data-lucide="code" class="w-4 h-4"></i> Preview Data
+            Preview Data
           </button>
           <span
             id="statusMsg"
@@ -1961,26 +1963,6 @@
           </div>
         </div>
 
-        <!-- Keyboard Help -->
-        <div class="text-xs text-muted-foreground border-t border-border pt-3">
-          <span class="font-bold">Keyboard:</span>
-          <span class="font-mono bg-muted px-1 rounded">z</span>=C3
-          <span class="font-mono bg-muted px-1 rounded">s</span>=C#3
-          <span class="font-mono bg-muted px-1 rounded">x</span>=D3
-          <span class="font-mono bg-muted px-1 rounded">d</span>=D#3
-          <span class="font-mono bg-muted px-1 rounded">c</span>=E3
-          <span class="font-mono bg-muted px-1 rounded">v</span>=F3
-          <span class="font-mono bg-muted px-1 rounded">g</span>=F#3
-          <span class="font-mono bg-muted px-1 rounded">b</span>=G3
-          <span class="font-mono bg-muted px-1 rounded">h</span>=G#3
-          <span class="font-mono bg-muted px-1 rounded">n</span>=A3
-          <span class="font-mono bg-muted px-1 rounded">j</span>=A#3
-          <span class="font-mono bg-muted px-1 rounded">m</span>=B3 |
-          <span class="font-mono bg-muted px-1 rounded">q..u</span>=C4..B4 |
-          <span class="font-mono bg-muted px-1 rounded">-</span>=Rest |
-          <span class="font-mono bg-muted px-1 rounded">Backspace</span>=Clear
-        </div>
-
         <div class="flex justify-end gap-2">
           <button
             id="clearTrackerBtn"
@@ -1996,7 +1978,7 @@
           </button>
           <button
             id="saveTrackerBtn"
-            class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-accent text-accent-foreground hover:bg-accent/90 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
+            class="!hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-accent text-accent-foreground hover:bg-accent/90 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
           >
             <i data-lucide="save" class="w-4 h-4"></i> Save
           </button>

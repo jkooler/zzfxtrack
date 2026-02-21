@@ -606,7 +606,7 @@ function renderArrangementsList() {
     folder.innerHTML = `
       <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-arr-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-4 h-4 ${highlightIcon ? 'text-primary' : ''}"></i>
+          <i data-lucide="${icon}" class="w-5 h-5 fill-current stroke-[var(--card)] ${expanded ? '' : 'opacity-50'} ${highlightIcon ? 'text-primary' : ''}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
@@ -653,11 +653,23 @@ function renderArrangementsList() {
         </div>
       `;
 
-      el.addEventListener('click', () => selectArrangement(index));
+      el.addEventListener('click', () => {
+        if (selectedArrangementIndex === index) {
+          selectArrangement(index, { preview: false });
+          void openArrangementEditor(arrangementsCache[index]);
+        } else {
+          selectArrangement(index);
+        }
+      });
       el.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        selectArrangement(index);
+        if (selectedArrangementIndex === index) {
+          selectArrangement(index, { preview: false });
+          void openArrangementEditor(arrangementsCache[index]);
+        } else {
+          selectArrangement(index);
+        }
       });
 
       el.querySelector('.sidebar-edit-btn')?.addEventListener('click', (e) => {
@@ -1330,7 +1342,7 @@ function renderBlocksList() {
     folder.innerHTML = `
       <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-block-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-4 h-4 ${highlightIcon ? 'text-primary' : ''}"></i>
+          <i data-lucide="${icon}" class="w-5 h-5 fill-current stroke-[var(--card)] ${expanded ? '' : 'opacity-50'} ${highlightIcon ? 'text-primary' : ''}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
@@ -1386,11 +1398,21 @@ function renderBlocksList() {
         </div>
       `;
 
-      blockEl.addEventListener('click', () => selectBlock(index));
+      blockEl.addEventListener('click', () => {
+        if (selectedBlockIndex === index) {
+          openTrackerForEdit(index);
+        } else {
+          selectBlock(index);
+        }
+      });
       blockEl.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        selectBlock(index);
+        if (selectedBlockIndex === index) {
+          openTrackerForEdit(index);
+        } else {
+          selectBlock(index);
+        }
       });
 
       const editBtn = blockEl.querySelector('.sidebar-edit-btn');

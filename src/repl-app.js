@@ -287,8 +287,12 @@ function showWelcome() {
     dom.exportBtn.disabled = true;
     
     updateSongSelectionState(false);
+    dom.previewPlayBtn.style.display = 'none';
     dom.previewPlayBtn.disabled = true;
-    if(dom.showJsonBtn) dom.showJsonBtn.disabled = true;
+    if(dom.showJsonBtn) {
+        dom.showJsonBtn.style.display = 'none';
+        dom.showJsonBtn.disabled = true;
+    }
     updateAdvancedSettingsButtonsVisibility();
     
     // Clear state
@@ -638,7 +642,7 @@ async function refreshSongList() {
             folderLi.innerHTML = `
                 <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-song-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
-                        <i data-lucide="${folderIcon}" class="w-4 h-4 ${highlightIcon ? 'text-primary' : ''}"></i>
+                        <i data-lucide="${folderIcon}" class="w-5 h-5 fill-current stroke-[var(--card)] ${expanded ? '' : 'opacity-50'} ${highlightIcon ? 'text-primary' : ''}"></i>
                         ${label}
                     </span>
                     <span class="opacity-70">${items.length}</span>
@@ -978,9 +982,20 @@ async function loadSong(filename) {
         
         dom.exportBtn.disabled = false;
         
-        // Clear preview and save status
+        // Stop ZzFXM preview playback when switching song
+        if (isPreviewPlaying) {
+            stopZzfxmSong();
+            updatePreviewPlayButton(false);
+        }
+        // Clear preview and hide preview buttons until next export
         lastExportedData = null;
         dom.previewJson.innerText = "// Click GENERATE to create ZzFXM song";
+        dom.previewPlayBtn.style.display = 'none';
+        dom.previewPlayBtn.disabled = true;
+        if (dom.showJsonBtn) {
+            dom.showJsonBtn.style.display = 'none';
+            dom.showJsonBtn.disabled = true;
+        }
         hideSaveStatus();
         
         renderPlayButton(); // Update play button context (Stop vs Play)
@@ -1127,6 +1142,83 @@ export const pattern = note("c3 e3 g3").s("demo-kickdrum");
 
 // --- BAKING LOGIC ---
 
+function stripQuotedStrings(source) {
+    let out = '';
+    let quote = null;
+    let escaped = false;
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i];
+        if (quote) {
+            out += ' ';
+            if (escaped) {
+                escaped = false;
+            } else if (ch === '\\') {
+                escaped = true;
+            } else if (ch === quote) {
+                quote = null;
+            }
+            continue;
+        }
+        if (ch === '"' || ch === "'" || ch === '`') {
+            quote = ch;
+            out += ' ';
+            continue;
+        }
+        out += ch;
+    }
+    return out;
+}
+
+function inferArrangeCyclesFromCode(code) {
+    if (typeof code !== 'string' || !code.includes('arrange')) return null;
+    const arrangeCallRegex = /\barrange\s*\(/g;
+    let maxCycles = 0;
+    let callMatch;
+
+    while ((callMatch = arrangeCallRegex.exec(code)) !== null) {
+        let i = arrangeCallRegex.lastIndex;
+        let depth = 1;
+        let quote = null;
+        let escaped = false;
+
+        while (i < code.length && depth > 0) {
+            const ch = code[i];
+            if (quote) {
+                if (escaped) {
+                    escaped = false;
+                } else if (ch === '\\') {
+                    escaped = true;
+                } else if (ch === quote) {
+                    quote = null;
+                }
+                i++;
+                continue;
+            }
+            if (ch === '"' || ch === "'" || ch === '`') {
+                quote = ch;
+                i++;
+                continue;
+            }
+            if (ch === '(') depth++;
+            else if (ch === ')') depth--;
+            i++;
+        }
+        if (depth !== 0) continue;
+
+        const argsSource = code.slice(arrangeCallRegex.lastIndex, i - 1);
+        const argsSansStrings = stripQuotedStrings(argsSource);
+        let sum = 0;
+        let tupleMatch;
+        const tupleRegex = /\[\s*(\d+)\s*,/g;
+        while ((tupleMatch = tupleRegex.exec(argsSansStrings)) !== null) {
+            sum += Number(tupleMatch[1]);
+        }
+        if (sum > maxCycles) maxCycles = sum;
+    }
+
+    return maxCycles > 0 ? maxCycles : null;
+}
+
 async function exportCurrentSong() {
     if (!currentSongFilename) return;
     
@@ -1177,8 +1269,10 @@ async function exportCurrentSong() {
             if (parsed && !Number.isNaN(parsed)) rowsPerCycle = parsed;
         }
         
-        // 5. Export!
-        const result = exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 8, {
+        // 5. Export! If arrange([...]) is present, prefer summed arrangement cycles (e.g. 4+4+16=24)
+        const inferredArrangeCycles = inferArrangeCyclesFromCode(code);
+        const baseExportCycles = inferredArrangeCycles || 8;
+        const result = exportPattern(pattern, bpm, instrumentArray, instrumentMapping, baseExportCycles, {
             maxVoicesPerInstrument: maxChannels,
             normalizeUnisonLayers: normalizeLayers,
             rowsPerCycle,
@@ -1189,7 +1283,8 @@ async function exportCurrentSong() {
             channelCount,
             droppedNotes,
             unknownInstrumentNotes,
-            unknownInstrumentAliases = []
+            unknownInstrumentAliases = [],
+            exportDebug = null
         } = result.stats;
         
         // Store for preview
@@ -1207,16 +1302,23 @@ async function exportCurrentSong() {
             if (!res.ok) throw new Error('Server failed to save JSON');
         }
         
-        // Enable preview playback buttons
-        // Enable preview playback buttons
+        // Show and enable preview playback buttons
+        dom.previewPlayBtn.style.display = '';
         dom.previewPlayBtn.disabled = false;
-        if(dom.showJsonBtn) dom.showJsonBtn.disabled = false;
+        if(dom.showJsonBtn) {
+            dom.showJsonBtn.style.display = '';
+            dom.showJsonBtn.disabled = false;
+        }
         
         // Build status message with channel count
         let statusMsg = `/output/${jsonFilename} (${channelCount} ch)`;
+        const debugSuffix = exportDebug
+            ? ` • [dbg ${exportDebug.mode} cyc=${exportDebug.exportCycles} p=${exportDebug.detectedPeriod ?? '-'} finite=${exportDebug.finiteCycles || '-'} look=${exportDebug.lookaheadCycles}]`
+            : '';
         if (droppedNotes > 0) {
             statusMsg += ` • ${droppedNotes} notes dropped`;
         }
+        statusMsg += debugSuffix;
         if (unknownInstrumentNotes > 0) {
             const incompatibleList = unknownInstrumentAliases.length
                 ? unknownInstrumentAliases.join(', ')
