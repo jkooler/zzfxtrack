@@ -1898,6 +1898,21 @@
             value="16"
             class="hidden w-16 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
+          <label for="trackerBlockChannels" class="text-xs font-bold text-muted-foreground uppercase">Channels:</label>
+          <select
+            id="trackerBlockChannels"
+            class="h-8 w-20 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            title="Only this many channels are played; hidden channel data is kept when you increase again."
+          >
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+          </select>
           <label for="trackerBlockName" class="text-xs font-bold text-muted-foreground uppercase">Name:</label>
           <input 
             type="text" 
@@ -1922,19 +1937,28 @@
           </div>
         </div>
 
-        <!-- Mini Notation Output -->
-        <div class="space-y-2">
-          <label
-            class="text-xs text-muted-foreground uppercase tracking-wider font-bold"
+        <!-- Mini Notation Output (expandable, collapsed by default) -->
+        <div id="trackerNotationSection" class="space-y-2">
+          <button
+            type="button"
+            id="trackerNotationToggle"
+            class="w-full flex items-center justify-between gap-2 py-1.5 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40"
+            aria-expanded="false"
+            aria-controls="trackerNotationContent"
           >
-            Generated Mini-Notation
-          </label>
-          <textarea
-            id="trackerOutput"
-            readonly
-            class="w-full h-24 rounded-md border border-input bg-muted px-3 py-2 text-xs font-mono text-muted-foreground resize-none"
-            placeholder="Tracker output will appear here..."
-          ></textarea>
+            <span class="inline-flex items-center gap-1.5 uppercase tracking-wider">
+              <i data-lucide="chevron-down" class="tracker-notation-chevron w-4 h-4 transition-transform" aria-hidden="true"></i>
+              Generated Mini-Notation
+            </span>
+          </button>
+          <div id="trackerNotationContent" class="hidden" role="region" aria-labelledby="trackerNotationToggle">
+            <textarea
+              id="trackerOutput"
+              readonly
+              class="w-full h-24 rounded-md border border-input bg-muted px-3 py-2 text-xs font-mono text-muted-foreground resize-none"
+              placeholder="Tracker output will appear here..."
+            ></textarea>
+          </div>
         </div>
 
         <!-- Keyboard Help -->

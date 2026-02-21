@@ -421,13 +421,19 @@ strudel-editor {
   @apply block text-sm font-medium leading-none text-foreground mb-1.5;
 }
 
-/* Tracker Styles */
+/* Tracker Styles: container scrolls horizontally when modal is narrower than grid */
+.tracker-container {
+  @apply overflow-x-auto overflow-y-auto min-w-0;
+}
+
 .tracker-grid {
-  @apply flex gap-3 p-2;
+  @apply flex gap-3 p-2 flex-nowrap;
+  width: max(100%, 960px);
+  min-width: 960px;
 }
 
 .tracker-timetrack {
-  @apply flex flex-col gap-1;
+  @apply flex flex-col gap-1 shrink-0;
 }
 
 .tracker-timetrack-header {
@@ -456,8 +462,18 @@ strudel-editor {
   @apply text-primary;
 }
 
+/* 1–4 channels: fixed column width. 5–8 channels: flexible so columns can be narrower */
 .tracker-channel {
-  @apply flex flex-col gap-1 min-w-[180px];
+  @apply flex flex-col gap-1 shrink-0 flex-1 min-w-[72px];
+}
+
+.tracker-grid[data-channels="1"] .tracker-channel,
+.tracker-grid[data-channels="2"] .tracker-channel,
+.tracker-grid[data-channels="3"] .tracker-channel,
+.tracker-grid[data-channels="4"] .tracker-channel {
+  flex: none;
+  width: 220px;
+  min-width: 220px;
 }
 
 .tracker-channel-header {
@@ -572,6 +588,11 @@ strudel-editor {
 /* Keyboard mapping hint overlay */
 .tracker-keyboard-hint {
   @apply fixed bottom-4 right-4 bg-card border border-border rounded-lg p-3 shadow-lg text-xs;
+}
+
+/* Tracker: Generated Mini-Notation expandable section */
+.tracker-notation-expanded .tracker-notation-chevron {
+  transform: rotate(-180deg);
 }
 
 /* Blocks Styles */

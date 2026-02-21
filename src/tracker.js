@@ -64,14 +64,18 @@ const NOTE_TO_KEY = Object.fromEntries(
   Object.entries(KEYBOARD_MAP).map(([k, v]) => [v, k])
 );
 
+/** Maximum number of channels; grid always has this many columns so reducing active channels keeps data. */
+const MAX_CHANNELS = 8;
+
 // Tracker state
 const state = {
+  /** Active channel count (1..MAX_CHANNELS); only this many are shown and played. */
   channels: 4,
   steps: 16,
   bpm: 120,
-  grid: [], // Array of channels, each with array of { note: string|null, active: boolean }
+  grid: [], // Array of MAX_CHANNELS channels, each with array of { note, vol, reps, nd, active }
   instruments: [], // Available instruments
-  channelInstruments: ['', '', '', ''], // Selected instrument for each channel
+  channelInstruments: Array(MAX_CHANNELS).fill(''), // Selected instrument per channel
   focusedChannel: 0,
   focusedStep: 0,
 };
@@ -169,16 +173,17 @@ export function initTracker(instrumentList) {
   state.instruments = instrumentList || [];
   initGrid();
   cacheElements();
+  setupNotationSection();
   renderGrid();
   setupEventListeners();
   updateOutput();
 }
 
 /**
- * Initialize the grid data structure
+ * Initialize the grid data structure (always MAX_CHANNELS columns; state.channels is active count).
  */
 function initGrid() {
-  state.grid = Array(state.channels).fill(null).map(() =>
+  state.grid = Array(MAX_CHANNELS).fill(null).map(() =>
     Array(state.steps).fill(null).map(() => ({
       note: null,
       vol: null,
@@ -187,6 +192,10 @@ function initGrid() {
       active: false,
     }))
   );
+  while (state.channelInstruments.length < MAX_CHANNELS) {
+    state.channelInstruments.push('');
+  }
+  state.channelInstruments = state.channelInstruments.slice(0, MAX_CHANNELS);
 }
 
 function setSteps(nextSteps) {
@@ -198,7 +207,7 @@ function setSteps(nextSteps) {
   const prevGrid = state.grid;
   state.steps = clamped;
 
-  state.grid = Array(state.channels).fill(null).map((_, ch) =>
+  state.grid = Array(MAX_CHANNELS).fill(null).map((_, ch) =>
     Array(state.steps).fill(null).map((__, step) => {
       const prevCell = prevGrid?.[ch]?.[step];
       if (prevCell) {
@@ -230,6 +239,24 @@ function setSteps(nextSteps) {
   focusNoteCell(state.focusedChannel, state.focusedStep);
 }
 
+/**
+ * Set active channel count (1..MAX_CHANNELS). Grid data for all columns is preserved.
+ */
+function setChannels(n) {
+  const next = Math.min(MAX_CHANNELS, Math.max(1, Number(n) | 0));
+  if (next === state.channels) return;
+  state.channels = next;
+  state.focusedChannel = Math.min(state.focusedChannel, state.channels - 1);
+  renderGrid();
+  updateOutput();
+  syncChannelsUI();
+}
+
+function syncChannelsUI() {
+  if (!elements.blockChannels) return;
+  elements.blockChannels.value = String(state.channels);
+}
+
 function scheduleEffectPreview(channel, step) {
   if (previewState.isPlaying) return;
   effectPreviewRequest = { channel, step };
@@ -256,6 +283,8 @@ function cacheElements() {
     modal: document.getElementById('trackerModal'),
     grid: document.getElementById('trackerGrid'),
     output: document.getElementById('trackerOutput'),
+    notationToggle: document.getElementById('trackerNotationToggle'),
+    notationContent: document.getElementById('trackerNotationContent'),
     closeBtn: document.getElementById('closeTrackerBtn'),
     clearBtn: document.getElementById('clearTrackerBtn'),
     copyBtn: document.getElementById('copyTrackerBtn'),
@@ -266,9 +295,32 @@ function cacheElements() {
     blockBpmInput: document.getElementById('trackerBlockBpm'),
     blockRowsPreset: document.getElementById('trackerBlockRowsPreset'),
     blockRowsCustom: document.getElementById('trackerBlockRowsCustom'),
+    blockChannels: document.getElementById('trackerBlockChannels'),
     blockAdvancedSettingsBtn: document.getElementById('trackerBlockAdvancedSettingsBtn'),
     title: document.querySelector('#trackerModal h2'),
   };
+}
+
+/**
+ * Set up the expandable Generated Mini-Notation section (collapsed by default).
+ */
+function setupNotationSection() {
+  const toggle = elements.notationToggle;
+  const content = elements.notationContent;
+  if (!toggle || !content) return;
+
+  const setExpanded = (expanded) => {
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.classList.toggle('tracker-notation-expanded', expanded);
+    content.classList.toggle('hidden', !expanded);
+  };
+
+  setExpanded(false);
+
+  toggle.addEventListener('click', () => {
+    const expanded = toggle.getAttribute('aria-expanded') === 'true';
+    setExpanded(!expanded);
+  });
 }
 
 /**
@@ -277,6 +329,7 @@ function cacheElements() {
 function renderGrid() {
   if (!elements.grid) return;
 
+  elements.grid.dataset.channels = String(state.channels);
   elements.grid.innerHTML = '';
 
   // Global time track column on the left (shared step numbering)
@@ -735,6 +788,13 @@ function setupEventListeners() {
     });
   }
 
+  if (elements.blockChannels) {
+    elements.blockChannels.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val) setChannels(Number(val));
+    });
+  }
+
   document.addEventListener('resource-scope:changed', (e) => {
     const detail = e?.detail || {};
     if (detail.type !== 'block') return;
@@ -1091,7 +1151,7 @@ function playNotePreview(channel, step, noteStr) {
  */
 function clearAll() {
   initGrid();
-  state.channelInstruments = ['', '', '', ''];
+  state.channelInstruments = Array(MAX_CHANNELS).fill('');
   renderGrid();
   updateOutput();
   
@@ -2375,6 +2435,7 @@ function updateEditModeUI() {
           elements.blockRowsCustom.classList.add('hidden');
         }
       }
+      syncChannelsUI();
     } else {
       elements.blockProps.classList.add('hidden');
     }
@@ -2527,16 +2588,19 @@ export function deserializeTrackerState(data) {
   try {
     const nextSteps = Number.isInteger(data.steps) ? Math.min(Math.max(data.steps, 1), 256) : state.steps;
     state.steps = nextSteps;
+    const savedChannels = Number.isInteger(data.channels) ? Math.min(Math.max(data.channels, 1), MAX_CHANNELS) : null;
+    const gridCols = Array.isArray(data.grid) ? data.grid.length : 0;
+    state.channels = savedChannels ?? Math.min(Math.max(gridCols, 1), MAX_CHANNELS);
     initGrid();
 
-    // Validate grid dimensions
-    if (!Array.isArray(data.grid) || data.grid.length !== state.channels) {
-      console.warn('[Tracker] Grid dimension mismatch');
+    if (!Array.isArray(data.grid) || data.grid.length < 1) {
+      console.warn('[Tracker] Invalid grid data');
       return false;
     }
 
-    // Load grid data
-    for (let ch = 0; ch < state.channels; ch++) {
+    // Load grid data (copy up to MAX_CHANNELS columns; extra columns in data are preserved when we serialize again)
+    const copyChannels = Math.min(data.grid.length, MAX_CHANNELS);
+    for (let ch = 0; ch < copyChannels; ch++) {
       const chNotes = Array.isArray(data.grid[ch]) ? data.grid[ch] : [];
       const chVol = Array.isArray(data.vol?.[ch]) ? data.vol[ch] : [];
       const chReps = Array.isArray(data.reps?.[ch]) ? data.reps[ch] : [];
@@ -2564,10 +2628,14 @@ export function deserializeTrackerState(data) {
       }
     }
 
-    // Load instrument assignments
+    // Load instrument assignments (pad to MAX_CHANNELS)
     if (data.channelInstruments && Array.isArray(data.channelInstruments)) {
-      state.channelInstruments = data.channelInstruments.slice(0, state.channels);
+      state.channelInstruments = data.channelInstruments.slice(0, MAX_CHANNELS);
     }
+    while (state.channelInstruments.length < MAX_CHANNELS) {
+      state.channelInstruments.push('');
+    }
+    state.channelInstruments = state.channelInstruments.slice(0, MAX_CHANNELS);
     state.bpm = Number.isFinite(data.bpm) ? data.bpm : 120;
     if (elements.blockBpmInput) {
       elements.blockBpmInput.value = String(state.bpm);
@@ -2582,6 +2650,7 @@ export function deserializeTrackerState(data) {
         elements.blockRowsCustom.classList.add('hidden');
       }
     }
+    syncChannelsUI();
 
     // Re-render with new data
     renderGrid();
