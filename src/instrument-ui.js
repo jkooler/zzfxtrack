@@ -91,6 +91,7 @@ const dom = {
     // Import ZzFX
     importZzFXInput: document.getElementById('importZzFXInput'),
     importZzFXBtn: document.getElementById('importZzFXBtn'),
+    exportZzFXBtn: document.getElementById('exportZzFXBtn'),
     importConfirmationModal: document.getElementById('importConfirmationModal'),
     confirmImportBtn: document.getElementById('confirmImportBtn'),
     cancelImportBtn: document.getElementById('cancelImportBtn'),
@@ -222,6 +223,7 @@ function setupEventListeners() {
 
     // Import ZzFX
     if(dom.importZzFXBtn) dom.importZzFXBtn.addEventListener('click', handleImportZzFX);
+    if(dom.exportZzFXBtn) dom.exportZzFXBtn.addEventListener('click', handleExportZzFX);
     if(dom.confirmImportBtn) dom.confirmImportBtn.addEventListener('click', handleConfirmImport);
     if(dom.cancelImportBtn) dom.cancelImportBtn.addEventListener('click', closeImportModal);
     
@@ -1236,7 +1238,7 @@ function renderInstrumentList() {
     };
 
     appendFolder('user', 'User', userInstruments);
-    appendFolder('example', 'Examples', exampleInstruments);
+    appendFolder('example', 'Examples (Read only)', exampleInstruments);
     
     createIcons({ icons });
 
@@ -1432,6 +1434,9 @@ function openDrawer(instrumentId) {
         const shouldShow = !DEMO_MODE && isDeveloperModeEnabled();
         dom.openInstrumentAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
     }
+    if (dom.exportZzFXBtn) {
+        dom.exportZzFXBtn.disabled = false;
+    }
     
     // Show drawer
     dom.instrumentDrawer.classList.add('active');
@@ -1453,6 +1458,9 @@ function openDrawer(instrumentId) {
 function closeDrawer() {
     dom.instrumentDrawer.classList.remove('active');
     currentInstrumentId = null;
+    if (dom.exportZzFXBtn) {
+        dom.exportZzFXBtn.disabled = true;
+    }
     if (dom.openInstrumentAdvancedSettingsBtn) {
         dom.openInstrumentAdvancedSettingsBtn.classList.add('dev-only-hidden');
     }
@@ -1705,6 +1713,31 @@ function handleImportZzFX() {
     
     // Show confirmation modal
     dom.importConfirmationModal.classList.add('open');
+}
+
+async function handleExportZzFX() {
+    if (!currentInstrumentId) return;
+    const instrument = getInstrumentById(currentInstrumentId);
+    if (!instrument || !Array.isArray(instrument.params)) return;
+
+    const csv = instrument.params
+        .map((value) => {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : 0;
+        })
+        .join(',');
+
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(csv);
+            console.log('[InstrumentUI] Exported ZzFX params copied to clipboard');
+            return;
+        }
+    } catch (err) {
+        console.warn('[InstrumentUI] Clipboard export failed, falling back to prompt:', err);
+    }
+
+    window.prompt('Copy ZzFX data:', csv);
 }
 
 function closeImportModal() {

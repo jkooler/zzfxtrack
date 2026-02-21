@@ -29,6 +29,16 @@ export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,
 export const zzfxm_demo_kickdrum = [0.9,0,130,0,0.06,0.05,1,0.8,-2,5,0,0,0,0,0.6,0,0,0.2,0.14,0,-1100];
 export const zzfxm_demo_elpiano = [0.32,0,440,0,0.09,1.01,1,14.5,0,0,0,0,0.23,0.08,0,0,0,0.82,0.19,0.1,-180];
 export const zzfxm_demo_horn = [0.48,0,110,0.03,0.22,0.1,2,7.8,0,0,0,0,0,0,0,0,0,0.92,0.82,0,-300];
+export const zzfxm_horn = [0.48,0,110,0.03,0.22,0.1,2,7.8,0,0,0,0,0,0,0,0,0,0.92,0.82,0,-300,-300];
+export const zzfxm_elpiano = [0.32,0,440,0,0.09,1.01,1,14.5,0,0,0,0,0.23,0.08,0,0,0,0.82,0.19,0.1,-180];
+export const zzfxm_kickdrum = [0.9,0,130,0,0.06,0.05,1,0.8,-2,5,0,0,0,0,0.6,0,0,0.2,0.14,0,-1100];
+export const zzfxm_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
+export const zzfxm_bass = [0.55,0,55,0.01,0,0,5,0.8,0,0,0,0,0,0,0,0,0,0,0.3,0,-540];
+export const zzfxm_cowbell = [0.7,0,440,0,0.1,0,0,0,50,50,0,0,0,0,34121,0,0,0,0.4,0,-1255];
+export const zzfxm_pad = [0.5,0,440,0.5,1,0,2,3,0,0,0,0,0.4,0.2,0,0,0,0.2,0.4,0.3,-553];
+export const zzfxm_hh_closed = [0.3,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.08,0,3700];
+export const zzfxm_synth_stab = [0.7,0,440,0.01,0,0,0,4.7,0,0,0,0,0.48,0,0,0,0.64,0,0.23,3,-648];
+export const zzfxm_snare = [1.3,0.05,240,0,0.01,0.28,4,1.4,38,98,477,0,0,0,172,0,0,0.4,0.03,0,-1203];
 
 /**
  * Strudel Sound Names to ZzFXM Channel Indices
@@ -55,7 +65,17 @@ export const instrumentMapping = {
     "demo-hh-open": 16,
     "demo-kickdrum": 17,
     "demo-elpiano": 18,
-    "demo-horn": 19
+    "demo-horn": 19,
+    "horn": 20,
+    "elpiano": 21,
+    "kickdrum": 22,
+    "hh-open": 23,
+    "bass": 24,
+    "cowbell": 25,
+    "pad": 26,
+    "hh-closed": 27,
+    "synth-stab": 28,
+    "snare": 29
 };
 
 // Map them to IDs you want to use in Strudel
@@ -79,7 +99,17 @@ export const instruments = {
     "demo-hh-open": zzfxm_demo_hh_open,
     "demo-kickdrum": zzfxm_demo_kickdrum,
     "demo-elpiano": zzfxm_demo_elpiano,
-    "demo-horn": zzfxm_demo_horn
+    "demo-horn": zzfxm_demo_horn,
+    "horn": zzfxm_horn,
+    "elpiano": zzfxm_elpiano,
+    "kickdrum": zzfxm_kickdrum,
+    "hh-open": zzfxm_hh_open,
+    "bass": zzfxm_bass,
+    "cowbell": zzfxm_cowbell,
+    "pad": zzfxm_pad,
+    "hh-closed": zzfxm_hh_closed,
+    "synth-stab": zzfxm_synth_stab,
+    "snare": zzfxm_snare
 };
 
 // Per-instrument playback settings
@@ -103,7 +133,17 @@ export const instrumentMonophonic = {
     "demo-hh-open": false,
     "demo-kickdrum": false,
     "demo-elpiano": false,
-    "demo-horn": true
+    "demo-horn": true,
+    "horn": false,
+    "elpiano": false,
+    "kickdrum": false,
+    "hh-open": false,
+    "bass": false,
+    "cowbell": false,
+    "pad": false,
+    "hh-closed": false,
+    "synth-stab": false,
+    "snare": false
 };
 
 // Also export as array for the exporter (ordered by channel index)
@@ -127,5 +167,15 @@ export const instrumentArray = [
     zzfxm_demo_hh_open,
     zzfxm_demo_kickdrum,
     zzfxm_demo_elpiano,
-    zzfxm_demo_horn
+    zzfxm_demo_horn,
+    zzfxm_horn,
+    zzfxm_elpiano,
+    zzfxm_kickdrum,
+    zzfxm_hh_open,
+    zzfxm_bass,
+    zzfxm_cowbell,
+    zzfxm_pad,
+    zzfxm_hh_closed,
+    zzfxm_synth_stab,
+    zzfxm_snare
 ];

@@ -712,7 +712,7 @@ async function refreshSongList() {
         const userEntries = entries.filter((entry) => normalizeScope(entry.scope) !== 'example');
         const exampleEntries = entries.filter((entry) => normalizeScope(entry.scope) === 'example');
         appendFolder('user', 'User', userEntries);
-        appendFolder('example', 'Examples', exampleEntries);
+        appendFolder('example', 'Examples (Read only)', exampleEntries);
         
         updateSongListVisualizer();
         createIcons({ icons });
@@ -3029,6 +3029,9 @@ function setupBlocksEventListeners() {
 	            editor.stop();
 	            updatePlayState(false);
 	        }
+          document.dispatchEvent(new CustomEvent('blocks:targetSongScope', {
+            detail: { scope: currentSongScope }
+          }));
 	    });
 
     // Stop any tracker-based preview playback when exiting the Blocks modal.

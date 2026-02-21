@@ -40,6 +40,7 @@ let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, ex
 let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, example: true });
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
 const DEMO_MODE = import.meta.env.MODE === 'demo';
+let targetSongScope = 'user';
 
 function normalizeScope(value) {
   return value === 'example' ? 'example' : 'user';
@@ -77,6 +78,16 @@ function updateArrangementSaveGuardUI() {
       ? 'Enable developer mode to edit example arrangements'
       : '';
   }
+}
+
+function canInsertIntoCurrentSong() {
+  return !(normalizeScope(targetSongScope) === 'example' && !isDeveloperModeEnabled());
+}
+
+function updateInsertButtonsDisabledState() {
+  const canInsert = canInsertIntoCurrentSong();
+  if (elements.insertBlockBtn) elements.insertBlockBtn.disabled = selectedBlockIndex == null || !canInsert;
+  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null || !canInsert;
 }
 
 function loadFolderState(key, fallback) {
@@ -369,8 +380,14 @@ function setupEventListeners() {
 
 	  document.addEventListener('resource-scope:changed', async (e) => {
 	    const detail = e?.detail || {};
+      if (detail.type === 'song') {
+        targetSongScope = normalizeScope(detail.scope);
+        updateInsertButtonsDisabledState();
+        return;
+      }
 	    if (detail.type === 'block') {
 	      await loadBlocksList();
+        updateInsertButtonsDisabledState();
 	      return;
 	    }
 	    if (detail.type === 'arrangement') {
@@ -382,8 +399,14 @@ function setupEventListeners() {
           updateArrangementSaveGuardUI();
 	      }
 	      await loadArrangementsList();
+        updateInsertButtonsDisabledState();
 	    }
 	  });
+
+  document.addEventListener('blocks:targetSongScope', (e) => {
+    targetSongScope = normalizeScope(e?.detail?.scope);
+    updateInsertButtonsDisabledState();
+  });
 
   document.addEventListener('developer-mode:changed', () => {
     // Re-render to show/hide immutable actions without forcing a reload.
@@ -391,6 +414,7 @@ function setupEventListeners() {
     renderArrangementsList();
     updateArrangementAdvancedSettingsVisibility();
     updateArrangementSaveGuardUI();
+    updateInsertButtonsDisabledState();
   });
 
   document.addEventListener('arrangements:blockCreated', (e) => {
@@ -567,8 +591,7 @@ function setActiveTab(tab) {
     stopTrackerPreviewPlayback();
   }
   // Keep insert buttons consistent: only enabled when an item is selected.
-  if (elements.insertBlockBtn) elements.insertBlockBtn.disabled = selectedBlockIndex == null;
-  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null;
+  updateInsertButtonsDisabledState();
   if (elements.description) {
     elements.description.textContent = blocksActive
       ? 'Blocks are reusable musical patterns. Create a block and insert it into a song or create arrangements from multiple blocks.'
@@ -597,7 +620,7 @@ function renderArrangementsList() {
 
   elements.arrangementsList.innerHTML = '';
   selectedArrangementIndex = null;
-  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = true;
+  updateInsertButtonsDisabledState();
 
   if (!arrangementsCache.length) {
     elements.arrangementsList.innerHTML = `
@@ -606,7 +629,7 @@ function renderArrangementsList() {
         <p class="text-sm">Create one to start arranging your blocks.</p>
       </div>
     `;
-    if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = true;
+    updateInsertButtonsDisabledState();
     return;
   }
 
@@ -717,7 +740,7 @@ function renderArrangementsList() {
     }
   });
   appendFolder('user', 'User', userEntries);
-  appendFolder('example', 'Examples', exampleEntries);
+  appendFolder('example', 'Examples (Read only)', exampleEntries);
 
   createIcons({ icons });
   updateBlocksModalScopeVisualizer();
@@ -732,7 +755,7 @@ function selectArrangement(index, { preview = true } = {}) {
     selectedEl.classList.add('selected', 'bg-accent', 'border-primary');
   }
   selectedArrangementIndex = index;
-  if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null;
+  updateInsertButtonsDisabledState();
 
   if (!preview) return;
 
@@ -840,6 +863,10 @@ function getSelectedArrangement() {
 }
 
 function insertSelectedArrangement() {
+  if (!canInsertIntoCurrentSong()) {
+    emitStatus('Cannot insert into example song outside developer mode', 'error');
+    return;
+  }
   const arr = getSelectedArrangement();
   if (!arr?.arrangementState) return;
   const event = new CustomEvent('arrangements:insert', { detail: { arrangement: arr } });
@@ -903,17 +930,21 @@ async function openArrangementEditor(arrangement = null) {
 }
 
 function closeArrangementEditor() {
+  const shouldRestoreBlocksModal = !isBlocksModalOpen();
+  if (shouldRestoreBlocksModal) {
+    // Open the blocks shell first to avoid a one-frame flash of the main app.
+    openBlocksModal('arranger');
+  }
   elements.arrangementModal?.classList.remove('open');
   arrangementEditMode.scope = 'user';
   updateArrangementAdvancedSettingsVisibility();
   updateArrangementSaveGuardUI();
-  if (isArrangementPreviewPlaying()) {
-    stopArrangementPreview();
-    playingArrangementFilename = null;
-    playingArrangementRowBlocks = [];
-    clearBlocksModalScopeVisualizer();
-  }
+  // Keep arrangement preview running when returning to the blocks shell.
+  // Preview still stops when the user closes the whole blocks modal.
   updateArrangementPreviewButtonState();
+  if (!shouldRestoreBlocksModal) {
+    resumeBlocksModal();
+  }
 }
 
 function renderArrangementRows() {
@@ -1340,7 +1371,7 @@ function renderBlocksList() {
   
   elements.blocksList.innerHTML = '';
   selectedBlockIndex = null;
-  if (elements.insertBlockBtn) elements.insertBlockBtn.disabled = true;
+  updateInsertButtonsDisabledState();
   if (elements.deleteBlockBtn) elements.deleteBlockBtn.disabled = true;
   
   if (blocksCache.length === 0) {
@@ -1468,7 +1499,7 @@ function renderBlocksList() {
     }
   });
   appendFolder('user', 'User', userEntries);
-  appendFolder('example', 'Examples', exampleEntries);
+  appendFolder('example', 'Examples (Read only)', exampleEntries);
 
   createIcons({ icons });
   updateBlocksModalScopeVisualizer();
@@ -1495,9 +1526,7 @@ function selectBlock(index) {
   const block = blocksCache[index];
   
     // Enable insert/delete/edit buttons
-  if (elements.insertBlockBtn) {
-    elements.insertBlockBtn.disabled = selectedBlockIndex == null;
-  }
+  updateInsertButtonsDisabledState();
   if (elements.deleteBlockBtn) {
     elements.deleteBlockBtn.disabled = selectedBlockIndex == null || (normalizeScope(block?.scope) === 'example' && !isDeveloperModeEnabled());
   }
@@ -1555,7 +1584,7 @@ function openTrackerForNewBlock() {
 }
 
 function openTrackerForNewBlockFromArrangement(rowIndex) {
-  closeBlocksModal('arrangement');
+  suspendBlocksModal();
   suspendArrangementModal();
   const event = new CustomEvent('blocks:create', {
     detail: {
@@ -1626,7 +1655,7 @@ async function openTrackerForArrangementBlock(filename) {
 
   if (!trackerState) return;
 
-  closeBlocksModal('arrangement');
+  suspendBlocksModal();
   suspendArrangementModal();
   const event = new CustomEvent('blocks:edit', {
     detail: {
@@ -1642,6 +1671,10 @@ async function openTrackerForArrangementBlock(filename) {
  * Insert the selected block into the current song
  */
 async function insertSelectedBlock() {
+  if (!canInsertIntoCurrentSong()) {
+    emitStatus('Cannot insert into example song outside developer mode', 'error');
+    return;
+  }
   const block = getSelectedBlock();
   if (!block || !block.pattern) {
     console.warn('[Blocks] No block selected or block has no pattern');
@@ -1740,9 +1773,7 @@ async function confirmDeleteBlock() {
 
 function clearBlockSelection() {
   selectedBlockIndex = null;
-  if (elements.insertBlockBtn) {
-    elements.insertBlockBtn.disabled = true;
-  }
+  updateInsertButtonsDisabledState();
   if (elements.deleteBlockBtn) {
     elements.deleteBlockBtn.disabled = true;
   }
