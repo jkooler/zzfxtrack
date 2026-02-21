@@ -226,8 +226,8 @@ const dom = {
 };
 
 const SONG_FOLDER_STATE_KEY = 'zzfxm-folder-state-songs-v1';
-/** Default: both folders open (Examples open on first run). User toggles are persisted and restored on next launch. */
-let songFolderState = loadFolderState(SONG_FOLDER_STATE_KEY, { user: true, example: true });
+/** Default: user folder open, examples collapsed. User toggles are persisted and restored on next launch. */
+let songFolderState = loadFolderState(SONG_FOLDER_STATE_KEY, { user: true, example: false });
 
 function normalizeScope(value) {
     return value === 'example' ? 'example' : 'user';

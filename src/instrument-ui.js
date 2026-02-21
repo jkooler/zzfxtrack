@@ -28,7 +28,7 @@ let currentInstrumentId = null;
 let currentView = 'songs'; // 'songs' or 'instruments'
 let hasSelectedSong = false;
 const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-instruments-v1';
-let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, example: true });
+let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, example: false });
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
 
 function isDeveloperModeEnabled() {
