@@ -174,11 +174,21 @@ function getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoices = Infin
  * @returns {Object} { song: ZzFXM song array, stats: { channelCount, droppedNotes } }
  */
 export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8, options = {}) {
-    const { maxVoicesPerInstrument = Infinity, normalizeUnisonLayers = false, rowsPerCycle = DEFAULT_ROWS_PER_CYCLE, monophonicByInstrumentIndex = [] } = options;
+    const {
+        maxVoicesPerInstrument = Infinity,
+        normalizeUnisonLayers = false,
+        rowsPerCycle = DEFAULT_ROWS_PER_CYCLE,
+        monophonicByInstrumentIndex = [],
+        forceCycles = null
+    } = options;
 
+    const hasForcedCycles = Number.isFinite(forceCycles) && forceCycles > 0;
     // Single upfront query (avoid repeated expensive Strudel evaluations)
-    const detectionEvents = pattern.queryArc(0, PERIOD_LOOKAHEAD_CYCLES);
-    const detectedPeriod = detectPeriodCycles(detectionEvents, PERIOD_LOOKAHEAD_CYCLES, rowsPerCycle);
+    const lookaheadCycles = hasForcedCycles ? Math.ceil(forceCycles) : PERIOD_LOOKAHEAD_CYCLES;
+    const detectionEvents = pattern.queryArc(0, lookaheadCycles);
+    const detectedPeriod = hasForcedCycles
+        ? null
+        : detectPeriodCycles(detectionEvents, lookaheadCycles, rowsPerCycle);
     const maxEndCycle = getMaxEndCycle(detectionEvents);
     const finiteCycles = maxEndCycle > 0 ? Math.ceil(maxEndCycle) : 0;
 
@@ -186,16 +196,18 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
     // - detected period for repeating patterns
     // - finite length when clearly shorter than lookahead
     // - fallback to caller intent (cycles, currently 8)
-    let exportLengthMode = 'fallback';
-    let exportCycles = detectedPeriod ?? Math.max(cycles, 1);
-    if (detectedPeriod != null) {
+    let exportLengthMode = hasForcedCycles ? 'arrangement' : 'fallback';
+    let exportCycles = hasForcedCycles
+        ? Math.max(Math.floor(forceCycles), 1)
+        : (detectedPeriod ?? Math.max(cycles, 1));
+    if (!hasForcedCycles && detectedPeriod != null) {
         exportLengthMode = 'period';
     }
-    if (detectedPeriod == null && finiteCycles > 0 && finiteCycles < PERIOD_LOOKAHEAD_CYCLES) {
+    if (!hasForcedCycles && detectedPeriod == null && finiteCycles > 0 && finiteCycles < lookaheadCycles) {
         exportCycles = Math.max(finiteCycles, 1);
         exportLengthMode = 'finite';
     }
-    exportCycles = Math.min(exportCycles, PERIOD_LOOKAHEAD_CYCLES);
+    exportCycles = Math.min(exportCycles, lookaheadCycles);
 
     const totalRows = exportCycles * rowsPerCycle;
     const events = detectionEvents;
@@ -216,7 +228,10 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
         normalizeUnisonLayers,
         detectedPeriod,
         finiteCycles,
+        forcedCycles: hasForcedCycles ? Math.floor(forceCycles) : null,
         cycles: exportCycles,
+        mode: exportLengthMode,
+        lookaheadCycles,
         totalRows
     });
 
@@ -388,7 +403,8 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
                 mode: exportLengthMode,
                 detectedPeriod,
                 finiteCycles,
-                lookaheadCycles: PERIOD_LOOKAHEAD_CYCLES,
+                lookaheadCycles,
+                forcedCycles: hasForcedCycles ? Math.floor(forceCycles) : null,
                 exportCycles
             }
         }

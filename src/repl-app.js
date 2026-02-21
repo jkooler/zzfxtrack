@@ -1271,12 +1271,16 @@ async function exportCurrentSong() {
         
         // 5. Export! If arrange([...]) is present, prefer summed arrangement cycles (e.g. 4+4+16=24)
         const inferredArrangeCycles = inferArrangeCyclesFromCode(code);
-        const baseExportCycles = inferredArrangeCycles || 8;
+        const isArrangementSong = Number.isFinite(inferredArrangeCycles) && inferredArrangeCycles > 0;
+        // Non-arrangement fallback defaults to 4 cycles (typical one-phrase loop);
+        // arrangements override with explicit summed cycles from arrange([...]).
+        const baseExportCycles = inferredArrangeCycles || 4;
         const result = exportPattern(pattern, bpm, instrumentArray, instrumentMapping, baseExportCycles, {
             maxVoicesPerInstrument: maxChannels,
             normalizeUnisonLayers: normalizeLayers,
             rowsPerCycle,
-            monophonicByInstrumentIndex: monophonicByIndex
+            monophonicByInstrumentIndex: monophonicByIndex,
+            forceCycles: isArrangementSong ? inferredArrangeCycles : null
         });
         const songData = result.song;
         const {
@@ -1313,7 +1317,7 @@ async function exportCurrentSong() {
         // Build status message with channel count
         let statusMsg = `/output/${jsonFilename} (${channelCount} ch)`;
         const debugSuffix = exportDebug
-            ? ` • [dbg ${exportDebug.mode} cyc=${exportDebug.exportCycles} p=${exportDebug.detectedPeriod ?? '-'} finite=${exportDebug.finiteCycles || '-'} look=${exportDebug.lookaheadCycles}]`
+            ? ` • [dbg ${exportDebug.mode} cyc=${exportDebug.exportCycles} p=${exportDebug.detectedPeriod ?? '-'} finite=${exportDebug.finiteCycles || '-'} look=${exportDebug.lookaheadCycles} forced=${exportDebug.forcedCycles ?? '-'}]`
             : '';
         if (droppedNotes > 0) {
             statusMsg += ` • ${droppedNotes} notes dropped`;
