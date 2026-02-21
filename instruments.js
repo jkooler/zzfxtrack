@@ -134,7 +134,7 @@ export const instrumentMonophonic = {
     "demo-kickdrum": false,
     "demo-elpiano": false,
     "demo-horn": true,
-    "horn": false,
+    "horn": true,
     "elpiano": false,
     "kickdrum": false,
     "hh-open": false,
