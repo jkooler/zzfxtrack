@@ -47,6 +47,12 @@ function updateAdvancedSettingsButtonsVisibility() {
         dom.openSongAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
     }
 }
+
+function updateDevModeToolbarLabelVisibility() {
+    if (!dom.devModeToolbarLabel) return;
+    const show = !DEMO_MODE && isDeveloperModeEnabled();
+    dom.devModeToolbarLabel.classList.toggle('hidden', !show);
+}
 const demoSongModules = import.meta.glob('../songs/*.js', {
     query: '?raw',
     import: 'default',
@@ -90,10 +96,11 @@ let pendingExternalUrl = null;
 let statusFadeClearTimeout = null;
 let renameDebounceTimeout = null;
 let pendingUploadBundle = null;
-let pendingUploadConflicts = null;
 let songEntriesCache = [];
 let currentSongScope = 'user';
 let pendingAdvancedSettingsContext = null;
+const UPLOAD_BUNDLE_MANIFEST_NAME = 'strudel-project-bundle.json';
+const UPLOAD_BUNDLE_KIND = 'strudel-project-bundle';
 let arrangementPreviewContext = {
     arrangementState: null,
     trackerStateByFilename: {},
@@ -117,6 +124,7 @@ const dom = {
     newSongBtn: document.getElementById('newSongBtn'),
     statusMsg: document.getElementById('statusMsg'),
     demoModeBadge: document.getElementById('demoModeBadge'),
+    devModeToolbarLabel: document.getElementById('devModeToolbarLabel'),
     
     // Views
     welcomeView: document.getElementById('welcomeView'),
@@ -131,20 +139,13 @@ const dom = {
     uploadProjectBtn: document.getElementById('uploadProjectBtn'),
     uploadProjectInput: document.getElementById('uploadProjectInput'),
     uploadProjectModal: document.getElementById('uploadProjectModal'),
+    uploadProjectDropzone: document.getElementById('uploadProjectDropzone'),
     closeUploadProjectModalBtn: document.getElementById('closeUploadProjectModalBtn'),
     cancelUploadProjectBtn: document.getElementById('cancelUploadProjectBtn'),
     confirmUploadProjectBtn: document.getElementById('confirmUploadProjectBtn'),
     uploadProjectFilename: document.getElementById('uploadProjectFilename'),
     uploadProjectSummary: document.getElementById('uploadProjectSummary'),
-    uploadProjectWarnings: document.getElementById('uploadProjectWarnings'),
-    uploadIncludeSongs: document.getElementById('uploadIncludeSongs'),
-    uploadIncludeBlocks: document.getElementById('uploadIncludeBlocks'),
-    uploadIncludeArrangements: document.getElementById('uploadIncludeArrangements'),
-    uploadIncludeInstruments: document.getElementById('uploadIncludeInstruments'),
-    uploadModeMerge: document.getElementById('uploadModeMerge'),
-    uploadModeReplace: document.getElementById('uploadModeReplace'),
-    uploadInstrumentsKeep: document.getElementById('uploadInstrumentsKeep'),
-    uploadInstrumentsReplace: document.getElementById('uploadInstrumentsReplace'),
+    uploadProjectFooterMessage: document.getElementById('uploadProjectFooterMessage'),
 
     // System Settings Modal
     openSystemSettingsModalBtn: document.getElementById('openSystemSettingsModalBtn'),
@@ -363,6 +364,7 @@ async function init() {
         dom.demoModeBadge.style.display = DEMO_MODE ? 'inline-flex' : 'none';
         dom.demoModeBadge.classList.toggle('hidden', !DEMO_MODE);
     }
+    updateDevModeToolbarLabelVisibility();
     
     // 4. Initialize Instrument UI
     await initInstrumentUI();
@@ -1668,7 +1670,26 @@ async function downloadSongsAndInstruments() {
             return;
         }
 
-        const stamp = new Date().toISOString().replace(/[:]/g, '-').replace(/\..+/, '');
+        const stampIso = new Date().toISOString();
+        zip.file(
+            UPLOAD_BUNDLE_MANIFEST_NAME,
+            JSON.stringify(
+                {
+                    kind: UPLOAD_BUNDLE_KIND,
+                    version: 1,
+                    generatedAt: stampIso,
+                    counts: {
+                        songs: downloadedSongs,
+                        blocks: downloadedBlocks,
+                        arrangements: downloadedArrangements,
+                        instruments: downloadedInstruments,
+                    },
+                },
+                null,
+                2
+            )
+        );
+        const stamp = stampIso.replace(/[:]/g, '-').replace(/\..+/, '');
         const zipName = `strudel-project-bundle-${stamp}.zip`;
         const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
         triggerFileDownload(zipName, zipBlob, 'application/zip');
@@ -1704,14 +1725,26 @@ async function buildUploadBundle(file) {
     const blocks = new Map();
     const arrangements = new Map();
     let instrumentsContent = '';
+    let manifest = null;
+    let hasInvalidManifest = false;
     const unknownPaths = [];
 
     for (const entry of entries) {
         const normalized = normalizeZipEntryPath(entry.name);
+        const normalizedLower = normalized.toLowerCase();
         const content = await entry.async('string');
         if (!content.trim()) continue;
 
-        if (normalized.toLowerCase().endsWith('/instruments.js') || normalized === 'instruments.js') {
+        if (normalizedLower.endsWith(`/${UPLOAD_BUNDLE_MANIFEST_NAME}`) || normalizedLower === UPLOAD_BUNDLE_MANIFEST_NAME) {
+            try {
+                manifest = JSON.parse(content);
+            } catch (_e) {
+                hasInvalidManifest = true;
+            }
+            continue;
+        }
+
+        if (normalizedLower.endsWith('/instruments.js') || normalizedLower === 'instruments.js') {
             instrumentsContent = content;
             continue;
         }
@@ -1743,8 +1776,94 @@ async function buildUploadBundle(file) {
         blocks: Array.from(blocks, ([filename, content]) => ({ filename, content })),
         arrangements: Array.from(arrangements, ([filename, content]) => ({ filename, content })),
         instrumentsContent,
+        manifest,
+        hasInvalidManifest,
         unknownPaths,
     };
+}
+
+function describeUploadBundle(bundle) {
+    if (!bundle) return '';
+    return `${bundle.songs.length} songs, ${bundle.blocks.length} blocks, ${bundle.arrangements.length} arrangements${bundle.instrumentsContent ? ', instruments.js' : ''}`;
+}
+
+function setUploadProjectFooterMessage(message, type = 'normal') {
+    if (!dom.uploadProjectFooterMessage) return;
+    dom.uploadProjectFooterMessage.classList.remove('text-muted-foreground', 'text-destructive', 'text-primary');
+    if (type === 'error') {
+        dom.uploadProjectFooterMessage.classList.add('text-destructive');
+    } else if (type === 'success') {
+        dom.uploadProjectFooterMessage.classList.add('text-primary');
+    } else {
+        dom.uploadProjectFooterMessage.classList.add('text-muted-foreground');
+    }
+    dom.uploadProjectFooterMessage.textContent = message || '';
+}
+
+function setUploadProjectValidationState(bundle) {
+    pendingUploadBundle = bundle || null;
+    if (dom.confirmUploadProjectBtn) {
+        dom.confirmUploadProjectBtn.disabled = !bundle;
+    }
+    if (!bundle) {
+        if (dom.uploadProjectFilename) dom.uploadProjectFilename.textContent = '';
+        if (dom.uploadProjectSummary) dom.uploadProjectSummary.textContent = '';
+        return;
+    }
+    if (dom.uploadProjectFilename) {
+        dom.uploadProjectFilename.textContent = `File: ${bundle.fileName}`;
+    }
+    if (dom.uploadProjectSummary) {
+        dom.uploadProjectSummary.textContent = describeUploadBundle(bundle);
+    }
+}
+
+function validateUploadBundle(bundle) {
+    if (!bundle) return 'No file selected.';
+
+    const hasAnyData = Boolean(bundle.songs.length || bundle.blocks.length || bundle.arrangements.length || bundle.instrumentsContent);
+    if (!hasAnyData) return 'Incompatible ZIP: no importable app data found.';
+
+    if (bundle.hasInvalidManifest) {
+        return 'Incompatible ZIP: metadata is corrupted.';
+    }
+    if (bundle.unknownPaths.length) {
+        return 'Incompatible ZIP: contains unsupported files.';
+    }
+
+    if (bundle.manifest) {
+        if (bundle.manifest.kind !== UPLOAD_BUNDLE_KIND || bundle.manifest.version !== 1) {
+            return 'Incompatible ZIP: invalid bundle metadata.';
+        }
+        const expected = bundle.manifest.counts || {};
+        const countChecks = [
+            ['songs', bundle.songs.length],
+            ['blocks', bundle.blocks.length],
+            ['arrangements', bundle.arrangements.length],
+            ['instruments', bundle.instrumentsContent ? 1 : 0],
+        ];
+        for (const [key, actual] of countChecks) {
+            const value = expected[key];
+            if (Number.isFinite(value) && value !== actual) {
+                return 'Incompatible ZIP: bundle integrity check failed.';
+            }
+        }
+        return '';
+    }
+
+    const songsLookValid = bundle.songs.every((item) => /export\s+default\b/.test(item.content));
+    if (!songsLookValid) return 'Incompatible ZIP: songs payload is invalid.';
+
+    const blocksLookValid = bundle.blocks.every((item) => /export\s+const\s+name\b/.test(item.content) && /export\s+const\s+pattern\b/.test(item.content));
+    if (!blocksLookValid) return 'Incompatible ZIP: blocks payload is invalid.';
+
+    const arrangementsLookValid = bundle.arrangements.every((item) => /export\s+const\s+arrangementState\b/.test(item.content));
+    if (!arrangementsLookValid) return 'Incompatible ZIP: arrangements payload is invalid.';
+
+    const instrumentsLookValid = !bundle.instrumentsContent || /export\s+const\s+instruments\b/.test(bundle.instrumentsContent);
+    if (!instrumentsLookValid) return 'Incompatible ZIP: instruments payload is invalid.';
+
+    return '';
 }
 
 async function getExistingNamesBySection() {
@@ -1857,51 +1976,16 @@ async function writeImportedFile(section, filename, content) {
 }
 
 function closeUploadProjectModal() {
-    pendingUploadBundle = null;
-    pendingUploadConflicts = null;
+    setUploadProjectValidationState(null);
+    setUploadProjectFooterMessage('Select or drag a ZIP file to validate.', 'normal');
+    if (dom.uploadProjectInput) dom.uploadProjectInput.value = '';
+    dom.uploadProjectDropzone?.classList.remove('is-dragover');
     dom.uploadProjectModal?.classList.remove('open');
 }
 
-function openUploadProjectModal(bundle, conflicts) {
-    pendingUploadBundle = bundle;
-    pendingUploadConflicts = conflicts;
-
-    if (dom.uploadProjectFilename) {
-        dom.uploadProjectFilename.textContent = `File: ${bundle.fileName}`;
-    }
-    if (dom.uploadProjectSummary) {
-        dom.uploadProjectSummary.textContent = `${bundle.songs.length} songs, ${bundle.blocks.length} blocks, ${bundle.arrangements.length} arrangements${bundle.instrumentsContent ? ', instruments.js' : ''}`;
-    }
-
-    const warnings = [];
-    if (bundle.unknownPaths.length) warnings.push(`Ignored ${bundle.unknownPaths.length} unknown path(s).`);
-    if (conflicts.songs > 0 || conflicts.blocks > 0 || conflicts.arrangements > 0) {
-        warnings.push(`Conflicts found: ${conflicts.songs} songs, ${conflicts.blocks} blocks, ${conflicts.arrangements} arrangements.`);
-    }
-    if (DEMO_MODE) {
-        warnings.push('Demo mode import updates in-browser session data only.');
-    }
-
-    if (dom.uploadProjectWarnings) {
-        dom.uploadProjectWarnings.innerHTML = warnings.map((w) => `<p>${escapeHtml(w)}</p>`).join('');
-        dom.uploadProjectWarnings.classList.toggle('hidden', warnings.length === 0);
-    }
-
-    const setToggleState = (input, enabled, checked) => {
-        if (!input) return;
-        input.disabled = !enabled;
-        input.checked = enabled ? checked : false;
-    };
-    setToggleState(dom.uploadIncludeSongs, bundle.songs.length > 0, true);
-    setToggleState(dom.uploadIncludeBlocks, bundle.blocks.length > 0, true);
-    setToggleState(dom.uploadIncludeArrangements, bundle.arrangements.length > 0, true);
-    setToggleState(dom.uploadIncludeInstruments, Boolean(bundle.instrumentsContent), Boolean(bundle.instrumentsContent));
-
-    if (dom.uploadModeMerge) dom.uploadModeMerge.checked = true;
-    if (dom.uploadModeReplace) dom.uploadModeReplace.checked = false;
-    if (dom.uploadInstrumentsKeep) dom.uploadInstrumentsKeep.checked = true;
-    if (dom.uploadInstrumentsReplace) dom.uploadInstrumentsReplace.checked = false;
-
+function openUploadProjectModal() {
+    setUploadProjectValidationState(null);
+    setUploadProjectFooterMessage('Select or drag a ZIP file to validate.', 'normal');
     dom.uploadProjectModal?.classList.add('open');
 }
 
@@ -1937,22 +2021,18 @@ async function importSectionItems(section, items, include, mode, existingSet) {
 }
 
 async function applyUploadProject() {
-    if (!pendingUploadBundle || !pendingUploadConflicts) return;
+    if (!pendingUploadBundle) return;
 
-    const includeSongs = Boolean(dom.uploadIncludeSongs?.checked);
-    const includeBlocks = Boolean(dom.uploadIncludeBlocks?.checked);
-    const includeArrangements = Boolean(dom.uploadIncludeArrangements?.checked);
-    const includeInstruments = Boolean(dom.uploadIncludeInstruments?.checked);
-
-    if (!includeSongs && !includeBlocks && !includeArrangements && !includeInstruments) {
-        setStatus('Select at least one data section to import', 'error');
-        return;
-    }
-
-    const mode = dom.uploadModeReplace?.checked ? 'replace' : 'merge';
-    const replaceInstruments = dom.uploadInstrumentsReplace?.checked;
+    const includeSongs = pendingUploadBundle.songs.length > 0;
+    const includeBlocks = pendingUploadBundle.blocks.length > 0;
+    const includeArrangements = pendingUploadBundle.arrangements.length > 0;
+    const includeInstruments = Boolean(pendingUploadBundle.instrumentsContent);
+    const mode = 'merge';
+    const replaceInstruments = true;
 
     try {
+        if (dom.confirmUploadProjectBtn) dom.confirmUploadProjectBtn.disabled = true;
+        setUploadProjectFooterMessage('Uploading...', 'normal');
         setStatus('Importing ZIP...', 'normal');
         const existing = await getExistingNamesBySection();
 
@@ -1984,31 +2064,39 @@ async function applyUploadProject() {
         closeUploadProjectModal();
     } catch (e) {
         console.error(e);
+        setUploadProjectFooterMessage(`Upload failed: ${e.message}`, 'error');
         setStatus(`Upload failed: ${e.message}`, 'error');
     } finally {
-        if (dom.uploadProjectInput) dom.uploadProjectInput.value = '';
+        if (dom.uploadProjectModal?.classList.contains('open') && dom.confirmUploadProjectBtn) {
+            dom.confirmUploadProjectBtn.disabled = !pendingUploadBundle;
+        }
     }
 }
 
 async function handleUploadSelection(file) {
     if (!file) return;
+    if (!String(file.name || '').toLowerCase().endsWith('.zip')) {
+        setUploadProjectValidationState(null);
+        setUploadProjectFooterMessage('Incompatible file: only .zip is accepted.', 'error');
+        return;
+    }
+
     try {
+        setUploadProjectValidationState(null);
+        setUploadProjectFooterMessage('Validating ZIP...', 'normal');
         const bundle = await buildUploadBundle(file);
-        if (!bundle.songs.length && !bundle.blocks.length && !bundle.arrangements.length && !bundle.instrumentsContent) {
-            setStatus('ZIP does not contain importable project data', 'error');
+        const validationError = validateUploadBundle(bundle);
+        if (validationError) {
+            setUploadProjectValidationState(null);
+            setUploadProjectFooterMessage(validationError, 'error');
             return;
         }
-
-        const existing = await getExistingNamesBySection();
-        const conflicts = {
-            songs: bundle.songs.filter((s) => existing.songs.has(s.filename.toLowerCase())).length,
-            blocks: bundle.blocks.filter((b) => existing.blocks.has(b.filename.toLowerCase())).length,
-            arrangements: bundle.arrangements.filter((a) => existing.arrangements.has(a.filename.toLowerCase())).length,
-        };
-        openUploadProjectModal(bundle, conflicts);
+        setUploadProjectValidationState(bundle);
+        setUploadProjectFooterMessage('Data validation successful', 'success');
     } catch (e) {
         console.error(e);
-        setStatus(`Upload failed: ${e.message}`, 'error');
+        setUploadProjectValidationState(null);
+        setUploadProjectFooterMessage(`Validation failed: ${e.message}`, 'error');
     } finally {
         if (dom.uploadProjectInput) dom.uploadProjectInput.value = '';
     }
@@ -2025,10 +2113,31 @@ function closeModal() {
 
 dom.exportBtn.addEventListener('click', exportCurrentSong);
 if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadSongsAndInstruments);
-if (dom.uploadProjectBtn) dom.uploadProjectBtn.addEventListener('click', () => dom.uploadProjectInput?.click());
+if (dom.uploadProjectBtn) dom.uploadProjectBtn.addEventListener('click', openUploadProjectModal);
 if (dom.uploadProjectInput) {
     dom.uploadProjectInput.addEventListener('change', (e) => {
         const file = e.target?.files?.[0];
+        if (file) handleUploadSelection(file);
+    });
+}
+if (dom.uploadProjectDropzone) {
+    dom.uploadProjectDropzone.addEventListener('click', () => dom.uploadProjectInput?.click());
+    dom.uploadProjectDropzone.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        dom.uploadProjectDropzone?.classList.add('is-dragover');
+    });
+    dom.uploadProjectDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dom.uploadProjectDropzone?.classList.add('is-dragover');
+    });
+    dom.uploadProjectDropzone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dom.uploadProjectDropzone?.classList.remove('is-dragover');
+    });
+    dom.uploadProjectDropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dom.uploadProjectDropzone?.classList.remove('is-dragover');
+        const file = e.dataTransfer?.files?.[0];
         if (file) handleUploadSelection(file);
     });
 }
@@ -2535,6 +2644,7 @@ document.addEventListener('developer-mode:changed', () => {
         dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
     }
     updateAdvancedSettingsButtonsVisibility();
+    updateDevModeToolbarLabelVisibility();
     void refreshSongList();
     try {
         refreshInstrumentListUI?.();
@@ -3730,7 +3840,8 @@ document.addEventListener('tracker:saveBlock', async (e) => {
         // Handle new block creation
         const result = await saveBlock(name, description || "Created in tracker", pattern, trackerState, scope || 'user');
         if (result) {
-            setStatus(`Block "${name}" created successfully`, 'success');
+            // Keep footer status quiet for block creation; the UI updates immediately.
+            setStatus('', 'normal');
             if (returnToArrangementsOnClose && Number.isInteger(arrangementInsertRowIndex)) {
                 const createdBlock = result?.block || null;
                 if (createdBlock?.filename) {

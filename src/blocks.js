@@ -1,6 +1,7 @@
 import { createIcons, icons } from 'lucide';
 import { setupScrubInteraction } from './instrument-ui.js';
 import { primePreviewAudioContext, isArrangementPreviewPlaying, stopArrangementPreview, stopTrackerPreviewPlayback } from './tracker.js';
+import { attachVisualizer } from './visualizer.js';
 
 /**
  * Blocks Module
@@ -22,12 +23,17 @@ let elements = {};
 let arrangementsCache = [];
 let selectedArrangementIndex = null;
 let playingArrangementRowIndex = null;
+let playingArrangementRowBlocks = [];
+let playingArrangementFilename = null;
+let playingBlockFilename = null;
+let playingBlockClearTimeout = null;
 let arrangementEditMode = {
 	  isEditing: false,
 	  filename: null,
     scope: 'user',
 	};
 let arrangementToDelete = null;
+let arrangementRowToDeleteIndex = null;
 const BLOCKS_FOLDER_STATE_KEY = 'zzfxm-folder-state-blocks-v1';
 const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v1';
 let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: true });
@@ -107,6 +113,69 @@ function updateArrangementChipSteps(blocks = []) {
     const steps = getBlockSteps(update);
     chip.dataset.blockSteps = String(steps);
   });
+}
+
+function setArrangementRowPlayingVisual(rowEl, isPlaying) {
+  if (!rowEl) return;
+  const valueEl = rowEl.querySelector('.arr-row-number-value');
+  const iconEl = rowEl.querySelector('.arr-row-play-icon');
+  valueEl?.classList.toggle('hidden', !!isPlaying);
+  iconEl?.classList.toggle('hidden', !isPlaying);
+}
+
+function clearBlocksModalScopeVisualizer() {
+  document.querySelectorAll('#blocksList .block-item, #arrangementsList .block-item').forEach((item) => {
+    item.classList.remove('relative', 'overflow-hidden');
+    item.querySelector('canvas.song-visualizer')?.remove();
+  });
+  attachVisualizer(null);
+}
+
+function isBlocksTabActive() {
+  return !elements.blocksTabPanel?.classList.contains('hidden');
+}
+
+function updateBlocksModalScopeVisualizer() {
+  let target = null;
+
+  if (isArrangementPreviewPlaying()) {
+    if (isBlocksTabActive()) {
+      for (const filename of playingArrangementRowBlocks) {
+        target = Array.from(elements.blocksList?.querySelectorAll('.block-item') || [])
+          .find((item) => item.dataset.filename === filename) || null;
+        if (target) break;
+      }
+    } else if (playingArrangementFilename) {
+      target = Array.from(elements.arrangementsList?.querySelectorAll('.block-item') || [])
+        .find((item) => item.dataset.filename === playingArrangementFilename) || null;
+    }
+  } else if (isBlocksTabActive() && playingBlockFilename) {
+    target = Array.from(elements.blocksList?.querySelectorAll('.block-item') || [])
+      .find((item) => item.dataset.filename === playingBlockFilename) || null;
+  }
+
+  document.querySelectorAll('#blocksList .block-item, #arrangementsList .block-item').forEach((item) => {
+    if (item !== target) {
+      item.classList.remove('relative', 'overflow-hidden');
+      item.querySelector('canvas.song-visualizer')?.remove();
+    }
+  });
+
+  if (!target) {
+    attachVisualizer(null);
+    return;
+  }
+
+  target.classList.add('relative', 'overflow-hidden');
+  let canvas = target.querySelector('canvas.song-visualizer');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.className = 'song-visualizer';
+    target.insertBefore(canvas, target.firstChild);
+  }
+  canvas.width = target.clientWidth;
+  canvas.height = target.clientHeight;
+  attachVisualizer(canvas);
 }
 
 function suspendArrangementModal() {
@@ -212,17 +281,21 @@ function cacheElements() {
     createBlockBtn: document.getElementById('createBlockBtn'),
     insertBlockBtn: document.getElementById('insertBlockBtn'),
     deleteBlockBtn: document.getElementById('deleteBlockBtn'),
-    preserveBlockBpm: document.getElementById('preserveBlockBpm'),
-	    deleteBlockModal: document.getElementById('deleteBlockModal'),
-	    deleteBlockText: document.getElementById('deleteBlockText'),
-	    cancelDeleteBlock: document.getElementById('cancelDeleteBlock'),
-	    confirmDeleteBlock: document.getElementById('confirmDeleteBlock'),
-	    deleteArrangementModal: document.getElementById('deleteArrangementModal'),
-	    deleteArrangementText: document.getElementById('deleteArrangementText'),
-	    cancelDeleteArrangement: document.getElementById('cancelDeleteArrangement'),
-	    confirmDeleteArrangement: document.getElementById('confirmDeleteArrangement'),
-	  };
-	}
+	    preserveBlockBpm: document.getElementById('preserveBlockBpm'),
+		    deleteBlockModal: document.getElementById('deleteBlockModal'),
+		    deleteBlockText: document.getElementById('deleteBlockText'),
+		    cancelDeleteBlock: document.getElementById('cancelDeleteBlock'),
+		    confirmDeleteBlock: document.getElementById('confirmDeleteBlock'),
+		    deleteArrangementModal: document.getElementById('deleteArrangementModal'),
+		    deleteArrangementText: document.getElementById('deleteArrangementText'),
+		    cancelDeleteArrangement: document.getElementById('cancelDeleteArrangement'),
+		    confirmDeleteArrangement: document.getElementById('confirmDeleteArrangement'),
+        deleteArrangementRowModal: document.getElementById('deleteArrangementRowModal'),
+        deleteArrangementRowText: document.getElementById('deleteArrangementRowText'),
+        cancelDeleteArrangementRow: document.getElementById('cancelDeleteArrangementRow'),
+        confirmDeleteArrangementRow: document.getElementById('confirmDeleteArrangementRow'),
+		  };
+		}
 
 /**
  * Setup event listeners
@@ -231,11 +304,13 @@ function setupEventListeners() {
   elements.closeBtn?.addEventListener('click', closeBlocksModal);
   elements.createBlockBtn?.addEventListener('click', openTrackerForNewBlock);
   elements.insertBlockBtn?.addEventListener('click', insertSelectedBlock);
-  elements.deleteBlockBtn?.addEventListener('click', deleteSelectedBlock);
-	  elements.cancelDeleteBlock?.addEventListener('click', closeDeleteBlockModal);
-	  elements.confirmDeleteBlock?.addEventListener('click', confirmDeleteBlock);
-	  elements.cancelDeleteArrangement?.addEventListener('click', closeDeleteArrangementModal);
-	  elements.confirmDeleteArrangement?.addEventListener('click', confirmDeleteArrangement);
+	  elements.deleteBlockBtn?.addEventListener('click', deleteSelectedBlock);
+		  elements.cancelDeleteBlock?.addEventListener('click', closeDeleteBlockModal);
+		  elements.confirmDeleteBlock?.addEventListener('click', confirmDeleteBlock);
+		  elements.cancelDeleteArrangement?.addEventListener('click', closeDeleteArrangementModal);
+		  elements.confirmDeleteArrangement?.addEventListener('click', confirmDeleteArrangement);
+      elements.cancelDeleteArrangementRow?.addEventListener('click', closeDeleteArrangementRowModal);
+      elements.confirmDeleteArrangementRow?.addEventListener('click', confirmDeleteArrangementRow);
 
   elements.blocksTabBtn?.addEventListener('click', () => setActiveTab('blocks'));
   elements.arrangerTabBtn?.addEventListener('click', () => setActiveTab('arranger'));
@@ -264,9 +339,17 @@ function setupEventListeners() {
     }));
   });
 
-  if (elements.arrangementBpm) {
-    setupScrubInteraction(elements.arrangementBpm);
-  }
+	  if (elements.arrangementBpm) {
+	    setupScrubInteraction(elements.arrangementBpm);
+	  }
+
+    if (elements.deleteArrangementRowModal) {
+      elements.deleteArrangementRowModal.addEventListener('click', (e) => {
+        if (e.target === elements.deleteArrangementRowModal) {
+          closeDeleteArrangementRowModal();
+        }
+      });
+    }
 
 	  document.addEventListener('resource-scope:changed', async (e) => {
 	    const detail = e?.detail || {};
@@ -321,8 +404,61 @@ function setupEventListeners() {
     resumeBlocksModal();
   });
 
-  document.addEventListener('arrangements:previewState', () => {
+  document.addEventListener('arrangements:previewState', (e) => {
     updateArrangementPreviewButtonState();
+    if (!e?.detail?.playing) {
+      playingArrangementFilename = null;
+      playingArrangementRowBlocks = [];
+      playingBlockFilename = null;
+      if (playingBlockClearTimeout) {
+        clearTimeout(playingBlockClearTimeout);
+        playingBlockClearTimeout = null;
+      }
+      clearBlocksModalScopeVisualizer();
+      return;
+    }
+    playingBlockFilename = null;
+    if (playingBlockClearTimeout) {
+      clearTimeout(playingBlockClearTimeout);
+      playingBlockClearTimeout = null;
+    }
+    updateBlocksModalScopeVisualizer();
+  });
+
+  document.addEventListener('arrangements:preview', (e) => {
+    playingArrangementFilename = e?.detail?.arrangement?.filename || null;
+    updateBlocksModalScopeVisualizer();
+  });
+
+  document.addEventListener('blocks:preview', (e) => {
+    const index = Number.isInteger(selectedBlockIndex) ? selectedBlockIndex : null;
+    const filename = index == null ? null : blocksCache?.[index]?.filename;
+    playingBlockFilename = filename || null;
+
+    if (playingBlockClearTimeout) {
+      clearTimeout(playingBlockClearTimeout);
+      playingBlockClearTimeout = null;
+    }
+
+    const trackerState = e?.detail?.trackerState || null;
+    const bpm = Number.isFinite(trackerState?.bpm) ? trackerState.bpm : 120;
+    const steps = Number.isFinite(trackerState?.steps)
+      ? trackerState.steps
+      : (Array.isArray(trackerState?.grid?.[0]) ? trackerState.grid[0].length : 16);
+    const secondsPerStep = (60 / Math.max(20, Math.min(bpm, 300))) / 4;
+    const durationMs = Math.max(0.5, steps * secondsPerStep + 1.0) * 1000;
+
+    updateBlocksModalScopeVisualizer();
+
+    playingBlockClearTimeout = setTimeout(() => {
+      playingBlockClearTimeout = null;
+      playingBlockFilename = null;
+      updateBlocksModalScopeVisualizer();
+    }, durationMs);
+  });
+
+  document.addEventListener('visualizer:ready', () => {
+    updateBlocksModalScopeVisualizer();
   });
 
   document.addEventListener('arrangements:blocksLoaded', (e) => {
@@ -334,11 +470,16 @@ function setupEventListeners() {
     const detail = e?.detail || {};
     const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
     const progress = typeof detail.progress === 'number' ? detail.progress : 0;
+    playingArrangementRowBlocks = rowIndex == null
+      ? []
+      : (Array.isArray(detail.blocks) ? detail.blocks : []);
+    updateBlocksModalScopeVisualizer();
 
     if (playingArrangementRowIndex != null && playingArrangementRowIndex !== rowIndex) {
       const prevEl = elements.arrangementRows?.querySelector(`.arr-row[data-row="${playingArrangementRowIndex}"]`);
       if (prevEl) {
         prevEl.classList.remove('playing');
+        setArrangementRowPlayingVisual(prevEl, false);
         prevEl.style.removeProperty('--arr-row-play-progress');
         prevEl.querySelectorAll('.arr-chip').forEach((chip) => {
           chip.style.removeProperty('--arr-chip-play-progress');
@@ -354,11 +495,12 @@ function setupEventListeners() {
     const rowEl = elements.arrangementRows?.querySelector(`.arr-row[data-row="${rowIndex}"]`);
     if (rowEl) {
       rowEl.classList.add('playing');
+      setArrangementRowPlayingVisual(rowEl, true);
       const pct = Math.max(0, Math.min(progress, 1)) * 100;
       rowEl.style.setProperty('--arr-row-play-progress', `${pct.toFixed(2)}%`);
 
       const row = arrangementDraft.rows?.[rowIndex];
-      const rowSteps = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 99) * 16 : 16;
+      const rowSteps = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) * 16 : 16;
       const progressSteps = Math.max(0, Math.min(progress, 1)) * rowSteps;
       rowEl.querySelectorAll('.arr-chip').forEach((chip) => {
         const blockSteps = parseInt(chip.dataset.blockSteps || '16', 10);
@@ -375,6 +517,9 @@ function setupEventListeners() {
 function previewArrangementDraft() {
   if (isArrangementPreviewPlaying()) {
     stopArrangementPreview();
+    playingArrangementFilename = null;
+    playingArrangementRowBlocks = [];
+    clearBlocksModalScopeVisualizer();
     updateArrangementPreviewButtonState();
     return;
   }
@@ -393,6 +538,13 @@ function setActiveTab(tab) {
   elements.arrangerTabPanel?.classList.toggle('hidden', blocksActive);
   elements.blocksTabBtn?.classList.toggle('active', blocksActive);
   elements.arrangerTabBtn?.classList.toggle('active', !blocksActive);
+  if (blocksActive && isArrangementPreviewPlaying()) {
+    stopArrangementPreview();
+    playingArrangementFilename = null;
+    playingArrangementRowBlocks = [];
+    clearBlocksModalScopeVisualizer();
+    updateArrangementPreviewButtonState();
+  }
   if (!blocksActive) {
     stopTrackerPreviewPlayback();
   }
@@ -407,6 +559,7 @@ function setActiveTab(tab) {
   if (!blocksActive) {
     loadArrangementsList();
   }
+  updateBlocksModalScopeVisualizer();
 }
 
 async function loadArrangementsList() {
@@ -487,6 +640,7 @@ function renderArrangementsList() {
       const el = document.createElement('div');
       el.className = 'block-item';
       el.dataset.index = index;
+      el.dataset.filename = arr.filename || '';
       el.tabIndex = 0;
       el.innerHTML = `
         <div class="min-w-0">
@@ -536,6 +690,7 @@ function renderArrangementsList() {
   appendFolder('example', 'Examples', exampleEntries);
 
   createIcons({ icons });
+  updateBlocksModalScopeVisualizer();
 }
 
 function selectArrangement(index, { preview = true } = {}) {
@@ -588,10 +743,42 @@ function selectArrangement(index, { preview = true } = {}) {
 	  elements.confirmDeleteArrangement?.focus();
 	}
 
-	function closeDeleteArrangementModal() {
-	  arrangementToDelete = null;
-	  elements.deleteArrangementModal?.classList.remove('open');
-	}
+function closeDeleteArrangementModal() {
+  arrangementToDelete = null;
+  elements.deleteArrangementModal?.classList.remove('open');
+}
+
+function openDeleteArrangementRowModal(rowIndex) {
+  if (!Number.isInteger(rowIndex)) return;
+  arrangementRowToDeleteIndex = rowIndex;
+  if (elements.deleteArrangementRowText) {
+    elements.deleteArrangementRowText.textContent = 'This action is not undoable.';
+  }
+  elements.deleteArrangementRowModal?.classList.add('open');
+  elements.confirmDeleteArrangementRow?.focus();
+}
+
+function closeDeleteArrangementRowModal() {
+  arrangementRowToDeleteIndex = null;
+  elements.deleteArrangementRowModal?.classList.remove('open');
+}
+
+function confirmDeleteArrangementRow() {
+  if (!Number.isInteger(arrangementRowToDeleteIndex)) {
+    closeDeleteArrangementRowModal();
+    return;
+  }
+  const rowIndex = arrangementRowToDeleteIndex;
+  closeDeleteArrangementRowModal();
+  if (arrangementDraft.rows.length === 1) {
+    arrangementDraft.rows[0] = { repeats: 1, blocks: [] };
+  } else {
+    arrangementDraft.rows.splice(rowIndex, 1);
+  }
+  renderArrangementRows();
+  createIcons({ icons });
+  emitArrangementStateChanged();
+}
 
 async function confirmDeleteArrangement() {
   if (!arrangementToDelete?.filename) {
@@ -690,6 +877,9 @@ function closeArrangementEditor() {
   updateArrangementAdvancedSettingsVisibility();
   if (isArrangementPreviewPlaying()) {
     stopArrangementPreview();
+    playingArrangementFilename = null;
+    playingArrangementRowBlocks = [];
+    clearBlocksModalScopeVisualizer();
   }
   updateArrangementPreviewButtonState();
 }
@@ -699,6 +889,131 @@ function renderArrangementRows() {
   elements.arrangementRows.innerHTML = '';
   playingArrangementRowIndex = null;
 
+  const sortBlocksForPicker = (blocks) => {
+    const collator = typeof Intl !== 'undefined' && Intl.Collator
+      ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+      : null;
+    const groupKey = (name) => {
+      const s = String(name || '').trim().toLowerCase();
+      const first = s[0] || '';
+      if (first >= '0' && first <= '9') return `0${s}`;
+      if (first >= 'a' && first <= 'z') return `1${s}`;
+      return `2${s}`;
+    };
+    return (blocks || []).slice().sort((a, b) => {
+      const aKey = groupKey(a?.name);
+      const bKey = groupKey(b?.name);
+      if (collator) {
+        const byKey = collator.compare(aKey, bKey);
+        if (byKey) return byKey;
+      } else {
+        if (aKey < bKey) return -1;
+        if (aKey > bKey) return 1;
+      }
+      const aFile = String(a?.filename || '');
+      const bFile = String(b?.filename || '');
+      return collator ? collator.compare(aFile, bFile) : aFile.localeCompare(bFile);
+    });
+  };
+  const blocksForPicker = sortBlocksForPicker(blocksCache);
+  const blockByFilename = new Map(blocksCache.map((b) => [b.filename, b]));
+  const compareRowBlockFilenames = (aFilename, bFilename) => {
+    const aBlock = blockByFilename.get(aFilename);
+    const bBlock = blockByFilename.get(bFilename);
+    const aKey = aBlock ? aBlock.name : aFilename;
+    const bKey = bBlock ? bBlock.name : bFilename;
+    // Reuse the picker sort behavior (0..9 then a..z).
+    const collator = typeof Intl !== 'undefined' && Intl.Collator
+      ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+      : null;
+    const groupKey = (name) => {
+      const s = String(name || '').trim().toLowerCase();
+      const first = s[0] || '';
+      if (first >= '0' && first <= '9') return `0${s}`;
+      if (first >= 'a' && first <= 'z') return `1${s}`;
+      return `2${s}`;
+    };
+    const aGroup = groupKey(aKey);
+    const bGroup = groupKey(bKey);
+    if (collator) {
+      const byGroup = collator.compare(aGroup, bGroup);
+      if (byGroup) return byGroup;
+      return collator.compare(String(aFilename || ''), String(bFilename || ''));
+    }
+    if (aGroup < bGroup) return -1;
+    if (aGroup > bGroup) return 1;
+    return String(aFilename || '').localeCompare(String(bFilename || ''));
+  };
+
+  const isMac = (() => {
+    try {
+      const platform = String(navigator?.platform || '');
+      const ua = String(navigator?.userAgent || '');
+      return /Mac/i.test(platform) || /Mac OS X/i.test(ua);
+    } catch (_e) {
+      return false;
+    }
+  })();
+  const isCopyModifier = (evt) => (isMac ? !!evt.altKey : !!evt.ctrlKey);
+
+  const cssEscape = (value) => {
+    try {
+      return window.CSS && typeof window.CSS.escape === 'function'
+        ? window.CSS.escape(String(value))
+        : String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+    } catch (_e) {
+      return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+    }
+  };
+
+  const shakeChip = (rowEl, filename) => {
+    if (!rowEl || !filename) return;
+    const selector = `.arr-chip[data-filename="${cssEscape(filename)}"]`;
+    const chip = rowEl.querySelector(selector);
+    if (!chip) return;
+    chip.classList.remove('shake');
+    // Force reflow so re-adding the class retriggers the animation.
+    void chip.offsetWidth;
+    chip.classList.add('shake');
+    chip.addEventListener('animationend', () => chip.classList.remove('shake'), { once: true });
+  };
+
+  const handleBlockDrop = ({ filename, fromRowIndex, toRowIndex, copy }, targetRowEl) => {
+    if (!filename) return;
+    if (!Number.isInteger(toRowIndex)) return;
+    const targetRow = arrangementDraft.rows?.[toRowIndex];
+    if (!targetRow) return;
+    if (!Array.isArray(targetRow.blocks)) targetRow.blocks = [];
+
+    const normalizedFrom = Number.isInteger(fromRowIndex) ? fromRowIndex : null;
+    const normalizedTo = toRowIndex;
+    const shouldCopy = Boolean(copy);
+
+    if (normalizedFrom === normalizedTo) {
+      if (targetRow.blocks.includes(filename)) {
+        shakeChip(targetRowEl, filename);
+      }
+      return;
+    }
+
+    if (targetRow.blocks.includes(filename)) {
+      shakeChip(targetRowEl, filename);
+      return;
+    }
+
+    if (!shouldCopy && normalizedFrom != null) {
+      const srcRow = arrangementDraft.rows?.[normalizedFrom];
+      if (srcRow && Array.isArray(srcRow.blocks)) {
+        const idx = srcRow.blocks.indexOf(filename);
+        if (idx >= 0) srcRow.blocks.splice(idx, 1);
+      }
+    }
+
+    targetRow.blocks.push(filename);
+    renderArrangementRows();
+    emitArrangementStateChanged();
+  };
+
   arrangementDraft.rows.forEach((row, rowIndex) => {
     const rowEl = document.createElement('div');
     rowEl.className = 'arr-row';
@@ -706,84 +1021,150 @@ function renderArrangementRows() {
 
     const rowNumberEl = document.createElement('span');
     rowNumberEl.className = 'arr-row-number';
-    rowNumberEl.textContent = String(rowIndex + 1);
+    rowNumberEl.innerHTML = `
+      <span class="arr-row-number-value">${rowIndex + 1}</span>
+      <i data-lucide="play" class="arr-row-play-icon hidden w-[13px] h-[13px] fill-current"></i>
+    `;
 
     const repeatsEl = document.createElement('input');
     repeatsEl.type = 'number';
     repeatsEl.min = '1';
-    repeatsEl.max = '99';
+    repeatsEl.max = '16';
     repeatsEl.step = '1';
     repeatsEl.value = String(row.repeats || 1);
     repeatsEl.className = 'arr-repeats';
     repeatsEl.addEventListener('input', () => {
       const val = parseInt(repeatsEl.value, 10);
-      row.repeats = Number.isFinite(val) ? Math.min(Math.max(val, 1), 99) : 1;
+      row.repeats = Number.isFinite(val) ? Math.min(Math.max(val, 1), 16) : 1;
       emitArrangementStateChanged();
     });
     setupScrubInteraction(repeatsEl);
 
-	    const chipsEl = document.createElement('div');
-	    chipsEl.className = 'arr-chips';
+		    const chipsEl = document.createElement('div');
+		    chipsEl.className = 'arr-chips';
 
-	    const updateSelectDisabled = (selectEl) => {
-	      if (!selectEl) return;
-	      const options = Array.from(selectEl.querySelectorAll('option'));
-	      for (const opt of options) {
+        rowEl.addEventListener('dragover', (e) => {
+          if (!e.dataTransfer) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = isCopyModifier(e) ? 'copy' : 'move';
+          rowEl.classList.add('arr-row-drop-target');
+        });
+        rowEl.addEventListener('dragleave', (e) => {
+          const related = e.relatedTarget;
+          if (related && related instanceof Node && rowEl.contains(related)) return;
+          rowEl.classList.remove('arr-row-drop-target');
+        });
+        rowEl.addEventListener('drop', (e) => {
+          if (!e.dataTransfer) return;
+          e.preventDefault();
+          rowEl.classList.remove('arr-row-drop-target');
+          let payload = null;
+          try {
+            payload = JSON.parse(e.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null');
+          } catch (_err) {
+            payload = null;
+          }
+          const filename = payload?.filename || e.dataTransfer.getData('text/plain') || '';
+          const fromRowIndex = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
+          handleBlockDrop({ filename, fromRowIndex, toRowIndex: rowIndex, copy: isCopyModifier(e) }, rowEl);
+        });
+
+		    const updateSelectDisabled = (selectEl) => {
+		      if (!selectEl) return;
+		      const options = Array.from(selectEl.querySelectorAll('option'));
+		      for (const opt of options) {
 	        if (!opt.value) continue;
 	        opt.disabled = row.blocks.includes(opt.value);
 	      }
 	    };
 
-	    const renderChips = () => {
-	      chipsEl.innerHTML = '';
-	      row.blocks.forEach((filename, i) => {
-	        const block = blocksCache.find(b => b.filename === filename);
-	        const chip = document.createElement('div');
-        chip.className = 'arr-chip';
-        chip.dataset.filename = filename;
-        chip.dataset.blockSteps = String(getBlockSteps(block));
-        chip.innerHTML = `
-          <span class="arr-chip-label">${escapeHtml(block?.name || filename)}</span>
-          <button type="button" class="arr-chip-del" title="Remove"><i data-lucide="x" class="w-3 h-3"></i></button>
-        `;
-	        chip.addEventListener('click', (event) => {
-	          if (event.target?.closest('.arr-chip-del')) return;
-	          void openTrackerForArrangementBlock(filename);
-	        });
-	        chip.querySelector('.arr-chip-del')?.addEventListener('click', () => {
-	          row.blocks.splice(i, 1);
-	          renderChips();
-	          updateSelectDisabled(selectEl);
-	          createIcons({ icons });
-          emitArrangementStateChanged();
-	        });
-	        chipsEl.appendChild(chip);
-	      });
-	    };
+		    const renderChips = () => {
+		      chipsEl.innerHTML = '';
+		      row.blocks
+            .slice()
+            .sort(compareRowBlockFilenames)
+            .forEach((filename) => {
+		        const block = blocksCache.find(b => b.filename === filename);
+		        const chip = document.createElement('div');
+	        chip.className = 'arr-chip';
+	        chip.dataset.filename = filename;
+	        chip.dataset.blockSteps = String(getBlockSteps(block));
+	        chip.innerHTML = `
+	          <span class="arr-chip-label">${escapeHtml(block?.name || filename)}</span>
+	          <button type="button" class="arr-chip-del" title="Remove"><i data-lucide="x" class="w-3 h-3"></i></button>
+	        `;
+          chip.draggable = true;
+          chip.addEventListener('dragstart', (e) => {
+            if (!e.dataTransfer) return;
+            const payload = { filename, fromRowIndex: rowIndex };
+            e.dataTransfer.effectAllowed = 'copyMove';
+            e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify(payload));
+            e.dataTransfer.setData('text/plain', filename);
+          });
+		        chip.addEventListener('click', (event) => {
+		          if (event.target?.closest('.arr-chip-del')) return;
+		          void openTrackerForArrangementBlock(filename);
+		        });
+		        chip.querySelector('.arr-chip-del')?.addEventListener('click', () => {
+              const idx = row.blocks.indexOf(filename);
+              if (idx >= 0) row.blocks.splice(idx, 1);
+		          renderChips();
+		          updateSelectDisabled(selectEl);
+		          createIcons({ icons });
+	          emitArrangementStateChanged();
+		        });
+		        chipsEl.appendChild(chip);
+		      });
+		    };
 
-	    const selectEl = document.createElement('select');
-	    selectEl.className = 'arr-block-select';
-	    selectEl.innerHTML = `<option value="">Add block…</option><option value="__create__">Create new…</option>` + blocksCache
-	      .map(b => {
-	        const disabled = row.blocks.includes(b.filename) ? ' disabled' : '';
-	        return `<option value="${escapeHtml(b.filename)}"${disabled}>${escapeHtml(b.name)}</option>`;
-	      })
-	      .join('');
-    selectEl.addEventListener('change', () => {
-      const val = selectEl.value;
-      if (!val) return;
-      if (val === '__create__') {
-        selectEl.value = '';
-        openTrackerForNewBlockFromArrangement(rowIndex);
-        return;
-      }
-      if (!row.blocks.includes(val)) {
-        row.blocks.push(val);
-      }
-      selectEl.value = '';
-      console.log('[Arranger] Added block to row', rowIndex, val, '=>', row.blocks);
-      renderChips();
-      updateSelectDisabled(selectEl);
+		    const selectEl = document.createElement('select');
+		    selectEl.className = 'arr-block-select';
+		    selectEl.setAttribute('aria-label', 'Add block');
+		    selectEl.title = 'Add block';
+		    selectEl.innerHTML = `<option value="" selected></option><option value="__create__">+ New block</option>` + blocksForPicker
+		      .map(b => {
+		        const disabled = row.blocks.includes(b.filename) ? ' disabled' : '';
+		        return `<option value="${escapeHtml(b.filename)}"${disabled}>${escapeHtml(b.name)}</option>`;
+		      })
+		      .join('');
+	    selectEl.addEventListener('change', () => {
+	      const val = selectEl.value;
+	      if (!val) return;
+	      if (val === '__create__') {
+	        selectEl.selectedIndex = 0;
+	        openTrackerForNewBlockFromArrangement(rowIndex);
+	        return;
+	      }
+	      if (!row.blocks.includes(val)) {
+	        row.blocks.push(val);
+	      }
+	      selectEl.selectedIndex = 0;
+	      console.log('[Arranger] Added block to row', rowIndex, val, '=>', row.blocks);
+	      renderChips();
+	      updateSelectDisabled(selectEl);
+	      createIcons({ icons });
+	      emitArrangementStateChanged();
+	    });
+
+        const selectWrap = document.createElement('div');
+        selectWrap.className = 'arr-block-select-wrap';
+        selectWrap.innerHTML = '<span class="arr-block-select-plus-label" aria-hidden="true">+</span>';
+        selectWrap.appendChild(selectEl);
+
+    const duplicateRowBtn = document.createElement('button');
+    duplicateRowBtn.type = 'button';
+    duplicateRowBtn.className = 'arr-row-del arr-row-dup';
+    duplicateRowBtn.title = 'Duplicate row';
+    duplicateRowBtn.innerHTML = '<i data-lucide="copy" class="w-4 h-4"></i>';
+    duplicateRowBtn.addEventListener('click', () => {
+      const sourceRow = arrangementDraft.rows?.[rowIndex];
+      if (!sourceRow) return;
+      const duplicatedRow = {
+        repeats: Number.isInteger(sourceRow.repeats) ? sourceRow.repeats : 1,
+        blocks: Array.isArray(sourceRow.blocks) ? sourceRow.blocks.slice() : [],
+      };
+      arrangementDraft.rows.splice(rowIndex + 1, 0, duplicatedRow);
+      renderArrangementRows();
       createIcons({ icons });
       emitArrangementStateChanged();
     });
@@ -794,21 +1175,15 @@ function renderArrangementRows() {
     removeRowBtn.title = 'Remove row';
     removeRowBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
     removeRowBtn.addEventListener('click', () => {
-      if (arrangementDraft.rows.length === 1) {
-        arrangementDraft.rows[0] = { repeats: 1, blocks: [] };
-      } else {
-        arrangementDraft.rows.splice(rowIndex, 1);
-      }
-      renderArrangementRows();
-      createIcons({ icons });
-      emitArrangementStateChanged();
+      openDeleteArrangementRowModal(rowIndex);
     });
 
-	    rowEl.appendChild(rowNumberEl);
-	    rowEl.appendChild(repeatsEl);
-	    rowEl.appendChild(chipsEl);
-	    rowEl.appendChild(selectEl);
-	    rowEl.appendChild(removeRowBtn);
+		    rowEl.appendChild(rowNumberEl);
+		    rowEl.appendChild(repeatsEl);
+		    rowEl.appendChild(chipsEl);
+		    rowEl.appendChild(selectWrap);
+        rowEl.appendChild(duplicateRowBtn);
+		    rowEl.appendChild(removeRowBtn);
 
 	    elements.arrangementRows.appendChild(rowEl);
 	    renderChips();
@@ -1050,6 +1425,7 @@ function renderBlocksList() {
   appendFolder('example', 'Examples', exampleEntries);
 
   createIcons({ icons });
+  updateBlocksModalScopeVisualizer();
 }
 
 /**
@@ -1438,7 +1814,7 @@ export async function updateBlock(filename, name, description, pattern, trackerS
 export function openBlocksModal() {
   elements.modal?.classList.add('open');
   elements.modal?.classList.remove('is-suspended');
-  setActiveTab('blocks');
+  setActiveTab('arranger');
   loadBlocksList(); // Refresh list when opening
   document.dispatchEvent(new CustomEvent('blocks:modalOpen'));
 }
@@ -1449,6 +1825,14 @@ export function openBlocksModal() {
 export function closeBlocksModal(reason = null) {
   elements.modal?.classList.remove('open');
   elements.modal?.classList.remove('is-suspended');
+  playingArrangementFilename = null;
+  playingArrangementRowBlocks = [];
+  playingBlockFilename = null;
+  if (playingBlockClearTimeout) {
+    clearTimeout(playingBlockClearTimeout);
+    playingBlockClearTimeout = null;
+  }
+  clearBlocksModalScopeVisualizer();
   document.dispatchEvent(new CustomEvent('blocks:modalClose', { detail: { reason } }));
 }
 

@@ -9,6 +9,8 @@ import { zzfxG } from './zzfx-loader.js';
 import { playTestNote } from './instrument-preview.js';
 import { createIcons, icons } from 'lucide';
 import { setupScrubInteraction } from './instrument-ui.js';
+import { getAudioContext } from '@strudel/webaudio';
+import { getVisualizerAnalyser } from './visualizer.js';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
@@ -125,7 +127,7 @@ const arrangementPreviewState = {
 
 function ensureArrangementAudioContext() {
   if (!arrangementPreviewState.audioContext) {
-    arrangementPreviewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    arrangementPreviewState.audioContext = getAudioContext();
   }
   const ctx = arrangementPreviewState.audioContext;
   if (ctx && ctx.state === 'suspended') {
@@ -136,7 +138,7 @@ function ensureArrangementAudioContext() {
 
 export function primePreviewAudioContext() {
   if (!previewState.audioContext) {
-    previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    previewState.audioContext = getAudioContext();
   }
   const ctx = previewState.audioContext;
   if (ctx && ctx.state === 'suspended') {
@@ -746,6 +748,10 @@ function setupEventListeners() {
     updateEditModeUI();
   });
 
+  document.addEventListener('arrangements:playhead', (e) => {
+    handleArrangementPlayheadForTracker(e?.detail || {});
+  });
+
   // Keyboard input
   document.addEventListener('keydown', handleKeyDown);
 }
@@ -1268,7 +1274,7 @@ function playPreview(startOffset = 0) {
 
   // Initialize audio context if needed
   if (!previewState.audioContext) {
-    previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    previewState.audioContext = getAudioContext();
   }
 
   const ctx = previewState.audioContext;
@@ -1533,7 +1539,7 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
   stopPreview();
 
   if (!previewState.audioContext) {
-    previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    previewState.audioContext = getAudioContext();
   }
 
   const ctx = previewState.audioContext;
@@ -1548,11 +1554,28 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
   playMixBuffer(mixBuffer, sampleRate);
 }
 
+function notifyVisualizerReady() {
+  document.dispatchEvent(new CustomEvent('visualizer:ready'));
+}
+
+function connectPreviewSource(ctx, source) {
+  source.connect(ctx.destination);
+  const vizAnalyser = getVisualizerAnalyser(ctx);
+  if (vizAnalyser) {
+    try {
+      source.connect(vizAnalyser);
+    } catch (_e) {
+      // ignore
+    }
+  }
+  notifyVisualizerReady();
+}
+
 function playMixBuffer(mixBuffer, sampleRate) {
   if (!mixBuffer || mixBuffer.length === 0) return;
 
   if (!previewState.audioContext) {
-    previewState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    previewState.audioContext = getAudioContext();
   }
 
   const ctx = previewState.audioContext;
@@ -1566,7 +1589,7 @@ function playMixBuffer(mixBuffer, sampleRate) {
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
   source.loop = false;
-  source.connect(ctx.destination);
+  connectPreviewSource(ctx, source);
   source.start(0);
 
   previewState.playingSource = source;
@@ -1744,7 +1767,7 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
   // Strudel's arrange() treats the first number as the number of cycles the section lasts for.
   // In our tracker, 1 cycle == 16 steps (16th notes).
   const rowDescriptors = rows.map((r, rowIndex) => {
-    const cycles = Number.isInteger(r?.repeats) ? Math.min(Math.max(r.repeats, 1), 99) : 1;
+    const cycles = Number.isInteger(r?.repeats) ? Math.min(Math.max(r.repeats, 1), 16) : 1;
     const files = Array.isArray(r?.blocks) ? r.blocks.filter(Boolean) : [];
     const states = files
       .map(f => overridesByFilename?.get(f) || trackerStateByFilename?.[f])
@@ -1859,7 +1882,7 @@ function computeArrangementRowBounds(arrangementState) {
   const rows = Array.isArray(arrangementState?.rows) ? arrangementState.rows : [];
   let cursor = 0;
   return rows.map((row, index) => {
-    const cycles = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 99) : 1;
+    const cycles = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) : 1;
     const steps = cycles * 16;
     const start = cursor;
     const end = start + steps;
@@ -1868,13 +1891,47 @@ function computeArrangementRowBounds(arrangementState) {
   });
 }
 
-function emitArrangementPlayhead(rowIndex, progress) {
+function emitArrangementPlayhead(rowIndex, progress, rowSteps = null, blocks = null) {
   document.dispatchEvent(new CustomEvent('arrangements:playhead', {
     detail: {
       rowIndex,
       progress,
+      rowSteps,
+      blocks,
     }
   }));
+}
+
+function handleArrangementPlayheadForTracker(detail = {}) {
+  if (!isTrackerOpen()) return;
+  if (!editMode.returnToArrangementsOnClose) return;
+  if (previewState.isPlaying) return;
+
+  const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
+  if (rowIndex == null) {
+    setPlayingStep(null);
+    return;
+  }
+
+  const rowBlocks = Array.isArray(detail.blocks) ? detail.blocks : [];
+  const rowSteps = Number.isInteger(detail.rowSteps) && detail.rowSteps > 0 ? detail.rowSteps : null;
+  const isEditingExistingBlock = Boolean(editMode.blockFilename);
+  const matchesExistingBlock = isEditingExistingBlock && rowBlocks.includes(editMode.blockFilename);
+  const matchesNewBlockRow = !isEditingExistingBlock
+    && Number.isInteger(editMode.arrangementInsertRowIndex)
+    && rowIndex === editMode.arrangementInsertRowIndex;
+
+  if (!matchesExistingBlock && !matchesNewBlockRow) {
+    setPlayingStep(null);
+    return;
+  }
+
+  const trackerSteps = Number.isInteger(state.steps) && state.steps > 0 ? state.steps : 16;
+  const cycleSteps = rowSteps || trackerSteps;
+  const progress = typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0;
+  const arrangementStep = Math.floor(progress * cycleSteps);
+  const trackerStep = ((arrangementStep % trackerSteps) + trackerSteps) % trackerSteps;
+  setPlayingStep(trackerStep);
 }
 
 function stopArrangementPlayhead() {
@@ -1918,9 +1975,15 @@ function startArrangementPlayhead() {
     const prevIndex = arrangementPreviewState.playingRowIndex;
     const prevProgress = arrangementPreviewState.playingRowProgress;
     if (prevIndex !== current.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
+      const row = arrangementPreviewState.arrangementState?.rows?.[current.index];
       arrangementPreviewState.playingRowIndex = current.index;
       arrangementPreviewState.playingRowProgress = clamped;
-      emitArrangementPlayhead(current.index, clamped);
+      emitArrangementPlayhead(
+        current.index,
+        clamped,
+        current.steps,
+        Array.isArray(row?.blocks) ? row.blocks : []
+      );
     }
 
     arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
@@ -1987,7 +2050,7 @@ function scheduleArrangementLoopStarts() {
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.loop = false;
-    source.connect(ctx.destination);
+    connectPreviewSource(ctx, source);
     source.onended = () => {
       arrangementPreviewState.playingSources = arrangementPreviewState.playingSources.filter(s => s !== source);
       if (arrangementPreviewState.playingSource === source) {
@@ -2039,7 +2102,7 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition } = {}) 
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
   source.loop = false;
-  source.connect(ctx.destination);
+  connectPreviewSource(ctx, source);
   source.onended = () => {
     arrangementPreviewState.playingSources = arrangementPreviewState.playingSources.filter(s => s !== source);
     if (arrangementPreviewState.playingSource === source) {

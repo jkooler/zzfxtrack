@@ -85,7 +85,7 @@
     --muted-foreground: hsl(60 9.1% 97.8% / 50%) !important;
 
     /* Amber 600 ~ #d97706 -> hsl(45 93% 41%) */
-    --accent: hsl(40.97deg 100% 50% / 15%) !important;
+    --accent: hsl(40.97deg 100% 50% / 20%) !important;
     --accent-foreground: hsl(60 9.1% 97.8%) !important;
 
     /* Red 500 */
@@ -608,8 +608,26 @@ strudel-editor {
 }
 
 /* Arranger */
+.arr-rows-header {
+  @apply flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase select-none;
+  padding-bottom: calc(var(--spacing) * 2);
+}
+
+.arr-rows-header-spacer {
+  width: calc(var(--spacing) * 4);
+}
+
+.arr-rows-header-repeat {
+  @apply inline-flex items-center gap-1;
+  width: calc(var(--spacing) * 9.6); /* matches .arr-repeats width (60%) */
+}
+
+.arr-rows-header-blocks {
+  @apply inline-flex items-center;
+}
+
 .arr-row {
-  @apply flex items-center gap-2 p-2 rounded-md border border-border/50 bg-background/30;
+  @apply flex items-center gap-2 py-1;
 }
 .arr-row-number {
   @apply inline-flex h-8 items-center justify-center text-xs font-mono text-muted-foreground;
@@ -619,7 +637,10 @@ strudel-editor {
   @apply text-primary;
 }
 .arr-repeats {
-  @apply w-16 h-8 rounded-md border border-input bg-input-bg px-2 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply h-8 rounded-md border border-input bg-input-bg px-2 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  width: calc(var(--spacing) * 9.6); /* 60% of previous w-16 */
+  -moz-appearance: textfield;
+  appearance: textfield;
   background-image: linear-gradient(
     90deg,
     var(--accent) 0%,
@@ -630,6 +651,12 @@ strudel-editor {
   background-size: 100% 100%;
   background-repeat: no-repeat;
   background-position: left top;
+}
+
+.arr-repeats::-webkit-outer-spin-button,
+.arr-repeats::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .arr-chips {
   @apply flex flex-wrap gap-2 flex-1 min-w-0;
@@ -647,14 +674,64 @@ strudel-editor {
   background-repeat: no-repeat;
   background-position: left top;
 }
+
+.arr-chip.shake {
+  animation: arr-chip-shake 240ms ease-in-out;
+}
+
+@keyframes arr-chip-shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
+}
+
+.arr-row.arr-row-drop-target {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary), transparent 60%);
+  border-radius: calc(var(--radius) - 2px);
+}
 .arr-chip-del {
   @apply text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded-md;
 }
 .arr-block-select {
   @apply h-8 w-40 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
+
+.arr-block-select-wrap {
+  @apply relative inline-flex items-center justify-center h-8 rounded-md border border-input bg-background shadow-sm transition-colors;
+  width: calc(var(--spacing) * 8);
+}
+
+.arr-block-select-wrap:focus-within {
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+.arr-block-select-plus-label {
+  @apply font-bold text-foreground leading-none select-none;
+  font-size: 22px;
+  transform: translateY(-1px);
+}
+
+.arr-block-select-wrap .arr-block-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
 .arr-row-del {
   @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0;
+}
+
+.upload-dropzone {
+  cursor: pointer;
+}
+
+.upload-dropzone.is-dragover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--accent), transparent 20%);
 }
 
 .modal-overlay.is-suspended {
