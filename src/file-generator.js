@@ -107,7 +107,18 @@ export function generateInstrumentsFile() {
     });
 
     content += `};\n\n`;
-    
+
+    // Export scope per alias so "get from disc" knows user vs example
+    content += `// User vs example (for conflict resolution when loading from disc)\n`;
+    content += `export const instrumentScope = {\n`;
+    defragged.forEach((inst, index, arr) => {
+        const comma = index < arr.length - 1 ? ',' : '';
+        const safeAlias = toSafeAlias(inst.strudelAlias);
+        const scope = (inst.scope === 'example') ? 'example' : 'user';
+        content += `    "${safeAlias}": "${scope}"${comma}\n`;
+    });
+    content += `};\n\n`;
+
     // Export instrumentArray
     content += `// Also export as array for the exporter (ordered by channel index)\n`;
     content += `export const instrumentArray = [\n`;

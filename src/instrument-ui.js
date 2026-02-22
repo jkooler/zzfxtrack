@@ -278,6 +278,19 @@ function setupEventListeners() {
             dom.openInstrumentAdvancedSettingsBtn.classList.add('dev-only-hidden');
         }
     });
+
+    document.addEventListener('instrument-preview:start', (e) => {
+        const { alias, analyser } = e.detail || {};
+        if (!alias || !analyser) return;
+        const item = dom.instrumentList?.querySelector(`.instrument-item[data-alias="${alias}"]`);
+        if (item?._scopeViz) item._scopeViz.setAnalyser(analyser);
+    });
+    document.addEventListener('instrument-preview:end', (e) => {
+        const { alias } = e.detail || {};
+        if (!alias) return;
+        const item = dom.instrumentList?.querySelector(`.instrument-item[data-alias="${alias}"]`);
+        if (item?._scopeViz) item._scopeViz.setAnalyser(getInstrumentAnalyser(alias));
+    });
 }
 
 function showInitOverlay() {
@@ -1191,7 +1204,7 @@ function renderInstrumentList() {
             li.innerHTML = `
                 <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
                 <div class="instrument-info" style="cursor: ${isExample ? 'pointer' : 'move'}; display: flex; align-items: center; gap: 8px;">
-                    <canvas class="instrument-scope w-8 h-8 rounded bg-black/20 border border-border/20 hidden md:block opacity-50 transition-opacity" width="64" height="64"></canvas>
+                    <canvas class="instrument-scope w-[1.6rem] h-[1.6rem] rounded-full bg-black/20 border border-border/20 hidden md:block opacity-50 transition-opacity shrink-0" width="64" height="64"></canvas>
                     <div class="min-w-0">
                         <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
                         <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">${waveShapeLabel} • CH: ${inst.channel}</div>
@@ -1209,12 +1222,13 @@ function renderInstrumentList() {
                     const viz = new ScopeVisualizer(analyser);
                     viz.attach(canvas);
                     activeVisualizers.push(viz);
+                    li._scopeViz = viz;
                 }
             }
 
             li.querySelector('.instrument-info').addEventListener('click', () => {
                 openDrawer(inst.id);
-                playTestNoteDebounced(inst.params, null, 0);
+                playTestNoteDebounced(inst.params, null, 0, inst.strudelAlias);
             });
 
             const deleteBtn = li.querySelector('.sidebar-del-btn');
@@ -1560,7 +1574,8 @@ function handleParamChange(paramIndex) {
     
     // Play test note (debounced) if Strudel isn't currently playing
     if (!isStrudelPlaybackActive()) {
-        playTestNoteDebounced(newParams);
+        const instrument = getInstrumentById(currentInstrumentId);
+        playTestNoteDebounced(newParams, null, 300, instrument?.strudelAlias ?? null);
     }
 }
 
@@ -1574,7 +1589,7 @@ function handleTestInstrument() {
     if (!instrument) return;
     
     // Play immediately (no debounce), using instrument's own frequency
-    playTestNoteDebounced(instrument.params, null, 0);
+    playTestNoteDebounced(instrument.params, null, 0, instrument.strudelAlias);
 }
 
 /**

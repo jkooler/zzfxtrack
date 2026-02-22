@@ -293,6 +293,8 @@ export function migrateFromFile(importedData) {
       .map((inst) => [inst.strudelAlias.toLowerCase(), inst]),
   );
   const monophonicFromFile = importedData?.instrumentMonophonic || {};
+  // Optional: file/API can provide scope per alias (e.g. instrumentScope: { "z-piano": "example" })
+  const scopeFromFile = importedData?.instrumentScope || {};
 
   const instruments = [];
   let channel = 0;
@@ -328,6 +330,20 @@ export function migrateFromFile(importedData) {
           monophonicFromFile?.[alias] ??
           monophonicFromFile?.[alias.toLowerCase()] ??
           monophonicFromFile?.[alias.toUpperCase()];
+        // Scope: prefer file if provided, else preserve local (prev), else safe default "user".
+        // We do not infer "example" from alias (e.g. demo-/test-) when prev is missing — that would misclassify
+        // user instruments and miss example instruments with other names. Only use "example" when file sends it
+        // or when we had it locally (prev).
+        const fileScope =
+          scopeFromFile[alias] ??
+          scopeFromFile[alias.toLowerCase()] ??
+          scopeFromFile[alias.toUpperCase()];
+        const scopeFallback = prev
+          ? inferLegacyScope(prev)
+          : "user";
+        const scopeSource = typeof fileScope === "string"
+          ? fileScope
+          : prev?.scope;
         instruments.push({
           id: prev?.id || generateId(),
           exportName,
@@ -335,7 +351,7 @@ export function migrateFromFile(importedData) {
           channel: ch,
           params,
           monophonic: parseMonophonicFlag(monoFromFile, parseMonophonicFlag(prev?.monophonic, false)),
-          scope: normalizeScope(prev?.scope, "example"),
+          scope: normalizeScope(scopeSource, scopeFallback),
         });
       } else {
         console.warn(`[InstrumentManager] Could not find params for ${alias}`);

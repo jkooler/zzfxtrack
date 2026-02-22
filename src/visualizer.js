@@ -25,6 +25,13 @@ export class ScopeVisualizer {
         }
     }
 
+    /**
+     * Swap the analyser (e.g. to preview analyser while test note plays, then back to instrument analyser).
+     */
+    setAnalyser(analyser) {
+        this.analyser = analyser;
+    }
+
     draw() {
         if (!this.canvas) return;
         this.animationId = requestAnimationFrame(this.draw);
@@ -44,12 +51,17 @@ export class ScopeVisualizer {
         ctx.strokeStyle = '#ffffff'; 
         ctx.beginPath();
 
+        // Amplify deviation from center so quiet signals are visible (zoom into waveform)
+        const waveformGain = 4;
         const sliceWidth = width * 1.0 / bufferLength;
+        const centerY = height / 2;
+        const halfHeight = height / 2;
         let x = 0;
 
         for (let i = 0; i < bufferLength; i++) {
-            const v = dataArray[i] / 128.0; 
-            const y = v * height / 2;
+            const normalized = (dataArray[i] - 128) / 128; // -1 .. 1
+            const amplified = Math.max(-1, Math.min(1, normalized * waveformGain));
+            const y = centerY + amplified * halfHeight;
 
             if (i === 0) {
                 ctx.moveTo(x, y);
@@ -60,7 +72,7 @@ export class ScopeVisualizer {
             x += sliceWidth;
         }
 
-        ctx.lineTo(width, height / 2);
+        ctx.lineTo(width, centerY);
         ctx.stroke();
     }
 }
