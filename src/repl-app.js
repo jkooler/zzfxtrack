@@ -2806,7 +2806,7 @@ document.addEventListener('keydown', (e) => {
 
 // --- PLAYBACK LOGIC ---
 
-function togglePlay(e) {
+async function togglePlay(e) {
     const editor = dom.repl.editor;
     if (!editor) return;
 
@@ -2829,7 +2829,18 @@ function togglePlay(e) {
             isStrudelPaused = false;
             updatePlayState(false);
         }
-    } else if (isRunning) {
+        return;
+    }
+
+    // Ensure ZzFX instruments are registered right before starting playback.
+    // This prevents default Strudel sound registries (e.g. sample packs) from overriding aliases like "cowbell".
+    try {
+        await reloadInstruments();
+    } catch (err) {
+        console.warn('[ReplApp] Failed to reload instruments before playback:', err);
+    }
+
+    if (isRunning) {
         // Another song is currently running. Switch to selected song and restart
         editor.stop();
         isStrudelPaused = false;
@@ -2891,6 +2902,9 @@ document.addEventListener('start-repl', (e) => {
     // If our repl started, update button
     if (dom.repl.editor && e.detail === dom.repl.editor.id) {
         updatePlayState(true);
+        // Ensure our ZzFX instruments win any name collisions (e.g. "cowbell") after REPL start.
+        // Some Strudel setups may (re)register default sound sources when the REPL starts.
+        void reloadInstruments();
     }
 });
 

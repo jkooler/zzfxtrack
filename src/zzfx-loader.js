@@ -182,7 +182,6 @@ let registeredAliases = new Set();
 export function loadZzFXInstruments(instrumentMap, options = {}) {
     if (typeof window === 'undefined') return;
 
-    const audioCtx = getAudioContext();
     console.log("🔊 Generating ZzFX previews (ZzFXMicro v1.3.2 compatible)...");
     if (options?.monophonicAliases) {
         if (options.monophonicAliases instanceof Set) {
@@ -214,9 +213,10 @@ export function loadZzFXInstruments(instrumentMap, options = {}) {
             // Overwrite with a silent handler that warns
             registerSound(alias, (time, value) => {
                 console.warn(`⚠️ Instrument "${alias}" has been removed or renamed. Please update your code.`);
+                const ctx = getAudioContext();
                 // Return no-op node
                 return {
-                    node: audioCtx.createGain(), // dummy node
+                    node: ctx ? ctx.createGain() : null, // dummy node
                     stop: () => {}
                 };
             });
@@ -232,6 +232,12 @@ export function loadZzFXInstruments(instrumentMap, options = {}) {
         const baseMidi = 12 * Math.log2(baseFreq / 440) + 69;
 
         registerSound(id, (time, value, onEnded) => {
+            // Resolve AudioContext lazily. Some Strudel/WebAudio setups create it only on first playback gesture.
+            const audioCtx = getAudioContext();
+            if (!audioCtx) {
+                return { node: null, stop: () => {} };
+            }
+
             const startTime = Math.max(time, audioCtx.currentTime + 0.01);
             const isMonophonic = monophonicAliasSet.has(id);
             if (isMonophonic) {
@@ -301,8 +307,7 @@ export function loadZzFXInstruments(instrumentMap, options = {}) {
             }
             
             // Create buffer
-            const buffer = audioCtx.createBuffer(1, samples.length, zzfxR);
-            buffer.getChannelData(0).set(samples);
+            const buffer = samplesToBuffer(samples, audioCtx);
 
             const source = audioCtx.createBufferSource();
             source.buffer = buffer;
