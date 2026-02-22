@@ -16,7 +16,7 @@ import {
 import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 
-import { reloadInstruments, isStrudelPlaybackActive } from './repl-app.js';
+import { reloadInstruments, isStrudelPlaybackActive, refreshSongListActiveState } from './repl-app.js';
 import { createIcons, icons } from 'lucide';
 import { getInstrumentAnalyser } from './zzfx-loader.js';
 import { ScopeVisualizer } from './visualizer.js';
@@ -1091,7 +1091,11 @@ export function updateSongSelectionState(isLoaded) {
  */
 function switchView(view) {
     currentView = view;
-    
+
+    // Clear introduction page highlight and restore current song highlight when user switches to Songs or Instruments tab
+    document.getElementById('sidebarTitle')?.classList.remove('active');
+    refreshSongListActiveState();
+
     if (view === 'songs') {
         dom.songsTab.classList.add('active');
         dom.instrumentsTab.classList.remove('active');

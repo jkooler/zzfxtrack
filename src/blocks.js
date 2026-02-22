@@ -322,6 +322,10 @@ function cacheElements() {
         deleteArrangementRowText: document.getElementById('deleteArrangementRowText'),
         cancelDeleteArrangementRow: document.getElementById('cancelDeleteArrangementRow'),
         confirmDeleteArrangementRow: document.getElementById('confirmDeleteArrangementRow'),
+        arrangementUnsavedModal: document.getElementById('arrangementUnsavedConfirmModal'),
+        arrangementUnsavedCancel: document.getElementById('arrangementUnsavedCancel'),
+        arrangementUnsavedDontSave: document.getElementById('arrangementUnsavedDontSave'),
+        arrangementUnsavedSave: document.getElementById('arrangementUnsavedSave'),
 		  };
 		}
 
@@ -345,8 +349,20 @@ function setupEventListeners() {
 
   elements.createArrangementBtn?.addEventListener('click', () => { void openArrangementEditor(); });
   elements.insertArrangementBtn?.addEventListener('click', insertSelectedArrangement);
-  elements.closeArrangementBtn?.addEventListener('click', closeArrangementEditor);
-  elements.cancelArrangementBtn?.addEventListener('click', closeArrangementEditor);
+  elements.closeArrangementBtn?.addEventListener('click', requestCloseArrangementEditor);
+  elements.cancelArrangementBtn?.addEventListener('click', requestCloseArrangementEditor);
+  elements.arrangementUnsavedCancel?.addEventListener('click', closeArrangementUnsavedConfirmModal);
+  elements.arrangementUnsavedDontSave?.addEventListener('click', () => {
+    closeArrangementUnsavedConfirmModal();
+    closeArrangementEditor();
+  });
+  elements.arrangementUnsavedSave?.addEventListener('click', () => {
+    closeArrangementUnsavedConfirmModal();
+    saveArrangementFromEditor();
+  });
+  elements.arrangementUnsavedModal?.addEventListener('click', (e) => {
+    if (e.target === elements.arrangementUnsavedModal) closeArrangementUnsavedConfirmModal();
+  });
   elements.previewArrangementBtn?.addEventListener('click', previewArrangementDraft);
   elements.addArrangementRowBtn?.addEventListener('click', () => {
     arrangementDraft.rows.push({ repeats: 1, blocks: [] });
@@ -882,6 +898,23 @@ let arrangementDraft = {
   rows: [{ repeats: 1, blocks: [] }],
 };
 
+/** Snapshot when arrangement editor was opened (for unsaved-changes detection) */
+let lastSavedArrangementSnapshot = '';
+
+function getArrangementSnapshot() {
+  const name = (elements.arrangementName?.value ?? arrangementDraft.name ?? '').trim();
+  const bpm = String(elements.arrangementBpm?.value ?? arrangementDraft.bpm ?? 120);
+  const rows = arrangementDraft.rows.map((r) => ({
+    repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
+    blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+  }));
+  return JSON.stringify({ name, bpm, rows });
+}
+
+function hasArrangementUnsavedChanges() {
+  return getArrangementSnapshot() !== lastSavedArrangementSnapshot;
+}
+
 async function ensureBlocksLoaded() {
   if (blocksCache?.length) return;
   await loadBlocksList();
@@ -928,9 +961,27 @@ async function openArrangementEditor(arrangement = null) {
   elements.arrangementName?.focus();
   createIcons({ icons });
   updateArrangementPreviewButtonState();
+  lastSavedArrangementSnapshot = getArrangementSnapshot();
+}
+
+function closeArrangementUnsavedConfirmModal() {
+  elements.arrangementUnsavedModal?.classList.remove('open');
+}
+
+function requestCloseArrangementEditor() {
+  if (hasArrangementUnsavedChanges()) {
+    const isReadonlyExample = arrangementEditMode.scope === 'example' && !isDeveloperModeEnabled();
+    if (elements.arrangementUnsavedSave) {
+      elements.arrangementUnsavedSave.classList.toggle('hidden', isReadonlyExample);
+    }
+    elements.arrangementUnsavedModal?.classList.add('open');
+    return;
+  }
+  closeArrangementEditor();
 }
 
 function closeArrangementEditor() {
+  closeArrangementUnsavedConfirmModal();
   const shouldRestoreBlocksModal = !isBlocksModalOpen();
   if (shouldRestoreBlocksModal) {
     // Open the blocks shell first to avoid a one-frame flash of the main app.
@@ -979,7 +1030,12 @@ function renderArrangementRows() {
       return collator ? collator.compare(aFile, bFile) : aFile.localeCompare(bFile);
     });
   };
-  const blocksForPicker = sortBlocksForPicker(blocksCache);
+  // When editing a user-scope arrangement, only list user blocks in the add-block picker (no example blocks)
+  const blocksAvailableForPicker =
+    arrangementEditMode.scope === 'user'
+      ? blocksCache.filter((b) => normalizeScope(b?.scope) !== 'example')
+      : blocksCache;
+  const blocksForPicker = sortBlocksForPicker(blocksAvailableForPicker);
   const blockByFilename = new Map(blocksCache.map((b) => [b.filename, b]));
   const compareRowBlockFilenames = (aFilename, bFilename) => {
     const aBlock = blockByFilename.get(aFilename);

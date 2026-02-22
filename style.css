@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans:wght@300;400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans:wght@300;400;500;700;800;900&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -122,7 +122,7 @@
 body {
   @apply bg-background text-foreground font-sans antialiased overflow-hidden h-screen;
   display: grid;
-  grid-template-columns: 260px auto 1fr; /* Sidebar | Drawer | Main */
+  grid-template-columns: 256px auto 1fr; /* Sidebar | Drawer | Main */
   grid-template-rows: 100vh;
 }
 
@@ -208,6 +208,11 @@ input[readonly]:focus-visible {
 }
 .song-item.active {
   @apply bg-accent text-accent-foreground;
+}
+
+/* Introduction page selection: same highlight as selected song */
+#sidebarTitle.active {
+  @apply bg-accent text-accent-foreground rounded-md px-2;
 }
 
 .song-item-actions {
@@ -428,9 +433,13 @@ strudel-editor {
   @apply text-[10px] font-bold tracking-widest text-muted-foreground uppercase mt-4 mb-4 border-b border-border/30 pb-0;
 }
 
+.param-group {
+  height: fit-content;
+}
+
 .param-field {
   height: fit-content;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .param-field > .flex {

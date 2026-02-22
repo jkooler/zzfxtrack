@@ -309,6 +309,9 @@ function showWelcome() {
     // Clear preview
     dom.previewJson.innerText = '';
     lastExportedData = null;
+
+    // No highlight on initial load or when returning to welcome with no song
+    dom.sidebarTitle?.classList.remove('active');
 }
 
 function showIntroduction() {
@@ -331,6 +334,10 @@ function showIntroduction() {
 
     renderPlayButton();
     updateSongListVisualizer();
+
+    // Remove selection highlight from song list when introduction page is selected
+    Array.from(dom.songList.querySelectorAll('.song-item')).forEach((li) => li.classList.remove('active'));
+    dom.sidebarTitle?.classList.add('active');
 }
 
 function showEditor() {
@@ -342,6 +349,7 @@ function showEditor() {
     dom.exportBtn.disabled = false;
     dom.songNameInput.classList.remove('hidden');
     updateAdvancedSettingsButtonsVisibility();
+    dom.sidebarTitle?.classList.remove('active');
 }
 
 // --- Initialization ---
@@ -693,7 +701,8 @@ async function refreshSongList() {
                 const devMode = isDeveloperModeEnabled();
                 const isImmutable = isExample && !devMode;
                 const li = document.createElement('li');
-                li.className = `song-item ${file === currentSongFilename ? 'active' : ''}`;
+                const isIntroductionVisible = dom.welcomeView?.style?.display === 'flex';
+                li.className = `song-item ${file === currentSongFilename && !isIntroductionVisible ? 'active' : ''}`;
                 li.dataset.scope = normalizeScope(entry.scope);
                 li.dataset.filename = file;
 
@@ -807,6 +816,17 @@ function updateSongListVisualizer() {
     if (!visualizerAttached) {
         attachVisualizer(null);
     }
+}
+
+/**
+ * Re-apply active highlight to the currently selected song in the sidebar.
+ * Used when user switches from introduction view to Songs/Instruments tab.
+ */
+export function refreshSongListActiveState() {
+    if (!currentSongFilename || !dom.songList) return;
+    Array.from(dom.songList.querySelectorAll('.song-item')).forEach((li) => {
+        li.classList.toggle('active', li.dataset.filename === currentSongFilename);
+    });
 }
 
 // --- Code Transformation Helpers ---

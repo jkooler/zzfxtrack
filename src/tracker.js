@@ -94,6 +94,9 @@ let editMode = {
   arrangementInsertRowIndex: null,
 };
 
+/** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
+let lastSavedSnapshot = '';
+
 // Preview playback state
 let previewState = {
   audioContext: null,
@@ -298,6 +301,13 @@ function cacheElements() {
     blockChannels: document.getElementById('trackerBlockChannels'),
     blockAdvancedSettingsBtn: document.getElementById('trackerBlockAdvancedSettingsBtn'),
     title: document.querySelector('#trackerModal h2'),
+    clearConfirmModal: document.getElementById('clearTrackerConfirmModal'),
+    clearConfirmCancel: document.getElementById('clearTrackerConfirmCancel'),
+    clearConfirmOk: document.getElementById('clearTrackerConfirmOk'),
+    unsavedConfirmModal: document.getElementById('trackerUnsavedConfirmModal'),
+    unsavedCancel: document.getElementById('trackerUnsavedCancel'),
+    unsavedDontSave: document.getElementById('trackerUnsavedDontSave'),
+    unsavedSave: document.getElementById('trackerUnsavedSave'),
   };
 }
 
@@ -702,14 +712,32 @@ function focusNoteCell(channel, step) {
  * Setup keyboard event listeners
  */
 function setupEventListeners() {
-  // Modal close button
-  elements.closeBtn?.addEventListener('click', closeTracker);
+  // Modal close button — show unsaved-changes dialog when needed
+  elements.closeBtn?.addEventListener('click', requestCloseTracker);
+  elements.unsavedCancel?.addEventListener('click', closeUnsavedConfirmModal);
+  elements.unsavedDontSave?.addEventListener('click', () => {
+    closeUnsavedConfirmModal();
+    closeTracker();
+  });
+  elements.unsavedSave?.addEventListener('click', () => {
+    closeUnsavedConfirmModal();
+    handleSaveBlock();
+  });
+  elements.unsavedConfirmModal?.addEventListener('click', (e) => {
+    if (e.target === elements.unsavedConfirmModal) closeUnsavedConfirmModal();
+  });
 
-  // Clear button
+  // Clear button — show confirmation dialog
   elements.clearBtn?.addEventListener('click', () => {
-    if (confirm('Clear all tracker data?')) {
-      clearAll();
-    }
+    elements.clearConfirmModal?.classList.add('open');
+  });
+  elements.clearConfirmCancel?.addEventListener('click', closeClearConfirmModal);
+  elements.clearConfirmOk?.addEventListener('click', () => {
+    closeClearConfirmModal();
+    clearAll();
+  });
+  elements.clearConfirmModal?.addEventListener('click', (e) => {
+    if (e.target === elements.clearConfirmModal) closeClearConfirmModal();
   });
 
   // Copy button
@@ -2338,7 +2366,8 @@ export function openTracker(instrumentList, options = {}) {
   }
 
   elements.modal?.classList.add('open');
-  
+  lastSavedSnapshot = getSnapshot();
+
   // Focus first cell
   setFocus(0, 0);
 }
@@ -2379,9 +2408,29 @@ export function openTrackerForEdit(instrumentList, blockData) {
   }
 
   elements.modal?.classList.add('open');
-  
+  lastSavedSnapshot = getSnapshot();
+
   // Focus first cell
   setFocus(0, 0);
+}
+
+/**
+ * Get a serializable snapshot of current state (for unsaved-changes comparison)
+ */
+function getSnapshot() {
+  const name = (elements.blockNameInput?.value ?? editMode.blockName ?? '').trim();
+  return JSON.stringify({
+    trackerState: serializeTrackerState(),
+    name,
+  });
+}
+
+/**
+ * Whether the user has made changes since opening or last save
+ */
+function hasUnsavedChanges() {
+  if (!editMode.isEditing) return false;
+  return getSnapshot() !== lastSavedSnapshot;
 }
 
 /**
@@ -2398,6 +2447,7 @@ function resetEditMode() {
   editMode.returnToArrangementsOnClose = false;
   editMode.returnToBlocksOnClose = false;
   editMode.arrangementInsertRowIndex = null;
+  lastSavedSnapshot = '';
 }
 
 /**
@@ -2514,6 +2564,29 @@ function handleSaveBlock() {
   document.dispatchEvent(event);
 }
 
+function closeClearConfirmModal() {
+  elements.clearConfirmModal?.classList.remove('open');
+}
+
+function closeUnsavedConfirmModal() {
+  elements.unsavedConfirmModal?.classList.remove('open');
+}
+
+/**
+ * Request to close the tracker; shows save-changes dialog if there are unsaved changes
+ */
+function requestCloseTracker() {
+  if (hasUnsavedChanges()) {
+    const isReadonlyExample = editMode.blockScope === 'example' && !isDeveloperModeEnabled();
+    if (elements.unsavedSave) {
+      elements.unsavedSave.classList.toggle('hidden', isReadonlyExample);
+    }
+    elements.unsavedConfirmModal?.classList.add('open');
+    return;
+  }
+  closeTracker();
+}
+
 /**
  * Close the tracker modal
  */
@@ -2522,7 +2595,9 @@ export function closeTracker() {
   const shouldReturnToArrangements = !!editMode.returnToArrangementsOnClose;
   // Stop any playing preview
   stopPreview();
-  
+
+  closeClearConfirmModal();
+  closeUnsavedConfirmModal();
   elements.modal?.classList.remove('open');
   
   // Reset edit mode when closing
