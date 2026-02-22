@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.1.0-alpha.1] - 2026-02-14
+## [0.1.0-alpha.1] - Q2/2026
 
 ### Added
 

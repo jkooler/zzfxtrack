@@ -34,8 +34,9 @@ let arrangementEditMode = {
 	};
 let arrangementToDelete = null;
 let arrangementRowToDeleteIndex = null;
-const BLOCKS_FOLDER_STATE_KEY = 'zzfxm-folder-state-blocks-v1';
-const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v1';
+// v2: default User expanded, Examples collapsed when first using the app
+const BLOCKS_FOLDER_STATE_KEY = 'zzfxm-folder-state-blocks-v2';
+const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v2';
 let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: false });
 let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, example: false });
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
