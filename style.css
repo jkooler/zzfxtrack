@@ -197,7 +197,7 @@ input[readonly]:focus-visible {
 }
 
 .song-item {
-  @apply flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 relative overflow-hidden text-sm;
+  @apply flex items-center justify-between py-1.5 px-2 min-h-9 rounded-md hover:bg-accent/50 cursor-pointer transition-colors border-b border-border/50 relative overflow-hidden text-sm font-medium;
 }
 .song-item.active {
   @apply bg-accent text-accent-foreground;
@@ -241,7 +241,7 @@ input[readonly]:focus-visible {
   @apply flex-1 min-w-0 mr-2;
 }
 .instrument-name {
-  @apply font-bold truncate text-foreground text-sm block;
+  @apply font-medium truncate text-foreground text-sm block;
 }
 .instrument-alias {
   @apply text-xs text-muted-foreground truncate block;
@@ -252,6 +252,9 @@ input[readonly]:focus-visible {
 
 .sidebar-del-btn {
   @apply text-muted-foreground hover:text-destructive focus-visible:text-destructive transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none;
+}
+.song-item .sidebar-del-btn {
+  @apply p-1;
 }
 .sidebar-edit-btn {
   @apply text-muted-foreground hover:text-primary focus-visible:text-primary transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none inline-flex items-center gap-2 text-xs;
@@ -613,7 +616,7 @@ strudel-editor {
 }
 
 .block-name {
-  @apply font-bold text-sm text-foreground;
+  @apply font-medium text-sm text-foreground;
 }
 
 .block-description {
