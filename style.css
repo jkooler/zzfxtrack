@@ -65,15 +65,15 @@
     /* Stone 950 ~ #0c0a09 -> hsl(24, 5.7%, 8.2%) */
     --background: hsl(24 5.7% 8.2%) !important;
     /* Stone 50 ~ #fafaf9 -> hsl(60, 9.1%, 97.8%) */
-    --foreground: hsl(60 9.1% 97.8%) !important;
+    --foreground: hsl(60 9.1% 80%) !important;
 
     /* Stone 900 ~ #1c1917 -> hsl(24 5.4% 10.9%) - Adjusted for Card */
     --card: hsl(24 5.4% 10.9%) !important;
-    --card-foreground: hsl(60 9.1% 97.8%) !important;
+    --card-foreground: hsl(60 9.1% 80%) !important;
 
     /* Popover same as background or slightly lighter */
     --popover: hsl(24 5.7% 8.2%) !important;
-    --popover-foreground: hsl(60 9.1% 97.8%) !important;
+    --popover-foreground: hsl(60 9.1% 80%) !important;
 
     /* Amber 500 ~ #f59e0b -> hsl(45 93% 47%) */
     --primary: hsl(45deg 62.76% 60.43%) !important;
