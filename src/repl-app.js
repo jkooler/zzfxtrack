@@ -1,5 +1,5 @@
 import '@strudel/repl/index.mjs'; 
-import { instruments } from '../instruments.js';
+import { instruments as staticInstruments, instrumentMonophonic as staticMonophonic } from '../instruments.js';
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
 import { exportPattern } from './export-logic.js';
@@ -359,7 +359,7 @@ async function init() {
     await initStrudel();
     
     // 2. Load ZzFX Instruments into Strudel Registry
-    loadZzFXInstruments(instruments);
+    loadZzFXInstruments(staticInstruments);
     
     // 3. Load Songs List
     await refreshSongList();
@@ -464,18 +464,32 @@ function syncThemeColors() {
 export async function reloadInstruments() {
     const { getDefragmentedInstruments } = await import('./instrument-manager.js');
 
-    const instruments = {};
+    const map = {};
     const monophonicAliases = new Set();
     const defragged = getDefragmentedInstruments();
 
     defragged.forEach((inst) => {
-        instruments[inst.strudelAlias] = inst.params;
+        map[inst.strudelAlias] = inst.params;
         if (inst.monophonic) monophonicAliases.add(inst.strudelAlias);
     });
 
-    // Reload into Strudel
-    loadZzFXInstruments(instruments, { monophonicAliases });
-    console.log('[ReplApp] Reloaded', Object.keys(instruments).length, 'instruments into Strudel');
+    // Ensure every static instrument (e.g. cowbell) is in the registry even if missing from
+    // localStorage — so reload never unregisters them and songs play without a full page reload.
+    for (const [alias, params] of Object.entries(staticInstruments)) {
+        if (Array.isArray(params) && map[alias] === undefined) {
+            map[alias] = params;
+            if (staticMonophonic && staticMonophonic[alias]) monophonicAliases.add(alias);
+        }
+    }
+
+    // If we still have nothing (no storage and no static?), keep initial registry
+    if (Object.keys(map).length === 0) {
+        console.log('[ReplApp] No instruments to load; keeping initial registry');
+        return;
+    }
+
+    loadZzFXInstruments(map, { monophonicAliases });
+    console.log('[ReplApp] Reloaded', Object.keys(map).length, 'instruments into Strudel');
 }
 
 // --- Auto-Save and Hot-Reload Setup ---
