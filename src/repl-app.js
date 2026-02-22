@@ -188,6 +188,12 @@ const dom = {
     closeJsonModalBottomBtn: document.getElementById('closeJsonModalBottomBtn'),
     downloadJsonBtn: document.getElementById('downloadJsonBtn'),
     copyJsonBtn: document.getElementById('copyJsonBtn'),
+
+    // About Modal
+    openAboutModalBtn: document.getElementById('openAboutModalBtn'),
+    aboutModal: document.getElementById('aboutModal'),
+    closeAboutModalBtn: document.getElementById('closeAboutModalBtn'),
+    closeAboutModalBottomBtn: document.getElementById('closeAboutModalBottomBtn'),
     
     // Licensing Modal
     openLicenseModalBtn: document.getElementById('openLicenseModalBtn'),
@@ -2956,6 +2962,25 @@ if(dom.closeJsonModalBtn) dom.closeJsonModalBtn.addEventListener('click', closeJ
 if(dom.closeJsonModalBottomBtn) dom.closeJsonModalBottomBtn.addEventListener('click', closeJsonModal);
 if(dom.downloadJsonBtn) dom.downloadJsonBtn.addEventListener('click', downloadJsonData);
 if(dom.copyJsonBtn) dom.copyJsonBtn.addEventListener('click', copyJsonToClipboard);
+
+// --- About Modal Logic ---
+function openAboutModal() {
+    dom.aboutModal?.classList.add('open');
+    createIcons({ icons });
+}
+
+function closeAboutModal() {
+    dom.aboutModal?.classList.remove('open');
+}
+
+if (dom.openAboutModalBtn) dom.openAboutModalBtn.addEventListener('click', openAboutModal);
+if (dom.closeAboutModalBtn) dom.closeAboutModalBtn.addEventListener('click', closeAboutModal);
+if (dom.closeAboutModalBottomBtn) dom.closeAboutModalBottomBtn.addEventListener('click', closeAboutModal);
+if (dom.aboutModal) {
+    dom.aboutModal.addEventListener('click', (e) => {
+        if (e.target === dom.aboutModal) closeAboutModal();
+    });
+}
 
 // --- Licensing Modal Logic ---
 function openLicenseModal() {

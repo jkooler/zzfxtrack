@@ -591,6 +591,12 @@
           <div class="h-px bg-border"></div>
           <div class="flex items-center justify-center gap-2">
             <button
+              id="openAboutModalBtn"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
+            >
+              About
+            </button>
+            <button
               id="openChangelogModalBtn"
               class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
             >
@@ -742,6 +748,74 @@
       </div>
     </div>
 
+    <!-- About Modal -->
+    <div
+      id="aboutModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-3xl max-h-[85vh] gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
+      >
+        <div class="flex items-center justify-between">
+          <h2
+            class="text-lg font-semibold leading-none tracking-tight text-primary"
+          >
+            About
+          </h2>
+          <button
+            id="closeAboutModalBtn"
+            class="text-muted-foreground hover:text-foreground"
+            aria-label="Close"
+          >
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+
+        <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
+          <p class="text-foreground/90 leading-relaxed">
+            This is an authoring/export tool for <strong>ZzFXM</strong> that embeds <strong>Strudel</strong> for its REPL workflow. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
+          </p>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">30-second workflow</h3>
+            <ol class="list-decimal pl-5 space-y-1">
+              <li>Load an example song.</li>
+              <li>Tweak a sound in the instrument editor (ZzFXMicro-style parameters).</li>
+              <li>(Optional) Use <strong>Blocks</strong> to sketch parts in a tracker-style grid and preview an arrangement.</li>
+              <li>Click <strong>Export ZzFXM</strong> and preview playback.</li>
+              <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Download WAV</strong> to share/test.</li>
+            </ol>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">How it fits together</h3>
+            <ul class="list-disc pl-5 space-y-1">
+              <li><strong>Strudel</strong>: pattern notation and event scheduling.</li>
+              <li><strong>ZzFXMicro</strong>: instrument parameter model and sound generation (registered as Strudel sounds for playback).</li>
+              <li><strong>ZzFXM</strong>: the export target format for games/apps.</li>
+            </ul>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">Alpha notes</h3>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Some Strudel features may preview fine but not export 1:1.</li>
+              <li>For best results, stick to simple, repeatable patterns and test with exported playback.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="flex justify-end">
+          <button
+            id="closeAboutModalBottomBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Licensing And Attribution Modal -->
     <div
       id="licenseAttributionModal"
@@ -841,7 +915,7 @@
             <ul class="list-disc pl-5 space-y-1">
               <li>The editor is the embedded <code>&lt;strudel-editor&gt;</code> REPL component. When you press Play (or run code via Strudel shortcuts), Strudel evaluates your code and drives timing/scheduling in the browser.</li>
               <li>Sound is produced by ZzFXMicro instruments: the app maps instrument definitions to ZzFXMicro parameters and uses them for preview playback and for export.</li>
-              <li>The app keeps a small amount of UI state (selected song, play state, export settings) and mirrors it into the sidebar and preview panel.</li>
+              <li>The app keeps a small amount of UI state (selected song, play state, export settings) and mirrors it into the sidebar, toolbar, and modals.</li>
               <li>Auto-save is event-driven: changes are debounced to avoid excessive writes, but key actions (like leaving certain inputs) can trigger immediate saves.</li>
             </ul>
           </div>
@@ -876,6 +950,7 @@
             <ul class="list-disc pl-5 space-y-1">
               <li>Export is the main feature: it turns your composition into a ZzFXM song array <code>[instruments, patterns, sequence, BPM]</code> (plus optional stats), designed to be deterministic and engine-friendly.</li>
               <li>Preview uses the same exported ZzFXM structure and ZzFXMicro synthesis to let you verify the result before downloading.</li>
+              <li><code>Download WAV</code> renders the exported song to PCM audio and encodes it as a WAV file (sample rate and bit depth are configurable in Export Settings).</li>
             </ul>
           </div>
 
