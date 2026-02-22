@@ -1695,7 +1695,7 @@ function playMixBuffer(mixBuffer, sampleRate) {
   };
 }
 
-function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds = 0 } = {}) {
+function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds = 0, normalizeMaster = true } = {}) {
   const channels = trackerState.channels || (Array.isArray(trackerState.grid) ? trackerState.grid.length : 0);
   const steps = trackerState.steps || (Array.isArray(trackerState.grid?.[0]) ? trackerState.grid[0].length : 0);
   const grid = trackerState.grid || [];
@@ -1813,14 +1813,16 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
     return null;
   }
 
-  let maxAmp = 0;
-  for (let i = 0; i < mixBuffer.length; i++) {
-    maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
-  }
-  if (maxAmp > 0) {
-    const scale = 0.5 / maxAmp;
+  if (normalizeMaster) {
+    let maxAmp = 0;
     for (let i = 0; i < mixBuffer.length; i++) {
-      mixBuffer[i] *= scale;
+      maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
+    }
+    if (maxAmp > 0) {
+      const scale = 0.5 / maxAmp;
+      for (let i = 0; i < mixBuffer.length; i++) {
+        mixBuffer[i] *= scale;
+      }
     }
   }
 
@@ -1917,7 +1919,10 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
           : Array.from({ length: srcChannels }, () => ''),
       };
 
-      const rendered = renderTrackerStateToMixBuffer(renderState, instrumentList, bpm, { tailSeconds: 1 });
+      const rendered = renderTrackerStateToMixBuffer(renderState, instrumentList, bpm, {
+        tailSeconds: 1,
+        normalizeMaster: false,
+      });
       if (!rendered?.mixBuffer) continue;
       const blockBuf = rendered.mixBuffer;
       for (let i = 0; i < rowMainSamples; i++) {
