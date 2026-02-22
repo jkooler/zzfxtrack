@@ -3,7 +3,7 @@ import { instruments as staticInstruments, instrumentMonophonic as staticMonopho
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
 import { exportPattern } from './export-logic.js';
-import { playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
+import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState, refreshInstrumentListUI } from './instrument-ui.js';
@@ -12,6 +12,7 @@ import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
+import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import JSZip from 'jszip';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
@@ -108,11 +109,20 @@ let arrangementPreviewContext = {
     trackerStateByFilename: {},
     instrumentList: null,
     bpm: 120,
+    mixSettings: sanitizePlaybackMixSettings(DEFAULT_PLAYBACK_MIX_SETTINGS),
 };
 let arrangementLiveEditSession = {
     active: false,
     committed: false,
 };
+
+const PLAYBACK_LOUDNESS_PRESETS = Object.freeze({
+    safe: { targetPeak: 0.5, masterGainDb: 0, softClipDrive: 1 },
+    balanced: { ...DEFAULT_PLAYBACK_MIX_SETTINGS },
+    loud: { targetPeak: 0.65, masterGainDb: 5.5, softClipDrive: 1.8 },
+    very_loud: { targetPeak: 0.8, masterGainDb: 7, softClipDrive: 2.3 },
+});
+const DEFAULT_PLAYBACK_PRESET_ID = 'balanced';
 
 // --- DOM Elements ---
 const dom = {
@@ -123,6 +133,7 @@ const dom = {
     openSongAdvancedSettingsBtn: document.getElementById('openSongAdvancedSettingsBtn'),
     playBtn: document.getElementById('playBtn'),
     exportBtn: document.getElementById('exportBtn'),
+    exportWavBtn: document.getElementById('exportWavBtn'),
     newSongBtn: document.getElementById('newSongBtn'),
     statusMsg: document.getElementById('statusMsg'),
     demoModeBadge: document.getElementById('demoModeBadge'),
@@ -175,6 +186,7 @@ const dom = {
     jsonPreviewModal: document.getElementById('jsonPreviewModal'),
     closeJsonModalBtn: document.getElementById('closeJsonModalBtn'),
     closeJsonModalBottomBtn: document.getElementById('closeJsonModalBottomBtn'),
+    downloadJsonBtn: document.getElementById('downloadJsonBtn'),
     copyJsonBtn: document.getElementById('copyJsonBtn'),
     
     // Licensing Modal
@@ -216,6 +228,12 @@ const dom = {
     exportResolutionHint: document.getElementById('exportResolutionHint'),
     exportResolutionCustomWrap: document.getElementById('exportResolutionCustomWrap'),
     exportResolutionCustom: document.getElementById('exportResolutionCustom'),
+    wavSampleRate: document.getElementById('wavSampleRate'),
+    wavBitDepth: document.getElementById('wavBitDepth'),
+    playbackLoudnessPreset: document.getElementById('playbackLoudnessPreset'),
+    playbackTargetPeak: document.getElementById('playbackTargetPeak'),
+    playbackMasterGainDb: document.getElementById('playbackMasterGainDb'),
+    playbackSoftClipDrive: document.getElementById('playbackSoftClipDrive'),
 
     // Advanced Settings Modal
     advancedSettingsModal: document.getElementById('advancedSettingsModal'),
@@ -287,6 +305,7 @@ function showWelcome() {
     if (dom.mainFooter) dom.mainFooter.classList.add('hidden');
     dom.playBtn.style.visibility = 'hidden';
     dom.exportBtn.disabled = true;
+    if (dom.exportWavBtn) dom.exportWavBtn.disabled = true;
     
     updateSongSelectionState(false);
     dom.previewPlayBtn.style.display = 'none';
@@ -331,6 +350,7 @@ function showIntroduction() {
     // Keep controls available so the user can stop playback while reading intro.
     dom.playBtn.style.visibility = 'visible';
     dom.exportBtn.disabled = false;
+    if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
 
     renderPlayButton();
     updateSongListVisualizer();
@@ -347,6 +367,7 @@ function showEditor() {
     if (dom.mainFooter) dom.mainFooter.classList.remove('hidden');
     dom.playBtn.style.visibility = 'visible';
     dom.exportBtn.disabled = false;
+    if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
     dom.songNameInput.classList.remove('hidden');
     updateAdvancedSettingsButtonsVisibility();
     dom.sidebarTitle?.classList.remove('active');
@@ -1059,6 +1080,24 @@ async function loadSongMeta(filename) {
             currentSongScope = normalizeScope(data.scope);
             dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
         }
+        const mixSettings = sanitizePlaybackMixSettings({
+            targetPeak: data?.playbackTargetPeak,
+            masterGainDb: data?.playbackMasterGainDb,
+            softClipDrive: data?.playbackSoftClipDrive,
+        });
+        applyPlaybackMixSettingsToInputs(mixSettings);
+        const savedPreset = typeof data?.playbackLoudnessPreset === 'string' ? data.playbackLoudnessPreset : null;
+        const resolvedPreset = normalizePlaybackPresetId(savedPreset) || inferPlaybackPresetId(mixSettings) || 'custom';
+        setPlaybackPresetControl(resolvedPreset);
+        const wavSampleRate = parseInt(data?.wavSampleRate, 10);
+        if (dom.wavSampleRate && [8000, 11025, 16000, 22050, 32000, 44100, 48000].includes(wavSampleRate)) {
+            dom.wavSampleRate.value = String(wavSampleRate);
+        }
+        const wavBitDepth = parseInt(data?.wavBitDepth, 10);
+        if (dom.wavBitDepth && [8, 16, 24].includes(wavBitDepth)) {
+            dom.wavBitDepth.value = String(wavBitDepth);
+        }
+
         const rowsPerCycle = parseInt(data?.rowsPerCycle, 10);
         if (!rowsPerCycle || Number.isNaN(rowsPerCycle)) return;
 
@@ -1089,6 +1128,16 @@ async function saveSongMeta() {
         if (parsed && !Number.isNaN(parsed)) rowsPerCycle = parsed;
     }
 
+    const mixSettings = sanitizePlaybackMixSettings({
+        targetPeak: dom.playbackTargetPeak?.value,
+        masterGainDb: dom.playbackMasterGainDb?.value,
+        softClipDrive: dom.playbackSoftClipDrive?.value,
+    });
+    const presetId = normalizePlaybackPresetId(dom.playbackLoudnessPreset?.value)
+        || inferPlaybackPresetId(mixSettings)
+        || 'custom';
+    const wavSettings = getWavExportSettings();
+
     try {
         let existing = {};
         try {
@@ -1102,11 +1151,76 @@ async function saveSongMeta() {
         await fetch(`/api/song-meta/${currentSongFilename}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...(existing || {}), rowsPerCycle })
+            body: JSON.stringify({
+                ...(existing || {}),
+                rowsPerCycle,
+                playbackTargetPeak: mixSettings.targetPeak,
+                playbackMasterGainDb: mixSettings.masterGainDb,
+                playbackSoftClipDrive: mixSettings.softClipDrive,
+                playbackLoudnessPreset: presetId,
+                wavSampleRate: wavSettings.sampleRate,
+                wavBitDepth: wavSettings.bitDepth,
+            })
         });
     } catch (e) {
         console.warn('Failed to save song meta', e);
     }
+}
+
+function getPlaybackMixSettings() {
+    return sanitizePlaybackMixSettings({
+        targetPeak: dom.playbackTargetPeak?.value,
+        masterGainDb: dom.playbackMasterGainDb?.value,
+        softClipDrive: dom.playbackSoftClipDrive?.value,
+    });
+}
+
+function getWavExportSettings() {
+    const sampleRate = parseInt(dom.wavSampleRate?.value, 10);
+    const bitDepth = parseInt(dom.wavBitDepth?.value, 10);
+    return {
+        sampleRate: [8000, 11025, 16000, 22050, 32000, 44100, 48000].includes(sampleRate) ? sampleRate : 44100,
+        bitDepth: [8, 16, 24].includes(bitDepth) ? bitDepth : 16,
+    };
+}
+
+function normalizePlaybackPresetId(value) {
+    const key = String(value || '').trim();
+    if (!key || key === 'custom') return key || null;
+    return Object.prototype.hasOwnProperty.call(PLAYBACK_LOUDNESS_PRESETS, key) ? key : null;
+}
+
+function approxEqual(a, b, epsilon = 1e-6) {
+    return Math.abs(Number(a) - Number(b)) <= epsilon;
+}
+
+function inferPlaybackPresetId(settings) {
+    const clean = sanitizePlaybackMixSettings(settings);
+    const entries = Object.entries(PLAYBACK_LOUDNESS_PRESETS);
+    for (const [presetId, presetSettings] of entries) {
+        const p = sanitizePlaybackMixSettings(presetSettings);
+        if (
+            approxEqual(clean.targetPeak, p.targetPeak)
+            && approxEqual(clean.masterGainDb, p.masterGainDb)
+            && approxEqual(clean.softClipDrive, p.softClipDrive)
+        ) {
+            return presetId;
+        }
+    }
+    return 'custom';
+}
+
+function applyPlaybackMixSettingsToInputs(settings) {
+    const clean = sanitizePlaybackMixSettings(settings);
+    if (dom.playbackTargetPeak) dom.playbackTargetPeak.value = String(clean.targetPeak);
+    if (dom.playbackMasterGainDb) dom.playbackMasterGainDb.value = String(clean.masterGainDb);
+    if (dom.playbackSoftClipDrive) dom.playbackSoftClipDrive.value = String(clean.softClipDrive);
+}
+
+function setPlaybackPresetControl(presetId) {
+    if (!dom.playbackLoudnessPreset) return;
+    const normalized = normalizePlaybackPresetId(presetId) || 'custom';
+    dom.playbackLoudnessPreset.value = normalized;
 }
 
 async function saveCurrentSong() {
@@ -1255,7 +1369,8 @@ function inferArrangeCyclesFromCode(code) {
     return maxCycles > 0 ? maxCycles : null;
 }
 
-async function exportCurrentSong() {
+async function exportCurrentSong(options = {}) {
+    const { revealZzfxmPreview = true } = options;
     if (!currentSongFilename) return;
     
     validateCode(dom.repl.editor.code);
@@ -1323,8 +1438,7 @@ async function exportCurrentSong() {
             channelCount,
             droppedNotes,
             unknownInstrumentNotes,
-            unknownInstrumentAliases = [],
-            exportDebug = null
+            unknownInstrumentAliases = []
         } = result.stats;
         
         // Store for preview
@@ -1342,23 +1456,21 @@ async function exportCurrentSong() {
             if (!res.ok) throw new Error('Server failed to save JSON');
         }
         
-        // Show and enable preview playback buttons
-        dom.previewPlayBtn.style.display = '';
-        dom.previewPlayBtn.disabled = false;
-        if(dom.showJsonBtn) {
-            dom.showJsonBtn.style.display = '';
-            dom.showJsonBtn.disabled = false;
+        // Show and enable ZzFXM preview buttons only for explicit ZzFXM export flow.
+        if (revealZzfxmPreview) {
+            dom.previewPlayBtn.style.display = '';
+            dom.previewPlayBtn.disabled = false;
+            if(dom.showJsonBtn) {
+                dom.showJsonBtn.style.display = '';
+                dom.showJsonBtn.disabled = false;
+            }
         }
         
         // Build status message with channel count
         let statusMsg = `/output/${jsonFilename} (${channelCount} ch)`;
-        const debugSuffix = exportDebug
-            ? ` • [dbg ${exportDebug.mode} cyc=${exportDebug.exportCycles} p=${exportDebug.detectedPeriod ?? '-'} finite=${exportDebug.finiteCycles || '-'} look=${exportDebug.lookaheadCycles} forced=${exportDebug.forcedCycles ?? '-'}]`
-            : '';
         if (droppedNotes > 0) {
             statusMsg += ` • ${droppedNotes} notes dropped`;
         }
-        statusMsg += debugSuffix;
         if (unknownInstrumentNotes > 0) {
             const incompatibleList = unknownInstrumentAliases.length
                 ? unknownInstrumentAliases.join(', ')
@@ -1619,6 +1731,107 @@ function triggerFileDownload(filename, content, mime = 'text/plain;charset=utf-8
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+}
+
+function resampleLinear(input, sourceRate, targetRate) {
+    if (!(input instanceof Float32Array) || input.length === 0) return new Float32Array();
+    if (!Number.isFinite(sourceRate) || !Number.isFinite(targetRate) || sourceRate <= 0 || targetRate <= 0 || sourceRate === targetRate) {
+        return input;
+    }
+    const ratio = targetRate / sourceRate;
+    const outputLength = Math.max(1, Math.round(input.length * ratio));
+    const output = new Float32Array(outputLength);
+    const invRatio = sourceRate / targetRate;
+    for (let i = 0; i < outputLength; i++) {
+        const srcPos = i * invRatio;
+        const srcIndex = Math.floor(srcPos);
+        const frac = srcPos - srcIndex;
+        const s0 = input[srcIndex] ?? 0;
+        const s1 = input[Math.min(srcIndex + 1, input.length - 1)] ?? s0;
+        output[i] = s0 + (s1 - s0) * frac;
+    }
+    return output;
+}
+
+function encodeWavMono(samples, sampleRate, bitDepth = 16) {
+    const depth = bitDepth === 8 ? 8 : (bitDepth === 24 ? 24 : 16);
+    const bytesPerSample = depth / 8;
+    const dataSize = samples.length * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    const channels = 1;
+    const blockAlign = channels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+
+    const writeString = (offset, text) => {
+        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, channels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, depth, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        if (depth === 8) {
+            const v = Math.round((s * 0.5 + 0.5) * 255);
+            view.setUint8(offset, Math.min(255, Math.max(0, v)));
+            offset += 1;
+        } else if (depth === 16) {
+            const v = s < 0 ? Math.round(s * 0x8000) : Math.round(s * 0x7fff);
+            view.setInt16(offset, v, true);
+            offset += 2;
+        } else {
+            const v = s < 0 ? Math.round(s * 0x800000) : Math.round(s * 0x7fffff);
+            view.setUint8(offset, v & 0xff);
+            view.setUint8(offset + 1, (v >> 8) & 0xff);
+            view.setUint8(offset + 2, (v >> 16) & 0xff);
+            offset += 3;
+        }
+    }
+
+    return buffer;
+}
+
+async function exportCurrentSongWav() {
+    if (!currentSongFilename) return;
+
+    await exportCurrentSong({ revealZzfxmPreview: false });
+    if (!lastExportedData) {
+        setStatus('WAV export failed: no song data generated.', 'error');
+        return;
+    }
+
+    try {
+        const wavSettings = getWavExportSettings();
+        const mixSettings = getPlaybackMixSettings();
+        const pcm44k = buildSong(lastExportedData, { ...(lastExportedMeta || {}), ...mixSettings });
+        if (!(pcm44k instanceof Float32Array) || pcm44k.length === 0) {
+            throw new Error('Could not render PCM audio');
+        }
+
+        const pcm = wavSettings.sampleRate === 44100
+            ? pcm44k
+            : resampleLinear(pcm44k, 44100, wavSettings.sampleRate);
+        const wavBuffer = encodeWavMono(pcm, wavSettings.sampleRate, wavSettings.bitDepth);
+        const wavName = currentSongFilename.replace(/\.js$/i, '.wav');
+        triggerFileDownload(wavName, new Blob([wavBuffer], { type: 'audio/wav' }), 'audio/wav');
+        setStatus(`Downloaded WAV: ${wavName} (${wavSettings.sampleRate} Hz, ${wavSettings.bitDepth}-bit)`, 'success');
+    } catch (e) {
+        console.error(e);
+        setStatus(`WAV export failed: ${e.message}`, 'error');
+    }
 }
 
 function buildBlockSourceFromApi(item) {
@@ -2255,6 +2468,7 @@ function closeModal() {
 // Event Listeners ---
 
 dom.exportBtn.addEventListener('click', exportCurrentSong);
+if (dom.exportWavBtn) dom.exportWavBtn.addEventListener('click', exportCurrentSongWav);
 if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadSongsAndInstruments);
 if (dom.uploadProjectBtn) dom.uploadProjectBtn.addEventListener('click', openUploadProjectModal);
 if (dom.uploadProjectInput) {
@@ -2559,7 +2773,7 @@ dom.previewPlayBtn.addEventListener('click', () => {
     
     playZzfxmSong(lastExportedData, getAudioContext(), () => {
         updatePreviewPlayButton(false);
-    }, lastExportedMeta);
+    }, { ...(lastExportedMeta || {}), ...getPlaybackMixSettings() });
     updatePreviewPlayButton(true);
 });
 
@@ -2723,10 +2937,24 @@ async function copyJsonToClipboard() {
     }
 }
 
+function downloadJsonData() {
+    const text = dom.previewJson?.innerText || '';
+    if (!text || !text.trim()) {
+        setStatus('No song data to download.', 'error');
+        return;
+    }
+    const filename = currentSongFilename
+        ? currentSongFilename.replace(/\.js$/i, '.json')
+        : 'song-data.json';
+    triggerFileDownload(filename, text, 'application/json;charset=utf-8');
+    setStatus(`Downloaded ${filename}`, 'success');
+}
+
 // JSON Modal Listeners
 if(dom.showJsonBtn) dom.showJsonBtn.addEventListener('click', openJsonModal);
 if(dom.closeJsonModalBtn) dom.closeJsonModalBtn.addEventListener('click', closeJsonModal);
 if(dom.closeJsonModalBottomBtn) dom.closeJsonModalBottomBtn.addEventListener('click', closeJsonModal);
+if(dom.downloadJsonBtn) dom.downloadJsonBtn.addEventListener('click', downloadJsonData);
 if(dom.copyJsonBtn) dom.copyJsonBtn.addEventListener('click', copyJsonToClipboard);
 
 // --- Licensing Modal Logic ---
@@ -2913,6 +3141,10 @@ function closeExternalLinkModal() {
 // --- Export Settings Modal ---
 
 function setupExportSettingsModal() {
+    if (dom.playbackLoudnessPreset && !normalizePlaybackPresetId(dom.playbackLoudnessPreset.value)) {
+        dom.playbackLoudnessPreset.value = DEFAULT_PLAYBACK_PRESET_ID;
+    }
+
     // Open modal
     dom.exportSettingsBtn.addEventListener('click', () => {
         dom.exportSettingsModal.classList.add('open');
@@ -2963,7 +3195,41 @@ function setupExportSettingsModal() {
             dom.channelLimitGroup.classList.add('hidden');
             dom.maxChannelsInput.disabled = true;
         }
+        saveSongMeta();
     });
+
+    dom.maxChannelsInput?.addEventListener('input', saveSongMeta);
+    dom.normalizeLayers?.addEventListener('change', saveSongMeta);
+    const handlePlaybackMixChange = () => {
+        const inferred = inferPlaybackPresetId(getPlaybackMixSettings());
+        setPlaybackPresetControl(inferred);
+        saveSongMeta();
+        if (!isArrangementPreviewPlaying()) return;
+        updateArrangementPreview({
+            mixSettings: getPlaybackMixSettings(),
+            keepPosition: true,
+        });
+    };
+    dom.playbackLoudnessPreset?.addEventListener('change', () => {
+        const presetId = normalizePlaybackPresetId(dom.playbackLoudnessPreset?.value);
+        if (!presetId || presetId === 'custom') {
+            setPlaybackPresetControl(inferPlaybackPresetId(getPlaybackMixSettings()));
+            return;
+        }
+        const presetSettings = PLAYBACK_LOUDNESS_PRESETS[presetId];
+        applyPlaybackMixSettingsToInputs(presetSettings);
+        handlePlaybackMixChange();
+    });
+    dom.playbackTargetPeak?.addEventListener('input', handlePlaybackMixChange);
+    dom.playbackMasterGainDb?.addEventListener('input', handlePlaybackMixChange);
+    dom.playbackSoftClipDrive?.addEventListener('input', handlePlaybackMixChange);
+    dom.wavSampleRate?.addEventListener('change', saveSongMeta);
+    dom.wavBitDepth?.addEventListener('change', saveSongMeta);
+
+    if (!dom.playbackTargetPeak?.value || !dom.playbackMasterGainDb?.value || !dom.playbackSoftClipDrive?.value) {
+        applyPlaybackMixSettingsToInputs(PLAYBACK_LOUDNESS_PRESETS[DEFAULT_PLAYBACK_PRESET_ID]);
+    }
+    setPlaybackPresetControl(inferPlaybackPresetId(getPlaybackMixSettings()));
 }
 
 // Initialize export settings modal
@@ -3871,7 +4137,7 @@ function setupBlocksEventListeners() {
             params: inst.params,
         }));
 
-	        previewTrackerStateOnce(trackerState, instrumentList, trackerState.bpm || 120);
+	        previewTrackerStateOnce(trackerState, instrumentList, trackerState.bpm || 120, getPlaybackMixSettings());
 	    });
 
 	    // Listen for arrangements:preview event
@@ -3935,19 +4201,24 @@ function setupBlocksEventListeners() {
 	                return;
 	            }
 
-            const bpm = arrangementState.bpm || 120;
-            console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
-            arrangementPreviewContext = {
-                arrangementState,
-                trackerStateByFilename,
-                instrumentList,
-                bpm,
-            };
+	            const bpm = arrangementState.bpm || 120;
+            const mixSettings = getPlaybackMixSettings();
+	            console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
+	            arrangementPreviewContext = {
+	                arrangementState,
+	                trackerStateByFilename,
+	                instrumentList,
+	                bpm,
+                    mixSettings,
+	            };
             clearArrangementLiveOverrides({ scheduleUpdate: false });
             if (previewBlocks.length) {
                 document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
             }
-            const started = startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm, { keepPosition: false });
+	            const started = startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm, {
+                    keepPosition: false,
+                    mixSettings,
+                });
             if (!started) {
                 setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
             }
@@ -3962,11 +4233,12 @@ function setupBlocksEventListeners() {
             if (!isArrangementPreviewPlaying()) return;
             const arrangementState = e?.detail?.arrangementState;
             if (!arrangementState) return;
-            arrangementPreviewContext = {
-                ...arrangementPreviewContext,
-                arrangementState,
-                bpm: arrangementState.bpm || arrangementPreviewContext.bpm,
-            };
+	            arrangementPreviewContext = {
+	                ...arrangementPreviewContext,
+	                arrangementState,
+	                bpm: arrangementState.bpm || arrangementPreviewContext.bpm,
+                    mixSettings: getPlaybackMixSettings(),
+	            };
             const addedRowIndex = e?.detail?.addedRowIndex;
             const addedFilename = e?.detail?.addedFilename;
             if (Number.isInteger(addedRowIndex)) {
@@ -3975,13 +4247,14 @@ function setupBlocksEventListeners() {
             if (addedFilename) {
                 clearArrangementLiveOverride({ filename: addedFilename, scheduleUpdate: false });
             }
-            updateArrangementPreview({
-                arrangementState,
-                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
-                instrumentList: arrangementPreviewContext.instrumentList,
-                bpm: arrangementPreviewContext.bpm,
-                keepPosition: true,
-            });
+	            updateArrangementPreview({
+	                arrangementState,
+	                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
+	                instrumentList: arrangementPreviewContext.instrumentList,
+	                bpm: arrangementPreviewContext.bpm,
+                    mixSettings: arrangementPreviewContext.mixSettings,
+	                keepPosition: true,
+	            });
         });
 
         document.addEventListener('tracker:stateChanged', (e) => {
@@ -4006,13 +4279,14 @@ function setupBlocksEventListeners() {
             if (!arrangementPreviewContext?.arrangementState) return;
             if (wasCommitted) return;
             const rerender = () => {
-                updateArrangementPreview({
-                    arrangementState: arrangementPreviewContext.arrangementState,
-                    trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
-                    instrumentList: arrangementPreviewContext.instrumentList,
-                    bpm: arrangementPreviewContext.bpm,
-                    keepPosition: true,
-                });
+	                updateArrangementPreview({
+	                    arrangementState: arrangementPreviewContext.arrangementState,
+	                    trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
+	                    instrumentList: arrangementPreviewContext.instrumentList,
+	                    bpm: arrangementPreviewContext.bpm,
+                        mixSettings: getPlaybackMixSettings(),
+	                    keepPosition: true,
+	                });
             };
             if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
                 window.requestIdleCallback(rerender, { timeout: 200 });

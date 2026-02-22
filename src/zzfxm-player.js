@@ -1,4 +1,5 @@
 import { zzfxG } from './zzfx-loader.js';
+import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-settings.js';
 
 /**
  * ZzFX Music Renderer v2.0.3 by Frank Force 2019
@@ -15,6 +16,8 @@ export const buildSong = (song, options = {}) => {
     if (!song) return null;
     let [instruments, patterns, sequence, BPM] = song;
     const monophonicByInstrumentIndex = options?.monophonicByInstrumentIndex || [];
+    const mixSettings = sanitizePlaybackMixSettings(options);
+    const targetPeak = mixSettings.targetPeak;
     
     let sampleRate = 44100;
     let secondsPerBeat = 60 / BPM;
@@ -117,8 +120,8 @@ export const buildSong = (song, options = {}) => {
                         // Generate Samples
                         let sound = zzfxG(...p);
                         
-                        // Per-Note Normalization (Match Strudel Behavior)
-                        // Normalize to 0.5 peak, but scale by intended volume to preserve
+                        // Per-note normalization.
+                        // Normalize to target peak, then preserve intended volume differences.
                         // relative loudness between instruments (e.g., hi-hat 0.3 vs pad 0.5)
                         let maxAmp = 0;
                         for(let s=0; s<sound.length; s++) {
@@ -127,8 +130,8 @@ export const buildSong = (song, options = {}) => {
                         }
                         
                         if (maxAmp > 0) {
-                            // Scale to 0.5 headroom, preserving intended volume
-                            const scale = (0.5 / maxAmp) * intendedVol;
+                            // Scale to target headroom, preserving intended volume.
+                            const scale = (targetPeak / maxAmp) * intendedVol;
                             
                             for(let s=0; s<sound.length; s++) {
                                 sound[s] *= scale;
@@ -177,8 +180,14 @@ export const buildSong = (song, options = {}) => {
     let max = 0;
     for (let i=0; i<mixBuffer.length; i++) max = Math.max(max, Math.abs(mixBuffer[i]));
     if (max > 0) {
-        let scale = 0.5 / max; // Safety margin
+        let scale = targetPeak / max; // Safety margin
         for (let i=0; i<mixBuffer.length; i++) mixBuffer[i] *= scale;
+    }
+
+    const masterGain = dbToGain(mixSettings.masterGainDb);
+    const clipDrive = mixSettings.softClipDrive;
+    for (let i = 0; i < mixBuffer.length; i++) {
+        mixBuffer[i] = softClipSample(mixBuffer[i] * masterGain, clipDrive);
     }
     
     return mixBuffer;

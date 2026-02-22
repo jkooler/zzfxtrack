@@ -655,7 +655,14 @@
             disabled
             style="display: none"
           >
-            Preview Data
+            Song Data
+          </button>
+          <span aria-hidden="true" class="h-5 w-px shrink-0 bg-border/80"></span>
+          <button
+            id="exportWavBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 flex items-center gap-2"
+          >
+            <i data-lucide="download" class="w-4 h-4"></i> Download WAV
           </button>
           <span
             id="statusMsg"
@@ -695,7 +702,7 @@
           <h2
             class="text-lg font-semibold leading-none tracking-tight text-primary"
           >
-            ZzFXM Data Preview
+            Song Data
           </h2>
           <button
             id="closeJsonModalBtn"
@@ -713,6 +720,12 @@
           ></pre>
         </div>
         <div class="flex justify-end gap-2">
+          <button
+            id="downloadJsonBtn"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
+          >
+            <i data-lucide="download" class="w-4 h-4"></i> Download
+          </button>
           <button
             id="copyJsonBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
@@ -1342,6 +1355,74 @@
 
           <div class="border-t border-border pt-4 space-y-2">
             <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+              Playback Loudness
+            </label>
+            <div class="space-y-1">
+              <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold" for="playbackLoudnessPreset">
+                Preset
+              </label>
+              <select
+                id="playbackLoudnessPreset"
+                class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="safe">Safe</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="loud">Loud</option>
+                <option value="very_loud">Very Loud</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="space-y-1">
+                <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold" for="playbackTargetPeak">
+                  Target Peak
+                </label>
+                <input
+                  type="number"
+                  id="playbackTargetPeak"
+                  min="0.1"
+                  max="0.99"
+                  step="0.01"
+                  value="0.5"
+                  class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              <div class="space-y-1">
+                <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold" for="playbackMasterGainDb">
+                  Master dB
+                </label>
+                <input
+                  type="number"
+                  id="playbackMasterGainDb"
+                  min="-24"
+                  max="24"
+                  step="0.5"
+                  value="3"
+                  class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              <div class="space-y-1">
+                <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold" for="playbackSoftClipDrive">
+                  Clip Drive
+                </label>
+                <input
+                  type="number"
+                  id="playbackSoftClipDrive"
+                  min="1"
+                  max="8"
+                  step="0.1"
+                  value="1.4"
+                  class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
+            <p class="text-xs text-muted-foreground/80 italic">
+              Applied to ZzFXM preview and arrangement playback. Uses soft clipping to reduce harsh digital clipping.
+            </p>
+          </div>
+
+          <div class="border-t border-border pt-4 space-y-2">
+            <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
               Export Resolution
             </label>
             <div class="flex items-center gap-4">
@@ -1390,6 +1471,44 @@
             >
               Smaller file size. Supports only R1 and R3.
             </p>
+          </div>
+
+          <div class="border-t border-border pt-4 space-y-2">
+            <label class="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+              WAV Export
+            </label>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-1">
+                <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold" for="wavSampleRate">
+                  Sample Rate
+                </label>
+                <select
+                  id="wavSampleRate"
+                  class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="8000">8000 Hz</option>
+                  <option value="11025">11025 Hz</option>
+                  <option value="16000">16000 Hz</option>
+                  <option value="22050">22050 Hz</option>
+                  <option value="32000">32000 Hz</option>
+                  <option value="44100" selected>44100 Hz</option>
+                  <option value="48000">48000 Hz</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="text-[10px] text-muted-foreground uppercase tracking-wider font-bold" for="wavBitDepth">
+                  Bit Depth
+                </label>
+                <select
+                  id="wavBitDepth"
+                  class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="8">8-bit PCM</option>
+                  <option value="16" selected>16-bit PCM</option>
+                  <option value="24">24-bit PCM</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -11,6 +11,7 @@ import { createIcons, icons } from 'lucide';
 import { setupScrubInteraction } from './instrument-ui.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { getVisualizerAnalyser } from './visualizer.js';
+import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-settings.js';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
@@ -127,6 +128,7 @@ const arrangementPreviewState = {
   trackerStateByFilename: null,
   instrumentList: null,
   bpm: 120,
+  mixSettings: sanitizePlaybackMixSettings(),
   overridesByFilename: new Map(),
   overridesByRowIndex: new Map(),
   pendingUpdate: null,
@@ -1621,7 +1623,7 @@ function updatePreviewUI() {
 /**
  * Play a one-shot preview of a tracker state (no looping)
  */
-export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120) {
+export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120, mixSettings = null) {
   if (!trackerState || !instrumentList) return;
 
   stopPreview();
@@ -1635,7 +1637,10 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120)
     ctx.resume();
   }
 
-  const rendered = renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds: 1 });
+  const rendered = renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, {
+    tailSeconds: 1,
+    mixSettings,
+  });
   if (!rendered) return;
 
   const { mixBuffer, sampleRate } = rendered;
@@ -1695,7 +1700,11 @@ function playMixBuffer(mixBuffer, sampleRate) {
   };
 }
 
-function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds = 0, normalizeMaster = true } = {}) {
+function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds = 0, normalizeMaster = true, mixSettings = null } = {}) {
+  const resolvedMixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
+  const targetPeak = resolvedMixSettings.targetPeak;
+  const masterGain = dbToGain(resolvedMixSettings.masterGainDb);
+  const clipDrive = resolvedMixSettings.softClipDrive;
   const channels = trackerState.channels || (Array.isArray(trackerState.grid) ? trackerState.grid.length : 0);
   const steps = trackerState.steps || (Array.isArray(trackerState.grid?.[0]) ? trackerState.grid[0].length : 0);
   const grid = trackerState.grid || [];
@@ -1783,7 +1792,7 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
         if (abs > maxAmp) maxAmp = abs;
       }
       if (maxAmp > 0) {
-        const scale = (0.5 / maxAmp) * intendedVol;
+        const scale = (targetPeak / maxAmp) * intendedVol;
         for (let i = 0; i < samples.length; i++) {
           samples[i] *= scale;
         }
@@ -1819,11 +1828,15 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
       maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
     }
     if (maxAmp > 0) {
-      const scale = 0.5 / maxAmp;
+      const scale = targetPeak / maxAmp;
       for (let i = 0; i < mixBuffer.length; i++) {
         mixBuffer[i] *= scale;
       }
     }
+  }
+
+  for (let i = 0; i < mixBuffer.length; i++) {
+    mixBuffer[i] = softClipSample(mixBuffer[i] * masterGain, clipDrive);
   }
 
   return { mixBuffer, sampleRate, samplesPerStep, mainSamples };
@@ -1839,8 +1852,12 @@ export function previewArrangementStateOnce(arrangementState, trackerStateByFile
   playMixBuffer(rendered.mixBuffer, rendered.sampleRate);
 }
 
-function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, overrides = {}) {
+function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, overrides = {}, mixSettings = null) {
   if (!arrangementState || !instrumentList) return null;
+  const resolvedMixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
+  const targetPeak = resolvedMixSettings.targetPeak;
+  const masterGain = dbToGain(resolvedMixSettings.masterGainDb);
+  const clipDrive = resolvedMixSettings.softClipDrive;
 
   const secondsPerBeat = 60 / bpm;
   const secondsPerStep = secondsPerBeat / 4; // 16th notes (ideal)
@@ -1922,6 +1939,7 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
       const rendered = renderTrackerStateToMixBuffer(renderState, instrumentList, bpm, {
         tailSeconds: 1,
         normalizeMaster: false,
+        mixSettings: resolvedMixSettings,
       });
       if (!rendered?.mixBuffer) continue;
       const blockBuf = rendered.mixBuffer;
@@ -1957,10 +1975,14 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
     return null;
   }
   if (maxAmp > 0) {
-    const scale = 0.5 / maxAmp;
+    const scale = targetPeak / maxAmp;
     for (let i = 0; i < mixBuffer.length; i++) {
       mixBuffer[i] *= scale;
     }
+  }
+
+  for (let i = 0; i < mixBuffer.length; i++) {
+    mixBuffer[i] = softClipSample(mixBuffer[i] * masterGain, clipDrive);
   }
 
   return {
@@ -2222,18 +2244,20 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition } = {}) 
   return true;
 }
 
-export function startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, { keepPosition = false } = {}) {
+export function startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, { keepPosition = false, mixSettings = null } = {}) {
   arrangementPreviewState.arrangementState = arrangementState || null;
   arrangementPreviewState.trackerStateByFilename = trackerStateByFilename || null;
   arrangementPreviewState.instrumentList = instrumentList || null;
   arrangementPreviewState.bpm = bpm || 120;
+  arrangementPreviewState.mixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
 
   const rendered = renderArrangementStateToMixBuffer(
     arrangementPreviewState.arrangementState,
     arrangementPreviewState.trackerStateByFilename,
     arrangementPreviewState.instrumentList,
     arrangementPreviewState.bpm,
-    { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex }
+    { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
+    arrangementPreviewState.mixSettings
   );
 
   if (!rendered?.mixBuffer) return false;
@@ -2247,11 +2271,12 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
   return started;
 }
 
-export function updateArrangementPreview({ arrangementState, trackerStateByFilename, instrumentList, bpm, keepPosition = true } = {}) {
+export function updateArrangementPreview({ arrangementState, trackerStateByFilename, instrumentList, bpm, keepPosition = true, mixSettings } = {}) {
   if (arrangementState) arrangementPreviewState.arrangementState = arrangementState;
   if (trackerStateByFilename) arrangementPreviewState.trackerStateByFilename = trackerStateByFilename;
   if (instrumentList) arrangementPreviewState.instrumentList = instrumentList;
   if (Number.isFinite(bpm)) arrangementPreviewState.bpm = bpm;
+  if (mixSettings) arrangementPreviewState.mixSettings = sanitizePlaybackMixSettings(mixSettings);
 
   if (!arrangementPreviewState.isPlaying) return false;
 
@@ -2260,7 +2285,8 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
     arrangementPreviewState.trackerStateByFilename,
     arrangementPreviewState.instrumentList,
     arrangementPreviewState.bpm,
-    { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex }
+    { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
+    arrangementPreviewState.mixSettings
   );
   if (!rendered?.mixBuffer) return false;
   arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
