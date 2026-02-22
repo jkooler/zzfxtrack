@@ -421,11 +421,20 @@ strudel-editor {
 }
 
 .param-label {
-  @apply block text-sm font-medium leading-none text-foreground mb-1.5;
+  @apply block text-sm font-medium leading-none text-foreground mb-3;
 }
 
 .param-group-header {
   @apply text-[10px] font-bold tracking-widest text-muted-foreground uppercase mt-4 mb-4 border-b border-border/30 pb-0;
+}
+
+.param-field {
+  height: fit-content;
+  margin-bottom: 8px;
+}
+
+.param-field > .flex {
+  margin-bottom: 0;
 }
 
 .param-field label {

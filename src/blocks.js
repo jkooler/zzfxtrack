@@ -262,9 +262,9 @@ function emitArrangementStateChanged(extraDetail = {}) {
 function updateArrangementPreviewButtonState() {
   if (!elements.previewArrangementBtn) return;
   if (isArrangementPreviewPlaying()) {
-    elements.previewArrangementBtn.innerHTML = '<i data-lucide="square" class="w-5 h-5 fill-current"></i>';
+    elements.previewArrangementBtn.innerHTML = '<i data-lucide="square" class="w-[18px] h-5 fill-current"></i>';
   } else {
-    elements.previewArrangementBtn.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
+    elements.previewArrangementBtn.innerHTML = '<i data-lucide="play" class="w-[18px] h-5 fill-current"></i>';
   }
   createIcons({ icons });
 }

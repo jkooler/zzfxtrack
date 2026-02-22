@@ -603,7 +603,7 @@ function setupParameterOrdering() {
     const toggleContainer = document.createElement('div');
     toggleContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #333;';
     toggleContainer.innerHTML = `
-        <h4 style="margin: 0;">Parameters</h4>
+        <h4 class="m-0 text-sm">Parameters</h4>
         <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #888; cursor: pointer;">
             <input type="checkbox" id="arrayOrderToggle" style="cursor: pointer;" />
             <span>Array Order</span>
@@ -856,7 +856,7 @@ function reorganizeParameters(useArrayOrder) {
                         container.appendChild(label);
                         
                         const toggleGroup = document.createElement('div');
-                        toggleGroup.className = 'flex w-full items-center rounded-md h-10';
+                        toggleGroup.className = 'flex w-full items-center rounded-md h-8 mb-0';
                         
                         const options = [
                              { val: 0, label: 'Sin' },

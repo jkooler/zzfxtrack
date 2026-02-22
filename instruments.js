@@ -146,6 +146,40 @@ export const instrumentMonophonic = {
     "snare": false
 };
 
+// User vs example (for conflict resolution when loading from disc)
+export const instrumentScope = {
+    "test-cp": "example",
+    "test-enterprise": "example",
+    "test-sine": "example",
+    "test-tri": "example",
+    "test-saw": "example",
+    "test-tan": "example",
+    "test-minimal": "example",
+    "test-noise": "example",
+    "test-square": "example",
+    "test-kick": "example",
+    "demo-snare": "example",
+    "demo-synth-stab": "example",
+    "demo-hh-closed": "example",
+    "demo-pad": "example",
+    "demo-cowbell": "example",
+    "demo-bass": "example",
+    "demo-hh-open": "example",
+    "demo-kickdrum": "example",
+    "demo-elpiano": "example",
+    "demo-horn": "example",
+    "horn": "user",
+    "elpiano": "user",
+    "kickdrum": "user",
+    "hh-open": "user",
+    "bass": "user",
+    "cowbell": "user",
+    "pad": "user",
+    "hh-closed": "user",
+    "synth-stab": "user",
+    "snare": "user"
+};
+
 // Also export as array for the exporter (ordered by channel index)
 export const instrumentArray = [
     zzfxm_test_cp,
