@@ -52,6 +52,13 @@
     box-shadow: 0 0 0 1px var(--ring);
     border-color: var(--primary);
   }
+
+  /* Default icon size for SVGs (overridden by utility classes or more specific rules) */
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
   /* Use html:root for higher specificity (0-1-1) to beat Strudel's inline :root (0-1-0) */
   html:root {
     /* Dark Mode Default (Stone & Amber) */
@@ -218,7 +225,8 @@ input[readonly]:focus-visible {
 }
 
 .instrument-item {
-  @apply flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors text-sm relative;
+  @apply flex items-center justify-between rounded-md hover:bg-accent/50 cursor-pointer transition-colors text-sm relative;
+  padding: 2px 4px;
 }
 .instrument-item.active {
   background-color: color-mix(in srgb, var(--tertiary), transparent 50%);
@@ -608,7 +616,7 @@ strudel-editor {
 }
 
 .block-item {
-  @apply p-3 rounded-md border border-border bg-card cursor-pointer transition-all hover:border-primary/50 hover:bg-accent/10 flex items-center justify-between gap-3;
+  @apply pt-2 pb-2 px-3 rounded-md border border-border bg-card cursor-pointer transition-all hover:border-primary/50 hover:bg-accent/10 flex items-center justify-between gap-3;
 }
 
 .block-item.selected {

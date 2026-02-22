@@ -92,6 +92,8 @@ let lastExportedMeta = null;
 let autoSaveTimeout = null; // Debounce timer for auto-save
 let isPreviewPlaying = false;
 let playingSongFilename = null;
+let isStrudelPaused = false; // true after Shift+click stop (pause); next play resumes
+let playBtnShiftHover = false; // shift held and mouse over play button (for pause icon)
 let pendingExternalUrl = null;
 let statusFadeClearTimeout = null;
 let renameDebounceTimeout = null;
@@ -2550,31 +2552,46 @@ document.addEventListener('keydown', (e) => {
 
 // --- PLAYBACK LOGIC ---
 
-function togglePlay() {
+function togglePlay(e) {
     const editor = dom.repl.editor;
     if (!editor) return;
-    
+
     validateCode(editor.code);
-    
+
     const scheduler = editor.repl.scheduler;
     const isRunning = scheduler.started;
     const isPlayingCurrent = isRunning && playingSongFilename === currentSongFilename;
-    
+    const shiftPause = e && e.shiftKey;
+
     if (isPlayingCurrent) {
-        // Stop current song
-        editor.stop();
-        // UI update happens via state helper
-        updatePlayState(false);
+        if (shiftPause) {
+            // Pause playback (resumable with play)
+            editor.repl.pause();
+            isStrudelPaused = true;
+            updatePlayState(false);
+        } else {
+            // Stop current song
+            editor.stop();
+            isStrudelPaused = false;
+            updatePlayState(false);
+        }
     } else if (isRunning) {
         // Another song is currently running. Switch to selected song and restart
-        // from the beginning of the selected song's timeline.
         editor.stop();
+        isStrudelPaused = false;
         editor.evaluate();
         updatePlayState(true);
     } else {
-        // Start selected song from the beginning.
-        editor.evaluate();
-        updatePlayState(true);
+        if (isStrudelPaused && playingSongFilename === currentSongFilename) {
+            // Resume from pause
+            editor.repl.start();
+            isStrudelPaused = false;
+            updatePlayState(true);
+        } else {
+            // Start selected song from the beginning
+            editor.evaluate();
+            updatePlayState(true);
+        }
     }
 }
 
@@ -2596,15 +2613,23 @@ export function isStrudelPlaybackActive() {
 
 function renderPlayButton() {
     const editor = dom.repl.editor;
-    // Use playingSongFilename logic: Show STOP only if running AND playing current song
-    // Note: editor.repl.scheduler.started might be true (if playing another song)
-    // But we only show STOP if matches current filename.
     const isRunning = editor && editor.repl.scheduler.started;
     const showStop = isRunning && playingSongFilename === currentSongFilename;
-    
-    dom.playBtn.innerHTML = showStop ? '<i data-lucide="square" class="w-5 h-5 fill-current"></i>' : '<i data-lucide="play" class="w-5 h-5 fill-current"></i>';
+    const showPauseIcon = showStop && playBtnShiftHover;
+
+    let iconName = 'play';
+    if (showPauseIcon) iconName = 'pause';
+    else if (showStop) iconName = 'square';
+
+    dom.playBtn.innerHTML = `<i data-lucide="${iconName}" class="w-[18px] h-5 fill-current"></i>`;
     dom.playBtn.style.color = '#eee';
     createIcons({ icons });
+}
+
+function setPlayBtnShiftHover(shiftHover) {
+    if (playBtnShiftHover === shiftHover) return;
+    playBtnShiftHover = shiftHover;
+    renderPlayButton();
 }
 
 // Listen for global Strudel events to keep UI in sync (e.g. Ctrl+Enter)
@@ -2617,6 +2642,21 @@ document.addEventListener('start-repl', (e) => {
 
 // Add listener
 dom.playBtn.addEventListener('click', togglePlay);
+
+// Shift + hover: show pause icon on stop button
+dom.playBtn.addEventListener('mouseenter', (e) => setPlayBtnShiftHover(!!e.shiftKey));
+dom.playBtn.addEventListener('mouseleave', () => setPlayBtnShiftHover(false));
+
+function updatePlayBtnShiftHoverFromKey(shiftKey) {
+    const hovered = dom.playBtn && dom.playBtn.matches(':hover');
+    setPlayBtnShiftHover(shiftKey && hovered);
+}
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Shift') updatePlayBtnShiftHoverFromKey(true);
+});
+document.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift') updatePlayBtnShiftHoverFromKey(false);
+});
 
 // --- JSON Preview Modal Logic ---
 

@@ -511,9 +511,9 @@
       >
         <button
           id="playBtn"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm flex items-center justify-center"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm flex items-center justify-center"
         >
-          <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+          <i data-lucide="play" class="w-[18px] h-5 fill-current"></i>
         </button>
 
         <div class="flex items-center gap-2 flex-1">
@@ -1595,7 +1595,7 @@
           <!-- Blocks List -->
           <div
             id="blocksList"
-            class="blocks-list flex-1 overflow-y-auto min-h-[200px] max-h-[400px] space-y-2 border border-border rounded-md p-2"
+            class="blocks-list flex-1 overflow-y-auto min-h-[200px] max-h-[400px] space-y-2 rounded-none p-0 border-0"
           >
             <!-- Blocks will be rendered here -->
           </div>
@@ -1631,7 +1631,7 @@
 	        <div id="arrangerTabPanel" class="flex flex-col gap-4 flex-1 min-h-0">
           <div
             id="arrangementsList"
-            class="blocks-list flex-1 overflow-y-auto min-h-[200px] max-h-[400px] space-y-2 border border-border rounded-md p-2"
+            class="blocks-list flex-1 overflow-y-auto min-h-[200px] max-h-[400px] space-y-2 rounded-none p-0 border-0"
           >
             <div class="blocks-empty text-center py-8 text-muted-foreground">
               <p class="mb-2">No arrangements yet.</p>
