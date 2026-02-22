@@ -601,7 +601,7 @@ function setupParameterOrdering() {
     
     // Create toggle UI
     const toggleContainer = document.createElement('div');
-    toggleContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #333;';
+    toggleContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #333;';
     toggleContainer.innerHTML = `
         <h4 style="margin: 0;">Parameters</h4>
         <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #888; cursor: pointer;">
@@ -700,6 +700,20 @@ function reorganizeParameters(useArrayOrder) {
     });
     
     if (useArrayOrder) {
+        // Monophonic checkbox first in array order
+        const monoField = document.createElement('div');
+        monoField.className = 'flex flex-col gap-2';
+        const checkbox = ensureMonophonicControl();
+        const row = document.createElement('div');
+        row.className = 'flex flex-row items-center gap-3 h-8';
+        const label = document.createElement('label');
+        label.className = 'flex items-center h-4 text-sm font-medium leading-4 text-foreground select-none';
+        label.setAttribute('for', 'instMonophonic');
+        label.textContent = 'Monophonic';
+        row.appendChild(checkbox);
+        row.appendChild(label);
+        monoField.appendChild(row);
+        paramGroup.appendChild(monoField);
         // Array order (0-20)
         for (let i = 0; i <= 20; i++) {
             const field = createParamField(i, `${i}: ${paramLabels[i]}`, paramHints[i], true);
@@ -709,32 +723,14 @@ function reorganizeParameters(useArrayOrder) {
     } else {
         // Musician-friendly order with groups
         Object.entries(musicianOrder).forEach(([groupName, indices]) => {
-            const groupHeader = document.createElement('h4');
-            groupHeader.textContent = groupName;
-            groupHeader.className = 'param-group-header';
-            paramGroup.appendChild(groupHeader);
-
-            // Instrument-level settings: placed between "General" and the Wave Shape UI.
-            if (groupName === 'General') {
-                const monoField = document.createElement('div');
-                // Avoid `.param-field label { ... }` global rule overriding our flex alignment.
-                monoField.className = 'flex flex-col gap-2';
-
-                const checkbox = ensureMonophonicControl();
-                const row = document.createElement('div');
-                row.className = 'flex flex-row items-center gap-3 h-8';
-
-                const label = document.createElement('label');
-                label.className = 'flex items-center h-4 text-sm font-medium leading-4 text-foreground select-none';
-                label.setAttribute('for', 'instMonophonic');
-                label.textContent = 'Monophonic';
-
-                row.appendChild(checkbox);
-                row.appendChild(label);
-                monoField.appendChild(row);
-                paramGroup.appendChild(monoField);
+            // Omit "General" group header (first group); keep other section headers
+            if (groupName !== 'General') {
+                const groupHeader = document.createElement('h4');
+                groupHeader.textContent = groupName;
+                groupHeader.className = 'param-group-header';
+                paramGroup.appendChild(groupHeader);
             }
-            
+
             if (groupName === 'Envelope (ADSR)') {
                 // Multislider Container
                 const container = document.createElement('div');
@@ -818,6 +814,21 @@ function reorganizeParameters(useArrayOrder) {
                 const volIdx = 17;
                 const field = createParamField(volIdx, paramLabels[volIdx], paramHints[volIdx], false);
                 paramGroup.appendChild(field);
+
+                // Monophonic checkbox (after Sustain Volume)
+                const monoField = document.createElement('div');
+                monoField.className = 'flex flex-col gap-2';
+                const checkbox = ensureMonophonicControl();
+                const row = document.createElement('div');
+                row.className = 'flex flex-row items-center gap-3 h-8';
+                const label = document.createElement('label');
+                label.className = 'flex items-center h-4 text-sm font-medium leading-4 text-foreground select-none';
+                label.setAttribute('for', 'instMonophonic');
+                label.textContent = 'Monophonic';
+                row.appendChild(checkbox);
+                row.appendChild(label);
+                monoField.appendChild(row);
+                paramGroup.appendChild(monoField);
                 
             } else {
                 indices.forEach(item => {

@@ -329,7 +329,7 @@ strudel-editor {
 
 /* Multislider Styles */
 .multislider-container {
-  @apply flex justify-between items-end h-32 rounded-md p-0 mb-2 gap-1;
+  @apply flex justify-between items-end h-32 rounded-md p-0 mb-4 gap-1;
 }
 
 /* Input inside slider */
@@ -425,7 +425,7 @@ strudel-editor {
 }
 
 .param-group-header {
-  @apply text-[10px] font-bold tracking-widest text-muted-foreground uppercase mt-8 mb-4 border-b border-border/30 pb-1;
+  @apply text-[10px] font-bold tracking-widest text-muted-foreground uppercase mt-4 mb-4 border-b border-border/30 pb-0;
 }
 
 .param-field label {
