@@ -2,6 +2,7 @@ import { createIcons, icons } from 'lucide';
 import { setupScrubInteraction } from './instrument-ui.js';
 import { primePreviewAudioContext, isArrangementPreviewPlaying, stopArrangementPreview, stopTrackerPreviewPlayback } from './tracker.js';
 import { attachVisualizer } from './visualizer.js';
+import { alertDialog } from './dialog.js';
 
 /**
  * Blocks Module
@@ -785,11 +786,14 @@ function selectArrangement(index, { preview = true } = {}) {
   }
 }
 
-		async function deleteArrangementByIndex(index) {
+async function deleteArrangementByIndex(index) {
 		  const arr = arrangementsCache[index];
 		  if (!arr?.filename) return;
 	    if (normalizeScope(arr.scope) === 'example' && !isDeveloperModeEnabled()) {
-	      alert('Example arrangements cannot be deleted.');
+	      await alertDialog({
+          title: 'Cannot Delete Example Resource',
+          message: 'Example arrangements are read-only and cannot be deleted.',
+        });
 	      return;
 	    }
 		  try {
@@ -798,7 +802,10 @@ function selectArrangement(index, { preview = true } = {}) {
 	    await loadArrangementsList();
 	  } catch (err) {
 	    console.error('[Arranger] Delete failed:', err);
-	    alert('Failed to delete arrangement. See console for details.');
+	    await alertDialog({
+        title: 'Arrangement Delete Failed',
+        message: 'Could not delete the arrangement. See console for details.',
+      });
 		  }
 		}
 
@@ -807,7 +814,7 @@ function selectArrangement(index, { preview = true } = {}) {
 	  if (!arr) return;
 	  arrangementToDelete = arr;
 	  if (elements.deleteArrangementText) {
-	    elements.deleteArrangementText.textContent = `This will permanently delete "${arr.name}". This action cannot be undone.`;
+	    elements.deleteArrangementText.textContent = `Delete arrangement "${arr.name}"? This cannot be undone.`;
 	  }
 	  elements.deleteArrangementModal?.classList.add('open');
 	  elements.confirmDeleteArrangement?.focus();
@@ -822,7 +829,7 @@ function openDeleteArrangementRowModal(rowIndex) {
   if (!Number.isInteger(rowIndex)) return;
   arrangementRowToDeleteIndex = rowIndex;
   if (elements.deleteArrangementRowText) {
-    elements.deleteArrangementRowText.textContent = 'This action is not undoable.';
+    elements.deleteArrangementRowText.textContent = 'Delete this row? This cannot be undone.';
   }
   elements.deleteArrangementRowModal?.classList.add('open');
   elements.confirmDeleteArrangementRow?.focus();
@@ -858,7 +865,10 @@ async function confirmDeleteArrangement() {
   const filename = arrangementToDelete.filename;
   if (normalizeScope(arrangementToDelete.scope) === 'example' && !isDeveloperModeEnabled()) {
     closeDeleteArrangementModal();
-    alert('Example arrangements cannot be deleted.');
+    await alertDialog({
+      title: 'Cannot Delete Example Resource',
+      message: 'Example arrangements are read-only and cannot be deleted.',
+    });
     return;
   }
   closeDeleteArrangementModal();
@@ -868,7 +878,10 @@ async function confirmDeleteArrangement() {
 		    await loadArrangementsList();
 		  } catch (err) {
 		    console.error('[Arranger] Delete failed:', err);
-		    alert('Failed to delete arrangement. See console for details.');
+		    await alertDialog({
+          title: 'Arrangement Delete Failed',
+          message: 'Could not delete the arrangement. See console for details.',
+        });
 		  }
 		}
 
@@ -1320,7 +1333,10 @@ async function saveArrangementFromEditor() {
   }
   const rawName = elements.arrangementName?.value?.trim() || '';
   if (!rawName) {
-    alert('Please enter an arrangement name.');
+    await alertDialog({
+      title: 'Arrangement Name Required',
+      message: 'Please enter an arrangement name.',
+    });
     elements.arrangementName?.focus();
     return;
   }
@@ -1398,7 +1414,10 @@ async function saveArrangementFromEditor() {
     emitStatus('Arrangement saved.', 'success');
   } catch (err) {
     console.error('[Arranger] Save failed:', err);
-    alert('Failed to save arrangement. See console for details.');
+    await alertDialog({
+      title: 'Arrangement Save Failed',
+      message: 'Could not save the arrangement. See console for details.',
+    });
     emitStatus('Failed to save arrangement.', 'error');
   }
 }
@@ -1784,12 +1803,15 @@ async function deleteBlockByIndex(index) {
 function showDeleteBlockConfirmation(block) {
   if (!block) return;
   if (normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled()) {
-    alert('Example blocks cannot be deleted.');
+    void alertDialog({
+      title: 'Cannot Delete Example Resource',
+      message: 'Example blocks are read-only and cannot be deleted.',
+    });
     return;
   }
   blockToDelete = block;
   if (elements.deleteBlockText) {
-    elements.deleteBlockText.innerHTML = `Block: <strong>${escapeHtml(block.name)}</strong><br>This action is irreversible.`;
+    elements.deleteBlockText.innerHTML = `Delete block: <strong>${escapeHtml(block.name)}</strong>?<br>This cannot be undone.`;
   }
   elements.deleteBlockModal?.classList.add('open');
 }
@@ -1804,7 +1826,10 @@ async function confirmDeleteBlock() {
   const block = blockToDelete;
   if (normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled()) {
     closeDeleteBlockModal();
-    alert('Example blocks cannot be deleted.');
+    await alertDialog({
+      title: 'Cannot Delete Example Resource',
+      message: 'Example blocks are read-only and cannot be deleted.',
+    });
     return;
   }
   try {
@@ -1812,8 +1837,27 @@ async function confirmDeleteBlock() {
       method: 'DELETE',
       headers: getDeveloperModeHeaders(),
     });
-    
-    if (!response.ok) throw new Error('Delete failed');
+
+    if (!response.ok) {
+      if (response.status === 409) {
+        let usedBy = [];
+        try {
+          const payload = await response.json();
+          usedBy = Array.isArray(payload?.usedBy) ? payload.usedBy : [];
+        } catch (_e) {
+          usedBy = [];
+        }
+        const list = usedBy.length
+          ? usedBy.map((entry) => `${entry.name || entry.filename} (${entry.filename})`).join(', ')
+          : 'one or more arrangements';
+        await alertDialog({
+          title: 'Cannot Delete Block',
+          message: `This block is used in arrangements:\n${list}`,
+        });
+        return;
+      }
+      throw new Error('Delete failed');
+    }
     
     // Reload the list
     await loadBlocksList();
@@ -1822,7 +1866,10 @@ async function confirmDeleteBlock() {
     clearBlockSelection();
   } catch (err) {
     console.error('[Blocks] Failed to delete block:', err);
-    alert('Failed to delete block. See console for details.');
+    await alertDialog({
+      title: 'Block Delete Failed',
+      message: 'Could not delete the block. See console for details.',
+    });
   } finally {
     closeDeleteBlockModal();
   }

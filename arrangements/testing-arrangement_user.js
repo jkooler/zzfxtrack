@@ -18,9 +18,9 @@ export const arrangementState = {
     {
       "repeats": 4,
       "blocks": [
-        "drums.js",
         "chords.js",
-        "bass.js"
+        "bass.js",
+        "drums.js"
       ]
     },
     {

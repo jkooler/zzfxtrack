@@ -299,6 +299,38 @@ input[readonly]:focus-visible {
   @apply select-none;
 }
 
+#trackerModal.workspace-docked {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  width: 100%;
+  height: 100%;
+  display: flex !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+}
+
+#trackerModal.workspace-docked > .modal {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0.75rem !important;
+}
+
+#trackerModal.workspace-docked #closeTrackerBtn {
+  display: none !important;
+}
+
 .song-visualizer {
   @apply absolute inset-0 z-0 opacity-50 pointer-events-none w-full h-full;
 }

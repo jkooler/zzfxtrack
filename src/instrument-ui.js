@@ -25,7 +25,7 @@ const DEMO_MODE = import.meta.env.MODE === 'demo';
 
 // State
 let currentInstrumentId = null;
-let currentView = 'songs'; // 'songs' or 'instruments'
+let currentView = 'songs'; // 'songs' | 'blocks' | 'instruments'
 let hasSelectedSong = false;
 const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-instruments-v1';
 let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, example: false });
@@ -43,14 +43,17 @@ function isDeveloperModeEnabled() {
 const dom = {
     // Tabs
     songsTab: document.getElementById('songsTab'),
+    blocksTab: document.getElementById('blocksTab'),
     instrumentsTab: document.getElementById('instrumentsTab'),
     
     // Lists
     songList: document.getElementById('songList'),
+    arrangementList: document.getElementById('arrangementList'),
     instrumentList: document.getElementById('instrumentList'),
     
     // Buttons
     newSongBtn: document.getElementById('newSongBtn'),
+    newArrangementBtn: document.getElementById('newArrangementBtn'),
     newInstrumentBtn: document.getElementById('newInstrumentBtn'),
     downloadProjectBtn: document.getElementById('downloadProjectBtn'),
     instrumentControls: document.getElementById('instrumentControls'),
@@ -177,6 +180,7 @@ export function refreshInstrumentListUI() {
 function setupEventListeners() {
     // Tab switching
     dom.songsTab.addEventListener('click', () => switchView('songs'));
+    dom.blocksTab?.addEventListener('click', () => switchView('blocks'));
     dom.instrumentsTab.addEventListener('click', () => switchView('instruments'));
 
     // Instrument Controls
@@ -1094,34 +1098,61 @@ function switchView(view) {
 
     // Clear introduction page highlight and restore current song highlight when user switches to Songs or Instruments tab
     document.getElementById('sidebarTitle')?.classList.remove('active');
-    refreshSongListActiveState();
+    if (view === 'songs' || view === 'instruments') {
+        refreshSongListActiveState();
+    }
 
     if (view === 'songs') {
         dom.songsTab.classList.add('active');
+        dom.blocksTab?.classList.remove('active');
         dom.instrumentsTab.classList.remove('active');
         
         dom.songList.classList.remove('hidden');
+        dom.arrangementList?.classList.add('hidden');
         dom.instrumentList.classList.add('hidden');
         dom.instrumentList.classList.remove('active');
         
         // Show Song stuff
         dom.newSongBtn.classList.remove('hidden');
         dom.newSongBtn.classList.add('inline-flex');
+        dom.newArrangementBtn?.classList.add('hidden');
+        dom.newArrangementBtn?.classList.remove('inline-flex');
         
         dom.newInstrumentBtn.classList.add('hidden');
         dom.newInstrumentBtn.classList.remove('inline-flex');
         
+    } else if (view === 'blocks') {
+        dom.songsTab.classList.remove('active');
+        dom.blocksTab?.classList.add('active');
+        dom.instrumentsTab.classList.remove('active');
+
+        dom.songList.classList.add('hidden');
+        dom.arrangementList?.classList.remove('hidden');
+        dom.instrumentList.classList.add('hidden');
+        dom.instrumentList.classList.remove('active');
+
+        dom.newSongBtn.classList.add('hidden');
+        dom.newSongBtn.classList.remove('inline-flex');
+        dom.newArrangementBtn?.classList.remove('hidden');
+        dom.newArrangementBtn?.classList.add('inline-flex');
+
+        dom.newInstrumentBtn.classList.add('hidden');
+        dom.newInstrumentBtn.classList.remove('inline-flex');
     } else {
         dom.songsTab.classList.remove('active');
+        dom.blocksTab?.classList.remove('active');
         dom.instrumentsTab.classList.add('active');
         
         dom.songList.classList.add('hidden');
+        dom.arrangementList?.classList.add('hidden');
         dom.instrumentList.classList.remove('hidden');
         dom.instrumentList.classList.add('active');
         
         // Show Instrument stuff
         dom.newSongBtn.classList.add('hidden');
         dom.newSongBtn.classList.remove('inline-flex');
+        dom.newArrangementBtn?.classList.add('hidden');
+        dom.newArrangementBtn?.classList.remove('inline-flex');
         
         dom.newInstrumentBtn.classList.remove('hidden');
         dom.newInstrumentBtn.classList.add('inline-flex');
@@ -1129,6 +1160,7 @@ function switchView(view) {
     }
     
     refreshInstrumentControlsVisibility();
+    document.dispatchEvent(new CustomEvent('sidebar:viewChanged', { detail: { view } }));
     
     createIcons({ icons });
 }

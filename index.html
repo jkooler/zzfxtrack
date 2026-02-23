@@ -81,12 +81,18 @@
           STRUDEL TO ZZFXM
         </h1>
         <!-- Tabs -->
-        <div class="sidebar-tabs grid grid-cols-2 rounded-md gap-1">
+        <div class="sidebar-tabs grid grid-cols-3 rounded-md gap-1">
           <button
             id="songsTab"
             class="sidebar-tab active inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
             Songs
+          </button>
+          <button
+            id="blocksTab"
+            class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
+          >
+            Blocks
           </button>
           <button
             id="instrumentsTab"
@@ -105,14 +111,21 @@
         </button>
         <button
           id="newInstrumentBtn"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-tertiary text-tertiary-foreground hover:bg-tertiary/80 h-9 px-4 py-2 w-full uppercase flex items-center gap-2"
+          class="hidden items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-tertiary text-tertiary-foreground hover:bg-tertiary/80 h-9 px-4 py-2 w-full uppercase flex items-center gap-2"
         >
           <i data-lucide="plus" class="w-4 h-4"></i> New instrument
+        </button>
+        <button
+          id="newArrangementBtn"
+          class="hidden items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 w-full uppercase flex items-center gap-2"
+        >
+          <i data-lucide="plus" class="w-4 h-4"></i> New arrangement
         </button>
       </div>
 
       <!-- Lists -->
       <ul id="songList" class="song-list flex-1 overflow-y-auto space-y-1"></ul>
+      <ul id="arrangementList" class="song-list hidden flex-1 overflow-y-auto space-y-1"></ul>
 
       <div
         id="instrumentControls"
@@ -537,13 +550,13 @@
         </button>
 
         <!-- Blocks Button (Header Right) -->
-        <button
-          id="blocksBtn"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 flex items-center gap-2"
-          title="Open Blocks (Ctrl+B)"
-        >
-          <i data-lucide="toy-brick" class="w-4 h-4"></i> Blocks
-        </button>
+	        <button
+	          id="blocksBtn"
+	          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 flex items-center gap-2"
+	          title="Insert blocks into song (Ctrl+B)"
+	        >
+	          <i data-lucide="toy-brick" class="w-4 h-4"></i> + Insert Blocks
+	        </button>
       </header>
 
       <!-- Welcome View -->
@@ -628,6 +641,32 @@
           <strudel-editor id="repl" class="h-full w-full"></strudel-editor>
         </div>
       </div>
+      <div id="arrangementWorkspace" class="hidden flex-1 min-h-0 overflow-hidden">
+        <div class="flex flex-1 min-h-0 overflow-hidden border-t border-border">
+          <section id="arrangementWorkspacePane" class="w-2/5 min-w-0 border-r border-border bg-background overflow-hidden">
+            <div class="h-full p-4 text-sm text-muted-foreground" id="arrangementWorkspacePlaceholder">
+              Select an arrangement from the Blocks list to open the arranger workspace.
+            </div>
+          </section>
+          <section id="trackerWorkspacePane" class="w-3/5 min-w-0 border-r border-border bg-background overflow-hidden">
+            <div class="h-full p-4 text-sm text-muted-foreground">
+              Tracker panel will appear here.
+            </div>
+          </section>
+          <aside id="blocksLibrarySidebar" class="w-[280px] min-w-[240px] max-w-[340px] bg-card/60 overflow-hidden flex flex-col">
+            <div class="p-3 border-b border-border flex items-center justify-between gap-2">
+              <h3 class="text-sm font-bold uppercase tracking-wide text-foreground">Block Library</h3>
+              <button
+                id="newSidebarBlockBtn"
+                class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-7 px-2"
+              >
+                New Block
+              </button>
+            </div>
+            <ul id="blocksLibraryList" class="flex-1 overflow-y-auto p-2 space-y-1"></ul>
+          </aside>
+        </div>
+      </div>
       <footer
         id="mainFooter"
         class="toolbar h-14 border-t border-border flex items-center px-4 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
@@ -644,7 +683,8 @@
             id="exportBtn"
             class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-2 uppercase"
           >
-            <i data-lucide="file-music" class="w-4 h-4"></i> Export ZzFXM
+            <i data-lucide="file-music" class="w-4 h-4"></i>
+            <span id="exportBtnLabel">Export ZzFXM</span>
           </button>
           <button
             id="previewPlayBtn"
@@ -668,7 +708,8 @@
             id="exportWavBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 flex items-center gap-2"
           >
-            <i data-lucide="download" class="w-4 h-4"></i> Download WAV
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span id="exportWavBtnLabel">Download WAV</span>
           </button>
           <span
             id="statusMsg"
@@ -1253,6 +1294,79 @@
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
           >
             <i data-lucide="plus" class="w-4 h-4"></i> Create
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Arrangement Modal -->
+    <div
+      id="newArrangementModal"
+      class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-50 grid w-full max-w-sm gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
+      >
+        <h2
+          class="text-lg font-semibold leading-none tracking-tight text-primary"
+        >
+          New Arrangement
+        </h2>
+        <input
+          type="text"
+          id="newArrangementName"
+          placeholder="arrangement-name (e.g. boss-loop)"
+          class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+        <div class="flex justify-end gap-2">
+          <button
+            id="cancelNewArrangement"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+          >
+            Cancel
+          </button>
+          <button
+            id="confirmNewArrangement"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i> Create
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- App Dialog Modal -->
+    <div
+      id="appDialogModal"
+      class="modal-overlay fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+    >
+      <div
+        class="modal fixed z-[71] grid w-full max-w-md gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
+      >
+        <h2
+          id="appDialogTitle"
+          class="text-lg font-semibold leading-none tracking-tight text-foreground"
+        >
+          Confirm
+        </h2>
+        <p
+          id="appDialogMessage"
+          class="text-sm text-muted-foreground whitespace-pre-line"
+        >
+          Message
+        </p>
+        <div class="flex justify-end gap-2">
+          <button
+            id="appDialogCancel"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+          >
+            Cancel
+          </button>
+          <button
+            id="appDialogConfirm"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm"
+          >
+            OK
           </button>
         </div>
       </div>

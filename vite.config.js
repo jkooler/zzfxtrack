@@ -55,6 +55,38 @@ const apiPlugin = () => ({
         return false;
       }
     };
+
+    const getArrangementsUsingBlock = (targetFilename) => {
+      if (!targetFilename || !fs.existsSync(ARRANGEMENTS_DIR)) return [];
+      const arrangementFiles = fs.readdirSync(ARRANGEMENTS_DIR)
+        .filter((filename) => filename.endsWith('.js') && filename !== 'index.js');
+      const usedBy = [];
+
+      arrangementFiles.forEach((arrangementFilename) => {
+        const filePath = path.join(ARRANGEMENTS_DIR, arrangementFilename);
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const nameMatch = content.match(/export\s+const\s+name\s*=\s*["']([^"']+)["']/);
+          const arrangementStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
+          if (!arrangementStateMatch) return;
+
+          const arrangementState = JSON.parse(arrangementStateMatch[1]);
+          const rows = Array.isArray(arrangementState?.rows) ? arrangementState.rows : [];
+          const hasReference = rows.some((row) => Array.isArray(row?.blocks) && row.blocks.includes(targetFilename));
+          if (!hasReference) return;
+
+          usedBy.push({
+            filename: arrangementFilename,
+            name: nameMatch ? nameMatch[1] : arrangementFilename.replace('.js', ''),
+            scope: readScopeFromContent(content, 'user'),
+          });
+        } catch (_e) {
+          // Ignore malformed arrangement files and continue scanning.
+        }
+      });
+
+      return usedBy;
+    };
     
     // API: List Songs
     // GET /api/songs
@@ -505,6 +537,16 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
               }
             } catch (_e) {
               // Continue with delete for malformed files.
+            }
+            const usedBy = getArrangementsUsingBlock(filename);
+            if (usedBy.length) {
+              res.statusCode = 409;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({
+                error: 'Block is used by one or more arrangements',
+                usedBy,
+              }));
+              return;
             }
             fs.unlinkSync(filePath);
             console.log(`[API] Deleted block: ${filename}`);

@@ -10,13 +10,17 @@ import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, upd
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, closeTracker, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback } from './tracker.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
+import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
+import { confirmDialog, alertDialog } from './dialog.js';
 import JSZip from 'jszip';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+
+setupBeforeUnloadHandler();
 
 function isDeveloperModeEnabled() {
     if (DEMO_MODE) return false;
@@ -90,6 +94,7 @@ let currentSongFilename = null;
 let currentSongDisplayName = ''; // Store the display name for restoration
 let lastExportedData = null;
 let lastExportedMeta = null;
+let lastExportedContext = { type: null, filename: null };
 let autoSaveTimeout = null; // Debounce timer for auto-save
 let isPreviewPlaying = false;
 let playingSongFilename = null;
@@ -101,6 +106,9 @@ let renameDebounceTimeout = null;
 let pendingUploadBundle = null;
 let songEntriesCache = [];
 let currentSongScope = 'user';
+let currentArrangementFilename = null;
+let currentArrangementScope = 'user';
+let arrangementEntriesCache = [];
 let pendingAdvancedSettingsContext = null;
 const UPLOAD_BUNDLE_MANIFEST_NAME = 'strudel-project-bundle.json';
 const UPLOAD_BUNDLE_KIND = 'strudel-project-bundle';
@@ -114,6 +122,22 @@ let arrangementPreviewContext = {
 let arrangementLiveEditSession = {
     active: false,
     committed: false,
+};
+let arrangementAutoSaveTimeout = null;
+let trackerAutoSaveTimeout = null;
+let pendingTrackerSavePayload = null;
+let arrangementDraftState = null;
+let blocksLibraryCache = [];
+let activeArrangementBlockFilename = null;
+let trackerDockRestoreParent = null;
+let trackerDockRestoreNextSibling = null;
+let trackerWorkspaceLoadedFilename = null;
+let trackerWorkspaceLoadToken = 0;
+let arrangementWorkspacePlayingRowIndex = null;
+let arrangementWorkspacePlayhead = {
+    rowIndex: null,
+    progress: 0,
+    blocks: [],
 };
 
 const PLAYBACK_LOUDNESS_PRESETS = Object.freeze({
@@ -129,11 +153,16 @@ const dom = {
     repl: document.getElementById('repl'),
     sidebarTitle: document.getElementById('sidebarTitle'),
     songList: document.getElementById('songList'),
+    arrangementList: document.getElementById('arrangementList'),
+    blocksTab: document.getElementById('blocksTab'),
+    newArrangementBtn: document.getElementById('newArrangementBtn'),
     songNameInput: document.getElementById('songNameInput'),
     openSongAdvancedSettingsBtn: document.getElementById('openSongAdvancedSettingsBtn'),
     playBtn: document.getElementById('playBtn'),
     exportBtn: document.getElementById('exportBtn'),
+    exportBtnLabel: document.getElementById('exportBtnLabel'),
     exportWavBtn: document.getElementById('exportWavBtn'),
+    exportWavBtnLabel: document.getElementById('exportWavBtnLabel'),
     newSongBtn: document.getElementById('newSongBtn'),
     statusMsg: document.getElementById('statusMsg'),
     demoModeBadge: document.getElementById('demoModeBadge'),
@@ -142,6 +171,13 @@ const dom = {
     // Views
     welcomeView: document.getElementById('welcomeView'),
     editorContainer: document.getElementById('editorContainer'),
+    arrangementWorkspace: document.getElementById('arrangementWorkspace'),
+    arrangementWorkspacePane: document.getElementById('arrangementWorkspacePane'),
+    arrangementWorkspacePlaceholder: document.getElementById('arrangementWorkspacePlaceholder'),
+    trackerWorkspacePane: document.getElementById('trackerWorkspacePane'),
+    blocksLibrarySidebar: document.getElementById('blocksLibrarySidebar'),
+    blocksLibraryList: document.getElementById('blocksLibraryList'),
+    newSidebarBlockBtn: document.getElementById('newSidebarBlockBtn'),
     mainHeader: document.getElementById('mainHeader'),
     mainFooter: document.getElementById('mainFooter'),
     
@@ -172,6 +208,10 @@ const dom = {
     newSongName: document.getElementById('newSongName'),
     confirmNewSong: document.getElementById('confirmNewSong'),
     cancelNewSong: document.getElementById('cancelNewSong'),
+    newArrangementModal: document.getElementById('newArrangementModal'),
+    newArrangementName: document.getElementById('newArrangementName'),
+    confirmNewArrangement: document.getElementById('confirmNewArrangement'),
+    cancelNewArrangement: document.getElementById('cancelNewArrangement'),
     
     // Delete Confirmation
     deleteConfirmModal: document.getElementById('deleteConfirmModal'),
@@ -303,10 +343,126 @@ function getSongEntry(filename) {
     return songEntriesCache.find((entry) => entry.filename === filename) || null;
 }
 
+function normalizeArrangementEntries(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload
+        .map((item) => {
+            if (typeof item === 'string') {
+                return { filename: item, name: item.replace(/\.js$/i, ''), scope: 'user', bpm: 120, arrangementState: null };
+            }
+            if (!item || typeof item !== 'object' || typeof item.filename !== 'string') {
+                return null;
+            }
+            return {
+                filename: item.filename,
+                name: typeof item.name === 'string' ? item.name : item.filename.replace(/\.js$/i, ''),
+                scope: normalizeScope(item.scope),
+                bpm: Number.isFinite(Number(item.bpm)) ? Number(item.bpm) : 120,
+                arrangementState: item.arrangementState ?? null,
+            };
+        })
+        .filter(Boolean);
+}
+
+function getArrangementEntry(filename) {
+    return arrangementEntriesCache.find((entry) => entry.filename === filename) || null;
+}
+
 // --- View State Helpers ---
+function stopAllPlaybackForSelectionChange() {
+    try {
+        if (dom.repl.editor?.repl?.scheduler?.started) {
+            dom.repl.editor.stop();
+            updatePlayState(false);
+        }
+    } catch (_e) {
+        // Ignore stop errors.
+    }
+
+    if (isPreviewPlaying) {
+        stopZzfxmSong();
+        updatePreviewPlayButton(false);
+    }
+
+    stopTrackerPreviewPlayback();
+    if (isArrangementPreviewPlaying()) {
+        stopArrangementPreview();
+    }
+    clearArrangementWorkspacePlayheadVisuals();
+}
+
+function refreshZzfxmPreviewControlsVisibility() {
+    const hasExportedData = Boolean(lastExportedData);
+    const matchesSong = hasExportedData
+        && lastExportedContext.type === 'song'
+        && Boolean(currentSongFilename)
+        && lastExportedContext.filename === currentSongFilename
+        && !isArrangementWorkspaceActive();
+    const matchesArrangement = hasExportedData
+        && lastExportedContext.type === 'arrangement'
+        && Boolean(currentArrangementFilename)
+        && lastExportedContext.filename === currentArrangementFilename
+        && isArrangementWorkspaceActive();
+    const shouldShow = matchesSong || matchesArrangement;
+
+    if (dom.previewPlayBtn) {
+        dom.previewPlayBtn.style.display = shouldShow ? '' : 'none';
+        dom.previewPlayBtn.disabled = !shouldShow;
+    }
+    if (dom.showJsonBtn) {
+        dom.showJsonBtn.style.display = shouldShow ? '' : 'none';
+        dom.showJsonBtn.disabled = !shouldShow;
+    }
+}
+
+function setZzfxmPreviewData(songData, meta = null, { type, filename, reveal = true } = {}) {
+    lastExportedData = songData || null;
+    lastExportedMeta = meta || null;
+    lastExportedContext = {
+        type: type || null,
+        filename: filename || null,
+    };
+    if (songData) {
+        dom.previewJson.innerText = JSON.stringify(songData, null, 2);
+    }
+    if (reveal) {
+        refreshZzfxmPreviewControlsVisibility();
+    }
+}
+
+function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFXM song' } = {}) {
+    if (isPreviewPlaying) {
+        stopZzfxmSong();
+        updatePreviewPlayButton(false);
+    }
+    lastExportedData = null;
+    lastExportedMeta = null;
+    lastExportedContext = { type: null, filename: null };
+    dom.previewJson.innerText = placeholder;
+    refreshZzfxmPreviewControlsVisibility();
+}
+
+function updateFooterExportActionLabels() {
+    const arrangementMode = isArrangementWorkspaceActive();
+    if (dom.exportBtnLabel) {
+        dom.exportBtnLabel.textContent = arrangementMode ? 'Export Arrangement ZzFXM' : 'Export ZzFXM';
+    }
+    if (dom.exportWavBtnLabel) {
+        dom.exportWavBtnLabel.textContent = arrangementMode ? 'Download Arrangement WAV' : 'Download WAV';
+    }
+    if (dom.exportBtn) {
+        dom.exportBtn.title = arrangementMode ? 'Export arrangement to ZzFXM JSON' : '';
+    }
+    if (dom.exportWavBtn) {
+        dom.exportWavBtn.title = arrangementMode ? 'Download arrangement mix as WAV' : '';
+    }
+}
+
 function showWelcome() {
+    undockTrackerModalFromWorkspace();
     dom.welcomeView.style.display = 'flex';
     dom.editorContainer.style.display = 'none';
+    if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'none';
     if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
     if (dom.mainFooter) dom.mainFooter.classList.add('hidden');
     dom.playBtn.style.visibility = 'hidden';
@@ -325,6 +481,10 @@ function showWelcome() {
     // Clear state
     currentSongFilename = null;
     currentSongScope = 'user';
+    currentArrangementFilename = null;
+    currentArrangementScope = 'user';
+    arrangementDraftState = null;
+    activeArrangementBlockFilename = null;
     playingSongFilename = null;
     dom.songNameInput.classList.add('hidden');
     if(dom.repl.editor) dom.repl.editor.stop();
@@ -332,11 +492,13 @@ function showWelcome() {
     updateSongListVisualizer();
     
     // Clear preview
-    dom.previewJson.innerText = '';
-    lastExportedData = null;
+    clearZzfxmPreviewData({ placeholder: '' });
 
     // No highlight on initial load or when returning to welcome with no song
     dom.sidebarTitle?.classList.remove('active');
+    refreshArrangementListActiveState();
+    renderArrangementWorkspace();
+    updateFooterExportActionLabels();
 }
 
 function showIntroduction() {
@@ -346,8 +508,10 @@ function showIntroduction() {
         return;
     }
 
+    undockTrackerModalFromWorkspace();
     dom.welcomeView.style.display = 'flex';
     dom.editorContainer.style.display = 'none';
+    if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'none';
     if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
     if (dom.mainFooter) dom.mainFooter.classList.add('hidden');
     dom.songNameInput.classList.add('hidden');
@@ -364,19 +528,78 @@ function showIntroduction() {
     // Remove selection highlight from song list when introduction page is selected
     Array.from(dom.songList.querySelectorAll('.song-item')).forEach((li) => li.classList.remove('active'));
     dom.sidebarTitle?.classList.add('active');
+    refreshZzfxmPreviewControlsVisibility();
+    updateFooterExportActionLabels();
 }
 
 function showEditor() {
+    undockTrackerModalFromWorkspace();
     dom.welcomeView.style.display = 'none';
     dom.editorContainer.style.display = 'flex';
+    if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'none';
     if (dom.mainHeader) dom.mainHeader.classList.remove('hidden');
     if (dom.mainFooter) dom.mainFooter.classList.remove('hidden');
     dom.playBtn.style.visibility = 'visible';
     dom.exportBtn.disabled = false;
     if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
     dom.songNameInput.classList.remove('hidden');
+    refreshZzfxmPreviewControlsVisibility();
     updateAdvancedSettingsButtonsVisibility();
     dom.sidebarTitle?.classList.remove('active');
+    updateFooterExportActionLabels();
+}
+
+function showArrangementWorkspace() {
+    dom.welcomeView.style.display = 'none';
+    dom.editorContainer.style.display = 'none';
+    if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'flex';
+    if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
+    if (dom.mainFooter) dom.mainFooter.classList.remove('hidden');
+    dom.sidebarTitle?.classList.remove('active');
+    dom.songNameInput.classList.add('hidden');
+    dom.exportBtn.disabled = false;
+    if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
+    refreshZzfxmPreviewControlsVisibility();
+    updateAdvancedSettingsButtonsVisibility();
+    updateFooterExportActionLabels();
+}
+
+function isArrangementWorkspaceActive() {
+    return Boolean(currentArrangementFilename);
+}
+
+function dockTrackerModalToWorkspace() {
+    const trackerModal = document.getElementById('trackerModal');
+    if (!trackerModal || !dom.trackerWorkspacePane) return null;
+
+    const alreadyDocked = trackerModal.classList.contains('workspace-docked')
+        && trackerModal.parentElement === dom.trackerWorkspacePane;
+    if (alreadyDocked) return trackerModal;
+
+    if (!trackerDockRestoreParent) {
+        trackerDockRestoreParent = trackerModal.parentElement;
+        trackerDockRestoreNextSibling = trackerModal.nextElementSibling;
+    }
+
+    dom.trackerWorkspacePane.innerHTML = '';
+    trackerModal.classList.add('workspace-docked');
+    dom.trackerWorkspacePane.appendChild(trackerModal);
+    return trackerModal;
+}
+
+function undockTrackerModalFromWorkspace() {
+    const trackerModal = document.getElementById('trackerModal');
+    if (!trackerModal || !trackerModal.classList.contains('workspace-docked')) return;
+
+    trackerModal.classList.remove('workspace-docked');
+    const restoreParent = trackerDockRestoreParent || document.body;
+    if (trackerDockRestoreNextSibling && trackerDockRestoreNextSibling.parentElement === restoreParent) {
+        restoreParent.insertBefore(trackerModal, trackerDockRestoreNextSibling);
+    } else {
+        restoreParent.appendChild(trackerModal);
+    }
+    trackerDockRestoreParent = null;
+    trackerDockRestoreNextSibling = null;
 }
 
 // --- Initialization ---
@@ -398,6 +621,8 @@ async function init() {
     
     // 3. Load Songs List
     await refreshSongList();
+    await refreshArrangementList();
+    await refreshBlocksLibrary();
     if (DEMO_MODE && dom.newSongBtn) {
         dom.newSongBtn.style.display = 'none';
     }
@@ -622,34 +847,93 @@ function setupAutoSave() {
     }, 100);
 }
 
-// Save pending changes before page unload
-window.addEventListener('beforeunload', (e) => {
+registerBeforeUnloadConfirmer(() => {
+    if (DEMO_MODE) return false;
+    if (currentSongScope === 'example' && !isDeveloperModeEnabled()) return false;
+    return Boolean(autoSaveTimeout && currentSongFilename);
+});
+
+registerBeforeUnloadFlusher(() => {
     if (DEMO_MODE) return;
     if (currentSongScope === 'example' && !isDeveloperModeEnabled()) return;
-    if (autoSaveTimeout && currentSongFilename) {
-        // There's a pending save - try to save synchronously
-        clearTimeout(autoSaveTimeout);
-        
-        const editorCode = dom.repl.editor.code;
-        const fileCode = editorToFile(editorCode);
-        
-        // Use sendBeacon for reliable delivery even as page closes.
-        // Note: sendBeacon cannot send custom headers, so for developer mode (which needs a header)
-        // we use fetch({ keepalive: true }) instead.
-        if (currentSongScope === 'example' && isDeveloperModeEnabled()) {
-            fetch(`/api/song/${currentSongFilename}`, {
-                method: 'POST',
-                headers: getDeveloperModeHeaders(),
-                body: fileCode,
-                keepalive: true,
-            }).catch(() => {});
-        } else {
-            const blob = new Blob([fileCode], { type: 'text/plain' });
-            navigator.sendBeacon(`/api/song/${currentSongFilename}`, blob);
-        }
-        
-        // Also keep in localStorage as backup
+    if (!(autoSaveTimeout && currentSongFilename)) return;
+
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = null;
+
+    const editorCode = dom.repl.editor?.code || '';
+    const fileCode = editorToFile(editorCode);
+
+    // Use sendBeacon for reliable delivery even as page closes.
+    // Note: sendBeacon cannot send custom headers, so for developer mode (which needs a header)
+    // we use fetch({ keepalive: true }) instead.
+    if (currentSongScope === 'example' && isDeveloperModeEnabled()) {
+        fetch(`/api/song/${currentSongFilename}`, {
+            method: 'POST',
+            headers: getDeveloperModeHeaders(),
+            body: fileCode,
+            keepalive: true,
+        }).catch(() => {});
+    } else {
+        const blob = new Blob([fileCode], { type: 'text/plain' });
+        navigator.sendBeacon(`/api/song/${currentSongFilename}`, blob);
+    }
+
+    // Also keep in localStorage as backup
+    try {
         localStorage.setItem(`unsaved_${currentSongFilename}`, editorCode);
+    } catch (_e) {
+        // Ignore storage failures.
+    }
+});
+
+registerBeforeUnloadConfirmer(() => {
+    if (DEMO_MODE) return false;
+    if (arrangementAutoSaveTimeout && currentArrangementFilename && !getArrangementReadonly()) return true;
+    return Boolean(trackerAutoSaveTimeout && pendingTrackerSavePayload);
+});
+
+registerBeforeUnloadFlusher(() => {
+    if (DEMO_MODE) return;
+
+    if (arrangementAutoSaveTimeout && currentArrangementFilename && !getArrangementReadonly()) {
+        clearTimeout(arrangementAutoSaveTimeout);
+        arrangementAutoSaveTimeout = null;
+        const arrangementState = buildArrangementStatePayload();
+        const body = JSON.stringify({
+            name: arrangementState.name,
+            arrangementState,
+            scope: currentArrangementScope,
+        });
+        fetch(`/api/arrangements/${encodeURIComponent(currentArrangementFilename)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
+            body,
+            keepalive: true,
+        }).catch(() => {});
+        try {
+            localStorage.setItem(`unsaved_arrangement_${currentArrangementFilename}`, JSON.stringify(arrangementState));
+        } catch (_e) {
+            // Ignore storage failures.
+        }
+    }
+
+    if (trackerAutoSaveTimeout && pendingTrackerSavePayload) {
+        clearTimeout(trackerAutoSaveTimeout);
+        trackerAutoSaveTimeout = null;
+        const payload = pendingTrackerSavePayload;
+        pendingTrackerSavePayload = null;
+        fetch(`/api/blocks/${encodeURIComponent(payload.filename)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            keepalive: true,
+        }).catch(() => {});
+        try {
+            localStorage.setItem(`unsaved_block_${payload.filename}`, JSON.stringify(payload.trackerState || {}));
+        } catch (_e) {
+            // Ignore storage failures.
+        }
     }
 });
 
@@ -856,6 +1140,1329 @@ export function refreshSongListActiveState() {
     });
 }
 
+function normalizeArrangementBaseName(input) {
+    return String(input || '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+async function refreshArrangementList() {
+    if (!dom.arrangementList) return;
+
+    try {
+        const entries = DEMO_MODE
+            ? Array.from(demoArrangementSourceByFile.keys())
+                .sort()
+                .map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'example' }))
+            : await (async () => {
+                const res = await fetch('/api/arrangements');
+                if (!res.ok) throw new Error('Failed to list arrangements');
+                const payload = await res.json();
+                return normalizeArrangementEntries(payload).sort((a, b) => a.filename.localeCompare(b.filename));
+            })();
+
+        arrangementEntriesCache = entries;
+        dom.arrangementList.innerHTML = '';
+
+        const appendFolder = (scope, label, items) => {
+            const isEmpty = items.length === 0;
+            const folderLi = document.createElement('li');
+            folderLi.className = 'mt-1 pb-1 border-b border-border/40';
+            folderLi.innerHTML = `
+                <div class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground">
+                    <span class="inline-flex items-center gap-1.5">
+                        <i data-lucide="folder-open" class="w-5 h-5 fill-current stroke-[var(--card)]"></i>
+                        ${label}
+                    </span>
+                    <span class="opacity-70">${items.length}</span>
+                </div>
+                <ul class="list-none m-0 p-0 space-y-1 mt-1" data-arrangement-folder-items="${scope}"></ul>
+            `;
+            const list = folderLi.querySelector(`[data-arrangement-folder-items="${scope}"]`);
+
+            if (isEmpty) {
+                const empty = document.createElement('li');
+                empty.className = 'text-xs text-muted-foreground px-2 py-1';
+                empty.textContent = scope === 'user'
+                    ? 'Create a new arrangement to get started.'
+                    : 'No example arrangements available.';
+                list?.appendChild(empty);
+            }
+
+            items.forEach((entry) => {
+                const isExample = normalizeScope(entry.scope) === 'example';
+                const devMode = isDeveloperModeEnabled();
+                const isImmutable = isExample && !devMode;
+                const li = document.createElement('li');
+                li.className = `song-item ${entry.filename === currentArrangementFilename ? 'active' : ''}`;
+                li.dataset.scope = normalizeScope(entry.scope);
+                li.dataset.filename = entry.filename;
+
+                li.innerHTML = (DEMO_MODE || isImmutable)
+                    ? `<span class="font-medium">${escapeHtml(entry.name || decodeURIComponent(entry.filename.replace(/\.js$/i, '')))}</span>`
+                    : `
+                        <span class="font-medium">${escapeHtml(entry.name || decodeURIComponent(entry.filename.replace(/\.js$/i, '')))}</span>
+                        <div class="song-item-actions">
+                            <button class="sidebar-del-btn" title="Delete ${escapeHtml(entry.name || entry.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    `;
+
+                li.querySelector('span')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    loadArrangement(entry.filename);
+                });
+                li.addEventListener('click', () => loadArrangement(entry.filename));
+
+                if (!DEMO_MODE && !isImmutable) {
+                    li.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteArrangement(entry.filename);
+                    });
+                }
+
+                list?.appendChild(li);
+            });
+
+            dom.arrangementList.appendChild(folderLi);
+        };
+
+        const userItems = entries.filter((entry) => normalizeScope(entry.scope) === 'user');
+        const exampleItems = entries.filter((entry) => normalizeScope(entry.scope) === 'example');
+        appendFolder('user', 'User', userItems);
+        appendFolder('example', 'Examples', exampleItems);
+        createIcons({ icons });
+    } catch (err) {
+        console.error('[Arrangements] Failed to refresh list:', err);
+        arrangementEntriesCache = [];
+        dom.arrangementList.innerHTML = '<li class="text-xs text-destructive px-3 py-2">Failed to load arrangements.</li>';
+    }
+}
+
+function refreshArrangementListActiveState() {
+    if (!dom.arrangementList) return;
+    Array.from(dom.arrangementList.querySelectorAll('.song-item')).forEach((li) => {
+        li.classList.toggle('active', li.dataset.filename === currentArrangementFilename);
+    });
+}
+
+async function deleteArrangement(filename) {
+    if (!filename || DEMO_MODE) return;
+    const scope = normalizeScope(getArrangementEntry(filename)?.scope);
+    if (scope === 'example' && !isDeveloperModeEnabled()) {
+        setStatus('Example arrangements are immutable', 'normal');
+        return;
+    }
+    const displayName = decodeURIComponent(filename.replace(/\.js$/i, ''));
+    const confirmed = await confirmDialog({
+        title: 'Delete Arrangement?',
+        message: `Delete arrangement "${displayName}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`, {
+            method: 'DELETE',
+            headers: getDeveloperModeHeaders(),
+        });
+        if (!res.ok) throw new Error('Failed to delete arrangement');
+
+        if (currentArrangementFilename === filename) {
+            currentArrangementFilename = null;
+            currentArrangementScope = 'user';
+            arrangementDraftState = null;
+            activeArrangementBlockFilename = null;
+            showWelcome();
+        }
+        await refreshArrangementList();
+        await refreshBlocksLibrary();
+        setStatus('Arrangement deleted', 'success');
+    } catch (err) {
+        console.error('[Arrangements] Delete failed:', err);
+        setStatus('Failed to delete arrangement', 'error');
+    }
+}
+
+async function createNewArrangement(name) {
+    if (DEMO_MODE) {
+        setStatus('Demo mode: creating arrangements is disabled', 'normal');
+        return;
+    }
+
+    const normalizedBase = normalizeArrangementBaseName(name);
+    if (!normalizedBase) {
+        setStatus('Invalid arrangement name', 'error');
+        return;
+    }
+
+    try {
+        const existing = await fetch('/api/arrangements').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+        const existingFilenames = new Set((existing || []).map((item) => String(item?.filename || '').toLowerCase()));
+        let baseSlug = normalizedBase.toLowerCase();
+        let slug = baseSlug;
+        let suffix = 1;
+        while (existingFilenames.has(`${slug}.js`)) {
+            suffix += 1;
+            slug = `${baseSlug}-${suffix}`;
+        }
+        const filename = `${slug}.js`;
+        const arrangementState = {
+            version: 1,
+            name: normalizedBase,
+            bpm: 120,
+            rows: [{ repeats: 1, blocks: [] }],
+        };
+
+        const res = await fetch('/api/arrangements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename, name: normalizedBase, arrangementState, scope: 'user' }),
+        });
+        if (!res.ok) throw new Error('Failed to create arrangement');
+
+        await refreshArrangementList();
+        await loadArrangement(filename);
+        closeNewArrangementModal();
+    } catch (err) {
+        console.error('[Arrangements] Create failed:', err);
+        setStatus('Failed to create arrangement', 'error');
+    }
+}
+
+function getArrangementReadonly() {
+    return DEMO_MODE || (currentArrangementScope === 'example' && !isDeveloperModeEnabled());
+}
+
+function canRecoverUnsavedForScope(scope) {
+    const normalizedScope = normalizeScope(scope);
+    return normalizedScope !== 'example' || isDeveloperModeEnabled();
+}
+
+function readUnsavedArrangementState(filename, scope) {
+    if (!filename || !canRecoverUnsavedForScope(scope)) return null;
+    const storageKey = `unsaved_arrangement_${filename}`;
+    try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return cloneArrangementState(parsed);
+    } catch (_e) {
+        try {
+            localStorage.removeItem(storageKey);
+        } catch (_err) {
+            // Ignore storage failures.
+        }
+        return null;
+    }
+}
+
+function readUnsavedBlockTrackerState(filename, scope) {
+    if (!filename || !canRecoverUnsavedForScope(scope)) return null;
+    const storageKey = `unsaved_block_${filename}`;
+    try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return parsed;
+    } catch (_e) {
+        try {
+            localStorage.removeItem(storageKey);
+        } catch (_err) {
+            // Ignore storage failures.
+        }
+        return null;
+    }
+}
+
+function cloneArrangementState(value) {
+    const rows = Array.isArray(value?.rows) ? value.rows : [];
+    return {
+        version: 1,
+        name: String(value?.name || 'Arrangement').trim() || 'Arrangement',
+        bpm: Number.isFinite(Number(value?.bpm)) ? Math.max(20, Math.min(300, Number(value.bpm))) : 120,
+        rows: rows.length ? rows.map((row) => ({
+            repeats: Number.isFinite(Number(row?.repeats)) ? Math.max(1, Math.min(16, Number(row.repeats))) : 1,
+            blocks: Array.isArray(row?.blocks) ? row.blocks.filter(Boolean).map(String) : [],
+        })) : [{ repeats: 1, blocks: [] }],
+    };
+}
+
+function getBlockByFilename(filename) {
+    return blocksLibraryCache.find((block) => block.filename === filename) || null;
+}
+
+async function getArrangementInstrumentList() {
+    const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+    const instruments = getDefragmentedInstruments();
+    return instruments.map((inst) => ({
+        id: inst.strudelAlias,
+        name: inst.strudelAlias,
+        params: inst.params,
+    }));
+}
+
+async function resolveBlockDetailForArrangement(filename) {
+    if (!filename) return null;
+    const cached = getBlockByFilename(filename);
+    const hasTrackerState = Boolean(cached?.trackerState);
+    const hasPattern = typeof cached?.pattern === 'string';
+    const hasDescription = typeof cached?.description === 'string';
+    if (hasTrackerState && hasPattern && hasDescription) return cached;
+
+    if (DEMO_MODE) {
+        const source = demoBlockSourceByFile.get(filename);
+        if (!source) return cached || null;
+        const parsed = parseBlockSource(source);
+        return {
+            filename,
+            name: parsed?.name || cached?.name || filename.replace(/\.js$/i, ''),
+            description: parsed?.description || cached?.description || '',
+            pattern: parsed?.pattern || cached?.pattern || '',
+            trackerState: parsed?.trackerState || cached?.trackerState || null,
+            scope: normalizeScope(parsed?.scope || cached?.scope),
+        };
+    }
+
+    try {
+        const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
+        if (!res.ok) return cached || null;
+        const detail = await res.json();
+        return {
+            filename,
+            name: detail?.name || cached?.name || filename.replace(/\.js$/i, ''),
+            description: detail?.description || cached?.description || '',
+            pattern: detail?.pattern || cached?.pattern || '',
+            trackerState: detail?.trackerState || cached?.trackerState || null,
+            scope: normalizeScope(detail?.scope || cached?.scope),
+        };
+    } catch (_e) {
+        return cached || null;
+    }
+}
+
+async function buildArrangementExportContext() {
+    if (!currentArrangementFilename || !arrangementDraftState) return null;
+
+    const arrangementState = buildArrangementStatePayload();
+    const blockFiles = Array.from(new Set(
+        (arrangementState.rows || []).flatMap((row) => Array.isArray(row?.blocks) ? row.blocks : []).filter(Boolean)
+    ));
+
+    const blocks = [];
+    const trackerStateByFilename = {};
+    for (const filename of blockFiles) {
+        const block = await resolveBlockDetailForArrangement(filename);
+        if (!block) continue;
+        blocks.push({
+            filename,
+            name: block.name || filename.replace(/\.js$/i, ''),
+            description: block.description || '',
+            scope: normalizeScope(block.scope),
+            pattern: block.pattern || '',
+            trackerState: block.trackerState || null,
+        });
+        if (block.trackerState) {
+            trackerStateByFilename[filename] = block.trackerState;
+        }
+    }
+
+    const instrumentList = await getArrangementInstrumentList();
+    const bpm = arrangementState.bpm || 120;
+    return { arrangementState, blocks, trackerStateByFilename, instrumentList, bpm };
+}
+
+function getNextUntitledBlockName() {
+    let maxSuffix = 0;
+    blocksLibraryCache.forEach((block) => {
+        const name = String(block?.name || '').trim();
+        const match = /^Untitled-(\d+)$/i.exec(name);
+        if (!match) return;
+        const suffix = parseInt(match[1], 10);
+        if (Number.isFinite(suffix)) {
+            maxSuffix = Math.max(maxSuffix, suffix);
+        }
+    });
+    return `Untitled-${maxSuffix + 1}`;
+}
+
+async function createUntitledBlock({ rowIndex = null } = {}) {
+    if (DEMO_MODE) {
+        setStatus('Demo mode: creating blocks is disabled', 'normal');
+        return null;
+    }
+
+    await refreshBlocksLibrary();
+    const name = getNextUntitledBlockName();
+    const result = await saveBlock(name, 'Created from arrangement workspace', 'silence', null, 'user');
+    if (!result?.ok || !result?.block?.filename) {
+        setStatus('Failed to create block', 'error');
+        return null;
+    }
+
+    const filename = result.block.filename;
+    await refreshBlocksLibrary();
+    activeArrangementBlockFilename = filename;
+    trackerWorkspaceLoadedFilename = null;
+
+    if (Number.isInteger(rowIndex) && arrangementDraftState?.rows?.[rowIndex]) {
+        const row = arrangementDraftState.rows[rowIndex];
+        if (!Array.isArray(row.blocks)) row.blocks = [];
+        row.blocks.push(filename);
+        scheduleArrangementAutoSave();
+        emitArrangementStateChanged({ addedRowIndex: rowIndex, addedFilename: filename });
+    }
+
+    renderArrangementWorkspace();
+    renderTrackerWorkspace();
+    return filename;
+}
+
+function buildArrangementStatePayload() {
+    return cloneArrangementState(arrangementDraftState || {
+        name: getArrangementEntry(currentArrangementFilename)?.name || 'Arrangement',
+        bpm: 120,
+        rows: [{ repeats: 1, blocks: [] }],
+    });
+}
+
+function emitArrangementStateChanged(extraDetail = {}) {
+    const arrangementState = buildArrangementStatePayload();
+    document.dispatchEvent(new CustomEvent('arrangements:stateChanged', {
+        detail: {
+            arrangementState,
+            name: arrangementState.name,
+            bpm: arrangementState.bpm,
+            ...extraDetail,
+        }
+    }));
+}
+
+function scheduleArrangementAutoSave() {
+    if (arrangementAutoSaveTimeout) {
+        clearTimeout(arrangementAutoSaveTimeout);
+    }
+    arrangementAutoSaveTimeout = setTimeout(() => {
+        saveCurrentArrangement();
+    }, 180);
+}
+
+async function saveCurrentArrangement() {
+    if (!currentArrangementFilename || !arrangementDraftState) return;
+    if (getArrangementReadonly()) return;
+
+    if (arrangementAutoSaveTimeout) {
+        clearTimeout(arrangementAutoSaveTimeout);
+        arrangementAutoSaveTimeout = null;
+    }
+
+    const arrangementState = buildArrangementStatePayload();
+    const storageKey = `unsaved_arrangement_${currentArrangementFilename}`;
+    try {
+        localStorage.setItem(storageKey, JSON.stringify(arrangementState));
+    } catch (_e) {
+        // Ignore localStorage failures.
+    }
+
+    try {
+        const res = await fetch(`/api/arrangements/${encodeURIComponent(currentArrangementFilename)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
+            body: JSON.stringify({
+                name: arrangementState.name,
+                arrangementState,
+                scope: currentArrangementScope,
+            }),
+        });
+        if (!res.ok) throw new Error('Failed to save arrangement');
+        try {
+            localStorage.removeItem(storageKey);
+        } catch (_e) {
+            // Ignore localStorage failures.
+        }
+        showSaveStatus('Saved arrangement', 900);
+    } catch (err) {
+        console.error('[Arrangements] Autosave failed:', err);
+        setStatus('Failed to save arrangement', 'error');
+    }
+}
+
+function scheduleTrackerAutoSave({ filename, trackerState }) {
+    if (!filename || !trackerState || DEMO_MODE) return;
+    const block = getBlockByFilename(filename);
+    if (!block) return;
+    if (normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled()) return;
+
+    const trackerNameInput = document.getElementById('trackerBlockName');
+    const trackerOutput = document.getElementById('trackerOutput');
+    const nextName = String(trackerNameInput?.value || block.name || filename.replace(/\.js$/i, '')).trim() || block.name || filename.replace(/\.js$/i, '');
+    const nextPattern = String(trackerOutput?.value || block.pattern || '').trim();
+    const payload = {
+        name: nextName,
+        description: block.description || '',
+        pattern: nextPattern,
+        trackerState,
+        scope: normalizeScope(block.scope),
+        filename,
+    };
+
+    pendingTrackerSavePayload = payload;
+
+    if (trackerAutoSaveTimeout) {
+        clearTimeout(trackerAutoSaveTimeout);
+    }
+    trackerAutoSaveTimeout = setTimeout(async () => {
+        const activePayload = pendingTrackerSavePayload;
+        pendingTrackerSavePayload = null;
+        trackerAutoSaveTimeout = null;
+        if (!activePayload) return;
+        try {
+            const res = await fetch(`/api/blocks/${encodeURIComponent(activePayload.filename)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: activePayload.name,
+                    description: activePayload.description,
+                    pattern: activePayload.pattern,
+                    trackerState: activePayload.trackerState,
+                    scope: activePayload.scope,
+                }),
+            });
+            if (!res.ok) throw new Error('Autosave failed');
+            try {
+                localStorage.removeItem(`unsaved_block_${activePayload.filename}`);
+            } catch (_e) {
+                // Ignore storage failures.
+            }
+            const idx = blocksLibraryCache.findIndex((item) => item.filename === activePayload.filename);
+            if (idx !== -1) {
+                blocksLibraryCache[idx] = {
+                    ...blocksLibraryCache[idx],
+                    name: activePayload.name,
+                    pattern: activePayload.pattern,
+                    trackerState: activePayload.trackerState,
+                };
+            }
+            renderArrangementWorkspace();
+            renderTrackerWorkspace();
+            void refreshBlocksLibrary();
+        } catch (err) {
+            console.error('[Tracker] Autosave failed:', err);
+            try {
+                localStorage.setItem(`unsaved_block_${activePayload.filename}`, JSON.stringify(activePayload.trackerState || {}));
+            } catch (_e) {
+                // Ignore storage failures.
+            }
+            setStatus('Failed to autosave block', 'error');
+        }
+    }, 200);
+}
+
+function renderTrackerWorkspace() {
+    if (!dom.trackerWorkspacePane) return;
+    const selectedBlock = activeArrangementBlockFilename ? getBlockByFilename(activeArrangementBlockFilename) : null;
+    if (!selectedBlock) {
+        trackerWorkspaceLoadedFilename = null;
+        trackerWorkspaceLoadToken += 1;
+        if (isTrackerOpen()) {
+            closeTracker();
+        }
+        undockTrackerModalFromWorkspace();
+        dom.trackerWorkspacePane.innerHTML = `
+            <div class="h-full p-4 text-sm text-muted-foreground">
+                Select a block from the arrangement or the library to open it in tracker.
+            </div>
+        `;
+        return;
+    }
+
+    dockTrackerModalToWorkspace();
+    const shouldReload = trackerWorkspaceLoadedFilename !== selectedBlock.filename || !isTrackerOpen();
+    if (!shouldReload) return;
+
+    trackerWorkspaceLoadedFilename = selectedBlock.filename;
+    trackerWorkspaceLoadToken += 1;
+    const loadToken = trackerWorkspaceLoadToken;
+    openTrackerModalForEdit(selectedBlock, selectedBlock.trackerState || null, {
+        autoSaveOnInput: true,
+        returnToArrangementsOnClose: false,
+        returnToBlocksOnClose: false,
+    }).then(() => {
+        if (loadToken !== trackerWorkspaceLoadToken) return;
+        const trackerModal = document.getElementById('trackerModal');
+        if (!trackerModal?.classList.contains('workspace-docked')) return;
+        const trackerHeader = trackerModal.querySelector('h2');
+        if (trackerHeader) {
+            trackerHeader.textContent = selectedBlock.name || selectedBlock.filename.replace(/\.js$/i, '');
+        }
+    }).catch((err) => {
+        if (loadToken !== trackerWorkspaceLoadToken) return;
+        console.error('[Tracker] Failed to load block in workspace:', err);
+        setStatus('Failed to open tracker block', 'error');
+    });
+}
+
+function renderArrangementWorkspace() {
+    if (!dom.arrangementWorkspacePane) return;
+    if (!arrangementDraftState) {
+        dom.arrangementWorkspacePane.innerHTML = `
+            <div class="h-full p-4 text-sm text-muted-foreground" id="arrangementWorkspacePlaceholder">
+                Select an arrangement from the Blocks list to open the arranger workspace.
+            </div>
+        `;
+        renderTrackerWorkspace();
+        return;
+    }
+
+    const readonly = getArrangementReadonly();
+    const isPreviewPlaying = isArrangementPreviewPlaying();
+    const blocksAvailableForPicker = readonly
+        ? blocksLibraryCache
+        : blocksLibraryCache.filter((block) => normalizeScope(block.scope) !== 'example');
+
+    const sortBlocksForPicker = (blocks) => {
+        const collator = typeof Intl !== 'undefined' && Intl.Collator
+            ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+            : null;
+        const groupKey = (name) => {
+            const s = String(name || '').trim().toLowerCase();
+            const first = s[0] || '';
+            if (first >= '0' && first <= '9') return `0${s}`;
+            if (first >= 'a' && first <= 'z') return `1${s}`;
+            return `2${s}`;
+        };
+        return (blocks || []).slice().sort((a, b) => {
+            const aKey = groupKey(a?.name);
+            const bKey = groupKey(b?.name);
+            if (collator) {
+                const byKey = collator.compare(aKey, bKey);
+                if (byKey) return byKey;
+            } else {
+                if (aKey < bKey) return -1;
+                if (aKey > bKey) return 1;
+            }
+            const aFile = String(a?.filename || '');
+            const bFile = String(b?.filename || '');
+            return collator ? collator.compare(aFile, bFile) : aFile.localeCompare(bFile);
+        });
+    };
+    const blocksForPicker = sortBlocksForPicker(blocksAvailableForPicker);
+    const blockByFilename = new Map(blocksLibraryCache.map((b) => [b.filename, b]));
+    const compareRowBlockFilenames = (aFilename, bFilename) => {
+        const aBlock = blockByFilename.get(aFilename);
+        const bBlock = blockByFilename.get(bFilename);
+        const aKey = aBlock ? aBlock.name : aFilename;
+        const bKey = bBlock ? bBlock.name : bFilename;
+        const collator = typeof Intl !== 'undefined' && Intl.Collator
+            ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+            : null;
+        const groupKey = (name) => {
+            const s = String(name || '').trim().toLowerCase();
+            const first = s[0] || '';
+            if (first >= '0' && first <= '9') return `0${s}`;
+            if (first >= 'a' && first <= 'z') return `1${s}`;
+            return `2${s}`;
+        };
+        const aGroup = groupKey(aKey);
+        const bGroup = groupKey(bKey);
+        if (collator) {
+            const byGroup = collator.compare(aGroup, bGroup);
+            if (byGroup) return byGroup;
+            return collator.compare(String(aFilename || ''), String(bFilename || ''));
+        }
+        if (aGroup < bGroup) return -1;
+        if (aGroup > bGroup) return 1;
+        return String(aFilename || '').localeCompare(String(bFilename || ''));
+    };
+    const isMac = (() => {
+        try {
+            const platform = String(navigator?.platform || '');
+            const ua = String(navigator?.userAgent || '');
+            return /Mac/i.test(platform) || /Mac OS X/i.test(ua);
+        } catch (_e) {
+            return false;
+        }
+    })();
+    const isCopyModifier = (event) => (isMac ? !!event.altKey : !!event.ctrlKey);
+    const cssEscape = (value) => {
+        try {
+            return window.CSS && typeof window.CSS.escape === 'function'
+                ? window.CSS.escape(String(value))
+                : String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+        } catch (_e) {
+            return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+        }
+    };
+    const shakeChip = (rowEl, filename) => {
+        if (!rowEl || !filename) return;
+        const selector = `.arr-chip[data-filename="${cssEscape(filename)}"]`;
+        const chip = rowEl.querySelector(selector);
+        if (!chip) return;
+        chip.classList.remove('shake');
+        void chip.offsetWidth;
+        chip.classList.add('shake');
+        chip.addEventListener('animationend', () => chip.classList.remove('shake'), { once: true });
+    };
+    const handleBlockDrop = ({ filename, fromRowIndex, toRowIndex, copy }, targetRowEl) => {
+        if (!filename || !Number.isInteger(toRowIndex)) return;
+        const targetRow = arrangementDraftState.rows?.[toRowIndex];
+        if (!targetRow) return;
+        if (!Array.isArray(targetRow.blocks)) targetRow.blocks = [];
+
+        const normalizedFrom = Number.isInteger(fromRowIndex) ? fromRowIndex : null;
+        const normalizedTo = toRowIndex;
+        const shouldCopy = Boolean(copy);
+
+        if (normalizedFrom === normalizedTo) {
+            if (targetRow.blocks.includes(filename)) {
+                shakeChip(targetRowEl, filename);
+            }
+            return;
+        }
+
+        if (targetRow.blocks.includes(filename)) {
+            shakeChip(targetRowEl, filename);
+            return;
+        }
+
+        if (!shouldCopy && normalizedFrom != null) {
+            const srcRow = arrangementDraftState.rows?.[normalizedFrom];
+            if (srcRow && Array.isArray(srcRow.blocks)) {
+                const idx = srcRow.blocks.indexOf(filename);
+                if (idx >= 0) srcRow.blocks.splice(idx, 1);
+            }
+        }
+
+        targetRow.blocks.push(filename);
+        activeArrangementBlockFilename = filename;
+        renderArrangementWorkspace();
+        scheduleArrangementAutoSave();
+        emitArrangementStateChanged({ addedRowIndex: normalizedTo, addedFilename: filename });
+    };
+
+    dom.arrangementWorkspacePane.innerHTML = `
+        <div class="h-full flex flex-col gap-4 p-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono">
+                    Arrangement
+                </h2>
+                <span class="text-xs ${readonly ? 'text-amber-300' : 'text-muted-foreground'}">
+                    ${readonly ? 'Read-only example arrangement' : 'Autosave enabled'}
+                </span>
+            </div>
+
+            <div class="flex gap-2 items-center">
+                <button
+                    id="arrangementWorkspacePreviewBtn"
+                    type="button"
+                    class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm"
+                    title="${isPreviewPlaying ? 'Stop arrangement preview' : 'Preview arrangement'}"
+                >
+                    <i data-lucide="${isPreviewPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current"></i>
+                </button>
+                <label for="arrangementWorkspaceBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM:</label>
+                <input
+                    type="number"
+                    id="arrangementWorkspaceBpm"
+                    min="20"
+                    max="300"
+                    step="1"
+                    value="${arrangementDraftState.bpm}"
+                    class="w-16 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    ${readonly ? 'readonly' : ''}
+                >
+                <label for="arrangementWorkspaceName" class="text-xs font-bold text-muted-foreground uppercase">Name:</label>
+                <input
+                    type="text"
+                    id="arrangementWorkspaceName"
+                    value="${escapeHtml(arrangementDraftState.name)}"
+                    placeholder="Arrangement Name"
+                    class="flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    ${readonly ? 'readonly' : ''}
+                >
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-auto border border-border rounded-md p-3 bg-card/30">
+                <div class="arr-rows-header">
+                    <span class="arr-rows-header-spacer" aria-hidden="true"></span>
+                    <span class="arr-rows-header-repeat" title="1 repeat = 16 steps">Repeat</span>
+                    <span class="arr-rows-header-blocks" aria-hidden="true">Blocks</span>
+                </div>
+                <div id="arrangementWorkspaceRows" class="flex flex-col"></div>
+                <button
+                    id="arrangementWorkspaceAddRowBtn"
+                    type="button"
+                    class="mt-3 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 ${readonly ? 'opacity-40 cursor-not-allowed' : ''}"
+                    ${readonly ? 'disabled' : ''}
+                >
+                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Row
+                </button>
+            </div>
+        </div>
+    `;
+
+    const nameInput = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceName');
+    const bpmInput = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceBpm');
+    const addRowBtn = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceAddRowBtn');
+    const previewBtn = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspacePreviewBtn');
+    const rowsRoot = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceRows');
+
+    nameInput?.addEventListener('input', () => {
+        arrangementDraftState.name = String(nameInput.value || '').trim() || arrangementDraftState.name;
+        scheduleArrangementAutoSave();
+        emitArrangementStateChanged();
+    });
+    bpmInput?.addEventListener('input', () => {
+        const bpm = parseInt(bpmInput.value || '120', 10);
+        arrangementDraftState.bpm = Number.isFinite(bpm) ? Math.max(20, Math.min(300, bpm)) : 120;
+        scheduleArrangementAutoSave();
+        emitArrangementStateChanged();
+    });
+    addRowBtn?.addEventListener('click', () => {
+        arrangementDraftState.rows.push({ repeats: 1, blocks: [] });
+        renderArrangementWorkspace();
+        scheduleArrangementAutoSave();
+        emitArrangementStateChanged({ addedRowIndex: arrangementDraftState.rows.length - 1 });
+    });
+    previewBtn?.addEventListener('click', () => {
+        if (isArrangementPreviewPlaying()) {
+            stopArrangementPreview();
+            clearArrangementLiveOverrides({ scheduleUpdate: false });
+            document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: false } }));
+            return;
+        }
+        document.dispatchEvent(new CustomEvent('arrangements:preview', {
+            detail: { arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() } }
+        }));
+    });
+
+    if (rowsRoot) {
+        arrangementDraftState.rows.forEach((row, rowIndex) => {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'arr-row';
+            rowEl.dataset.rowIndex = String(rowIndex);
+            rowEl.addEventListener('dragover', (event) => {
+                if (!event.dataTransfer || readonly) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = isCopyModifier(event) ? 'copy' : 'move';
+                rowEl.classList.add('arr-row-drop-target');
+            });
+            rowEl.addEventListener('dragleave', (event) => {
+                const related = event.relatedTarget;
+                if (related && related instanceof Node && rowEl.contains(related)) return;
+                rowEl.classList.remove('arr-row-drop-target');
+            });
+            rowEl.addEventListener('drop', (event) => {
+                if (!event.dataTransfer || readonly) return;
+                event.preventDefault();
+                rowEl.classList.remove('arr-row-drop-target');
+                let payload = null;
+                try {
+                    payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null');
+                } catch (_e) {
+                    payload = null;
+                }
+                const filename = payload?.filename || event.dataTransfer.getData('text/plain') || '';
+                const fromRowIndex = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
+                handleBlockDrop({
+                    filename,
+                    fromRowIndex,
+                    toRowIndex: rowIndex,
+                    copy: isCopyModifier(event),
+                }, rowEl);
+            });
+
+            const rowNumberEl = document.createElement('span');
+            rowNumberEl.className = 'arr-row-number';
+            rowNumberEl.innerHTML = `
+                <span class="arr-row-number-value">${rowIndex + 1}</span>
+                <i data-lucide="play" class="arr-row-play-icon hidden w-[13px] h-[13px] fill-current"></i>
+            `;
+
+            const repeatsEl = document.createElement('input');
+            repeatsEl.type = 'number';
+            repeatsEl.min = '1';
+            repeatsEl.max = '16';
+            repeatsEl.step = '1';
+            repeatsEl.value = String(row.repeats || 1);
+            repeatsEl.className = 'arr-repeats';
+            if (readonly) repeatsEl.readOnly = true;
+            repeatsEl.addEventListener('input', () => {
+                const val = parseInt(repeatsEl.value, 10);
+                row.repeats = Number.isFinite(val) ? Math.min(Math.max(val, 1), 16) : 1;
+                scheduleArrangementAutoSave();
+                emitArrangementStateChanged();
+            });
+
+            const chipsEl = document.createElement('div');
+            chipsEl.className = 'arr-chips';
+
+            const updateSelectDisabled = (selectEl) => {
+                if (!selectEl) return;
+                const options = Array.from(selectEl.querySelectorAll('option'));
+                for (const opt of options) {
+                    if (!opt.value || opt.value === '__create__') continue;
+                    opt.disabled = row.blocks.includes(opt.value);
+                }
+            };
+
+            const selectEl = document.createElement('select');
+            selectEl.className = 'arr-block-select';
+            selectEl.setAttribute('aria-label', 'Add block');
+            selectEl.title = 'Add block';
+            if (readonly) selectEl.disabled = true;
+            selectEl.innerHTML = `<option value="" selected></option><option value="__create__">+ New block</option>` + blocksForPicker
+                .map((block) => {
+                    const disabled = row.blocks.includes(block.filename) ? ' disabled' : '';
+                    return `<option value="${escapeHtml(block.filename)}"${disabled}>${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</option>`;
+                })
+                .join('');
+            selectEl.addEventListener('change', () => {
+                if (readonly) return;
+                const val = selectEl.value;
+                if (!val) return;
+                if (val === '__create__') {
+                    selectEl.selectedIndex = 0;
+                    void createUntitledBlock({ rowIndex });
+                    return;
+                }
+                if (!row.blocks.includes(val)) {
+                    row.blocks.push(val);
+                }
+                activeArrangementBlockFilename = val;
+                selectEl.selectedIndex = 0;
+                renderArrangementWorkspace();
+                scheduleArrangementAutoSave();
+                emitArrangementStateChanged({ addedRowIndex: rowIndex, addedFilename: val });
+            });
+
+            const selectWrap = document.createElement('div');
+            selectWrap.className = 'arr-block-select-wrap';
+            selectWrap.innerHTML = '<span class="arr-block-select-plus-label" aria-hidden="true">+</span>';
+            selectWrap.appendChild(selectEl);
+
+            const duplicateRowBtn = document.createElement('button');
+            duplicateRowBtn.type = 'button';
+            duplicateRowBtn.className = 'arr-row-del arr-row-dup';
+            duplicateRowBtn.title = 'Duplicate row';
+            duplicateRowBtn.innerHTML = '<i data-lucide="copy" class="w-4 h-4"></i>';
+            duplicateRowBtn.disabled = readonly;
+            duplicateRowBtn.classList.toggle('opacity-40', readonly);
+            duplicateRowBtn.classList.toggle('cursor-not-allowed', readonly);
+            duplicateRowBtn.addEventListener('click', () => {
+                if (readonly) return;
+                const sourceRow = arrangementDraftState.rows?.[rowIndex];
+                if (!sourceRow) return;
+                const duplicatedRow = {
+                    repeats: Number.isInteger(sourceRow.repeats) ? sourceRow.repeats : 1,
+                    blocks: Array.isArray(sourceRow.blocks) ? sourceRow.blocks.slice() : [],
+                };
+                arrangementDraftState.rows.splice(rowIndex + 1, 0, duplicatedRow);
+                renderArrangementWorkspace();
+                scheduleArrangementAutoSave();
+                emitArrangementStateChanged();
+            });
+
+            const removeRowBtn = document.createElement('button');
+            removeRowBtn.type = 'button';
+            removeRowBtn.className = 'arr-row-del';
+            removeRowBtn.title = 'Remove row';
+            removeRowBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
+            removeRowBtn.disabled = readonly;
+            removeRowBtn.classList.toggle('opacity-40', readonly);
+            removeRowBtn.classList.toggle('cursor-not-allowed', readonly);
+            removeRowBtn.addEventListener('click', () => {
+                if (readonly) return;
+                if (arrangementDraftState.rows.length === 1) {
+                    arrangementDraftState.rows[0] = { repeats: 1, blocks: [] };
+                } else {
+                    arrangementDraftState.rows.splice(rowIndex, 1);
+                }
+                renderArrangementWorkspace();
+                scheduleArrangementAutoSave();
+                emitArrangementStateChanged();
+            });
+
+            const renderChips = () => {
+                chipsEl.innerHTML = '';
+                row.blocks
+                    .slice()
+                    .sort(compareRowBlockFilenames)
+                    .forEach((filename) => {
+                        const block = getBlockByFilename(filename);
+                        const chip = document.createElement('div');
+                        chip.className = `arr-chip ${filename === activeArrangementBlockFilename ? 'ring-2 ring-primary' : ''}`;
+                        chip.dataset.filename = filename;
+                        chip.dataset.blockSteps = String(getBlockSteps(block));
+                        chip.draggable = !readonly;
+                        chip.addEventListener('dragstart', (event) => {
+                            if (!event.dataTransfer || readonly) return;
+                            const payload = { filename, fromRowIndex: rowIndex };
+                            event.dataTransfer.effectAllowed = 'copyMove';
+                            event.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify(payload));
+                            event.dataTransfer.setData('text/plain', filename);
+                        });
+                        chip.innerHTML = `
+                            <span class="arr-chip-label">${escapeHtml(block?.name || filename)}</span>
+                            <button type="button" class="arr-chip-del" title="Remove"><i data-lucide="x" class="w-3 h-3"></i></button>
+                        `;
+                        chip.addEventListener('click', (event) => {
+                            if (event.target?.closest('.arr-chip-del')) return;
+                            activeArrangementBlockFilename = filename;
+                            renderArrangementWorkspace();
+                            renderTrackerWorkspace();
+                        });
+                        chip.querySelector('.arr-chip-del')?.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            if (readonly) return;
+                            const idx = row.blocks.indexOf(filename);
+                            if (idx >= 0) row.blocks.splice(idx, 1);
+                            if (activeArrangementBlockFilename === filename) {
+                                activeArrangementBlockFilename = null;
+                            }
+                            renderArrangementWorkspace();
+                            renderTrackerWorkspace();
+                            scheduleArrangementAutoSave();
+                            emitArrangementStateChanged();
+                        });
+                        chipsEl.appendChild(chip);
+                    });
+            };
+
+            rowEl.appendChild(rowNumberEl);
+            rowEl.appendChild(repeatsEl);
+            rowEl.appendChild(chipsEl);
+            rowEl.appendChild(selectWrap);
+            rowEl.appendChild(duplicateRowBtn);
+            rowEl.appendChild(removeRowBtn);
+            rowsRoot.appendChild(rowEl);
+
+            renderChips();
+            updateSelectDisabled(selectEl);
+        });
+    }
+
+    createIcons({ icons });
+    if (isArrangementPreviewPlaying()) {
+        applyArrangementWorkspacePlayhead(arrangementWorkspacePlayhead);
+    } else {
+        clearArrangementWorkspacePlayheadVisuals();
+    }
+    renderTrackerWorkspace();
+}
+
+function updateArrangementWorkspacePreviewButtonState() {
+    const previewBtn = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspacePreviewBtn');
+    if (!previewBtn) return;
+    const playing = isArrangementPreviewPlaying();
+    previewBtn.title = playing ? 'Stop arrangement preview' : 'Preview arrangement';
+    previewBtn.innerHTML = `<i data-lucide="${playing ? 'square' : 'play'}" class="w-[18px] h-5 fill-current"></i>`;
+    createIcons({ icons });
+}
+
+function getBlockSteps(block) {
+    const steps = Number.isInteger(block?.trackerState?.steps)
+        ? block.trackerState.steps
+        : (Array.isArray(block?.trackerState?.grid?.[0]) ? block.trackerState.grid[0].length : null);
+    if (Number.isInteger(steps) && steps > 0) return steps;
+    return 16;
+}
+
+function setArrangementWorkspaceRowPlayingVisual(rowEl, isPlaying) {
+    if (!rowEl) return;
+    const valueEl = rowEl.querySelector('.arr-row-number-value');
+    const iconEl = rowEl.querySelector('.arr-row-play-icon');
+    valueEl?.classList.toggle('hidden', !!isPlaying);
+    iconEl?.classList.toggle('hidden', !isPlaying);
+}
+
+function clearArrangementWorkspacePlayheadVisuals() {
+    const rowsRoot = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceRows');
+    if (rowsRoot) {
+        const rows = rowsRoot.querySelectorAll('.arr-row');
+        rows.forEach((rowEl) => {
+            rowEl.classList.remove('playing');
+            setArrangementWorkspaceRowPlayingVisual(rowEl, false);
+            rowEl.style.removeProperty('--arr-row-play-progress');
+            rowEl.querySelectorAll('.arr-chip').forEach((chip) => {
+                chip.style.removeProperty('--arr-chip-play-progress');
+            });
+        });
+    }
+    arrangementWorkspacePlayingRowIndex = null;
+    arrangementWorkspacePlayhead = { rowIndex: null, progress: 0, blocks: [] };
+}
+
+function updateArrangementWorkspaceChipSteps(blocks = []) {
+    if (!Array.isArray(blocks) || !blocks.length) return;
+    const blockByFilename = new Map(blocks.map((block) => [block.filename, block]));
+    blocksLibraryCache = blocksLibraryCache.map((block) => {
+        const update = blockByFilename.get(block.filename);
+        return update?.trackerState ? { ...block, trackerState: update.trackerState } : block;
+    });
+
+    const chips = dom.arrangementWorkspacePane?.querySelectorAll('.arr-chip[data-filename]') || [];
+    chips.forEach((chip) => {
+        const filename = chip.dataset.filename;
+        const update = blockByFilename.get(filename);
+        if (!update?.trackerState) return;
+        chip.dataset.blockSteps = String(getBlockSteps(update));
+    });
+}
+
+function applyArrangementWorkspacePlayhead(detail = {}) {
+    const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
+    const progress = typeof detail.progress === 'number' ? detail.progress : 0;
+    arrangementWorkspacePlayhead = {
+        rowIndex,
+        progress,
+        blocks: Array.isArray(detail.blocks) ? detail.blocks : [],
+    };
+
+    const rowsRoot = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceRows');
+    if (!rowsRoot) {
+        arrangementWorkspacePlayingRowIndex = rowIndex;
+        return;
+    }
+
+    if (arrangementWorkspacePlayingRowIndex != null && arrangementWorkspacePlayingRowIndex !== rowIndex) {
+        const prevEl = rowsRoot.querySelector(`.arr-row[data-row-index="${arrangementWorkspacePlayingRowIndex}"]`);
+        if (prevEl) {
+            prevEl.classList.remove('playing');
+            setArrangementWorkspaceRowPlayingVisual(prevEl, false);
+            prevEl.style.removeProperty('--arr-row-play-progress');
+            prevEl.querySelectorAll('.arr-chip').forEach((chip) => {
+                chip.style.removeProperty('--arr-chip-play-progress');
+            });
+        }
+    }
+
+    if (rowIndex == null) {
+        arrangementWorkspacePlayingRowIndex = null;
+        return;
+    }
+
+    const rowEl = rowsRoot.querySelector(`.arr-row[data-row-index="${rowIndex}"]`);
+    if (!rowEl) {
+        arrangementWorkspacePlayingRowIndex = rowIndex;
+        return;
+    }
+
+    rowEl.classList.add('playing');
+    setArrangementWorkspaceRowPlayingVisual(rowEl, true);
+    const pct = Math.max(0, Math.min(progress, 1)) * 100;
+    rowEl.style.setProperty('--arr-row-play-progress', `${pct.toFixed(2)}%`);
+
+    const row = arrangementDraftState?.rows?.[rowIndex];
+    const rowSteps = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) * 16 : 16;
+    const progressSteps = Math.max(0, Math.min(progress, 1)) * rowSteps;
+    rowEl.querySelectorAll('.arr-chip').forEach((chip) => {
+        const blockSteps = parseInt(chip.dataset.blockSteps || '16', 10);
+        const steps = Number.isInteger(blockSteps) && blockSteps > 0 ? blockSteps : 16;
+        const local = steps > 0 ? (progressSteps % steps) / steps : 0;
+        const localPct = Math.max(0, Math.min(local, 1)) * 100;
+        chip.style.setProperty('--arr-chip-play-progress', `${localPct.toFixed(2)}%`);
+    });
+
+    arrangementWorkspacePlayingRowIndex = rowIndex;
+}
+
+async function refreshBlocksLibrary() {
+    if (!dom.blocksLibraryList) return;
+    try {
+        const previousBlocksByFilename = new Map(
+            (Array.isArray(blocksLibraryCache) ? blocksLibraryCache : [])
+                .filter((block) => block?.filename)
+                .map((block) => [block.filename, block])
+        );
+        const list = DEMO_MODE
+            ? Array.from(demoBlockSourceByFile.keys()).map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'example', trackerState: null }))
+            : await fetch('/api/blocks').then((r) => (r.ok ? r.json() : []));
+        blocksLibraryCache = (Array.isArray(list) ? list : []).map((block) => {
+            const previous = previousBlocksByFilename.get(block?.filename);
+            if (!previous) return block;
+            return {
+                ...previous,
+                ...block,
+                description: block?.description ?? previous.description,
+                pattern: block?.pattern ?? previous.pattern,
+                trackerState: block?.trackerState ?? previous.trackerState,
+            };
+        });
+        dom.blocksLibraryList.innerHTML = '';
+
+        if (!blocksLibraryCache.length) {
+            dom.blocksLibraryList.innerHTML = '<li class="text-xs text-muted-foreground px-2 py-2">No blocks available.</li>';
+            return;
+        }
+
+        blocksLibraryCache
+            .slice()
+            .sort((a, b) => String(a?.name || a?.filename || '').localeCompare(String(b?.name || b?.filename || '')))
+            .forEach((block) => {
+                const li = document.createElement('li');
+                const isSelected = block.filename === activeArrangementBlockFilename;
+                li.className = `song-item ${isSelected ? 'active' : ''}`;
+                li.dataset.filename = block.filename;
+                const isReadonly = normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled();
+                li.innerHTML = `
+                    <span class="font-medium">${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
+                    ${isReadonly ? '' : `<div class="song-item-actions"><button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
+                `;
+                li.addEventListener('click', async () => {
+                    activeArrangementBlockFilename = block.filename;
+                    renderArrangementWorkspace();
+                    renderTrackerWorkspace();
+                });
+                li.querySelector('.sidebar-del-btn')?.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await deleteBlockFromLibrary(block.filename, block.name || block.filename);
+                });
+                dom.blocksLibraryList.appendChild(li);
+            });
+
+        createIcons({ icons });
+    } catch (err) {
+        console.error('[Blocks] Failed to refresh library:', err);
+        dom.blocksLibraryList.innerHTML = '<li class="text-xs text-destructive px-2 py-2">Failed to load block library.</li>';
+    }
+}
+
+function getArrangementReferencesForBlock(filename) {
+    const refs = [];
+    arrangementEntriesCache.forEach((entry) => {
+        if (entry?.arrangementState?.rows?.some((row) => Array.isArray(row?.blocks) && row.blocks.includes(filename))) {
+            refs.push(entry);
+        }
+    });
+    if (currentArrangementFilename && arrangementDraftState?.rows?.some((row) => Array.isArray(row?.blocks) && row.blocks.includes(filename))) {
+        const already = refs.some((entry) => entry.filename === currentArrangementFilename);
+        if (!already) {
+            refs.push({
+                filename: currentArrangementFilename,
+                name: arrangementDraftState.name,
+                scope: currentArrangementScope,
+            });
+        }
+    }
+    return refs;
+}
+
+async function deleteBlockFromLibrary(filename, displayName) {
+    if (!filename || DEMO_MODE) return;
+    const block = getBlockByFilename(filename);
+    if (normalizeScope(block?.scope) === 'example' && !isDeveloperModeEnabled()) {
+        setStatus('Example blocks are immutable', 'normal');
+        return;
+    }
+
+    const refs = getArrangementReferencesForBlock(filename);
+    if (refs.length) {
+        const list = refs.map((entry) => `${entry.name || entry.filename} (${entry.filename})`).join(', ');
+        await alertDialog({
+            title: 'Cannot Delete Block',
+            message: `This block is used in arrangements:\n${list}`,
+        });
+        return;
+    }
+
+    const confirmed = await confirmDialog({
+        title: 'Delete Block?',
+        message: `Delete block "${displayName}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
+            method: 'DELETE',
+            headers: getDeveloperModeHeaders(),
+        });
+        if (!res.ok) {
+            if (res.status === 409) {
+                let usedBy = [];
+                try {
+                    const payload = await res.json();
+                    usedBy = Array.isArray(payload?.usedBy) ? payload.usedBy : [];
+                } catch (_e) {
+                    usedBy = [];
+                }
+                const list = usedBy.length
+                    ? usedBy.map((entry) => `${entry.name || entry.filename} (${entry.filename})`).join(', ')
+                    : 'one or more arrangements';
+                await alertDialog({
+                    title: 'Cannot Delete Block',
+                    message: `This block is used in arrangements:\n${list}`,
+                });
+                return;
+            }
+            throw new Error('Failed to delete block');
+        }
+        if (activeArrangementBlockFilename === filename) {
+            activeArrangementBlockFilename = null;
+            renderTrackerWorkspace();
+        }
+        await refreshBlocksLibrary();
+        setStatus('Block deleted', 'success');
+    } catch (err) {
+        console.error('[Blocks] Delete failed:', err);
+        setStatus('Failed to delete block', 'error');
+    }
+}
+
+async function loadArrangement(filename) {
+    if (!filename) return;
+    if (arrangementAutoSaveTimeout) {
+        clearTimeout(arrangementAutoSaveTimeout);
+        arrangementAutoSaveTimeout = null;
+    }
+
+    try {
+        stopAllPlaybackForSelectionChange();
+        const loadedScope = DEMO_MODE ? 'example' : normalizeScope(getArrangementEntry(filename)?.scope);
+        const detail = DEMO_MODE
+            ? null
+            : await fetch(`/api/arrangements/${encodeURIComponent(filename)}`).then((r) => (r.ok ? r.json() : null));
+        let arrangementState = cloneArrangementState(detail?.arrangementState || {
+            name: decodeURIComponent(filename.replace(/\.js$/i, '')),
+            bpm: 120,
+            rows: [{ repeats: 1, blocks: [] }],
+        });
+        const recoveredArrangementState = readUnsavedArrangementState(filename, loadedScope);
+        const recoveredFromCache = Boolean(recoveredArrangementState);
+        if (recoveredArrangementState) {
+            arrangementState = recoveredArrangementState;
+            setStatus('⚠️ Recovered unsaved arrangement from cache', 'error');
+        }
+
+        currentArrangementFilename = filename;
+        currentArrangementScope = loadedScope;
+        arrangementDraftState = arrangementState;
+        activeArrangementBlockFilename = null;
+        currentSongFilename = null;
+        updateSongSelectionState(false);
+
+        refreshArrangementListActiveState();
+        Array.from(dom.songList.querySelectorAll('.song-item')).forEach((li) => li.classList.remove('active'));
+        await refreshBlocksLibrary();
+        renderArrangementWorkspace();
+        showArrangementWorkspace();
+        if (recoveredFromCache) {
+            setTimeout(() => {
+                if (currentArrangementFilename !== filename) return;
+                saveCurrentArrangement();
+            }, 500);
+        }
+    } catch (err) {
+        console.error('[Arrangements] Failed to load arrangement:', err);
+        setStatus('Failed to load arrangement', 'error');
+    }
+}
+
 // --- Code Transformation Helpers ---
 
 function fileToEditor(code) {
@@ -987,6 +2594,7 @@ async function loadSong(filename) {
     }
     
     try {
+        stopAllPlaybackForSelectionChange();
         let fileCode = '';
         const loadedSongScope = DEMO_MODE
             ? 'example'
@@ -1021,6 +2629,12 @@ async function loadSong(filename) {
         showEditor();
         currentSongFilename = filename;
         currentSongScope = loadedSongScope;
+        currentArrangementFilename = null;
+        currentArrangementScope = 'user';
+        arrangementDraftState = null;
+        activeArrangementBlockFilename = null;
+        refreshArrangementListActiveState();
+        renderArrangementWorkspace();
         currentSongDisplayName = decodeURIComponent(filename.replace('.js', '')); // Store without extension
         originalSongName = currentSongDisplayName; // Track for rename detection
         dom.songNameInput.value = currentSongDisplayName;
@@ -1045,20 +2659,8 @@ async function loadSong(filename) {
         
         dom.exportBtn.disabled = false;
         
-        // Stop ZzFXM preview playback when switching song
-        if (isPreviewPlaying) {
-            stopZzfxmSong();
-            updatePreviewPlayButton(false);
-        }
-        // Clear preview and hide preview buttons until next export
-        lastExportedData = null;
-        dom.previewJson.innerText = "// Click GENERATE to create ZzFXM song";
-        dom.previewPlayBtn.style.display = 'none';
-        dom.previewPlayBtn.disabled = true;
-        if (dom.showJsonBtn) {
-            dom.showJsonBtn.style.display = 'none';
-            dom.showJsonBtn.disabled = true;
-        }
+        // Clear ZzFXM export preview until this song/arrangement is exported again.
+        clearZzfxmPreviewData();
         hideSaveStatus();
         
         renderPlayButton(); // Update play button context (Stop vs Play)
@@ -1381,7 +2983,14 @@ async function exportCurrentSong(options = {}) {
     
     validateCode(dom.repl.editor.code);
     if (dom.statusMsg.innerText.startsWith('⚠️')) {
-        if (!confirm("Code contains unsafe functions for ZzFXM (e.g. reverb/delay). These will be ignored. Export anyway?")) return;
+        const confirmed = await confirmDialog({
+            title: 'Export With Warnings?',
+            message: 'This code uses functions that ZzFXM ignores (for example reverb/delay). Export anyway?',
+            confirmLabel: 'Export',
+            cancelLabel: 'Cancel',
+            variant: 'danger',
+        });
+        if (!confirmed) return;
     }
 
     setStatus('Exporting...');
@@ -1448,9 +3057,11 @@ async function exportCurrentSong(options = {}) {
         } = result.stats;
         
         // Store for preview
-        lastExportedData = songData;
-        lastExportedMeta = { monophonicByInstrumentIndex: monophonicByIndex };
-        dom.previewJson.innerText = JSON.stringify(songData, null, 2);
+        setZzfxmPreviewData(songData, { monophonicByInstrumentIndex: monophonicByIndex }, {
+            type: 'song',
+            filename: currentSongFilename,
+            reveal: revealZzfxmPreview,
+        });
         
         // 4. Send JSON to server (local mode only)
         const jsonFilename = currentSongFilename.replace('.js', '.json');
@@ -1464,12 +3075,7 @@ async function exportCurrentSong(options = {}) {
         
         // Show and enable ZzFXM preview buttons only for explicit ZzFXM export flow.
         if (revealZzfxmPreview) {
-            dom.previewPlayBtn.style.display = '';
-            dom.previewPlayBtn.disabled = false;
-            if(dom.showJsonBtn) {
-                dom.showJsonBtn.style.display = '';
-                dom.showJsonBtn.disabled = false;
-            }
+            refreshZzfxmPreviewControlsVisibility();
         }
         
         // Build status message with channel count
@@ -1700,10 +3306,16 @@ async function applyAdvancedSettings() {
             if (context.filename) {
                 await updateBlockScope(context.filename, nextScope);
             }
+            await refreshBlocksLibrary();
         } else if (context.type === 'arrangement') {
             if (context.filename) {
                 await updateArrangementScope(context.filename, nextScope);
+                if (context.filename === currentArrangementFilename) {
+                    currentArrangementScope = nextScope;
+                }
             }
+            await refreshArrangementList();
+            renderArrangementWorkspace();
         } else {
             throw new Error('Unsupported resource type');
         }
@@ -1725,6 +3337,22 @@ async function applyAdvancedSettings() {
 function openModal() {
     dom.newSongModal.classList.add('open');
     dom.newSongName.focus();
+}
+
+function openNewArrangementModal() {
+    if (DEMO_MODE) {
+        setStatus('Demo mode: creating arrangements is disabled', 'normal');
+        return;
+    }
+    const suggested = `arrangement-${arrangementEntriesCache.filter((entry) => normalizeScope(entry.scope) === 'user').length + 1}`;
+    if (dom.newArrangementName) dom.newArrangementName.value = suggested;
+    dom.newArrangementModal?.classList.add('open');
+    dom.newArrangementName?.focus();
+}
+
+function closeNewArrangementModal() {
+    dom.newArrangementModal?.classList.remove('open');
+    if (dom.newArrangementName) dom.newArrangementName.value = '';
 }
 
 function triggerFileDownload(filename, content, mime = 'text/plain;charset=utf-8') {
@@ -1837,6 +3465,196 @@ async function exportCurrentSongWav() {
     } catch (e) {
         console.error(e);
         setStatus(`WAV export failed: ${e.message}`, 'error');
+    }
+}
+
+async function exportCurrentArrangement() {
+    if (!currentArrangementFilename || !arrangementDraftState) return;
+
+    try {
+        await saveCurrentArrangement();
+        const context = await buildArrangementExportContext();
+        if (!context) {
+            setStatus('Arrangement export failed: no arrangement selected.', 'error');
+            return;
+        }
+        const arrangementState = context.arrangementState;
+        const bpm = arrangementState.bpm || context.bpm || 120;
+        const rows = Array.isArray(arrangementState.rows) ? arrangementState.rows : [];
+        const arrangementCycles = rows.reduce((sum, row) => {
+            const repeats = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) : 1;
+            return sum + repeats;
+        }, 0);
+
+        const slugify = (str) => (str || 'x')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 40) || 'x';
+
+        const blockByFilename = new Map(context.blocks.map((block) => [block.filename, block]));
+        const blockVarByFilename = {};
+        const usedVarNames = new Set();
+        const nextVar = (base) => {
+            let candidate = base;
+            let n = 2;
+            while (usedVarNames.has(candidate)) {
+                candidate = `${base}_${n}`;
+                n += 1;
+            }
+            usedVarNames.add(candidate);
+            return candidate;
+        };
+
+        const wantedBlockFiles = Array.from(new Set(
+            rows.flatMap((row) => Array.isArray(row?.blocks) ? row.blocks : []).filter(Boolean)
+        ));
+        const blockDeclarations = [];
+        for (const filename of wantedBlockFiles) {
+            const block = blockByFilename.get(filename);
+            if (!block) continue;
+            const baseVar = `block_${slugify(filename.replace(/\.js$/i, ''))}`;
+            const varName = nextVar(baseVar);
+            blockVarByFilename[filename] = varName;
+
+            let scaledPattern = String(block.pattern || '').trim() || 'silence';
+            const stepsInt = block?.trackerState?.steps;
+            if (scaledPattern !== 'silence' && Number.isInteger(stepsInt) && stepsInt !== 16) {
+                const stepFactor = stepsInt / 16;
+                if (Number.isFinite(stepFactor) && stepFactor > 0 && stepFactor !== 1) {
+                    scaledPattern = `(${scaledPattern}).slow(${Number(stepFactor.toFixed(4))})`;
+                }
+            }
+            blockDeclarations.push(`const ${varName} = ${scaledPattern};`);
+        }
+
+        const arrangeLines = rows.map((row) => {
+            const repeats = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) : 1;
+            const vars = (Array.isArray(row?.blocks) ? row.blocks : [])
+                .map((filename) => blockVarByFilename[filename])
+                .filter(Boolean);
+            if (!vars.length) return `  [${repeats}, silence]`;
+            return `  [${repeats}, stack(${vars.join(', ')})]`;
+        });
+
+        const arrangementCode = [
+            `const bpm = ${Math.max(20, Math.min(300, bpm))};`,
+            'setcps(bpm/240);',
+            '',
+            ...(blockDeclarations.length ? blockDeclarations : ['const block_silence = silence;']),
+            '',
+            'const arrangement_pattern = arrange(',
+            arrangeLines.join(',\n'),
+            ');',
+            '',
+            'arrangement_pattern',
+        ].join('\n');
+
+        const editor = dom.repl.editor;
+        await editor.repl.evaluate(arrangementCode, false);
+        const pattern = editor.repl.scheduler.pattern;
+        if (!pattern) throw new Error('No arrangement pattern found');
+
+        const {
+            array: instrumentArray,
+            mapping: instrumentMapping,
+            monophonicByIndex,
+        } = await getInstrumentsForExporter();
+        const isLimitEnabled = dom.limitChannels.checked;
+        const maxChannels = isLimitEnabled ? (parseInt(dom.maxChannelsInput.value, 10) || 16) : Infinity;
+        const normalizeLayers = dom.normalizeLayers?.checked || false;
+        const resolutionInput = document.querySelector('input[name="exportResolution"]:checked');
+        let rowsPerCycle = 96;
+        if (resolutionInput?.value === '48') {
+            rowsPerCycle = 48;
+        } else if (resolutionInput?.value === 'custom') {
+            const parsed = parseInt(dom.exportResolutionCustom?.value, 10);
+            if (parsed && !Number.isNaN(parsed)) rowsPerCycle = parsed;
+        }
+
+        const result = exportPattern(pattern, bpm, instrumentArray, instrumentMapping, arrangementCycles || 4, {
+            maxVoicesPerInstrument: maxChannels,
+            normalizeUnisonLayers: normalizeLayers,
+            rowsPerCycle,
+            monophonicByInstrumentIndex: monophonicByIndex,
+            forceCycles: arrangementCycles || null,
+        });
+        const songData = result.song;
+        const {
+            channelCount,
+            droppedNotes,
+            unknownInstrumentNotes,
+            unknownInstrumentAliases = [],
+        } = result.stats;
+
+        setZzfxmPreviewData(songData, { monophonicByInstrumentIndex: monophonicByIndex }, {
+            type: 'arrangement',
+            filename: currentArrangementFilename,
+            reveal: true,
+        });
+
+        const jsonFilename = currentArrangementFilename.replace(/\.js$/i, '.json');
+        if (!DEMO_MODE) {
+            const res = await fetch(`/api/save-exported/${encodeURIComponent(jsonFilename)}`, {
+                method: 'POST',
+                body: JSON.stringify(songData),
+            });
+            if (!res.ok) throw new Error('Server failed to save JSON');
+        }
+
+        let statusMsg = `/output/${jsonFilename} (${channelCount} ch)`;
+        if (droppedNotes > 0) {
+            statusMsg += ` • ${droppedNotes} notes dropped`;
+        }
+        if (unknownInstrumentNotes > 0) {
+            const incompatibleList = unknownInstrumentAliases.length
+                ? unknownInstrumentAliases.join(', ')
+                : `${unknownInstrumentNotes} unknown`;
+            setStatus(`${statusMsg} • Incompatible sounds: ${incompatibleList}`, 'error');
+        } else if (DEMO_MODE) {
+            setStatus(`${statusMsg} • Demo mode: not written to /output`, 'success');
+        } else {
+            setStatus(statusMsg, 'success');
+        }
+    } catch (e) {
+        console.error(e);
+        setStatus(`Arrangement export failed: ${e.message}`, 'error');
+    }
+}
+
+async function exportCurrentArrangementWav() {
+    if (!currentArrangementFilename || !arrangementDraftState) return;
+
+    try {
+        await saveCurrentArrangement();
+        const context = await buildArrangementExportContext();
+        if (!context) {
+            setStatus('WAV export failed: no arrangement selected.', 'error');
+            return;
+        }
+
+        const renderResult = renderArrangementStateForExport(
+            context.arrangementState,
+            context.trackerStateByFilename,
+            context.instrumentList,
+            context.bpm,
+            { mixSettings: getPlaybackMixSettings() }
+        );
+        if (!renderResult?.mixBuffer?.length) {
+            throw new Error('Arrangement has no playable tracker blocks');
+        }
+
+        const wavSettings = getWavExportSettings();
+        const pcm = wavSettings.sampleRate === renderResult.sampleRate
+            ? renderResult.mixBuffer
+            : resampleLinear(renderResult.mixBuffer, renderResult.sampleRate, wavSettings.sampleRate);
+        const wavBuffer = encodeWavMono(pcm, wavSettings.sampleRate, wavSettings.bitDepth);
+        const wavName = currentArrangementFilename.replace(/\.js$/i, '.wav');
+        triggerFileDownload(wavName, new Blob([wavBuffer], { type: 'audio/wav' }), 'audio/wav');
+        setStatus(`Downloaded WAV: ${wavName} (${wavSettings.sampleRate} Hz, ${wavSettings.bitDepth}-bit)`, 'success');
+    } catch (e) {
+        console.error(e);
+        setStatus(`Arrangement WAV export failed: ${e.message}`, 'error');
     }
 }
 
@@ -2473,8 +4291,22 @@ function closeModal() {
 
 // Event Listeners ---
 
-dom.exportBtn.addEventListener('click', exportCurrentSong);
-if (dom.exportWavBtn) dom.exportWavBtn.addEventListener('click', exportCurrentSongWav);
+dom.exportBtn.addEventListener('click', () => {
+    if (isArrangementWorkspaceActive()) {
+        exportCurrentArrangement();
+        return;
+    }
+    exportCurrentSong();
+});
+if (dom.exportWavBtn) {
+    dom.exportWavBtn.addEventListener('click', () => {
+        if (isArrangementWorkspaceActive()) {
+            exportCurrentArrangementWav();
+            return;
+        }
+        exportCurrentSongWav();
+    });
+}
 if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadSongsAndInstruments);
 if (dom.uploadProjectBtn) dom.uploadProjectBtn.addEventListener('click', openUploadProjectModal);
 if (dom.uploadProjectInput) {
@@ -2517,7 +4349,12 @@ if (dom.uploadProjectModal) {
 
 dom.sidebarTitle.addEventListener('click', showIntroduction);
 dom.newSongBtn.addEventListener('click', openModal);
+dom.newArrangementBtn?.addEventListener('click', openNewArrangementModal);
+dom.newSidebarBlockBtn?.addEventListener('click', () => {
+    void createUntitledBlock();
+});
 dom.cancelNewSong.addEventListener('click', closeModal);
+dom.cancelNewArrangement?.addEventListener('click', closeNewArrangementModal);
 if (dom.openSongAdvancedSettingsBtn) {
     dom.openSongAdvancedSettingsBtn.addEventListener('click', () => {
         if (!isDeveloperModeEnabled()) return;
@@ -2540,11 +4377,35 @@ dom.confirmNewSong.addEventListener('click', () => {
     const name = dom.newSongName.value.trim();
     if (name) createNewSong(name);
 });
+dom.confirmNewArrangement?.addEventListener('click', () => {
+    const name = dom.newArrangementName?.value?.trim() || '';
+    if (name) {
+        void createNewArrangement(name);
+    }
+});
+document.addEventListener('sidebar:viewChanged', async (e) => {
+    const view = e?.detail?.view;
+    if (view === 'blocks') {
+        await refreshArrangementList();
+        await refreshBlocksLibrary();
+        if (!currentArrangementFilename && !currentSongFilename) {
+            showWelcome();
+        }
+    }
+});
 dom.newSongName.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     const name = dom.newSongName.value.trim();
     if (name) createNewSong(name);
+});
+dom.newArrangementName?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const name = dom.newArrangementName?.value?.trim() || '';
+    if (name) {
+        void createNewArrangement(name);
+    }
 });
 if (dom.closeAdvancedSettingsModalBtn) dom.closeAdvancedSettingsModalBtn.addEventListener('click', closeAdvancedSettingsModal);
 if (dom.cancelAdvancedSettingsBtn) dom.cancelAdvancedSettingsBtn.addEventListener('click', closeAdvancedSettingsModal);
@@ -2553,6 +4414,13 @@ if (dom.advancedSettingsModal) {
     dom.advancedSettingsModal.addEventListener('click', (e) => {
         if (e.target === dom.advancedSettingsModal) {
             closeAdvancedSettingsModal();
+        }
+    });
+}
+if (dom.newArrangementModal) {
+    dom.newArrangementModal.addEventListener('click', (e) => {
+        if (e.target === dom.newArrangementModal) {
+            closeNewArrangementModal();
         }
     });
 }
@@ -2567,7 +4435,7 @@ function showDeleteConfirmation(filename) {
         return;
     }
     songToDelete = filename;
-    dom.deleteConfirmText.innerHTML = `File: <strong>${decodeURIComponent(filename)}</strong><br>This action is irreversible.`;
+    dom.deleteConfirmText.innerHTML = `Song: <strong>${decodeURIComponent(filename)}</strong><br>This cannot be undone.`;
     dom.deleteConfirmModal.classList.add('open');
 }
 
@@ -2766,7 +4634,7 @@ dom.previewPlayBtn.addEventListener('click', () => {
     }
 
     if (!lastExportedData) {
-        setStatus('Nothing to play. Export a song first.', 'error');
+        setStatus('Nothing to play. Export to ZzFXM first.', 'error');
         return;
     }
     
@@ -2960,11 +4828,12 @@ async function copyJsonToClipboard() {
 function downloadJsonData() {
     const text = dom.previewJson?.innerText || '';
     if (!text || !text.trim()) {
-        setStatus('No song data to download.', 'error');
+        setStatus('No exported data to download.', 'error');
         return;
     }
-    const filename = currentSongFilename
-        ? currentSongFilename.replace(/\.js$/i, '.json')
+    const contextFilename = lastExportedContext?.filename || currentSongFilename || currentArrangementFilename || null;
+    const filename = contextFilename
+        ? contextFilename.replace(/\.js$/i, '.json')
         : 'song-data.json';
     triggerFileDownload(filename, text, 'application/json;charset=utf-8');
     setStatus(`Downloaded ${filename}`, 'success');
@@ -3301,8 +5170,17 @@ function setupTrackerEventListeners() {
         const { returnToBlocksOnClose, returnToArrangementsOnClose } = e.detail || {};
         if (returnToArrangementsOnClose) return;
         if (!returnToBlocksOnClose) return;
+        if (isArrangementWorkspaceActive()) return;
         if (isBlocksModalOpen()) return;
         openBlocksModal('blocks');
+    });
+
+    document.addEventListener('tracker:closed', (e) => {
+        if (!isArrangementWorkspaceActive()) return;
+        if (e?.detail?.returnToArrangementsOnClose) return;
+        if (!activeArrangementBlockFilename) return;
+        trackerWorkspaceLoadedFilename = null;
+        renderTrackerWorkspace();
     });
 
     
@@ -3380,17 +5258,34 @@ async function openTrackerModalForEdit(block, trackerState, options = {}) {
     }
 
     // Prepare block data for edit mode
+    let recoveredTrackerState = trackerState;
+    const recoveredBlockCache = readUnsavedBlockTrackerState(resolvedBlock.filename, resolvedBlock.scope);
+    const recoveredBlockFromCache = Boolean(recoveredBlockCache);
+    if (recoveredBlockCache) {
+        recoveredTrackerState = recoveredBlockCache;
+        setStatus('⚠️ Recovered unsaved block edits from cache', 'error');
+    }
+
     const blockData = {
         filename: resolvedBlock.filename,
         name: resolvedBlock.name,
         description: resolvedBlock.description,
         scope: normalizeScope(resolvedBlock.scope),
-        trackerState: trackerState,
+        trackerState: recoveredTrackerState,
+        autoSaveOnInput: !!options.autoSaveOnInput,
         returnToArrangementsOnClose: options.returnToArrangementsOnClose,
         returnToBlocksOnClose: options.returnToBlocksOnClose,
     };
     
     openTrackerForEdit(instrumentList, blockData);
+    if (recoveredBlockFromCache && blockData.filename && blockData.trackerState) {
+        setTimeout(() => {
+            scheduleTrackerAutoSave({
+                filename: blockData.filename,
+                trackerState: blockData.trackerState,
+            });
+        }, 500);
+    }
 }
 
 /**
@@ -3399,7 +5294,10 @@ async function openTrackerModalForEdit(block, trackerState, options = {}) {
 function setupBlocksEventListeners() {
 	    // Blocks button in header
 	    const blocksBtn = document.getElementById('blocksBtn');
-	    blocksBtn?.addEventListener('click', openBlocksModal);
+	    blocksBtn?.addEventListener('click', () => {
+            if (!currentSongFilename) return;
+            openBlocksModal();
+        });
 
 	    // Stop Strudel playback when entering the Blocks modal (avoids confusion with previews/exports).
 	    document.addEventListener('blocks:modalOpen', () => {
@@ -4186,15 +6084,9 @@ function setupBlocksEventListeners() {
 	        if (!arrangementState) return;
 
 	        try {
-            console.log('[Arranger] Preview start:', arrangementState);
-	            const { getDefragmentedInstruments } = await import('./instrument-manager.js');
-	            const instruments = getDefragmentedInstruments();
-	            const instrumentList = instruments.map(inst => ({
-	                id: inst.strudelAlias,
-	                name: inst.strudelAlias,
-	                params: inst.params,
-	            }));
-	            const instrumentIdSet = new Set(instrumentList.map(i => i.id));
+	            console.log('[Arranger] Preview start:', arrangementState);
+		            const instrumentList = await getArrangementInstrumentList();
+		            const instrumentIdSet = new Set(instrumentList.map(i => i.id));
 
 	            const wantedBlockFiles = Array.from(new Set(
 	                (arrangementState.rows || []).flatMap(r => Array.isArray(r.blocks) ? r.blocks : [])
@@ -4210,65 +6102,134 @@ function setupBlocksEventListeners() {
 	                });
 	            };
 
-            const trackerStateByFilename = {};
-            const previewBlocks = [];
-            let fetched = 0;
-            let playable = 0;
-            for (const filename of wantedBlockFiles) {
-                try {
-                    const res = await fetch(`/api/blocks/${filename}`);
-                    if (!res.ok) continue;
-                    fetched++;
-                    const block = await res.json();
-                    console.log('[Arranger] Preview fetched block:', filename, 'trackerState?', !!block?.trackerState);
-                    if (block?.trackerState) {
-                        trackerStateByFilename[filename] = block.trackerState;
-                        previewBlocks.push({ filename, trackerState: block.trackerState });
-                        if (isPlayableTrackerState(block.trackerState)) playable++;
-                    }
-                } catch (err) {
-                    console.warn('[Arranger] Failed to fetch block for preview:', filename, err);
-                }
-            }
-
-	            if (wantedBlockFiles.length > 0 && fetched === 0) {
-	                setStatus('Arrangement preview failed: could not load blocks.', 'error');
-	                return;
-	            }
-	            if (wantedBlockFiles.length > 0 && playable === 0) {
-	                setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
-	                return;
-	            }
-
-	            const bpm = arrangementState.bpm || 120;
-            const mixSettings = getPlaybackMixSettings();
-	            console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
-	            arrangementPreviewContext = {
-	                arrangementState,
-	                trackerStateByFilename,
-	                instrumentList,
-	                bpm,
-                    mixSettings,
+	            const trackerStateByFilename = {};
+	            const previewBlocks = [];
+	            const resolvedFilenames = new Set();
+	            let playable = 0;
+	            const registerTrackerState = (filename, trackerState) => {
+	                if (!filename || !trackerState || trackerStateByFilename[filename]) return;
+	                trackerStateByFilename[filename] = trackerState;
+	                previewBlocks.push({ filename, trackerState });
+	                if (isPlayableTrackerState(trackerState)) playable++;
 	            };
-            clearArrangementLiveOverrides({ scheduleUpdate: false });
-            if (previewBlocks.length) {
-                document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
-            }
-	            const started = startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm, {
-                    keepPosition: false,
-                    mixSettings,
-                });
-            if (!started) {
-                setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
-            }
-            document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: started } }));
+
+	            const cachedBlocksByFilename = new Map(
+	                (Array.isArray(blocksLibraryCache) ? blocksLibraryCache : [])
+	                    .filter((block) => block?.filename)
+	                    .map((block) => [block.filename, block])
+	            );
+
+	            for (const filename of wantedBlockFiles) {
+	                const cached = cachedBlocksByFilename.get(filename);
+	                if (!cached) continue;
+	                resolvedFilenames.add(filename);
+	                registerTrackerState(filename, cached.trackerState);
+	            }
+
+	            const missingBlocks = wantedBlockFiles.filter((filename) => !trackerStateByFilename[filename]);
+	            const mergeFetchedBlocks = (fetchedBlocks = []) => {
+	                fetchedBlocks.forEach((result) => {
+	                    if (!result?.block) return;
+	                    const { filename, block } = result;
+	                    resolvedFilenames.add(filename);
+	                    registerTrackerState(filename, block.trackerState);
+
+	                    const cacheIndex = blocksLibraryCache.findIndex((entry) => entry?.filename === filename);
+	                    if (cacheIndex !== -1) {
+	                        blocksLibraryCache[cacheIndex] = { ...blocksLibraryCache[cacheIndex], ...block };
+	                    } else {
+	                        blocksLibraryCache.push({ filename, ...block });
+	                    }
+	                });
+	            };
+	            const fetchMissingBlocks = async (filenames = []) => Promise.all(
+	                filenames.map(async (filename) => {
+	                    try {
+	                        const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
+	                        if (!res.ok) return null;
+	                        const block = await res.json();
+	                        return { filename, block };
+	                    } catch (err) {
+	                        console.warn('[Arranger] Failed to fetch block for preview:', filename, err);
+	                        return null;
+	                    }
+	                })
+	            );
+	            const startPreviewWithCurrentStates = () => {
+	                const bpm = arrangementState.bpm || 120;
+	                const mixSettings = getPlaybackMixSettings();
+	                console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
+	                arrangementPreviewContext = {
+	                    arrangementState,
+	                    trackerStateByFilename: { ...trackerStateByFilename },
+	                    instrumentList,
+	                    bpm,
+	                    mixSettings,
+	                };
+	                clearArrangementLiveOverrides({ scheduleUpdate: false });
+	                if (previewBlocks.length) {
+	                    document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
+	                }
+	                const started = startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm, {
+	                    keepPosition: false,
+	                    mixSettings,
+	                });
+	                if (!started) {
+	                    setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
+	                }
+	                document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: started } }));
+	                return started;
+	            };
+
+	            // Start immediately when cached tracker states are available, then hydrate missing blocks in background.
+	            if (playable > 0 || missingBlocks.length === 0) {
+	                const started = startPreviewWithCurrentStates();
+	                if (started && missingBlocks.length) {
+	                    fetchMissingBlocks(missingBlocks).then((fetchedBlocks) => {
+	                        mergeFetchedBlocks(fetchedBlocks);
+	                        if (!isArrangementPreviewPlaying()) return;
+	                        if (!fetchedBlocks.length) return;
+	                        arrangementPreviewContext = {
+	                            ...arrangementPreviewContext,
+	                            trackerStateByFilename: { ...trackerStateByFilename },
+	                            mixSettings: getPlaybackMixSettings(),
+	                        };
+	                        if (previewBlocks.length) {
+	                            document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
+	                        }
+	                        updateArrangementPreview({
+	                            trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
+	                            mixSettings: arrangementPreviewContext.mixSettings,
+	                            keepPosition: true,
+	                        });
+	                    }).catch((err) => {
+	                        console.warn('[Arranger] Background block hydration failed:', err);
+	                    });
+	                }
+	                return;
+	            }
+
+	            if (missingBlocks.length) {
+	                const fetchedBlocks = await fetchMissingBlocks(missingBlocks);
+	                mergeFetchedBlocks(fetchedBlocks);
+	            }
+
+		            if (wantedBlockFiles.length > 0 && resolvedFilenames.size === 0) {
+		                setStatus('Arrangement preview failed: could not load blocks.', 'error');
+		                return;
+		            }
+		            if (wantedBlockFiles.length > 0 && playable === 0) {
+		                setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
+		                return;
+		            }
+	            startPreviewWithCurrentStates();
         } catch (err) {
             console.error('[Arranger] Preview failed:', err);
             setStatus('Arrangement preview failed (see console).', 'error');
         }
     });
 
-        document.addEventListener('arrangements:stateChanged', (e) => {
+	        document.addEventListener('arrangements:stateChanged', (e) => {
             if (!isArrangementPreviewPlaying()) return;
             const arrangementState = e?.detail?.arrangementState;
             if (!arrangementState) return;
@@ -4293,18 +6254,36 @@ function setupBlocksEventListeners() {
 	                bpm: arrangementPreviewContext.bpm,
                     mixSettings: arrangementPreviewContext.mixSettings,
 	                keepPosition: true,
-	            });
+			            });
+        });
+
+        document.addEventListener('arrangements:blocksLoaded', (e) => {
+            const blocks = e?.detail?.blocks || [];
+            updateArrangementWorkspaceChipSteps(blocks);
+        });
+
+        document.addEventListener('arrangements:playhead', (e) => {
+            applyArrangementWorkspacePlayhead(e?.detail || {});
+        });
+
+        document.addEventListener('arrangements:previewState', () => {
+            updateArrangementWorkspacePreviewButtonState();
+            if (!isArrangementPreviewPlaying()) {
+                clearArrangementWorkspacePlayheadVisuals();
+            }
         });
 
         document.addEventListener('tracker:stateChanged', (e) => {
-            if (!isArrangementPreviewPlaying()) return;
             const { filename, trackerState, arrangementInsertRowIndex } = e.detail || {};
             if (!trackerState) return;
+            if (filename && (currentArrangementFilename || activeArrangementBlockFilename)) {
+                scheduleTrackerAutoSave({ filename, trackerState });
+            }
+
+            if (!isArrangementPreviewPlaying()) return;
             if (filename) {
                 setArrangementLiveOverride({ filename, trackerState });
-                return;
-            }
-            if (Number.isInteger(arrangementInsertRowIndex)) {
+            } else if (Number.isInteger(arrangementInsertRowIndex)) {
                 setArrangementLiveOverride({ rowIndex: arrangementInsertRowIndex, trackerState });
             }
         });
@@ -4337,6 +6316,7 @@ function setupBlocksEventListeners() {
     // Keyboard shortcut for blocks (Ctrl/Cmd + B)
     document.addEventListener('keydown', (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+            if (!currentSongFilename) return;
             // Only if not in an input field
             if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT') {
                 e.preventDefault();
@@ -4381,7 +6361,18 @@ document.addEventListener('tracker:saveBlock', async (e) => {
             // Close tracker and return to blocks list
             closeTracker();
             if (!returnToArrangementsOnClose) {
-                openBlocksModal('blocks');
+                if (isArrangementWorkspaceActive()) {
+                    const createdBlock = result?.block || null;
+                    if (createdBlock?.filename) {
+                        activeArrangementBlockFilename = createdBlock.filename;
+                        trackerWorkspaceLoadedFilename = null;
+                    }
+                    await refreshBlocksLibrary();
+                    renderArrangementWorkspace();
+                    renderTrackerWorkspace();
+                } else {
+                    openBlocksModal('blocks');
+                }
             }
         } else {
             setStatus('Failed to create block', 'error');
@@ -4420,7 +6411,17 @@ document.addEventListener('tracker:saveBlock', async (e) => {
             }
             closeTracker();
             if (!returnToArrangementsOnClose) {
-                openBlocksModal('blocks');
+                if (isArrangementWorkspaceActive()) {
+                    if (updatedFilename) {
+                        activeArrangementBlockFilename = updatedFilename;
+                    }
+                    trackerWorkspaceLoadedFilename = null;
+                    await refreshBlocksLibrary();
+                    renderArrangementWorkspace();
+                    renderTrackerWorkspace();
+                } else {
+                    openBlocksModal('blocks');
+                }
             }
         } else {
             setStatus(`Failed to update block${updateResult?.error ? `: ${updateResult.error}` : ''}`, 'error');
