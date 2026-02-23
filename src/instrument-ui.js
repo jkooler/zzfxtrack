@@ -15,11 +15,12 @@ import {
 } from './instrument-manager.js';
 import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
+import { getAudioContext } from '@strudel/webaudio';
 
 import { reloadInstruments, isStrudelPlaybackActive, refreshSongListActiveState } from './repl-app.js';
 import { createIcons, icons } from 'lucide';
 import { getInstrumentAnalyser } from './zzfx-loader.js';
-import { ScopeVisualizer } from './visualizer.js';
+import { ScopeVisualizer, getVisualizerAnalyser } from './visualizer.js';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 
@@ -27,6 +28,7 @@ const DEMO_MODE = import.meta.env.MODE === 'demo';
 let currentInstrumentId = null;
 let currentView = 'songs'; // 'songs' | 'blocks' | 'instruments'
 let hasSelectedSong = false;
+const playbackAliasesBySource = new Map();
 const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-instruments-v1';
 let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, example: false });
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
@@ -117,6 +119,91 @@ function getWaveShapeLabel(params) {
     return labels[shapeIndex] || 'sine';
 }
 
+function normalizePlaybackAliasList(aliases = []) {
+    const normalized = new Set();
+    const list = Array.isArray(aliases) ? aliases : [];
+    list.forEach((alias) => {
+        if (typeof alias !== 'string') return;
+        const trimmed = alias.trim();
+        if (!trimmed) return;
+        normalized.add(trimmed);
+    });
+    return normalized;
+}
+
+function collectActivePlaybackAliases() {
+    const active = new Set();
+    playbackAliasesBySource.forEach((aliases) => {
+        aliases.forEach((alias) => active.add(alias));
+    });
+    return active;
+}
+
+function isAliasInActivePlayback(alias) {
+    if (!alias) return false;
+    for (const aliases of playbackAliasesBySource.values()) {
+        if (aliases.has(alias)) return true;
+    }
+    return false;
+}
+
+function usesMixedPlaybackAnalyser(source) {
+    return source === 'tracker-preview' || source === 'arrangement-preview';
+}
+
+function getMixedPlaybackAnalyser() {
+    const ctx = getAudioContext();
+    if (!ctx) return null;
+    return getVisualizerAnalyser(ctx);
+}
+
+function refreshPlaybackHighlights() {
+    if (!dom.instrumentList) return;
+    const activeAliases = collectActivePlaybackAliases();
+    const hasMixedPlaybackSource = Array.from(playbackAliasesBySource.entries()).some(([source, aliases]) =>
+        usesMixedPlaybackAnalyser(source) && aliases?.size
+    );
+    const mixedPlaybackAnalyser = hasMixedPlaybackSource ? getMixedPlaybackAnalyser() : null;
+    dom.instrumentList.querySelectorAll('.instrument-item').forEach((item) => {
+        const alias = item.dataset.alias;
+        if (!alias) return;
+        const shouldHighlight = activeAliases.has(alias) || Boolean(item._playingTimeout);
+        item.classList.toggle('playing', shouldHighlight);
+        if (!item._scopeViz) return;
+        const fallbackAnalyser = item._scopeBaseAnalyser || getInstrumentAnalyser(alias);
+        const targetAnalyser = activeAliases.has(alias) && mixedPlaybackAnalyser
+            ? mixedPlaybackAnalyser
+            : fallbackAnalyser;
+        if (item._scopeActiveAnalyser !== targetAnalyser) {
+            item._scopeActiveAnalyser = targetAnalyser;
+            item._scopeViz.setAnalyser(targetAnalyser);
+        }
+    });
+}
+
+export function setPlaybackInstrumentAliases(source, aliases = []) {
+    const sourceKey = typeof source === 'string' ? source.trim() : '';
+    if (!sourceKey) return;
+    const normalized = normalizePlaybackAliasList(aliases);
+    if (normalized.size) {
+        playbackAliasesBySource.set(sourceKey, normalized);
+    } else {
+        playbackAliasesBySource.delete(sourceKey);
+    }
+    refreshPlaybackHighlights();
+}
+
+export function clearPlaybackInstrumentAliases(source = null) {
+    if (source == null) {
+        playbackAliasesBySource.clear();
+    } else {
+        const sourceKey = typeof source === 'string' ? source.trim() : '';
+        if (!sourceKey) return;
+        playbackAliasesBySource.delete(sourceKey);
+    }
+    refreshPlaybackHighlights();
+}
+
 function loadFolderState(key, fallback) {
     try {
         const raw = localStorage.getItem(key);
@@ -204,8 +291,10 @@ function setupEventListeners() {
                 const flashDuration = Math.max(duration * 1000, 100);
                 
                 li._playingTimeout = setTimeout(() => {
-                    li.classList.remove('playing');
                     li._playingTimeout = null;
+                    if (!isAliasInActivePlayback(id)) {
+                        li.classList.remove('playing');
+                    }
                 }, flashDuration);
             }
         });
@@ -293,7 +382,10 @@ function setupEventListeners() {
         const { alias } = e.detail || {};
         if (!alias) return;
         const item = dom.instrumentList?.querySelector(`.instrument-item[data-alias="${alias}"]`);
-        if (item?._scopeViz) item._scopeViz.setAnalyser(getInstrumentAnalyser(alias));
+        if (item?._scopeViz) {
+            item._scopeActiveAnalyser = null;
+            refreshPlaybackHighlights();
+        }
     });
 }
 
@@ -1270,6 +1362,8 @@ function renderInstrumentList() {
                     viz.attach(canvas);
                     activeVisualizers.push(viz);
                     li._scopeViz = viz;
+                    li._scopeBaseAnalyser = analyser;
+                    li._scopeActiveAnalyser = analyser;
                 }
             }
 
@@ -1305,6 +1399,7 @@ function renderInstrumentList() {
 
     // Refresh usage indicators (dots)
     updateInstrumentUsage();
+    refreshPlaybackHighlights();
 }
 
 let lastKnownCode = '';

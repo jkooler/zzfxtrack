@@ -6,7 +6,7 @@ import { exportPattern } from './export-logic.js';
 import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
-import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState, refreshInstrumentListUI } from './instrument-ui.js';
+import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases } from './instrument-ui.js';
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
@@ -139,6 +139,7 @@ let arrangementWorkspacePlayhead = {
     progress: 0,
     blocks: [],
 };
+let lastArrangementPlaybackInstrumentSignature = '';
 
 const PLAYBACK_LOUDNESS_PRESETS = Object.freeze({
     safe: { targetPeak: 0.5, masterGainDb: 0, softClipDrive: 1 },
@@ -389,6 +390,8 @@ function stopAllPlaybackForSelectionChange() {
         stopArrangementPreview();
     }
     clearArrangementWorkspacePlayheadVisuals();
+    clearPlaybackInstrumentAliases('tracker-preview');
+    clearArrangementPlaybackInstrumentAliases();
 }
 
 function refreshZzfxmPreviewControlsVisibility() {
@@ -1393,6 +1396,80 @@ function cloneArrangementState(value) {
 
 function getBlockByFilename(filename) {
     return blocksLibraryCache.find((block) => block.filename === filename) || null;
+}
+
+function isPlayableTrackerNote(note) {
+    return Boolean(note && note !== '-' && note !== '~');
+}
+
+function getTrackerStateSteps(trackerState) {
+    if (Number.isInteger(trackerState?.steps) && trackerState.steps > 0) return trackerState.steps;
+    if (!Array.isArray(trackerState?.grid)) return 16;
+    const firstChannel = trackerState.grid.find((channel) => Array.isArray(channel));
+    if (!firstChannel) return 16;
+    return Math.max(1, firstChannel.length || 16);
+}
+
+function collectInstrumentAliasesFromRowStep(rowIndex, rowStep, blockFilenames = []) {
+    const aliases = new Set();
+    const files = Array.isArray(blockFilenames) ? blockFilenames : [];
+    files.forEach((filename) => {
+        const trackerState = arrangementPreviewContext?.trackerStateByFilename?.[filename];
+        if (!trackerState || !Array.isArray(trackerState.grid) || !Array.isArray(trackerState.channelInstruments)) return;
+        const blockSteps = getTrackerStateSteps(trackerState);
+        const localStep = ((rowStep % blockSteps) + blockSteps) % blockSteps;
+        trackerState.grid.forEach((channel, channelIndex) => {
+            const alias = trackerState.channelInstruments[channelIndex];
+            if (!alias || !Array.isArray(channel)) return;
+            const cell = channel[localStep];
+            const note = typeof cell === 'object' ? cell?.note : cell;
+            if (isPlayableTrackerNote(note)) {
+                aliases.add(alias);
+            }
+        });
+    });
+    return Array.from(aliases).sort();
+}
+
+function clearArrangementPlaybackInstrumentAliases() {
+    lastArrangementPlaybackInstrumentSignature = '';
+    clearPlaybackInstrumentAliases('arrangement-preview');
+}
+
+function updateArrangementPlaybackInstrumentAliases(detail = {}) {
+    if (!isArrangementPreviewPlaying()) {
+        clearArrangementPlaybackInstrumentAliases();
+        return;
+    }
+
+    const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
+    const row = rowIndex == null ? null : arrangementPreviewContext?.arrangementState?.rows?.[rowIndex];
+    const blocks = Array.isArray(detail.blocks) && detail.blocks.length
+        ? detail.blocks
+        : (Array.isArray(row?.blocks) ? row.blocks : []);
+    if (rowIndex == null || !blocks.length) {
+        if (lastArrangementPlaybackInstrumentSignature !== 'empty') {
+            lastArrangementPlaybackInstrumentSignature = 'empty';
+            clearPlaybackInstrumentAliases('arrangement-preview');
+        }
+        return;
+    }
+
+    const rowSteps = Number.isInteger(detail.rowSteps) && detail.rowSteps > 0
+        ? detail.rowSteps
+        : (Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) * 16 : 16);
+    const progress = typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0;
+    const rowStep = Math.floor(progress * rowSteps);
+    const sortedAliases = collectInstrumentAliasesFromRowStep(rowIndex, rowStep, blocks);
+    const signature = `${rowIndex}|${rowStep}|${sortedAliases.join('|')}`;
+    if (signature === lastArrangementPlaybackInstrumentSignature) return;
+    lastArrangementPlaybackInstrumentSignature = signature;
+
+    if (sortedAliases.length) {
+        setPlaybackInstrumentAliases('arrangement-preview', sortedAliases);
+    } else {
+        clearPlaybackInstrumentAliases('arrangement-preview');
+    }
 }
 
 async function getArrangementInstrumentList() {
@@ -5183,6 +5260,16 @@ function setupTrackerEventListeners() {
         renderTrackerWorkspace();
     });
 
+    document.addEventListener('tracker:previewInstruments', (e) => {
+        const detail = e?.detail || {};
+        const aliases = Array.isArray(detail.aliases) ? detail.aliases : [];
+        if (detail.playing && aliases.length) {
+            setPlaybackInstrumentAliases('tracker-preview', aliases);
+        } else {
+            clearPlaybackInstrumentAliases('tracker-preview');
+        }
+    });
+
     
     // Add keyboard shortcut to open tracker (Ctrl/Cmd + T)
     document.addEventListener('keydown', (e) => {
@@ -6248,29 +6335,37 @@ function setupBlocksEventListeners() {
                 clearArrangementLiveOverride({ filename: addedFilename, scheduleUpdate: false });
             }
 	            updateArrangementPreview({
-	                arrangementState,
-	                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
-	                instrumentList: arrangementPreviewContext.instrumentList,
-	                bpm: arrangementPreviewContext.bpm,
-                    mixSettings: arrangementPreviewContext.mixSettings,
-	                keepPosition: true,
-			            });
+		                arrangementState,
+		                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
+		                instrumentList: arrangementPreviewContext.instrumentList,
+		                bpm: arrangementPreviewContext.bpm,
+	                    mixSettings: arrangementPreviewContext.mixSettings,
+		                keepPosition: true,
+				            });
+                updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
         });
 
         document.addEventListener('arrangements:blocksLoaded', (e) => {
             const blocks = e?.detail?.blocks || [];
             updateArrangementWorkspaceChipSteps(blocks);
+            updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
         });
 
         document.addEventListener('arrangements:playhead', (e) => {
-            applyArrangementWorkspacePlayhead(e?.detail || {});
+            const detail = e?.detail || {};
+            applyArrangementWorkspacePlayhead(detail);
+            updateArrangementPlaybackInstrumentAliases(detail);
         });
 
-        document.addEventListener('arrangements:previewState', () => {
+        document.addEventListener('arrangements:previewState', (e) => {
             updateArrangementWorkspacePreviewButtonState();
-            if (!isArrangementPreviewPlaying()) {
+            const playing = e?.detail?.playing ?? isArrangementPreviewPlaying();
+            if (!playing) {
                 clearArrangementWorkspacePlayheadVisuals();
+                clearArrangementPlaybackInstrumentAliases();
+                return;
             }
+            updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
         });
 
         document.addEventListener('tracker:stateChanged', (e) => {

@@ -106,6 +106,7 @@ let previewState = {
   isPlaying: false,
   playheadRafId: null,
   playingStep: null,
+  instrumentSignature: '',
 };
 
 const arrangementPreviewState = {
@@ -1542,6 +1543,12 @@ function playPreview(startOffset = 0) {
 
   // Update button state
   updatePreviewUI();
+
+  const aliases = collectPlayableAliasesFromTrackerState({
+    grid: state.grid,
+    channelInstruments: state.channelInstruments,
+  });
+  emitTrackerPreviewInstruments({ playing: true, aliases });
   
   // No onended handler needed for looping, as it stops only on manual stop()
 
@@ -1563,6 +1570,7 @@ function stopPreview() {
   stopPlayhead();
   previewState.isPlaying = false;
   updatePreviewUI();
+  emitTrackerPreviewInstruments({ playing: false, aliases: [] });
 }
 
 export function stopTrackerPreviewPlayback() {
@@ -1606,6 +1614,47 @@ function stepHasPlayableNote(step) {
     return true;
   }
   return false;
+}
+
+function isPlayableTrackerNote(note) {
+  return Boolean(note && note !== '-' && note !== '~');
+}
+
+function collectPlayableAliasesFromTrackerState(trackerState) {
+  if (!trackerState) return [];
+  const grid = Array.isArray(trackerState.grid) ? trackerState.grid : [];
+  const channelInstruments = Array.isArray(trackerState.channelInstruments) ? trackerState.channelInstruments : [];
+  const aliases = new Set();
+
+  grid.forEach((channel, channelIndex) => {
+    const alias = channelInstruments[channelIndex];
+    if (!alias || !Array.isArray(channel)) return;
+    const hasPlayableNote = channel.some((cell) => {
+      const note = typeof cell === 'object' ? cell?.note : cell;
+      return isPlayableTrackerNote(note);
+    });
+    if (hasPlayableNote) aliases.add(alias);
+  });
+
+  return Array.from(aliases).sort();
+}
+
+function emitTrackerPreviewInstruments({ playing = false, aliases = [] } = {}) {
+  const normalized = Array.isArray(aliases)
+    ? Array.from(new Set(aliases.filter((alias) => typeof alias === 'string' && alias.trim().length > 0)))
+    : [];
+  normalized.sort();
+
+  const signature = `${playing ? '1' : '0'}|${normalized.join('|')}`;
+  if (signature === previewState.instrumentSignature) return;
+  previewState.instrumentSignature = signature;
+
+  document.dispatchEvent(new CustomEvent('tracker:previewInstruments', {
+    detail: {
+      playing: Boolean(playing),
+      aliases: normalized,
+    }
+  }));
 }
 
 function setPlayingStep(step) {
@@ -1676,6 +1725,8 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120,
   if (!rendered) return;
 
   const { mixBuffer, sampleRate } = rendered;
+  const aliases = collectPlayableAliasesFromTrackerState(trackerState);
+  emitTrackerPreviewInstruments({ playing: true, aliases });
   playMixBuffer(mixBuffer, sampleRate);
 }
 
@@ -1728,6 +1779,7 @@ function playMixBuffer(mixBuffer, sampleRate) {
       previewState.playingSource = null;
       previewState.isPlaying = false;
       updatePreviewUI();
+      emitTrackerPreviewInstruments({ playing: false, aliases: [] });
     }
   };
 }
