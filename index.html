@@ -643,12 +643,12 @@
       </div>
       <div id="arrangementWorkspace" class="hidden flex-1 min-h-0 overflow-hidden">
         <div class="flex flex-1 min-h-0 overflow-hidden">
-          <section id="arrangementWorkspacePane" class="w-1/2 xl:flex-[7] min-w-0 border-r border-border bg-background overflow-hidden">
+          <section id="arrangementWorkspacePane" class="w-2/5 xl:flex-[7] min-w-0 border-r border-border bg-background overflow-hidden">
             <div class="h-full p-4 text-sm text-muted-foreground" id="arrangementWorkspacePlaceholder">
               Select an arrangement from the Blocks list to open the arranger workspace.
             </div>
           </section>
-          <section id="trackerWorkspacePane" class="w-1/2 xl:flex-[13] min-w-0 border-r border-border bg-background overflow-hidden">
+          <section id="trackerWorkspacePane" class="w-3/5 xl:flex-[13] min-w-0 border-r border-border bg-background overflow-hidden">
             <div class="h-full p-4 text-sm text-muted-foreground">
               Tracker panel will appear here.
             </div>
@@ -1858,7 +1858,7 @@
           <h2
             class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono"
           >
-            Blocks
+            Insert Blocks (Experimental)
           </h2>
           <button
             id="closeBlocksBtn"
@@ -2217,7 +2217,7 @@
         </div>
         
         <!-- Block Name Input (Only shown in Edit/Create Mode) -->
-        <div id="trackerBlockProps" class="hidden flex gap-2 items-center pb-2 border-b border-border/50 px-4">
+        <div id="trackerBlockProps" class="hidden flex gap-2 items-center pb-2 border-b border-border/50 px-4 min-w-0">
           <label for="trackerBlockBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM:</label>
           <input
             type="number"
@@ -2262,12 +2262,12 @@
             <option value="7">7</option>
             <option value="8">8</option>
           </select>
-          <label for="trackerBlockName" class="text-xs font-bold text-muted-foreground uppercase">Name:</label>
+          <label for="trackerBlockName" class="text-xs font-bold text-muted-foreground uppercase shrink-0">Name:</label>
           <input 
             type="text" 
             id="trackerBlockName" 
             placeholder="Block Name" 
-            class="flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            class="flex-1 min-w-0 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
           <button
             id="trackerBlockAdvancedSettingsBtn"
