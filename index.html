@@ -555,7 +555,7 @@
 	          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 flex items-center gap-2"
 	          title="Insert blocks into song (Ctrl+B)"
 	        >
-	          <i data-lucide="toy-brick" class="w-4 h-4"></i> + Insert Blocks
+	          <i data-lucide="toy-brick" class="w-4 h-4"></i> Insert Blocks
 	        </button>
       </header>
 
@@ -643,12 +643,12 @@
       </div>
       <div id="arrangementWorkspace" class="hidden flex-1 min-h-0 overflow-hidden">
         <div class="flex flex-1 min-h-0 overflow-hidden">
-          <section id="arrangementWorkspacePane" class="w-1/2 min-w-0 border-r border-border bg-background overflow-hidden">
+          <section id="arrangementWorkspacePane" class="w-1/2 xl:flex-[7] min-w-0 border-r border-border bg-background overflow-hidden">
             <div class="h-full p-4 text-sm text-muted-foreground" id="arrangementWorkspacePlaceholder">
               Select an arrangement from the Blocks list to open the arranger workspace.
             </div>
           </section>
-          <section id="trackerWorkspacePane" class="w-1/2 min-w-0 border-r border-border bg-background overflow-hidden">
+          <section id="trackerWorkspacePane" class="w-1/2 xl:flex-[13] min-w-0 border-r border-border bg-background overflow-hidden">
             <div class="h-full p-4 text-sm text-muted-foreground">
               Tracker panel will appear here.
             </div>
@@ -2190,32 +2190,34 @@
       class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
     >
       <div
-        class="modal fixed z-50 flex flex-col w-[90vw] max-w-5xl max-h-[90vh] gap-4 border border-border bg-background p-0 shadow-lg sm:rounded-lg"
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-5xl max-h-[90vh] gap-0 border border-border bg-background p-0 shadow-lg sm:rounded-lg"
       >
-        <div class="flex items-center justify-between pt-4 pl-3 pr-4">
+        <div class="flex items-center justify-between pt-2 pl-3 pr-3 pb-2.5 gap-2">
           <h2
-            class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono"
+            class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono min-w-0 truncate"
           >
             Tracker
           </h2>
-          <button
-            id="closeTrackerBtn"
-            class="text-muted-foreground hover:text-foreground"
-          >
-            <i data-lucide="x" class="w-6 h-6"></i>
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              id="previewTrackerBtn"
+              type="button"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm"
+              title="Preview"
+            >
+              <i data-lucide="play" class="w-[18px] h-5 fill-current"></i>
+            </button>
+            <button
+              id="closeTrackerBtn"
+              class="text-muted-foreground hover:text-foreground"
+            >
+              <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+          </div>
         </div>
         
         <!-- Block Name Input (Only shown in Edit/Create Mode) -->
         <div id="trackerBlockProps" class="hidden flex gap-2 items-center pb-2 border-b border-border/50 px-4">
-          <button
-            id="previewTrackerBtn"
-            type="button"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm flex items-center justify-center"
-            title="Preview"
-          >
-            <i data-lucide="play" class="w-[18px] h-5 fill-current"></i>
-          </button>
           <label for="trackerBlockBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM:</label>
           <input
             type="number"
@@ -2229,7 +2231,7 @@
           <label for="trackerBlockRowsPreset" class="text-xs font-bold text-muted-foreground uppercase">Rows:</label>
           <select
             id="trackerBlockRowsPreset"
-            class="h-8 w-20 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            class="h-8 w-[53px] rounded-md border border-input bg-background px-1.5 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="16">16</option>
             <option value="32">32</option>
@@ -2245,7 +2247,7 @@
             value="16"
             class="hidden w-16 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-          <label for="trackerBlockChannels" class="text-xs font-bold text-muted-foreground uppercase">Channels:</label>
+          <label for="trackerBlockChannels" class="text-xs font-bold text-muted-foreground uppercase">Ch:</label>
           <select
             id="trackerBlockChannels"
             class="h-8 w-20 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

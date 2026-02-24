@@ -11,7 +11,16 @@ export const arrangementState = {
     {
       "repeats": 4,
       "blocks": [
-        "bass.js"
+        "bass.js",
+        "chords.js"
+      ]
+    },
+    {
+      "repeats": 4,
+      "blocks": [
+        "chords.js",
+        "bass.js",
+        "drums.js"
       ]
     },
     {
@@ -21,14 +30,6 @@ export const arrangementState = {
         "chords.js",
         "synths.js",
         "bass.js"
-      ]
-    },
-    {
-      "repeats": 4,
-      "blocks": [
-        "chords.js",
-        "bass.js",
-        "drums.js"
       ]
     }
   ]

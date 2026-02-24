@@ -343,6 +343,23 @@ input[readonly]:focus-visible {
   padding: 0 !important;
 }
 
+/* Modal only: original header layout — Play left, Title, Close right */
+#trackerModal:not(.workspace-docked) > .modal > div:first-child {
+  display: flex;
+}
+#trackerModal:not(.workspace-docked) > .modal > div:first-child > div:last-child {
+  display: contents;
+}
+#trackerModal:not(.workspace-docked) #previewTrackerBtn {
+  order: 1;
+}
+#trackerModal:not(.workspace-docked) > .modal > div:first-child > h2 {
+  order: 2;
+}
+#trackerModal:not(.workspace-docked) #closeTrackerBtn {
+  order: 3;
+}
+
 #trackerModal.workspace-docked #closeTrackerBtn {
   display: none !important;
 }
@@ -732,12 +749,37 @@ strudel-editor {
 }
 
 .arr-row {
-  @apply flex items-center gap-2;
+  @apply flex flex-col gap-2;
   padding: 12px 4px;
   border-width: 1px 0 0 0;
   border-style: solid none none none;
   border-color: rgba(44, 42, 39, 1);
   border-image: none;
+}
+@media (min-width: 1536px) {
+  .arr-row {
+    @apply flex-row items-center justify-between;
+  }
+}
+
+.arr-row-main {
+  @apply flex items-center gap-2 min-w-0;
+  align-self: flex-start;
+}
+@media (min-width: 1536px) {
+  .arr-row-main {
+    align-self: center;
+  }
+}
+
+.arr-row-actions {
+  @apply flex justify-end;
+  align-self: flex-end;
+}
+@media (min-width: 1536px) {
+  .arr-row-actions {
+    align-self: center;
+  }
 }
 .arr-row-number {
   @apply inline-flex h-8 items-center justify-center text-xs font-mono text-muted-foreground cursor-grab;
@@ -834,58 +876,29 @@ strudel-editor {
   cursor: pointer;
 }
 /* Arrangement row actions: add block (+), duplicate, delete — single button group */
-/* xl and smaller: column; above xl: row */
 .arr-row-btn-group {
-  @apply inline-flex flex-col;
+  @apply inline-flex flex-row;
 }
-@media (min-width: 1280px) {
-  .arr-row-btn-group {
-    @apply flex-row;
-  }
-}
-/* Column (xl and smaller): wrap is on top → round top corners */
 .arr-row-btn-group .arr-block-select-wrap {
   border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-  border-bottom-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 8px;
   border-bottom-right-radius: 0;
-  margin-bottom: -1px;
-}
-@media (min-width: 1280px) {
-  .arr-row-btn-group .arr-block-select-wrap {
-    border-top-left-radius: 8px;
-    border-top-right-radius: 0;
-    border-bottom-left-radius: 8px;
-    border-bottom-right-radius: 0;
-    margin-bottom: 0;
-    margin-right: -1px;
-  }
+  margin-bottom: 0;
+  margin-right: -1px;
 }
 .arr-row-btn-group .arr-row-del {
   @apply rounded-none;
   margin-left: -1px;
-  margin-top: -1px;
-}
-@media (min-width: 1280px) {
-  .arr-row-btn-group .arr-row-del {
-    margin-top: 0;
-  }
 }
 .arr-row-btn-group .arr-row-del:first-of-type {
   margin-left: 0;
 }
-/* Column: last button on bottom → round bottom corners. Row: last button on right → round right corners */
 .arr-row-btn-group .arr-row-del:last-child {
-  border-bottom-left-radius: var(--radius);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-top-right-radius: var(--radius);
   border-bottom-right-radius: var(--radius);
-}
-@media (min-width: 1280px) {
-  .arr-row-btn-group .arr-row-del:last-child {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-    border-top-right-radius: var(--radius);
-    border-bottom-right-radius: var(--radius);
-  }
 }
 
 .arr-row-del {

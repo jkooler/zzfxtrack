@@ -1356,10 +1356,18 @@ function renderArrangementRows() {
 		    rowActionsGroup.appendChild(duplicateRowBtn);
 		    rowActionsGroup.appendChild(removeRowBtn);
 
-		    rowEl.appendChild(rowNumberEl);
-		    rowEl.appendChild(repeatsEl);
-		    rowEl.appendChild(chipsEl);
-		    rowEl.appendChild(rowActionsGroup);
+		    const rowMain = document.createElement('div');
+		    rowMain.className = 'arr-row-main';
+		    rowMain.appendChild(rowNumberEl);
+		    rowMain.appendChild(repeatsEl);
+		    rowMain.appendChild(chipsEl);
+
+		    const rowActions = document.createElement('div');
+		    rowActions.className = 'arr-row-actions';
+		    rowActions.appendChild(rowActionsGroup);
+
+		    rowEl.appendChild(rowMain);
+		    rowEl.appendChild(rowActions);
 
 	    elements.arrangementRows.appendChild(rowEl);
 	    renderChips();
@@ -1592,7 +1600,7 @@ function renderBlocksList() {
       const editBtn = blockEl.querySelector('.sidebar-edit-btn');
       editBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
-        selectBlock(index);
+        selectBlock(index, { preview: false });
         openTrackerForEdit(index);
       });
 
@@ -1627,7 +1635,7 @@ function renderBlocksList() {
 /**
  * Select a block from the list
  */
-function selectBlock(index) {
+function selectBlock(index, { preview = true } = {}) {
   // Remove previous selection
   document.querySelectorAll('#blocksList .block-item').forEach(el => {
     el.classList.remove('selected', 'bg-accent', 'border-primary');
@@ -1649,8 +1657,8 @@ function selectBlock(index) {
   if (elements.deleteBlockBtn) {
     elements.deleteBlockBtn.disabled = selectedBlockIndex == null || (normalizeScope(block?.scope) === 'example' && !isDeveloperModeEnabled());
   }
-  // Trigger preview on selection
-  if (block) {
+  // Trigger preview on selection (skip when opening Edit to avoid one-shot preview then hard cut)
+  if (preview && block) {
     previewBlock(block);
   }
 }

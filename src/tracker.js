@@ -167,6 +167,9 @@ export function primePreviewAudioContext() {
 let octaveOffset = 0;
 let effectPreviewTimeout = null;
 let effectPreviewRequest = null;
+/** Ignore preview start within this ms of modal open to avoid accidental first-note play */
+const TRACKER_OPEN_PREVIEW_GUARD_MS = 250;
+let trackerModalOpenedAt = 0;
 const EFFECT_PREVIEW_DEBOUNCE_MS = 150;
 const TRACKER_NOTE_PREVIEW_GAIN = 0.8;
 const TRACKER_NOTE_PREVIEW_DUCKED_GAIN = 0.35;
@@ -264,6 +267,14 @@ function setChannels(n) {
 function syncChannelsUI() {
   if (!elements.blockChannels) return;
   elements.blockChannels.value = String(state.channels);
+}
+
+function cancelEffectPreview() {
+  if (effectPreviewTimeout) {
+    clearTimeout(effectPreviewTimeout);
+    effectPreviewTimeout = null;
+  }
+  effectPreviewRequest = null;
 }
 
 function scheduleEffectPreview(channel, step) {
@@ -1363,6 +1374,10 @@ function togglePreview() {
   if (previewState.isPlaying) {
     stopPreview();
   } else {
+    // Avoid accidental start from click-through or focus when modal just opened
+    if (Date.now() - trackerModalOpenedAt < TRACKER_OPEN_PREVIEW_GUARD_MS) {
+      return;
+    }
     playPreview();
   }
 }
@@ -2512,11 +2527,16 @@ export function openTracker(instrumentList, options = {}) {
     renderGrid();
   }
 
-  elements.modal?.classList.add('open');
   lastSavedSnapshot = getSnapshot();
 
-  // Focus first cell
-  setFocus(0, 0);
+  // Defer adding 'open' to next frame so the browser paints opacity-0 first;
+  // otherwise the fade-in transition can fail on first open.
+  requestAnimationFrame(() => {
+    cancelEffectPreview();
+    elements.modal?.classList.add('open');
+    trackerModalOpenedAt = Date.now();
+    setFocus(0, 0);
+  });
 }
 
 /**
@@ -2555,11 +2575,16 @@ export function openTrackerForEdit(instrumentList, blockData) {
     renderGrid();
   }
 
-  elements.modal?.classList.add('open');
   lastSavedSnapshot = getSnapshot();
 
-  // Focus first cell
-  setFocus(0, 0);
+  // Defer adding 'open' to next frame so the browser paints opacity-0 first;
+  // otherwise the fade-in transition can fail on first open.
+  requestAnimationFrame(() => {
+    cancelEffectPreview();
+    elements.modal?.classList.add('open');
+    trackerModalOpenedAt = Date.now();
+    setFocus(0, 0);
+  });
 }
 
 /**

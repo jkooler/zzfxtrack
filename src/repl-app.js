@@ -606,6 +606,7 @@ function undockTrackerModalFromWorkspace() {
     if (!trackerModal || !trackerModal.classList.contains('workspace-docked')) return;
 
     trackerModal.classList.remove('workspace-docked');
+    trackerModal.classList.remove('open');
     const restoreParent = trackerDockRestoreParent || document.body;
     if (trackerDockRestoreNextSibling && trackerDockRestoreNextSibling.parentElement === restoreParent) {
         restoreParent.insertBefore(trackerModal, trackerDockRestoreNextSibling);
@@ -1978,7 +1979,7 @@ function renderArrangementWorkspace() {
 
     dom.arrangementWorkspacePane.innerHTML = `
         <div class="h-full flex flex-col gap-4 p-0">
-            <div class="flex gap-2 items-center px-3 py-2">
+            <div class="flex min-w-0 gap-2 items-center px-3 py-2">
                 <button
                     id="arrangementWorkspacePreviewBtn"
                     type="button"
@@ -2004,7 +2005,7 @@ function renderArrangementWorkspace() {
                     id="arrangementWorkspaceName"
                     value="${escapeHtml(arrangementDraftState.name)}"
                     placeholder="Arrangement Name"
-                    class="flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    class="min-w-0 flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     ${readonly ? 'readonly' : ''}
                 >
                 <button
@@ -2341,10 +2342,18 @@ function renderArrangementWorkspace() {
             rowActionsGroup.appendChild(duplicateRowBtn);
             rowActionsGroup.appendChild(removeRowBtn);
 
-            rowEl.appendChild(rowNumberEl);
-            rowEl.appendChild(repeatsEl);
-            rowEl.appendChild(chipsEl);
-            rowEl.appendChild(rowActionsGroup);
+            const rowMain = document.createElement('div');
+            rowMain.className = 'arr-row-main';
+            rowMain.appendChild(rowNumberEl);
+            rowMain.appendChild(repeatsEl);
+            rowMain.appendChild(chipsEl);
+
+            const rowActions = document.createElement('div');
+            rowActions.className = 'arr-row-actions';
+            rowActions.appendChild(rowActionsGroup);
+
+            rowEl.appendChild(rowMain);
+            rowEl.appendChild(rowActions);
             rowsRoot.appendChild(rowEl);
 
             renderChips();
@@ -5417,8 +5426,21 @@ function setupTrackerEventListeners() {
     document.addEventListener('tracker:previewInstruments', (e) => {
         const detail = e?.detail || {};
         const aliases = Array.isArray(detail.aliases) ? detail.aliases : [];
-        if (detail.playing && aliases.length) {
-            setPlaybackInstrumentAliases('tracker-preview', aliases);
+        if (detail.playing) {
+            // Stop Strudel song and ZzFXM export preview so only tracker preview is heard
+            try {
+                if (dom.repl.editor?.repl?.scheduler?.started) {
+                    dom.repl.editor.stop();
+                    updatePlayState(false);
+                }
+            } catch (_err) { /* ignore */ }
+            if (isPreviewPlaying) {
+                stopZzfxmSong();
+                updatePreviewPlayButton(false);
+            }
+            if (aliases.length) {
+                setPlaybackInstrumentAliases('tracker-preview', aliases);
+            }
         } else {
             clearPlaybackInstrumentAliases('tracker-preview');
         }
