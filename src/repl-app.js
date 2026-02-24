@@ -510,6 +510,15 @@ function showWelcome() {
     updateFooterExportActionLabels();
 }
 
+function handleSidebarTitleClick() {
+    // If introduction is visible and a song is selected, return to that song; otherwise show introduction.
+    if (dom.sidebarTitle?.classList.contains('active') && currentSongFilename) {
+        showEditor();
+    } else {
+        showIntroduction();
+    }
+}
+
 function showIntroduction() {
     // If no song is loaded, the introduction view is also the "empty" state.
     if (!currentSongFilename) {
@@ -541,8 +550,21 @@ function showIntroduction() {
     updateFooterExportActionLabels();
 }
 
+function isTrackerDocked() {
+    const trackerModal = document.getElementById('trackerModal');
+    return Boolean(
+        trackerModal?.classList.contains('workspace-docked')
+        && dom.trackerWorkspacePane
+        && trackerModal.parentElement === dom.trackerWorkspacePane
+    );
+}
+
 function showEditor() {
-    undockTrackerModalFromWorkspace();
+    // When switching to song editor, do not undock the tracker if it is docked and playing.
+    // Playback should only stop when the user clicks Play on the song (togglePlay → stopAllPlaybackForSelectionChange).
+    if (!isTrackerDocked()) {
+        undockTrackerModalFromWorkspace();
+    }
     dom.welcomeView.style.display = 'none';
     dom.editorContainer.style.display = 'flex';
     if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'none';
@@ -4561,7 +4583,7 @@ if (dom.uploadProjectModal) {
     });
 }
 
-dom.sidebarTitle.addEventListener('click', showIntroduction);
+dom.sidebarTitle.addEventListener('click', handleSidebarTitleClick);
 dom.newSongBtn.addEventListener('click', openModal);
 dom.newArrangementBtn?.addEventListener('click', openNewArrangementModal);
 dom.newSidebarBlockBtn?.addEventListener('click', () => {
@@ -4874,14 +4896,10 @@ dom.previewPlayBtn.addEventListener('click', () => {
         setStatus('Nothing to play. Export to ZzFXM first.', 'error');
         return;
     }
-    
-    // Stop Strudel playback to avoid overlap
-    const editor = dom.repl.editor;
-    if (editor && editor.repl.scheduler.started) {
-        editor.stop();
-        updatePlayState(false);
-    }
-    
+
+    // Stop Strudel, arrangement preview, and tracker preview so only ZzFXM preview plays.
+    stopAllPlaybackForSelectionChange();
+
     playZzfxmSong(lastExportedData, getAudioContext(), () => {
         updatePreviewPlayButton(false);
     }, { ...(lastExportedMeta || {}), ...getPlaybackMixSettings() });

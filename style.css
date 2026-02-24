@@ -937,3 +937,8 @@ strudel-editor {
 #trackerModal > .modal {
   padding: 0;
 }
+
+/* Instrument drawer: hide "Instrument Name" label for now */
+#instrumentNameLabel {
+  display: none !important;
+}
