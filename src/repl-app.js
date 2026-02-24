@@ -2703,13 +2703,17 @@ async function loadSong(filename) {
             }
         }
         
-        showEditor();
-        currentSongFilename = filename;
-        currentSongScope = loadedSongScope;
+        // Clear arrangement workspace state BEFORE showing the editor so footer/preview controls
+        // reflect the correct (song) context.
         currentArrangementFilename = null;
         currentArrangementScope = 'user';
         arrangementDraftState = null;
         activeArrangementBlockFilename = null;
+
+        currentSongFilename = filename;
+        currentSongScope = loadedSongScope;
+
+        showEditor();
         refreshArrangementListActiveState();
         renderArrangementWorkspace();
         currentSongDisplayName = decodeURIComponent(filename.replace('.js', '')); // Store without extension
