@@ -565,6 +565,7 @@ function showArrangementWorkspace() {
     refreshZzfxmPreviewControlsVisibility();
     updateAdvancedSettingsButtonsVisibility();
     updateFooterExportActionLabels();
+    updateArrangementListScopeVisualizer();
 }
 
 function isArrangementWorkspaceActive() {
@@ -1061,7 +1062,17 @@ async function refreshSongList() {
     }
 }
 
+function isSongListVisible() {
+    return Boolean(dom.songList && !dom.songList.classList.contains('hidden'));
+}
+
+function isArrangementListVisible() {
+    return Boolean(dom.arrangementList && !dom.arrangementList.classList.contains('hidden'));
+}
+
 function updateSongListVisualizer() {
+    if (!isSongListVisible()) return;
+
     const playingEntry = songEntriesCache.find((e) => e.filename === playingSongFilename);
     const playingScope = playingEntry ? normalizeScope(playingEntry.scope) : null;
     let visualizerAttached = false;
@@ -1130,6 +1141,39 @@ function updateSongListVisualizer() {
     if (!visualizerAttached) {
         attachVisualizer(null);
     }
+}
+
+function updateArrangementListScopeVisualizer() {
+    if (!isArrangementListVisible()) return;
+
+    let target = null;
+    if (isArrangementPreviewPlaying() && currentArrangementFilename) {
+        target = Array.from(dom.arrangementList.querySelectorAll('.song-item'))
+            .find((item) => item.dataset.filename === currentArrangementFilename) || null;
+    }
+
+    Array.from(dom.arrangementList.querySelectorAll('.song-item')).forEach((item) => {
+        if (item !== target) {
+            item.classList.remove('relative', 'overflow-hidden');
+            item.querySelector('canvas.song-visualizer')?.remove();
+        }
+    });
+
+    if (!target) {
+        attachVisualizer(null);
+        return;
+    }
+
+    target.classList.add('relative', 'overflow-hidden');
+    let canvas = target.querySelector('canvas.song-visualizer');
+    if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.className = 'song-visualizer';
+        target.insertBefore(canvas, target.firstChild);
+    }
+    canvas.width = target.clientWidth;
+    canvas.height = target.clientHeight;
+    attachVisualizer(canvas);
 }
 
 /**
@@ -1235,6 +1279,7 @@ async function refreshArrangementList() {
         appendFolder('user', 'User', userItems);
         appendFolder('example', 'Examples', exampleItems);
         createIcons({ icons });
+        updateArrangementListScopeVisualizer();
     } catch (err) {
         console.error('[Arrangements] Failed to refresh list:', err);
         arrangementEntriesCache = [];
@@ -1247,6 +1292,7 @@ function refreshArrangementListActiveState() {
     Array.from(dom.arrangementList.querySelectorAll('.song-item')).forEach((li) => {
         li.classList.toggle('active', li.dataset.filename === currentArrangementFilename);
     });
+    updateArrangementListScopeVisualizer();
 }
 
 async function deleteArrangement(filename) {
@@ -4473,6 +4519,12 @@ document.addEventListener('sidebar:viewChanged', async (e) => {
             showWelcome();
         }
     }
+    updateSongListVisualizer();
+    updateArrangementListScopeVisualizer();
+});
+document.addEventListener('visualizer:ready', () => {
+    updateSongListVisualizer();
+    updateArrangementListScopeVisualizer();
 });
 dom.newSongName.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
@@ -6359,6 +6411,7 @@ function setupBlocksEventListeners() {
             const detail = e?.detail || {};
             applyArrangementWorkspacePlayhead(detail);
             updateArrangementPlaybackInstrumentAliases(detail);
+            updateArrangementListScopeVisualizer();
         });
 
         document.addEventListener('arrangements:previewState', (e) => {
@@ -6367,9 +6420,11 @@ function setupBlocksEventListeners() {
             if (!playing) {
                 clearArrangementWorkspacePlayheadVisuals();
                 clearArrangementPlaybackInstrumentAliases();
+                updateArrangementListScopeVisualizer();
                 return;
             }
             updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
+            updateArrangementListScopeVisualizer();
         });
 
         document.addEventListener('tracker:stateChanged', (e) => {
