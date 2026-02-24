@@ -28,6 +28,9 @@
   --color-tertiary: var(--tertiary);
   --color-tertiary-foreground: var(--tertiary-foreground);
 
+  --color-quaternary: var(--quaternary);
+  --color-quaternary-foreground: var(--quaternary-foreground);
+
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
 
@@ -86,6 +89,10 @@
     /* Pale Blue Tertiary */
     --tertiary: hsl(180deg 100% 16.57%) !important;
     --tertiary-foreground: hsl(0, 0%, 100%) !important;
+
+    /* Wine Red Quaternary */
+    --quaternary: hsl(352deg 48% 30%) !important;
+    --quaternary-foreground: hsl(0, 0%, 100%) !important;
 
     /* Stone 800ish */
     --muted: hsl(24 5.4% 15.1%) !important;
@@ -182,6 +189,15 @@ input[readonly]:focus-visible {
   @apply bg-muted-foreground/50;
 }
 
+/* Export button: quaternary (wine red) when in arrangement mode */
+#exportBtn.export-arrangement-mode {
+  background-color: var(--quaternary);
+  color: var(--quaternary-foreground);
+}
+#exportBtn.export-arrangement-mode:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--quaternary) 80%, transparent);
+}
+
 /* Dynamic Classes used by JS */
 .song-list {
   @apply list-none m-0 p-2 space-y-1;
@@ -204,7 +220,7 @@ input[readonly]:focus-visible {
 }
 
 .song-item {
-  @apply flex items-center justify-between py-1.5 px-2 min-h-9 rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative overflow-hidden text-sm font-medium;
+  @apply flex items-center justify-between py-0 px-1.5 mb-0 min-h-9 rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative overflow-hidden text-sm font-medium;
 }
 .song-item.active {
   @apply bg-accent text-accent-foreground;
@@ -324,10 +340,15 @@ input[readonly]:focus-visible {
   border-radius: 0 !important;
   border: 0 !important;
   box-shadow: none !important;
-  padding: 0.75rem !important;
+  padding: 0 !important;
 }
 
 #trackerModal.workspace-docked #closeTrackerBtn {
+  display: none !important;
+}
+
+#trackerModal.workspace-docked #trackerNotationToggle,
+#trackerModal.workspace-docked #saveTrackerBtn {
   display: none !important;
 }
 
@@ -692,6 +713,8 @@ strudel-editor {
 /* Arranger */
 .arr-rows-header {
   @apply flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase select-none;
+  padding-left: 4px;
+  padding-right: 4px;
   padding-bottom: calc(var(--spacing) * 2);
 }
 
@@ -709,18 +732,23 @@ strudel-editor {
 }
 
 .arr-row {
-  @apply flex items-center gap-2 py-1;
+  @apply flex items-center gap-2;
+  padding: 12px 4px;
+  border-width: 1px 0 0 0;
+  border-style: solid none none none;
+  border-color: rgba(44, 42, 39, 1);
+  border-image: none;
 }
 .arr-row-number {
-  @apply inline-flex h-8 items-center justify-center text-xs font-mono text-muted-foreground;
+  @apply inline-flex h-8 items-center justify-center text-xs font-mono text-muted-foreground cursor-grab;
   width: calc(var(--spacing) * 4);
 }
 .arr-row.playing .arr-row-number {
   @apply text-primary;
 }
 .arr-repeats {
-  @apply h-8 rounded-md border border-input bg-input-bg px-2 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
-  width: calc(var(--spacing) * 9.6); /* 60% of previous w-16 */
+  @apply h-8 rounded-md border border-input bg-input-bg pl-1 pr-0 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  width: fit-content;
   -moz-appearance: textfield;
   appearance: textfield;
   background-image: linear-gradient(
@@ -769,9 +797,11 @@ strudel-editor {
   100% { transform: translateX(0); }
 }
 
-.arr-row.arr-row-drop-target {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary), transparent 60%);
-  border-radius: calc(var(--radius) - 2px);
+.arr-row.arr-row-drop-target-above {
+  border-top: 2px solid color-mix(in srgb, var(--primary), transparent 40%);
+}
+.arr-row.arr-row-drop-target-below {
+  border-bottom: 2px solid color-mix(in srgb, var(--primary), transparent 40%);
 }
 .arr-chip-del {
   @apply text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded-md;
@@ -803,6 +833,61 @@ strudel-editor {
   opacity: 0;
   cursor: pointer;
 }
+/* Arrangement row actions: add block (+), duplicate, delete — single button group */
+/* xl and smaller: column; above xl: row */
+.arr-row-btn-group {
+  @apply inline-flex flex-col;
+}
+@media (min-width: 1280px) {
+  .arr-row-btn-group {
+    @apply flex-row;
+  }
+}
+/* Column (xl and smaller): wrap is on top → round top corners */
+.arr-row-btn-group .arr-block-select-wrap {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-bottom: -1px;
+}
+@media (min-width: 1280px) {
+  .arr-row-btn-group .arr-block-select-wrap {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 0;
+    margin-bottom: 0;
+    margin-right: -1px;
+  }
+}
+.arr-row-btn-group .arr-row-del {
+  @apply rounded-none;
+  margin-left: -1px;
+  margin-top: -1px;
+}
+@media (min-width: 1280px) {
+  .arr-row-btn-group .arr-row-del {
+    margin-top: 0;
+  }
+}
+.arr-row-btn-group .arr-row-del:first-of-type {
+  margin-left: 0;
+}
+/* Column: last button on bottom → round bottom corners. Row: last button on right → round right corners */
+.arr-row-btn-group .arr-row-del:last-child {
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+@media (min-width: 1280px) {
+  .arr-row-btn-group .arr-row-del:last-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: var(--radius);
+    border-bottom-right-radius: var(--radius);
+  }
+}
+
 .arr-row-del {
   @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0;
 }
@@ -826,6 +911,16 @@ strudel-editor {
   transform: scale(0.98);
 }
 
+/* Shared modal overlay: lighter dim, no blur (overrides Tailwind bg-black/80 backdrop-blur-sm on .modal-overlay) */
+.modal-overlay {
+  background-color: rgb(0 0 0 / 0.4);
+  backdrop-filter: none;
+}
+
 #trackerModal {
   z-index: 60;
+}
+
+#trackerModal > .modal {
+  padding: 0;
 }

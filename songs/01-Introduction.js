@@ -20,7 +20,7 @@ const pattern = stack(
 
 export const pattern = arrange([16, pattern])
 
-// If you look down, you'll see the "Export ZzFXM" button.
+// If you look down, you'll see the "Song to ZzFXM" button.
 // Clicking it will generate the song data as .json, that is compatible with ZzFXM.
 
 // 1. Audio processing effects will not carry over to exported .json file.

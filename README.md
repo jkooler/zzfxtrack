@@ -18,7 +18,7 @@ Under the hood, Strudel is used for **pattern notation + event scheduling**, and
 1. Open an example song.
 1. Open the instrument editor and tweak a sound (ZzFXMicro-style params).
 1. (Optional) Open `Blocks` to sketch a beat/melody in a tracker-style grid, then preview the arrangement.
-1. Click `Export ZzFXM`.
+1. Click `Song to ZzFXM`.
 1. Click the play button to preview ZzFXM playback.
 1. Open `Song Data` to inspect/download the exported JSON.
 1. Click `Download WAV` if you want a quick audio file to share/test.

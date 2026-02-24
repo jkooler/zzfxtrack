@@ -51,6 +51,11 @@ function updateAdvancedSettingsButtonsVisibility() {
         const shouldShow = show && Boolean(currentSongFilename) && !dom.songNameInput.classList.contains('hidden');
         dom.openSongAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
     }
+    const arrangementWorkspaceSettingsBtn = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceAdvancedSettingsBtn');
+    if (arrangementWorkspaceSettingsBtn) {
+        const shouldShowArrangement = show && Boolean(currentArrangementFilename);
+        arrangementWorkspaceSettingsBtn.classList.toggle('dev-only-hidden', !shouldShowArrangement);
+    }
 }
 
 function updateDevModeToolbarLabelVisibility() {
@@ -448,13 +453,14 @@ function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFX
 function updateFooterExportActionLabels() {
     const arrangementMode = isArrangementWorkspaceActive();
     if (dom.exportBtnLabel) {
-        dom.exportBtnLabel.textContent = arrangementMode ? 'Export Arrangement ZzFXM' : 'Export ZzFXM';
-    }
-    if (dom.exportWavBtnLabel) {
-        dom.exportWavBtnLabel.textContent = arrangementMode ? 'Download Arrangement WAV' : 'Download WAV';
+        dom.exportBtnLabel.textContent = arrangementMode ? 'Arr. to ZzFXM' : 'Song to ZzFXM';
     }
     if (dom.exportBtn) {
         dom.exportBtn.title = arrangementMode ? 'Export arrangement to ZzFXM JSON' : '';
+        dom.exportBtn.classList.toggle('export-arrangement-mode', arrangementMode);
+    }
+    if (dom.exportWavBtnLabel) {
+        dom.exportWavBtnLabel.textContent = arrangementMode ? 'Download WAV' : 'Download WAV';
     }
     if (dom.exportWavBtn) {
         dom.exportWavBtn.title = arrangementMode ? 'Download arrangement mix as WAV' : '';
@@ -546,6 +552,7 @@ function showEditor() {
     dom.exportBtn.disabled = false;
     if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
     dom.songNameInput.classList.remove('hidden');
+    updateSongSelectionState(!!currentSongFilename);
     refreshZzfxmPreviewControlsVisibility();
     updateAdvancedSettingsButtonsVisibility();
     dom.sidebarTitle?.classList.remove('active');
@@ -560,16 +567,19 @@ function showArrangementWorkspace() {
     if (dom.mainFooter) dom.mainFooter.classList.remove('hidden');
     dom.sidebarTitle?.classList.remove('active');
     dom.songNameInput.classList.add('hidden');
+    updateSongSelectionState(false);
     dom.exportBtn.disabled = false;
     if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
     refreshZzfxmPreviewControlsVisibility();
     updateAdvancedSettingsButtonsVisibility();
     updateFooterExportActionLabels();
     updateArrangementListScopeVisualizer();
+    updateArrangementWorkspacePreviewButtonState();
 }
 
+/** True when the arrangement workspace is the currently visible main content (footer/export reflect arrangement context). */
 function isArrangementWorkspaceActive() {
-    return Boolean(currentArrangementFilename);
+    return Boolean(dom.arrangementWorkspace && dom.arrangementWorkspace.style.display === 'flex');
 }
 
 function dockTrackerModalToWorkspace() {
@@ -1967,24 +1977,15 @@ function renderArrangementWorkspace() {
     };
 
     dom.arrangementWorkspacePane.innerHTML = `
-        <div class="h-full flex flex-col gap-4 p-4">
-            <div class="flex items-center justify-between">
-                <h2 class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono">
-                    Arrangement
-                </h2>
-                <span class="text-xs ${readonly ? 'text-amber-300' : 'text-muted-foreground'}">
-                    ${readonly ? 'Read-only example arrangement' : 'Autosave enabled'}
-                </span>
-            </div>
-
-            <div class="flex gap-2 items-center">
+        <div class="h-full flex flex-col gap-4 p-0">
+            <div class="flex gap-2 items-center px-3 py-2">
                 <button
                     id="arrangementWorkspacePreviewBtn"
                     type="button"
-                    class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm"
+                    class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-0 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 w-10 h-10 p-0 shadow-sm"
                     title="${isPreviewPlaying ? 'Stop arrangement preview' : 'Preview arrangement'}"
                 >
-                    <i data-lucide="${isPreviewPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current"></i>
+                    <i data-lucide="${isPreviewPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>
                 </button>
                 <label for="arrangementWorkspaceBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM:</label>
                 <input
@@ -2006,24 +2007,34 @@ function renderArrangementWorkspace() {
                     class="flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     ${readonly ? 'readonly' : ''}
                 >
+                <button
+                    id="arrangementWorkspaceAdvancedSettingsBtn"
+                    type="button"
+                    class="dev-only-hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
+                    title="Advanced settings"
+                >
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                </button>
             </div>
 
-            <div class="flex-1 min-h-0 overflow-auto border border-border rounded-md p-3 bg-card/30">
+            <div class="flex-1 min-h-0 overflow-auto rounded-md p-0 bg-card/30">
                 <div class="arr-rows-header">
                     <span class="arr-rows-header-spacer" aria-hidden="true"></span>
                     <span class="arr-rows-header-repeat" title="1 repeat = 16 steps">Repeat</span>
                     <span class="arr-rows-header-blocks" aria-hidden="true">Blocks</span>
                 </div>
                 <div id="arrangementWorkspaceRows" class="flex flex-col"></div>
+            </div>
+            <footer class="flex items-center border-t border-border p-3 shrink-0">
                 <button
                     id="arrangementWorkspaceAddRowBtn"
                     type="button"
-                    class="mt-3 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 ${readonly ? 'opacity-40 cursor-not-allowed' : ''}"
+                    class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 ${readonly ? 'opacity-40 cursor-not-allowed' : ''}"
                     ${readonly ? 'disabled' : ''}
                 >
                     <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Row
                 </button>
-            </div>
+            </footer>
         </div>
     `;
 
@@ -2031,7 +2042,23 @@ function renderArrangementWorkspace() {
     const bpmInput = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceBpm');
     const addRowBtn = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceAddRowBtn');
     const previewBtn = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspacePreviewBtn');
+    const advancedSettingsBtn = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceAdvancedSettingsBtn');
     const rowsRoot = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceRows');
+
+    if (advancedSettingsBtn) {
+        advancedSettingsBtn.addEventListener('click', () => {
+            if (!isDeveloperModeEnabled() || DEMO_MODE) return;
+            const name = (nameInput?.value ?? arrangementDraftState?.name ?? '').trim();
+            document.dispatchEvent(new CustomEvent('resource-scope:open', {
+                detail: {
+                    type: 'arrangement',
+                    filename: currentArrangementFilename,
+                    name,
+                    scope: normalizeScope(currentArrangementScope),
+                },
+            }));
+        });
+    }
 
     nameInput?.addEventListener('input', () => {
         arrangementDraftState.name = String(nameInput.value || '').trim() || arrangementDraftState.name;
@@ -2057,6 +2084,8 @@ function renderArrangementWorkspace() {
             document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: false } }));
             return;
         }
+        // Stop any other playback (Strudel song, ZzFXM preview, tracker) before starting arrangement preview.
+        stopAllPlaybackForSelectionChange();
         document.dispatchEvent(new CustomEvent('arrangements:preview', {
             detail: { arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() } }
         }));
@@ -2071,17 +2100,43 @@ function renderArrangementWorkspace() {
                 if (!event.dataTransfer || readonly) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = isCopyModifier(event) ? 'copy' : 'move';
-                rowEl.classList.add('arr-row-drop-target');
+                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
+                const isRowDrag = event.dataTransfer.types.includes('application/x-zzfxm-arr-row');
+                const fromIndex = isRowDrag ? window.__arrRowDragFromIndex : undefined;
+                if (typeof fromIndex === 'number') {
+                    if (fromIndex > rowIndex) rowEl.classList.add('arr-row-drop-target-above');
+                    else if (fromIndex < rowIndex) rowEl.classList.add('arr-row-drop-target-below');
+                } else {
+                    rowEl.classList.add('arr-row-drop-target-below');
+                }
             });
             rowEl.addEventListener('dragleave', (event) => {
                 const related = event.relatedTarget;
                 if (related && related instanceof Node && rowEl.contains(related)) return;
-                rowEl.classList.remove('arr-row-drop-target');
+                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
             });
             rowEl.addEventListener('drop', (event) => {
                 if (!event.dataTransfer || readonly) return;
                 event.preventDefault();
-                rowEl.classList.remove('arr-row-drop-target');
+                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
+                window.__arrRowDragFromIndex = undefined;
+                let rowPayload = null;
+                try {
+                    rowPayload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-row') || 'null');
+                } catch (_e) {
+                    rowPayload = null;
+                }
+                const fromRowIndex = Number.isInteger(rowPayload?.fromRowIndex) ? rowPayload.fromRowIndex : null;
+                if (fromRowIndex != null && fromRowIndex !== rowIndex) {
+                    const moved = arrangementDraftState.rows.splice(fromRowIndex, 1)[0];
+                    if (moved) {
+                        arrangementDraftState.rows.splice(rowIndex, 0, moved);
+                        renderArrangementWorkspace();
+                        scheduleArrangementAutoSave();
+                        emitArrangementStateChanged();
+                    }
+                    return;
+                }
                 let payload = null;
                 try {
                     payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null');
@@ -2089,10 +2144,10 @@ function renderArrangementWorkspace() {
                     payload = null;
                 }
                 const filename = payload?.filename || event.dataTransfer.getData('text/plain') || '';
-                const fromRowIndex = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
+                const fromRowIndexChip = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
                 handleBlockDrop({
                     filename,
-                    fromRowIndex,
+                    fromRowIndex: fromRowIndexChip,
                     toRowIndex: rowIndex,
                     copy: isCopyModifier(event),
                 }, rowEl);
@@ -2100,6 +2155,22 @@ function renderArrangementWorkspace() {
 
             const rowNumberEl = document.createElement('span');
             rowNumberEl.className = 'arr-row-number';
+            rowNumberEl.setAttribute('aria-label', 'Row ' + (rowIndex + 1) + ' (drag to reorder)');
+            if (!readonly) {
+                rowNumberEl.draggable = true;
+                rowNumberEl.addEventListener('dragstart', (e) => {
+                    if (!e.dataTransfer) return;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('application/x-zzfxm-arr-row', JSON.stringify({ fromRowIndex: rowIndex }));
+                    window.__arrRowDragFromIndex = rowIndex;
+                });
+                rowNumberEl.addEventListener('dragend', () => {
+                    window.__arrRowDragFromIndex = undefined;
+                    rowsRoot.querySelectorAll('.arr-row').forEach((el) => {
+                        el.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
+                    });
+                });
+            }
             rowNumberEl.innerHTML = `
                 <span class="arr-row-number-value">${rowIndex + 1}</span>
                 <i data-lucide="play" class="arr-row-play-icon hidden w-[13px] h-[13px] fill-current"></i>
@@ -2119,7 +2190,6 @@ function renderArrangementWorkspace() {
                 scheduleArrangementAutoSave();
                 emitArrangementStateChanged();
             });
-
             const chipsEl = document.createElement('div');
             chipsEl.className = 'arr-chips';
 
@@ -2197,8 +2267,18 @@ function renderArrangementWorkspace() {
             removeRowBtn.disabled = readonly;
             removeRowBtn.classList.toggle('opacity-40', readonly);
             removeRowBtn.classList.toggle('cursor-not-allowed', readonly);
-            removeRowBtn.addEventListener('click', () => {
+            removeRowBtn.addEventListener('click', async () => {
                 if (readonly) return;
+                const confirmed = await confirmDialog({
+                    title: 'Delete row?',
+                    message: 'Delete this row? This cannot be undone.',
+                    cancelLabel: 'No! Abort.',
+                    confirmLabel: 'Delete',
+                    confirmIcon: 'trash-2',
+                    variant: 'danger',
+                    overlayLight: true,
+                });
+                if (!confirmed) return;
                 if (arrangementDraftState.rows.length === 1) {
                     arrangementDraftState.rows[0] = { repeats: 1, blocks: [] };
                 } else {
@@ -2217,7 +2297,7 @@ function renderArrangementWorkspace() {
                     .forEach((filename) => {
                         const block = getBlockByFilename(filename);
                         const chip = document.createElement('div');
-                        chip.className = `arr-chip ${filename === activeArrangementBlockFilename ? 'ring-2 ring-primary' : ''}`;
+                        chip.className = `arr-chip ${filename === activeArrangementBlockFilename ? 'ring-1 ring-primary' : ''}`;
                         chip.dataset.filename = filename;
                         chip.dataset.blockSteps = String(getBlockSteps(block));
                         chip.draggable = !readonly;
@@ -2255,12 +2335,16 @@ function renderArrangementWorkspace() {
                     });
             };
 
+            const rowActionsGroup = document.createElement('div');
+            rowActionsGroup.className = 'arr-row-btn-group';
+            rowActionsGroup.appendChild(selectWrap);
+            rowActionsGroup.appendChild(duplicateRowBtn);
+            rowActionsGroup.appendChild(removeRowBtn);
+
             rowEl.appendChild(rowNumberEl);
             rowEl.appendChild(repeatsEl);
             rowEl.appendChild(chipsEl);
-            rowEl.appendChild(selectWrap);
-            rowEl.appendChild(duplicateRowBtn);
-            rowEl.appendChild(removeRowBtn);
+            rowEl.appendChild(rowActionsGroup);
             rowsRoot.appendChild(rowEl);
 
             renderChips();
@@ -2269,6 +2353,7 @@ function renderArrangementWorkspace() {
     }
 
     createIcons({ icons });
+    updateAdvancedSettingsButtonsVisibility();
     if (isArrangementPreviewPlaying()) {
         applyArrangementWorkspacePlayhead(arrangementWorkspacePlayhead);
     } else {
@@ -2282,7 +2367,7 @@ function updateArrangementWorkspacePreviewButtonState() {
     if (!previewBtn) return;
     const playing = isArrangementPreviewPlaying();
     previewBtn.title = playing ? 'Stop arrangement preview' : 'Preview arrangement';
-    previewBtn.innerHTML = `<i data-lucide="${playing ? 'square' : 'play'}" class="w-[18px] h-5 fill-current"></i>`;
+    previewBtn.innerHTML = `<i data-lucide="${playing ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>`;
     createIcons({ icons });
 }
 
@@ -2432,7 +2517,7 @@ async function refreshBlocksLibrary() {
                 li.dataset.filename = block.filename;
                 const isReadonly = normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled();
                 li.innerHTML = `
-                    <span class="font-medium">${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
+                    <span class="font-medium text-xs">${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
                     ${isReadonly ? '' : `<div class="song-item-actions"><button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
                 `;
                 li.addEventListener('click', async () => {
@@ -2545,7 +2630,7 @@ async function loadArrangement(filename) {
     }
 
     try {
-        stopAllPlaybackForSelectionChange();
+        // Do not stop playback here: let the arrangement workspace play button stop Strudel (etc.) and start arrangement preview when user presses play.
         const loadedScope = DEMO_MODE ? 'example' : normalizeScope(getArrangementEntry(filename)?.scope);
         const detail = DEMO_MODE
             ? null
@@ -2566,11 +2651,9 @@ async function loadArrangement(filename) {
         currentArrangementScope = loadedScope;
         arrangementDraftState = arrangementState;
         activeArrangementBlockFilename = null;
-        currentSongFilename = null;
-        updateSongSelectionState(false);
+        // Keep currentSongFilename so song selection is remembered when switching back to Songs tab.
 
         refreshArrangementListActiveState();
-        Array.from(dom.songList.querySelectorAll('.song-item')).forEach((li) => li.classList.remove('active'));
         await refreshBlocksLibrary();
         renderArrangementWorkspace();
         showArrangementWorkspace();
@@ -2717,7 +2800,7 @@ async function loadSong(filename) {
     }
     
     try {
-        stopAllPlaybackForSelectionChange();
+        // Do not stop playback here: let the Strudel play button stop arrangement (etc.) and start song when user presses play.
         let fileCode = '';
         const loadedSongScope = DEMO_MODE
             ? 'example'
@@ -2749,12 +2832,7 @@ async function loadSong(filename) {
             }
         }
         
-        // Clear arrangement workspace state BEFORE showing the editor so footer/preview controls
-        // reflect the correct (song) context.
-        currentArrangementFilename = null;
-        currentArrangementScope = 'user';
-        arrangementDraftState = null;
-        activeArrangementBlockFilename = null;
+        // Keep currentArrangementFilename and arrangementDraftState so arrangement selection is remembered when switching back to Blocks tab.
 
         currentSongFilename = filename;
         currentSongScope = loadedSongScope;
@@ -4512,11 +4590,28 @@ dom.confirmNewArrangement?.addEventListener('click', () => {
 });
 document.addEventListener('sidebar:viewChanged', async (e) => {
     const view = e?.detail?.view;
-    if (view === 'blocks') {
+    if (view === 'songs') {
+        if (currentSongFilename) {
+            showEditor();
+        }
+        refreshSongListActiveState();
+    } else if (view === 'blocks') {
         await refreshArrangementList();
         await refreshBlocksLibrary();
-        if (!currentArrangementFilename && !currentSongFilename) {
+        if (currentArrangementFilename) {
+            showArrangementWorkspace();
+        } else if (!currentSongFilename) {
             showWelcome();
+        }
+    } else if (view === 'instruments') {
+        // Tie Instruments tab to currently playing source: show that context in the center.
+        if (isStrudelPlaybackActive()) {
+            showEditor();
+        } else if (isArrangementPreviewPlaying()) {
+            showArrangementWorkspace();
+        } else {
+            if (currentSongFilename) showEditor();
+            else if (currentArrangementFilename) showArrangementWorkspace();
         }
     }
     updateSongListVisualizer();
@@ -4833,6 +4928,10 @@ async function togglePlay(e) {
         return;
     }
 
+    // Stop any other playback (arrangement preview, ZzFXM, tracker) before starting Strudel.
+    stopAllPlaybackForSelectionChange();
+    isStrudelPaused = false;
+
     // Ensure ZzFX instruments are registered right before starting playback.
     // This prevents default Strudel sound registries (e.g. sample packs) from overriding aliases like "cowbell".
     try {
@@ -4887,8 +4986,7 @@ function renderPlayButton() {
     if (showPauseIcon) iconName = 'pause';
     else if (showStop) iconName = 'square';
 
-    dom.playBtn.innerHTML = `<i data-lucide="${iconName}" class="w-[18px] h-5 fill-current"></i>`;
-    dom.playBtn.style.color = '#eee';
+    dom.playBtn.innerHTML = `<i data-lucide="${iconName}" class="w-[18px] h-5 fill-current text-primary"></i>`;
     createIcons({ icons });
 }
 

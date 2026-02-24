@@ -92,7 +92,7 @@
             id="blocksTab"
             class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
-            Blocks
+            Arrang.
           </button>
           <button
             id="instrumentsTab"
@@ -117,7 +117,7 @@
         </button>
         <button
           id="newArrangementBtn"
-          class="hidden items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 w-full uppercase flex items-center gap-2"
+          class="hidden items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 h-9 px-4 py-2 w-full uppercase flex items-center gap-2"
         >
           <i data-lucide="plus" class="w-4 h-4"></i> New arrangement
         </button>
@@ -230,7 +230,7 @@
             id="testInstrumentBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-accent text-accent-foreground hover:bg-primary/90 h-9 px-4 py-2 flex-1 shadow-sm flex items-center gap-2 justify-center"
           >
-            <i data-lucide="play" class="w-4 h-4 fill-current"></i> Test
+            Test
           </button>
           <button
             id="closeDrawerBtn"
@@ -508,13 +508,13 @@
       <!-- Toolbar -->
       <header
         id="mainHeader"
-        class="toolbar h-14 border-b border-border flex items-center px-4 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        class="toolbar h-14 border-b border-border flex items-center px-3 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
         <button
           id="playBtn"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm flex items-center justify-center"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm flex items-center justify-center text-primary"
         >
-          <i data-lucide="play" class="w-[18px] h-5 fill-current"></i>
+          <i data-lucide="play" class="w-[18px] h-5 fill-current text-primary"></i>
         </button>
 
         <div class="flex items-center gap-2 flex-1">
@@ -642,25 +642,25 @@
         </div>
       </div>
       <div id="arrangementWorkspace" class="hidden flex-1 min-h-0 overflow-hidden">
-        <div class="flex flex-1 min-h-0 overflow-hidden border-t border-border">
-          <section id="arrangementWorkspacePane" class="w-2/5 min-w-0 border-r border-border bg-background overflow-hidden">
+        <div class="flex flex-1 min-h-0 overflow-hidden">
+          <section id="arrangementWorkspacePane" class="w-1/2 min-w-0 border-r border-border bg-background overflow-hidden">
             <div class="h-full p-4 text-sm text-muted-foreground" id="arrangementWorkspacePlaceholder">
               Select an arrangement from the Blocks list to open the arranger workspace.
             </div>
           </section>
-          <section id="trackerWorkspacePane" class="w-3/5 min-w-0 border-r border-border bg-background overflow-hidden">
+          <section id="trackerWorkspacePane" class="w-1/2 min-w-0 border-r border-border bg-background overflow-hidden">
             <div class="h-full p-4 text-sm text-muted-foreground">
               Tracker panel will appear here.
             </div>
           </section>
-          <aside id="blocksLibrarySidebar" class="w-[280px] min-w-[240px] max-w-[340px] bg-card/60 overflow-hidden flex flex-col">
+          <aside id="blocksLibrarySidebar" class="w-[280px] min-w-[140px] max-w-[140px] bg-card/60 overflow-hidden flex flex-col">
             <div class="p-3 border-b border-border flex items-center justify-between gap-2">
-              <h3 class="text-sm font-bold uppercase tracking-wide text-foreground">Block Library</h3>
+              <h3 class="text-sm font-bold uppercase tracking-wide text-foreground">Blocks</h3>
               <button
                 id="newSidebarBlockBtn"
                 class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-7 px-2"
               >
-                New Block
+                + New
               </button>
             </div>
             <ul id="blocksLibraryList" class="flex-1 overflow-y-auto p-2 space-y-1"></ul>
@@ -669,7 +669,7 @@
       </div>
       <footer
         id="mainFooter"
-        class="toolbar h-14 border-t border-border flex items-center px-4 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        class="toolbar h-14 border-t border-border flex items-center px-3 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
         <div class="flex gap-2 items-center w-full">
           <button
@@ -684,7 +684,7 @@
             class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-2 uppercase"
           >
             <i data-lucide="file-music" class="w-4 h-4"></i>
-            <span id="exportBtnLabel">Export ZzFXM</span>
+            <span id="exportBtnLabel">Song to ZzFXM</span>
           </button>
           <button
             id="previewPlayBtn"
@@ -823,7 +823,7 @@
               <li>Load an example song.</li>
               <li>Tweak a sound in the instrument editor (ZzFXMicro-style parameters).</li>
               <li>(Optional) Use <strong>Blocks</strong> to sketch parts in a tracker-style grid and preview an arrangement.</li>
-              <li>Click <strong>Export ZzFXM</strong> and preview playback.</li>
+              <li>Click <strong>Song to ZzFXM</strong> and preview playback.</li>
               <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Download WAV</strong> to share/test.</li>
             </ol>
           </div>
@@ -2078,7 +2078,7 @@
           </button>
         </div>
 
-	        <div class="flex-1 min-h-0 overflow-auto border border-border rounded-md p-3 bg-card/30">
+	        <div class="flex-1 min-h-0 overflow-auto rounded-md p-0 bg-card/30">
             <div id="arrangementRowsHeader" class="arr-rows-header">
               <span class="arr-rows-header-spacer" aria-hidden="true"></span>
               <span class="arr-rows-header-repeat" title="1 repeat = 16 steps">Repeat</span>
@@ -2190,9 +2190,9 @@
       class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
     >
       <div
-        class="modal fixed z-50 flex flex-col w-[90vw] max-w-5xl max-h-[90vh] gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
+        class="modal fixed z-50 flex flex-col w-[90vw] max-w-5xl max-h-[90vh] gap-4 border border-border bg-background p-0 shadow-lg sm:rounded-lg"
       >
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between pt-4 pl-3 pr-4">
           <h2
             class="text-lg font-semibold leading-none tracking-tight text-primary uppercase font-mono"
           >
@@ -2207,7 +2207,7 @@
         </div>
         
         <!-- Block Name Input (Only shown in Edit/Create Mode) -->
-        <div id="trackerBlockProps" class="hidden flex gap-2 items-center pb-2 border-b border-border/50">
+        <div id="trackerBlockProps" class="hidden flex gap-2 items-center pb-2 border-b border-border/50 px-4">
           <button
             id="previewTrackerBtn"
             type="button"
@@ -2289,7 +2289,7 @@
           <button
             type="button"
             id="trackerNotationToggle"
-            class="w-full flex items-center justify-between gap-2 py-1.5 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40"
+            class="w-full flex items-center justify-between gap-2 py-1.5 px-3 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40"
             aria-expanded="false"
             aria-controls="trackerNotationContent"
           >
@@ -2308,7 +2308,7 @@
           </div>
         </div>
 
-        <div class="flex justify-end gap-2">
+        <div class="flex justify-end gap-2 pt-3 pr-3 pb-4 pl-4">
           <button
             id="clearTrackerBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"

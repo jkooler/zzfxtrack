@@ -1,4 +1,6 @@
-const BUTTON_BASE_CLASS = 'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring h-9 px-4 py-2';
+import { createIcons, icons } from 'lucide';
+
+const BUTTON_BASE_CLASS = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring h-9 px-4 py-2';
 const BUTTON_SECONDARY_CLASS = `${BUTTON_BASE_CLASS} border border-input bg-background hover:bg-accent hover:text-accent-foreground`;
 const BUTTON_PRIMARY_CLASS = `${BUTTON_BASE_CLASS} bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm`;
 const BUTTON_DANGER_CLASS = `${BUTTON_BASE_CLASS} bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm`;
@@ -22,7 +24,7 @@ function cacheElements() {
 function closeDialog(result) {
   const el = cacheElements();
   if (!el?.modal) return;
-  el.modal.classList.remove('open');
+  el.modal.classList.remove('open', 'overlay-light');
   const resolve = activeResolve;
   activeResolve = null;
   if (typeof resolve === 'function') {
@@ -59,6 +61,8 @@ function openDialog({
   cancelLabel = 'Cancel',
   showCancel = true,
   variant = 'primary',
+  confirmIcon = null,
+  overlayLight = false,
 }) {
   const el = cacheElements();
   if (!el?.modal) {
@@ -78,7 +82,13 @@ function openDialog({
   if (el.title) el.title.textContent = String(title || 'Confirm');
   if (el.message) el.message.textContent = String(message || '');
   if (el.confirm) {
-    el.confirm.textContent = String(confirmLabel || 'OK');
+    const label = String(confirmLabel || 'OK');
+    if (confirmIcon) {
+      el.confirm.innerHTML = `<i data-lucide="${confirmIcon}" class="w-4 h-4"></i>${label}`;
+      createIcons({ icons });
+    } else {
+      el.confirm.textContent = label;
+    }
     el.confirm.className = getConfirmButtonClass(variant);
   }
   if (el.cancel) {
@@ -88,6 +98,7 @@ function openDialog({
   }
 
   isAlertMode = !showCancel;
+  el.modal.classList.toggle('overlay-light', Boolean(overlayLight));
   el.modal.classList.add('open');
 
   return new Promise((resolve) => {
