@@ -126,11 +126,24 @@
 }
 
 /* Base style resets and global defaults */
+/* Prevent horizontal overflow on narrow viewports (e.g. iPad); minmax(0, 1fr) lets the main column shrink so inner overflow-x scrolls. */
+html {
+  overflow-x: hidden;
+}
+
 body {
   @apply bg-background text-foreground font-sans antialiased overflow-hidden h-screen;
   display: grid;
-  grid-template-columns: 215px auto 1fr; /* Sidebar | Drawer | Main */
+  grid-template-columns: 215px auto minmax(0, 1fr); /* Sidebar | Drawer | Main (0 min so width isn't driven by wide content) */
   grid-template-rows: 100vh;
+  grid-template-rows: 100dvh; /* iOS/iPad: use dynamic viewport so height isn't wrong when browser UI shows */
+  min-width: 0; /* Allow body to shrink below content size so grid tracks respect minmax(0, 1fr) */
+}
+
+/* Let main content panels shrink on narrow viewports (e.g. iPad) so overflow scrolls inside .tracker-container / editor instead of the page */
+#editorContainer,
+#arrangementWorkspace {
+  min-width: 0;
 }
 
 /* Global Cursor Styles */
