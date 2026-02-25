@@ -129,7 +129,7 @@
 body {
   @apply bg-background text-foreground font-sans antialiased overflow-hidden h-screen;
   display: grid;
-  grid-template-columns: 256px auto 1fr; /* Sidebar | Drawer | Main */
+  grid-template-columns: 215px auto 1fr; /* Sidebar | Drawer | Main */
   grid-template-rows: 100vh;
 }
 

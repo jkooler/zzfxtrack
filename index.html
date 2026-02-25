@@ -64,11 +64,11 @@
     <!-- Strudel REPL imported in module -->
   </head>
   <body
-    class="bg-background text-foreground font-sans antialiased overflow-hidden h-screen grid grid-cols-[256px_auto_1fr] grid-rows-1"
+    class="bg-background text-foreground font-sans antialiased overflow-hidden h-screen grid grid-cols-[210px_auto_1fr] grid-rows-1"
   >
     <!-- LEFT SIDEBAR (Col 1) -->
     <aside
-      class="sidebar bg-card border-r border-border flex flex-col h-full overflow-hidden w-[256px] col-start-1"
+      class="sidebar bg-card border-r border-border flex flex-col h-full overflow-hidden w-[215px] col-start-1"
     >
       <div
         class="sidebar-header p-3 border-b border-border flex flex-col gap-2.5"
@@ -81,7 +81,7 @@
           STRUDEL TO ZZFXM
         </h1>
         <!-- Tabs -->
-        <div class="sidebar-tabs grid grid-cols-3 rounded-md gap-1">
+        <div class="sidebar-tabs grid grid-cols-3 rounded-md gap-x-0 gap-y-1">
           <button
             id="songsTab"
             class="sidebar-tab active inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
@@ -92,13 +92,13 @@
             id="blocksTab"
             class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
-            Arrang.
+            Arrang
           </button>
           <button
             id="instrumentsTab"
             class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
-            Instr.
+            Instr
           </button>
         </div>
 
@@ -117,7 +117,7 @@
         </button>
         <button
           id="newArrangementBtn"
-          class="hidden items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 h-9 px-4 py-2 w-full uppercase flex items-center gap-2"
+          class="hidden items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 h-9 px-2 py-2 w-full uppercase flex items-center gap-2"
         >
           <i data-lucide="plus" class="w-4 h-4"></i> New arrangement
         </button>
@@ -148,20 +148,20 @@
         class="instrument-list flex-1 overflow-y-auto p-2 space-y-1"
       ></ul>
 
-      <div class="p-3 border-t border-border bg-card flex items-center gap-2">
+      <div class="p-3 border-t border-border bg-card flex items-center gap-1">
         <span class="text-xs text-muted-foreground font-medium">Data:</span>
         <button
           id="downloadProjectBtn"
           class="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
         >
-          <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
+          Download
         </button>
         <span aria-hidden="true" class="h-5 w-px shrink-0 bg-border/80"></span>
         <button
           id="uploadProjectBtn"
           class="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-xs text-muted-foreground font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3"
         >
-          <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload
+          Upload
         </button>
         <input id="uploadProjectInput" type="file" accept=".zip" class="hidden" />
       </div>
