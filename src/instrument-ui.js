@@ -1473,13 +1473,14 @@ function handleDragOver(e) {
         target.style.borderTop = '';
         target.style.borderBottom = '';
         
-        // Show indicator on the appropriate side based on drag direction
+        // Show indicator on the appropriate side based on drag direction (use theme primary)
+        const dropColor = 'var(--primary)';
         if (draggedIndex < targetIndex) {
             // Dragging down - show indicator on bottom
-            target.style.borderBottom = '2px solid #00ff88';
+            target.style.borderBottom = `2px solid ${dropColor}`;
         } else {
             // Dragging up - show indicator on top
-            target.style.borderTop = '2px solid #00ff88';
+            target.style.borderTop = `2px solid ${dropColor}`;
         }
     }
     

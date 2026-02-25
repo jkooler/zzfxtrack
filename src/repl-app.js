@@ -1,4 +1,7 @@
-import '@strudel/repl/index.mjs'; 
+import '@strudel/repl/index.mjs';
+import { codemirrorSettings, themes as strudelReplThemes } from '@strudel/codemirror';
+import '@melloware/coloris/dist/coloris.css';
+import Coloris from '@melloware/coloris';
 import { instruments as staticInstruments, instrumentMonophonic as staticMonophonic } from '../instruments.js';
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
@@ -208,7 +211,15 @@ const dom = {
     closeSystemSettingsModalBtn: document.getElementById('closeSystemSettingsModalBtn'),
     closeSystemSettingsModalBottomBtn: document.getElementById('closeSystemSettingsModalBottomBtn'),
     systemSettingsDevModeToggle: document.getElementById('systemSettingsDevModeToggle'),
-    
+    systemSettingsThemeDetails: document.getElementById('systemSettingsThemeDetails'),
+    systemSettingsThemeResetBtn: document.getElementById('systemSettingsThemeResetBtn'),
+    systemSettingsThemeCopyBtn: document.getElementById('systemSettingsThemeCopyBtn'),
+    systemSettingsThemeDefaultBtn: document.getElementById('systemSettingsThemeDefaultBtn'),
+    systemSettingsThemeLegacyBtn: document.getElementById('systemSettingsThemeLegacyBtn'),
+    systemSettingsThemeRomulanBtn: document.getElementById('systemSettingsThemeRomulanBtn'),
+    systemSettingsThemeWhiteDebugBtn: document.getElementById('systemSettingsThemeWhiteDebugBtn'),
+    systemSettingsReplThemeSelect: document.getElementById('systemSettingsReplThemeSelect'),
+
     // Modals
     newSongModal: document.getElementById('newSongModal'),
     newSongName: document.getElementById('newSongName'),
@@ -736,7 +747,9 @@ async function init() {
 
     // 8. Sync Theme Colors from CodeMirror to Sidebar
     setTimeout(syncThemeColors, 1000); // Wait for editor render
-    
+    // Scope Strudel REPL theme vars to .editor-pane so they don't override app --background/--foreground
+    setTimeout(scopeStrudelThemeVarsToRepl, 1200);
+
     // 9. Initialize Tracker
     initTrackerWithInstruments();
     setupTrackerEventListeners();
@@ -3524,8 +3537,9 @@ async function exportCurrentSong(options = {}) {
             const incompatibleList = unknownInstrumentAliases.length
                 ? unknownInstrumentAliases.join(', ')
                 : `${unknownInstrumentNotes} unknown`;
-            dom.statusMsg.innerHTML = `${escapeHtml(statusMsg)} • <span style="color:#ff3333">Incompatible sounds: ${escapeHtml(incompatibleList)}</span>`;
-            dom.statusMsg.style.color = '#888';
+            dom.statusMsg.innerHTML = `${escapeHtml(statusMsg)} • <span class="text-destructive">Incompatible sounds: ${escapeHtml(incompatibleList)}</span>`;
+            dom.statusMsg.classList.remove('status-error', 'status-success', 'status-normal');
+            dom.statusMsg.classList.add('status-normal');
             dom.statusMsg.style.opacity = '1';
         } else {
             if (DEMO_MODE) {
@@ -3579,6 +3593,7 @@ function setStatus(msg, type = 'normal') {
 
     if (!msg) {
         dom.statusMsg.style.opacity = '0';
+        dom.statusMsg.classList.remove('status-error', 'status-success', 'status-normal');
         statusFadeClearTimeout = setTimeout(() => {
             dom.statusMsg.textContent = '';
             statusFadeClearTimeout = null;
@@ -3587,7 +3602,8 @@ function setStatus(msg, type = 'normal') {
     }
 
     dom.statusMsg.innerText = msg;
-    dom.statusMsg.style.color = type === 'error' ? '#ff3333' : (type === 'success' ? '#00ff66' : '#888');
+    dom.statusMsg.classList.remove('status-error', 'status-success', 'status-normal');
+    dom.statusMsg.classList.add(type === 'error' ? 'status-error' : (type === 'success' ? 'status-success' : 'status-normal'));
     dom.statusMsg.style.opacity = '1';
 }
 
@@ -5109,8 +5125,7 @@ dom.previewPlayBtn.addEventListener('click', () => {
 
 function updatePreviewPlayButton(playing) {
     isPreviewPlaying = playing;
-    dom.previewPlayBtn.innerHTML = playing ? '<i data-lucide="square" class="w-4 h-4 fill-current"></i>' : '<i data-lucide="play" class="w-4 h-4"></i>';
-    dom.previewPlayBtn.style.color = '#eee';
+    dom.previewPlayBtn.innerHTML = playing ? '<i data-lucide="square" class="w-4 h-4 fill-current"></i>' : '<i data-lucide="play" class="w-4 h-4 fill-current"></i>';
     createIcons({ icons });
 }
 
@@ -5386,12 +5401,269 @@ if (dom.changelogModal) {
 }
 
 // --- System Settings Modal Logic ---
+
+/** Resolve a CSS variable to rgb components (0-255) and alpha (0-1). */
+function getCssVarAsRgbA(varName) {
+    const fullName = varName.startsWith('--') ? varName : `--${varName}`;
+    const el = document.createElement('div');
+    el.style.color = `var(${fullName})`;
+    el.style.position = 'absolute';
+    el.style.left = '-9999px';
+    document.body.appendChild(el);
+    const css = getComputedStyle(el).color;
+    document.body.removeChild(el);
+    const m = css.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\)/);
+    if (!m) return { r: 0, g: 0, b: 0, a: 1 };
+    return {
+        r: parseInt(m[1], 10),
+        g: parseInt(m[2], 10),
+        b: parseInt(m[3], 10),
+        a: m[4] != null ? parseFloat(m[4]) : 1,
+    };
+}
+
+/** Convert r,g,b (0-255) and alpha (0-1) to HSL string for Coloris (format: hsl). */
+function rgbToHslString(r, g, b, a = 1) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            default: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    const H = Math.round(h * 360);
+    const S = Math.round(s * 100);
+    const L = Math.round(l * 100);
+    if (a < 1) {
+        return `hsl(${H} ${S}% ${L}% / ${a})`;
+    }
+    return `hsl(${H} ${S}% ${L}%)`;
+}
+
+/** Resolve a CSS variable to HSL string so theme pickers show HSL (matches Coloris format). */
+function getCssVarAsHsl(varName) {
+    const { r, g, b, a } = getCssVarAsRgbA(varName);
+    return rgbToHslString(r, g, b, a);
+}
+
+function syncThemeColorPickers() {
+    const root = dom.systemSettingsModal;
+    if (!root) return;
+    root.querySelectorAll('input[data-theme-var]').forEach((input) => {
+        const varName = input.getAttribute('data-theme-var');
+        if (!varName) return;
+        try {
+            const hsl = getCssVarAsHsl(varName);
+            input.value = hsl;
+            // Coloris inline swatch is .clr-field’s color (button uses currentColor); no .clr-preview on the field
+            const field = input.closest('.clr-field');
+            if (field) field.style.color = hsl;
+        } catch (_) {
+            // ignore
+        }
+    });
+}
+
+function applyThemeColorOverride(varName, colorValue) {
+    const key = varName.startsWith('--') ? varName.slice(2) : varName;
+    const prop = `--${key}`;
+    document.documentElement.style.setProperty(prop, colorValue);
+    // Tailwind v4 utilities use --color-* theme variables; sync so utilities update
+    if (key === 'background') document.documentElement.style.setProperty('--color-background', colorValue);
+    if (key === 'foreground') document.documentElement.style.setProperty('--color-foreground', colorValue);
+    if (key === 'card') document.documentElement.style.setProperty('--color-card', colorValue);
+    if (key === 'card-foreground') document.documentElement.style.setProperty('--color-card-foreground', colorValue);
+    if (key === 'popover') document.documentElement.style.setProperty('--color-popover', colorValue);
+    if (key === 'popover-foreground') document.documentElement.style.setProperty('--color-popover-foreground', colorValue);
+    if (key === 'primary') document.documentElement.style.setProperty('--color-primary', colorValue);
+    if (key === 'primary-foreground') document.documentElement.style.setProperty('--color-primary-foreground', colorValue);
+    if (key === 'secondary') document.documentElement.style.setProperty('--color-secondary', colorValue);
+    if (key === 'secondary-foreground') document.documentElement.style.setProperty('--color-secondary-foreground', colorValue);
+    if (key === 'tertiary') document.documentElement.style.setProperty('--color-tertiary', colorValue);
+    if (key === 'tertiary-foreground') document.documentElement.style.setProperty('--color-tertiary-foreground', colorValue);
+    if (key === 'quaternary') document.documentElement.style.setProperty('--color-quaternary', colorValue);
+    if (key === 'quaternary-foreground') document.documentElement.style.setProperty('--color-quaternary-foreground', colorValue);
+    if (key === 'muted') document.documentElement.style.setProperty('--color-muted', colorValue);
+    if (key === 'muted-foreground') document.documentElement.style.setProperty('--color-muted-foreground', colorValue);
+    if (key === 'accent') document.documentElement.style.setProperty('--color-accent', colorValue);
+    if (key === 'accent-foreground') document.documentElement.style.setProperty('--color-accent-foreground', colorValue);
+    if (key === 'border') document.documentElement.style.setProperty('--color-border', colorValue);
+    if (key === 'input') document.documentElement.style.setProperty('--color-input', colorValue);
+    if (key === 'input-bg') document.documentElement.style.setProperty('--color-input-bg', colorValue);
+    if (key === 'destructive') document.documentElement.style.setProperty('--color-destructive', colorValue);
+    if (key === 'destructive-foreground') document.documentElement.style.setProperty('--color-destructive-foreground', colorValue);
+    if (key === 'ring') document.documentElement.style.setProperty('--color-ring', colorValue);
+}
+
+function resetThemeToDefaults() {
+    const vars = ['background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground', 'primary', 'primary-foreground', 'secondary', 'secondary-foreground', 'tertiary', 'tertiary-foreground', 'quaternary', 'quaternary-foreground', 'muted', 'muted-foreground', 'accent', 'accent-foreground', 'destructive', 'destructive-foreground', 'border', 'input', 'input-bg', 'ring'];
+    vars.forEach((name) => document.documentElement.style.removeProperty(`--${name}`));
+    ['--color-background', '--color-foreground', '--color-card', '--color-card-foreground', '--color-popover', '--color-popover-foreground', '--color-primary', '--color-primary-foreground', '--color-secondary', '--color-secondary-foreground', '--color-tertiary', '--color-tertiary-foreground', '--color-quaternary', '--color-quaternary-foreground', '--color-muted', '--color-muted-foreground', '--color-accent', '--color-accent-foreground', '--color-destructive', '--color-destructive-foreground', '--color-border', '--color-input', '--color-input-bg', '--color-ring'].forEach((p) => document.documentElement.style.removeProperty(p));
+    syncThemeColorPickers();
+}
+
+const THEME_COLOR_VARS_AND_TAILWIND = [
+    'background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground',
+    'primary', 'primary-foreground', 'secondary', 'secondary-foreground',
+    'tertiary', 'tertiary-foreground', 'quaternary', 'quaternary-foreground',
+    'muted', 'muted-foreground', 'accent', 'accent-foreground',
+    'destructive', 'destructive-foreground', 'border', 'input', 'ring', 'input-bg',
+];
+
+const TAILWIND_COLOR_VARS = [
+    'background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground',
+    'primary', 'primary-foreground', 'secondary', 'secondary-foreground',
+    'tertiary', 'tertiary-foreground', 'quaternary', 'quaternary-foreground',
+    'muted', 'muted-foreground', 'accent', 'accent-foreground',
+    'destructive', 'destructive-foreground', 'border', 'input', 'input-bg', 'ring',
+];
+
+function setAllThemeColorsToWhite() {
+    const white = 'hsl(0 0% 100%)';
+    const root = document.documentElement;
+    THEME_COLOR_VARS_AND_TAILWIND.forEach((name) => root.style.setProperty(`--${name}`, white));
+    TAILWIND_COLOR_VARS.forEach((name) => root.style.setProperty(`--color-${name}`, white));
+    syncThemeColorPickers();
+}
+
+const THEME_VAR_NAMES = [
+    'background', 'foreground', 'card', 'card-foreground',
+    'popover', 'popover-foreground', 'primary', 'primary-foreground',
+    'secondary', 'secondary-foreground', 'tertiary', 'tertiary-foreground',
+    'quaternary', 'quaternary-foreground', 'muted', 'muted-foreground',
+    'accent', 'accent-foreground', 'destructive', 'destructive-foreground',
+    'border', 'input', 'ring', 'input-bg', 'radius',
+];
+
+/** Get a theme variable value from the active theme block in stylesheets (fallback when getComputedStyle omits it). */
+function getThemeVarFromStylesheet(varName, theme) {
+    const prop = `--${varName}`;
+    try {
+        for (const sheet of document.styleSheets) {
+            let rules;
+            try {
+                rules = sheet.cssRules || sheet.rules;
+            } catch (_) {
+                continue;
+            }
+            if (!rules) continue;
+            const selectorsForTheme = theme
+                ? [`html[data-theme="${theme}"]`]
+                : ['html:root', ':root'];
+            for (let i = rules.length - 1; i >= 0; i--) {
+                const rule = rules[i];
+                const sel = rule.selectorText?.trim().toLowerCase();
+                if (!sel || !rule.style) continue;
+                if (selectorsForTheme.some((s) => s.toLowerCase() === sel)) {
+                    const val = rule.style.getPropertyValue(prop)?.trim();
+                    if (val) return val;
+                }
+            }
+        }
+    } catch (_) {
+        // ignore
+    }
+    return '';
+}
+
+function getThemeCssBlock() {
+    const root = document.documentElement;
+    const computed = getComputedStyle(root);
+    const theme = getActiveColorTheme();
+    const lines = THEME_VAR_NAMES.map((name) => {
+        const prop = `--${name}`;
+        const inline = root.style.getPropertyValue(prop).trim();
+        const fromComputed = computed.getPropertyValue(prop).trim();
+        const fromSheet = getThemeVarFromStylesheet(name, theme);
+        const value = inline || fromComputed || fromSheet;
+        return value ? `  --${name}: ${value};` : null;
+    }).filter(Boolean);
+    return lines.join('\n');
+}
+
+async function copyThemeToClipboard() {
+    const block = getThemeCssBlock();
+    try {
+        await navigator.clipboard.writeText(block);
+        if (dom.systemSettingsThemeCopyBtn) {
+            const label = dom.systemSettingsThemeCopyBtn.textContent;
+            dom.systemSettingsThemeCopyBtn.textContent = 'Copied!';
+            setTimeout(() => { dom.systemSettingsThemeCopyBtn.textContent = label; }, 2000);
+        }
+    } catch (err) {
+        console.warn('Copy failed:', err);
+    }
+}
+
+function getActiveColorTheme() {
+    return document.documentElement.getAttribute('data-theme') || '';
+}
+
+function setColorTheme(theme) {
+    if (theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    updateThemeOptionButtonsState();
+    syncThemeColorPickers();
+}
+
+function updateThemeOptionButtonsState() {
+    const active = getActiveColorTheme();
+    [dom.systemSettingsThemeDefaultBtn, dom.systemSettingsThemeLegacyBtn].forEach((btn) => {
+        if (!btn) return;
+        const value = (btn.getAttribute('data-theme') || '').trim();
+        const isActive = value === active;
+        btn.classList.toggle('bg-primary', isActive);
+        btn.classList.toggle('text-primary-foreground', isActive);
+        btn.classList.toggle('text-muted-foreground', !isActive);
+        btn.classList.toggle('hover:text-foreground', !isActive);
+    });
+}
+
+/** Populate REPL theme dropdown from Strudel presets and sync selected value to current setting. */
+function syncReplThemeSelect() {
+    const select = dom.systemSettingsReplThemeSelect;
+    if (!select) return;
+    if (select.options.length === 0) {
+        const names = Object.keys(strudelReplThemes).sort();
+        names.forEach((name) => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+    }
+    const current = codemirrorSettings.get().theme;
+    if (Object.prototype.hasOwnProperty.call(strudelReplThemes, current)) {
+        select.value = current;
+    } else {
+        select.value = 'strudelTheme';
+    }
+}
+
 function openSystemSettingsModal() {
     if (!dom.systemSettingsModal) return;
     if (dom.systemSettingsDevModeToggle) {
         dom.systemSettingsDevModeToggle.checked = isDeveloperModeEnabled();
         dom.systemSettingsDevModeToggle.disabled = DEMO_MODE;
     }
+    updateThemeOptionButtonsState();
+    syncThemeColorPickers();
+    syncReplThemeSelect();
+    scopeStrudelThemeVarsToRepl();
     dom.systemSettingsModal.classList.add('open');
     createIcons({ icons });
 }
@@ -5413,6 +5685,70 @@ if (dom.systemSettingsDevModeToggle) {
         setDeveloperModeEnabled(Boolean(dom.systemSettingsDevModeToggle.checked));
     });
 }
+
+// Theme color pickers (Coloris): apply override on change; reset button clears overrides
+if (dom.systemSettingsModal) {
+    dom.systemSettingsModal.addEventListener('change', (e) => {
+        const input = e.target;
+        if (input && input.getAttribute('data-theme-var') && input.classList.contains('theme-color-input')) {
+            applyThemeColorOverride(input.getAttribute('data-theme-var'), input.value);
+        }
+    });
+    dom.systemSettingsModal.addEventListener('input', (e) => {
+        const input = e.target;
+        if (input && input.getAttribute('data-theme-var') && input.classList.contains('theme-color-input')) {
+            applyThemeColorOverride(input.getAttribute('data-theme-var'), input.value);
+        }
+    });
+}
+if (dom.systemSettingsThemeResetBtn) {
+    dom.systemSettingsThemeResetBtn.addEventListener('click', resetThemeToDefaults);
+}
+if (dom.systemSettingsThemeCopyBtn) {
+    dom.systemSettingsThemeCopyBtn.addEventListener('click', copyThemeToClipboard);
+}
+if (dom.systemSettingsThemeDefaultBtn) {
+    dom.systemSettingsThemeDefaultBtn.addEventListener('click', () => setColorTheme(''));
+}
+if (dom.systemSettingsThemeLegacyBtn) {
+    dom.systemSettingsThemeLegacyBtn.addEventListener('click', () => setColorTheme('legacy'));
+}
+if (dom.systemSettingsThemeRomulanBtn) {
+    dom.systemSettingsThemeRomulanBtn.addEventListener('click', () => setColorTheme('romulan'));
+}
+if (dom.systemSettingsThemeWhiteDebugBtn) {
+    dom.systemSettingsThemeWhiteDebugBtn.addEventListener('click', setAllThemeColorsToWhite);
+}
+/** Scope Strudel's injected theme vars to .editor-pane so they don't override the app's --background/--foreground. Keep app in dark mode. */
+function scopeStrudelThemeVarsToRepl() {
+    const styleEl = document.getElementById('strudel-theme-vars');
+    if (styleEl?.textContent) {
+        const content = styleEl.textContent.trim();
+        if (content.startsWith(':root')) {
+            styleEl.textContent = content.replace(/^:root\b/, '.editor-pane');
+        }
+    }
+    document.documentElement.classList.add('dark');
+}
+
+if (dom.systemSettingsReplThemeSelect) {
+    dom.systemSettingsReplThemeSelect.addEventListener('change', () => {
+        const theme = dom.systemSettingsReplThemeSelect.value;
+        const next = { ...codemirrorSettings.get(), theme };
+        codemirrorSettings.set(next);
+        if (dom.repl?.editor) dom.repl.editor.updateSettings({ theme });
+        requestAnimationFrame(() => scopeStrudelThemeVarsToRepl());
+    });
+}
+
+// Initialize Coloris for theme color inputs (dark theme, hex + alpha support)
+Coloris.init();
+Coloris({
+    el: '#systemSettingsModal input[data-coloris]',
+    themeMode: 'dark',
+    format: 'hsl',
+    alpha: true,
+});
 
 document.addEventListener('developer-mode:changed', () => {
     // Immediately update local read-only flags and rerender lists.

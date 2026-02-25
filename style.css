@@ -66,57 +66,93 @@
   html:root {
     /* Dynamic base font size: portrait/narrow 15px, tablet landscape 16px, desktop 16px */
     font-size: 15px;
-    /* Dark Mode Default (Stone & Amber) */
-    /* Stone 950 ~ #0c0a09 -> hsl(24, 5.7%, 8.2%) */
-    --background: hsl(24 5.7% 8.2%) !important;
-    /* Stone 50 ~ #fafaf9 -> hsl(60, 9.1%, 97.8%) */
-    --foreground: hsl(60 9.1% 80%) !important;
+    /* Default theme */
 
-    /* Stone 900 ~ #1c1917 -> hsl(24 5.4% 10.9%) - Adjusted for Card */
-    --card: hsl(24 5.4% 10.9%) !important;
-    --card-foreground: hsl(60 9.1% 80%) !important;
-
-    /* Popover same as background or slightly lighter */
-    --popover: hsl(24 5.7% 8.2%) !important;
-    --popover-foreground: hsl(60 9.1% 80%) !important;
-
-    /* Amber 500 ~ #f59e0b -> hsl(45 93% 47%) */
-    --primary: hsl(45deg 62.76% 60.43%) !important;
-    --primary-foreground: hsl(24 9.8% 10%) !important; /* Dark text on amber */
-
-    /* Stone 800 ~ #292524 -> hsl(24 5.4% 15.1%) */
-    --secondary: hsl(178.29deg 13.08% 27.01%) !important;
-    --secondary-foreground: hsl(60 9.1% 97.8%) !important;
-
-    /* Pale Blue Tertiary */
-    --tertiary: hsl(180deg 100% 16.57%) !important;
-    --tertiary-foreground: hsl(0, 0%, 100%) !important;
-
-    /* Wine Red Quaternary */
-    --quaternary: hsl(279.09deg 32.93% 27.76%) !important;
-    --quaternary-foreground: hsl(0, 0%, 100%) !important;
-
-    /* Stone 800ish */
-    --muted: hsl(24 5.4% 15.1%) !important;
-    --muted-foreground: hsl(60 9.1% 97.8% / 50%) !important;
-
-    /* Amber 600 ~ #d97706 -> hsl(45 93% 41%) */
-    --accent: hsl(40.97deg 100% 50% / 20%) !important;
-    --accent-foreground: hsl(60 9.1% 97.8%) !important;
-
-    /* Red 500 */
-    --destructive: hsl(0 84.2% 60.2%) !important;
-    --destructive-foreground: hsl(60 9.1% 97.8%) !important;
-
-    /* Stone 700 ~ #44403c -> hsl(24 5.4% 23.9%) */
-    --border: hsl(24 5.4% 23.9%) !important;
-    --input: hsl(24 5.4% 23.9%) !important;
-    --ring: hsl(45 93% 47% / 50%) !important;
-
+    --background: #222;
+    --foreground: #fff;
+    --card: hsl(61, 10%, 13%);
+    --card-foreground: hsla(0, 0%, 100%, 0.74);
+    --popover: hsl(24 5.7% 8.2%);
+    --popover-foreground: hsl(60 9.1% 80%);
+    --primary: hsl(45, 40%, 55%);
+    --primary-foreground: hsl(36, 17%, 13%);
+    --secondary: hsl(178.29 13.08% 27.01%);
+    --secondary-foreground: hsl(60 9.1% 97.8%);
+    --tertiary: hsl(180, 40%, 25%);
+    --tertiary-foreground: hsl(95, 43%, 83%);
+    --quaternary: hsl(278, 21%, 34%);
+    --quaternary-foreground: hsl(201, 100%, 88%);
+    --muted: hsl(24 5.4% 15.1%);
+    --muted-foreground: hsl(60 9.1% 97.8% / 0.5);
+    --accent: hsl(180 13.24% 26.67% / 0.9);
+    --accent-foreground: hsl(60 9.1% 97.8%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(60 9.1% 97.8%);
+    --border: hsla(37, 100%, 69%, 0.18);
+    --input: hsla(20, 0%, 100%, 0.14);
+    --ring: hsl(45 93% 47% / 0.5);
+    --input-bg: hsla(180, 0%, 0%, 0.17);
     --radius: 0.5rem;
+  }
 
-    /* Dedicated Input Background Token */
-    --input-bg: hsl(180deg 13.24% 26.67% / 36%) !important;
+  /* Legacy theme: snapshot of the original Stone & Amber (safe to switch back from default) */
+  html[data-theme="legacy"] {
+    font-size: 15px;
+    --background: hsl(24 5.7% 8.2%);
+    --foreground: hsl(60 9.1% 80%);
+    --card: hsl(24 5.4% 10.9%);
+    --card-foreground: hsl(60 9.1% 80%);
+    --popover: hsl(24 5.7% 8.2%);
+    --popover-foreground: hsl(60 9.1% 80%);
+    --primary: hsl(45 62.76% 60.43%);
+    --primary-foreground: hsl(24 9.8% 10%);
+    --secondary: hsl(178.29 13.08% 27.01%);
+    --secondary-foreground: hsl(60 9.1% 97.8%);
+    --tertiary: hsl(180 100% 16.57%);
+    --tertiary-foreground: hsl(0 0% 100%);
+    --quaternary: hsl(279.09 32.93% 27.76%);
+    --quaternary-foreground: hsl(0 0% 100%);
+    --muted: hsl(24 5.4% 15.1%);
+    --muted-foreground: hsl(60 9.1% 97.8% / 0.5);
+    --accent: hsl(180 13.24% 26.67% / 0.9);
+    --accent-foreground: hsl(60 9.1% 97.8%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(60 9.1% 97.8%);
+    --border: hsl(24 5.4% 23.9%);
+    --input: hsl(24 5.4% 23.9%);
+    --ring: hsl(45 93% 47% / 0.5);
+    --radius: 0.5rem;
+    --input-bg: hsl(180 13.24% 26.67% / 0.36);
+  }
+
+  /* Romulan theme */
+  html[data-theme="romulan"] {
+    font-size: 15px;
+    --background: hsl(214, 30%, 14%);
+    --foreground: hsl(72, 14%, 73%);
+    --card: hsl(314, 8%, 14%);
+    --card-foreground: hsla(0, 0%, 100%, 0.74);
+    --popover: hsla(0, 12%, 75%, 0.86);
+    --popover-foreground: hsla(0, 0%, 0%, 0.71);
+    --primary: hsl(31, 48%, 67%);
+    --primary-foreground: hsl(36, 17%, 13%);
+    --secondary: hsl(178.29 13.08% 27.01%);
+    --secondary-foreground: hsl(60 9.1% 97.8%);
+    --tertiary: hsl(194, 40%, 25%);
+    --tertiary-foreground: hsl(46, 14%, 76%);
+    --quaternary: hsl(146, 24%, 30%);
+    --quaternary-foreground: hsl(201, 39%, 82%);
+    --muted: hsla(23, 6%, 15%, 0.97);
+    --muted-foreground: hsl(211, 5%, 48%);
+    --accent: hsl(180 13.24% 26.67% / 0.9);
+    --accent-foreground: hsl(60 9.1% 97.8%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(60 9.1% 97.8%);
+    --border: hsla(37, 100%, 69%, 0.18);
+    --input: hsla(20, 0%, 100%, 0.14);
+    --ring: hsl(45 93% 47% / 0.5);
+    --input-bg: hsla(180, 0%, 0%, 0.17);
+    --radius: 0.5rem;
   }
 
   /* Tablet landscape (e.g. iPad landscape): 16px base */
@@ -329,15 +365,15 @@ input[readonly]:focus-visible {
 }
 
 .instrument-item.playing .instrument-name {
-  color: var(--strudel-inst-color, #98c379);
+  color: var(--strudel-inst-color, var(--primary));
   opacity: 1;
-  text-shadow: 0 0 8px var(--strudel-inst-color-glow, rgba(152, 195, 121, 0.4));
+  text-shadow: 0 0 8px var(--strudel-inst-color-glow, hsl(45 93% 47% / 0.4));
 }
 
 .instrument-item.playing .instrument-scope {
   opacity: 1;
-  border-color: var(--strudel-inst-color, rgba(152, 195, 121, 0.5));
-  box-shadow: 0 0 10px var(--strudel-inst-color-glow, rgba(152, 195, 121, 0.2));
+  border-color: var(--strudel-inst-color, hsl(45 93% 47% / 0.5));
+  box-shadow: 0 0 10px var(--strudel-inst-color-glow, hsl(45 93% 47% / 0.2));
 }
 
 .instrument-info {
@@ -366,7 +402,7 @@ input[readonly]:focus-visible {
 .sidebar-del-btn:focus-visible,
 .sidebar-edit-btn:hover,
 .sidebar-edit-btn:focus-visible {
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: color-mix(in srgb, var(--background) 60%, transparent);
 }
 .sidebar-edit-btn:hover,
 .sidebar-edit-btn:focus-visible {
@@ -469,11 +505,28 @@ strudel-editor {
   height: 100% !important;
 }
 
+/* Keep REPL font aligned with app (JetBrains Mono); Strudel theme presets can inject --fontFamily */
+.editor-pane .cm-editor,
+.editor-pane .cm-scroller {
+  font-family: var(--font-mono) !important;
+}
+
 .sync-list-item {
   @apply p-2 border-b border-border/50 last:border-0 text-sm;
 }
 .sync-list-item.highlight {
   @apply font-bold text-primary;
+}
+
+/* Status message semantic colors (overrides base text-muted-foreground) */
+#statusMsg.status-error {
+  color: var(--destructive);
+}
+#statusMsg.status-success {
+  color: var(--primary);
+}
+#statusMsg.status-normal {
+  color: var(--muted-foreground);
 }
 
 /* Multislider Styles */
@@ -827,7 +880,7 @@ strudel-editor {
   padding: 12px 4px;
   border-width: 1px 0 0 0;
   border-style: solid none none none;
-  border-color: rgba(44, 42, 39, 1);
+  border-color: var(--border);
   border-image: none;
 }
 @media (min-width: 1536px) {
@@ -859,7 +912,7 @@ strudel-editor {
   @apply inline-flex items-center justify-center rounded-full w-6 h-6 text-[10px] font-mono text-muted-foreground cursor-grab shrink-0 border border-border bg-card/50;
 }
 .arr-row.playing .arr-row-number {
-  @apply text-primary;
+  @apply text-white;
 }
 .arr-repeats {
   @apply h-8 rounded-md border border-input bg-input-bg pl-1 pr-0 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
@@ -1029,8 +1082,13 @@ strudel-editor {
 
 /* Shared modal overlay: lighter dim, no blur (overrides Tailwind bg-black/80 backdrop-blur-sm on .modal-overlay) */
 .modal-overlay {
-  background-color: rgb(0 0 0 / 0.4);
+  background-color: color-mix(in srgb, var(--background) 50%, transparent);
   backdrop-filter: none;
+}
+
+/* System settings: no overlay so theme color changes are visible behind the modal */
+#systemSettingsModal.modal-overlay {
+  background-color: transparent;
 }
 
 #trackerModal {
@@ -1044,4 +1102,9 @@ strudel-editor {
 /* Instrument drawer: hide "Instrument Name" label for now */
 #instrumentNameLabel {
   display: none !important;
+}
+
+/* Coloris: ensure picker appears above System settings modal (z-[80]) */
+.clr-picker {
+  z-index: 90 !important;
 }

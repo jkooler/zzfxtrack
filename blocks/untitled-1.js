@@ -15,12 +15,12 @@ export const trackerState = {
   "bpm": 120,
   "grid": [
     [
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
       null,
       null,
       null,

@@ -688,7 +688,7 @@
           </button>
           <button
             id="previewPlayBtn"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 w-9 p-0 flex items-center justify-center"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground text-foreground h-9 w-9 p-0 flex items-center justify-center"
             title="Play ZzFXM"
             disabled
             style="display: none"
@@ -1807,10 +1807,10 @@
     <!-- System Settings Modal -->
     <div
       id="systemSettingsModal"
-      class="modal-overlay fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+      class="modal-overlay fixed inset-0 z-[80] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
     >
       <div
-        class="modal fixed z-[81] grid w-full max-w-md gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
+        class="modal fixed z-[81] grid w-full max-w-md max-h-[800px] gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg overflow-y-auto"
       >
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold leading-none tracking-tight text-primary">
@@ -1824,6 +1824,20 @@
             <i data-lucide="x" class="w-6 h-6"></i>
           </button>
         </div>
+        <div class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
+          <span class="text-sm text-foreground leading-snug">Color theme</span>
+          <div class="flex gap-1 rounded-md p-0.5 border border-input bg-background">
+            <button type="button" id="systemSettingsThemeDefaultBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="">Default</button>
+            <button type="button" id="systemSettingsThemeLegacyBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="legacy">Legacy</button>
+            <button type="button" id="systemSettingsThemeRomulanBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="romulan">Romulan</button>
+          </div>
+        </div>
+        <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
+          <span class="text-sm text-foreground leading-snug">REPL editor theme</span>
+          <select id="systemSettingsReplThemeSelect" class="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-ring min-w-[11rem]">
+            <!-- Options filled by repl-app.js from Strudel presets -->
+          </select>
+        </label>
         <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
           <span class="text-sm text-foreground leading-snug">Developer mode</span>
           <span class="relative inline-flex h-6 w-11 items-center">
@@ -1835,6 +1849,79 @@
         <p class="text-xs text-muted-foreground/90 leading-relaxed">
           Use with caution. Will enable functionality that can lead to unintended data loss.
         </p>
+
+        <details id="systemSettingsThemeDetails" class="group rounded-md border border-input bg-card/40 overflow-hidden">
+          <summary class="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-medium text-foreground select-none hover:bg-accent/50 transition-colors [&::-webkit-details-marker]:hidden">
+            <i data-lucide="palette" class="w-4 h-4 text-muted-foreground shrink-0"></i>
+            <span>Theme colors</span>
+            <i data-lucide="chevron-down" class="w-4 h-4 ml-auto text-muted-foreground shrink-0 transition-transform group-open:rotate-180"></i>
+          </summary>
+          <div class="px-3 pb-3 pt-0 space-y-2 border-t border-border mt-0">
+            <p class="text-xs text-muted-foreground pt-2">Override theme tokens. Changes reset on reload.</p>
+            <div class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 items-center">
+              <label class="text-sm text-foreground">Background</label>
+              <input type="text" id="systemSettingsThemeBackground" data-coloris data-theme-var="background" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Foreground</label>
+              <input type="text" id="systemSettingsThemeForeground" data-coloris data-theme-var="foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Card</label>
+              <input type="text" id="systemSettingsThemeCard" data-coloris data-theme-var="card" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Card foreground</label>
+              <input type="text" id="systemSettingsThemeCardForeground" data-coloris data-theme-var="card-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Popover</label>
+              <input type="text" id="systemSettingsThemePopover" data-coloris data-theme-var="popover" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Popover foreground</label>
+              <input type="text" id="systemSettingsThemePopoverForeground" data-coloris data-theme-var="popover-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Primary</label>
+              <input type="text" id="systemSettingsThemePrimary" data-coloris data-theme-var="primary" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Primary foreground</label>
+              <input type="text" id="systemSettingsThemePrimaryForeground" data-coloris data-theme-var="primary-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Secondary</label>
+              <input type="text" id="systemSettingsThemeSecondary" data-coloris data-theme-var="secondary" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Secondary foreground</label>
+              <input type="text" id="systemSettingsThemeSecondaryForeground" data-coloris data-theme-var="secondary-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Muted</label>
+              <input type="text" id="systemSettingsThemeMuted" data-coloris data-theme-var="muted" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Muted foreground</label>
+              <input type="text" id="systemSettingsThemeMutedForeground" data-coloris data-theme-var="muted-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Accent</label>
+              <input type="text" id="systemSettingsThemeAccent" data-coloris data-theme-var="accent" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Accent foreground</label>
+              <input type="text" id="systemSettingsThemeAccentForeground" data-coloris data-theme-var="accent-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Tertiary</label>
+              <input type="text" id="systemSettingsThemeTertiary" data-coloris data-theme-var="tertiary" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Tertiary foreground</label>
+              <input type="text" id="systemSettingsThemeTertiaryForeground" data-coloris data-theme-var="tertiary-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Quaternary</label>
+              <input type="text" id="systemSettingsThemeQuaternary" data-coloris data-theme-var="quaternary" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Quaternary foreground</label>
+              <input type="text" id="systemSettingsThemeQuaternaryForeground" data-coloris data-theme-var="quaternary-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Border</label>
+              <input type="text" id="systemSettingsThemeBorder" data-coloris data-theme-var="border" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Input (border)</label>
+              <input type="text" id="systemSettingsThemeInput" data-coloris data-theme-var="input" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Input background</label>
+              <input type="text" id="systemSettingsThemeInputBg" data-coloris data-theme-var="input-bg" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Destructive</label>
+              <input type="text" id="systemSettingsThemeDestructive" data-coloris data-theme-var="destructive" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Destructive foreground</label>
+              <input type="text" id="systemSettingsThemeDestructiveForeground" data-coloris data-theme-var="destructive-foreground" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+              <label class="text-sm text-foreground">Ring</label>
+              <input type="text" id="systemSettingsThemeRing" data-coloris data-theme-var="ring" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
+            </div>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <button type="button" id="systemSettingsThemeResetBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                Reset to defaults
+              </button>
+              <button type="button" id="systemSettingsThemeCopyBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3" title="Copy current theme variable values for style.css or to share">
+                Copy theme to clipboard
+              </button>
+              <button type="button" id="systemSettingsThemeWhiteDebugBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground h-8 px-3" title="Set every theme color to white to find elements that don’t use theme variables">
+                Set all to white (debug)
+              </button>
+            </div>
+          </div>
+        </details>
+
         <div class="flex justify-end gap-2">
           <button
             id="closeSystemSettingsModalBottomBtn"
@@ -2051,7 +2138,7 @@
 	          >
 	            <i data-lucide="play" class="w-[18px] h-5 fill-current"></i>
 	          </button>
-          <label for="arrangementBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM:</label>
+          <label for="arrangementBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM</label>
           <input
             type="number"
             id="arrangementBpm"
@@ -2078,7 +2165,7 @@
           </button>
         </div>
 
-	        <div class="flex-1 min-h-0 overflow-auto rounded-md p-0 bg-card/30">
+	        <div class="flex-1 min-h-0 overflow-auto rounded-md p-0">
             <div id="arrangementRowsHeader" class="arr-rows-header">
               <span class="arr-rows-header-spacer" aria-hidden="true"></span>
               <span class="arr-rows-header-repeat" title="1 repeat = 16 steps">Repeat</span>
@@ -2218,7 +2305,7 @@
         
         <!-- Block Name Input (Only shown in Edit/Create Mode) -->
         <div id="trackerBlockProps" class="hidden flex gap-2 items-center pb-2 border-b border-border/50 px-4 min-w-0">
-          <label for="trackerBlockBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM:</label>
+          <label for="trackerBlockBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM</label>
           <input
             type="number"
             id="trackerBlockBpm"
@@ -2228,7 +2315,7 @@
             value="120"
             class="w-16 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-          <label for="trackerBlockRowsPreset" class="text-xs font-bold text-muted-foreground uppercase">Rows:</label>
+          <label for="trackerBlockRowsPreset" class="text-xs font-bold text-muted-foreground uppercase">Rows</label>
           <select
             id="trackerBlockRowsPreset"
             class="h-8 w-[53px] rounded-md border border-input bg-background px-1.5 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -2247,10 +2334,10 @@
             value="16"
             class="hidden w-16 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-          <label for="trackerBlockChannels" class="text-xs font-bold text-muted-foreground uppercase">Ch:</label>
+          <label for="trackerBlockChannels" class="text-xs font-bold text-muted-foreground uppercase">Ch</label>
           <select
             id="trackerBlockChannels"
-            class="h-8 w-20 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            class="h-8 w-12 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             title="Only this many channels are played; hidden channel data is kept when you increase again."
           >
             <option value="1">1</option>

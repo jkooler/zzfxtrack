@@ -65,6 +65,16 @@ const NOTE_TO_KEY = Object.fromEntries(
   Object.entries(KEYBOARD_MAP).map(([k, v]) => [v, k])
 );
 
+/** Ordered list for note-cell scrub: empty, rest, then C0..B8 (matches noteToFreq format). */
+const NOTE_NAMES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
+const SCRUB_NOTE_VALUES = (() => {
+  const list = [null, '-'];
+  for (let oct = 0; oct <= 8; oct++) {
+    for (const name of NOTE_NAMES) list.push(name + oct);
+  }
+  return list;
+})();
+
 /** Maximum number of channels; grid always has this many columns so reducing active channels keeps data. */
 const MAX_CHANNELS = 8;
 
@@ -171,6 +181,8 @@ let effectPreviewRequest = null;
 const TRACKER_OPEN_PREVIEW_GUARD_MS = 250;
 let trackerModalOpenedAt = 0;
 const EFFECT_PREVIEW_DEBOUNCE_MS = 150;
+/** Debounce (ms) before playing a note while scrubbing the note cell. */
+const NOTE_SCRUB_PREVIEW_DEBOUNCE_MS = 80;
 const TRACKER_NOTE_PREVIEW_GAIN = 0.8;
 const TRACKER_NOTE_PREVIEW_DUCKED_GAIN = 0.35;
 let liveArrangementUpdateTimeout = null;
@@ -492,6 +504,8 @@ function renderGrid() {
         cellEl.focus();
       });
 
+      setupNoteCellScrub(cellEl, ch, step);
+
       const volEl = document.createElement('input');
       volEl.type = 'number';
       volEl.min = '0';
@@ -576,6 +590,8 @@ function renderGrid() {
         repsEl.focus();
       });
 
+      setupScrubInteraction(repsEl);
+
       const ndEl = document.createElement('input');
       ndEl.type = 'number';
       ndEl.min = '0';
@@ -616,6 +632,8 @@ function renderGrid() {
         setFocus(ch, step);
         ndEl.focus();
       });
+
+      setupScrubInteraction(ndEl);
 
       rowEl.appendChild(cellEl);
       rowEl.appendChild(volEl);
@@ -1096,13 +1114,143 @@ function applyOctaveOffset(noteStr, offset) {
 }
 
 /**
- * Set a note in the grid
+ * Enable drag-to-change (scrub) on a tracker note cell. Drag up = higher note, down = lower; includes empty and rest.
  */
-function setNote(channel, step, note) {
+function setupNoteCellScrub(cellEl, ch, step) {
+  if (cellEl._noteScrubInitialized) return;
+  cellEl._noteScrubInitialized = true;
+  cellEl.classList.add('scrub-input');
+
+  let startY = 0;
+  let startIndex = 0;
+  let lastAppliedIndex = -1;
+  let isDragging = false;
+  let scrubPreviewTimeout = null;
+  const len = SCRUB_NOTE_VALUES.length;
+  const sensitivity = 8; // pixels per step
+
+  const getCurrentIndex = () => {
+    const note = state.grid[ch][step].note;
+    const idx = SCRUB_NOTE_VALUES.indexOf(note);
+    return idx === -1 ? 0 : idx;
+  };
+
+  const applyDelta = (clientY) => {
+    const deltaY = startY - clientY;
+    const steps = Math.round(deltaY / sensitivity);
+    const newIndex = Math.max(0, Math.min(len - 1, startIndex + steps));
+    if (newIndex !== lastAppliedIndex) {
+      lastAppliedIndex = newIndex;
+      const note = SCRUB_NOTE_VALUES[newIndex];
+      setNote(ch, step, note, { skipRender: true });
+      cellEl.textContent = note === null ? '·' : note;
+      cellEl.classList.toggle('has-note', note && note !== '-');
+      cellEl.classList.toggle('rest', note === '-');
+      if (note && note !== '-') {
+        if (scrubPreviewTimeout) clearTimeout(scrubPreviewTimeout);
+        scrubPreviewTimeout = setTimeout(() => {
+          scrubPreviewTimeout = null;
+          playNotePreview(ch, step, note);
+        }, NOTE_SCRUB_PREVIEW_DEBOUNCE_MS);
+      } else if (scrubPreviewTimeout) {
+        clearTimeout(scrubPreviewTimeout);
+        scrubPreviewTimeout = null;
+      }
+    }
+  };
+
+  const clearScrubPreview = () => {
+    if (scrubPreviewTimeout) {
+      clearTimeout(scrubPreviewTimeout);
+      scrubPreviewTimeout = null;
+    }
+  };
+
+  const onMouseDown = (e) => {
+    if (e.button !== 0) return;
+    startY = e.clientY;
+    startIndex = getCurrentIndex();
+    lastAppliedIndex = startIndex;
+    isDragging = false;
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    document.body.classList.add('scrubbing');
+  };
+
+  const onMouseMove = (e) => {
+    const deltaY = startY - e.clientY;
+    if (!isDragging && Math.abs(deltaY) < 3) return;
+    if (!isDragging) {
+      isDragging = true;
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+    }
+    e.preventDefault();
+    applyDelta(e.clientY);
+  };
+
+  const onMouseUp = () => {
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+    document.body.classList.remove('scrubbing');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    clearScrubPreview();
+    if (isDragging) renderGrid();
+    isDragging = false;
+  };
+
+  const onTouchStart = (e) => {
+    if (e.touches.length !== 1) return;
+    startY = e.touches[0].clientY;
+    startIndex = getCurrentIndex();
+    lastAppliedIndex = startIndex;
+    isDragging = false;
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+    document.body.classList.add('scrubbing');
+    e.preventDefault();
+  };
+
+  const onTouchMove = (e) => {
+    if (e.touches.length !== 1) return;
+    const clientY = e.touches[0].clientY;
+    const deltaY = startY - clientY;
+    if (!isDragging && Math.abs(deltaY) < 3) return;
+    if (!isDragging) isDragging = true;
+    e.preventDefault();
+    applyDelta(clientY);
+  };
+
+  const onTouchEnd = () => {
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('touchend', onTouchEnd);
+    window.removeEventListener('touchcancel', onTouchEnd);
+    document.body.classList.remove('scrubbing');
+    clearScrubPreview();
+    if (isDragging) renderGrid();
+    else {
+      setFocus(ch, step);
+      cellEl.focus();
+    }
+    isDragging = false;
+  };
+
+  cellEl.addEventListener('mousedown', onMouseDown);
+  cellEl.addEventListener('touchstart', onTouchStart, { passive: false });
+}
+
+/**
+ * Set a note in the grid.
+ * @param {object} [options] - { skipRender: true } to only update state (e.g. during note-cell scrub); caller must update UI and call renderGrid() when done.
+ */
+function setNote(channel, step, note, options = {}) {
   state.grid[channel][step].note = note;
-  renderGrid();
+  if (!options.skipRender) renderGrid();
   updateOutput();
-  
+  if (options.skipRender) return;
+
   // If preview is playing, update the loop seamlessly
   if (previewState.isPlaying && previewState.audioContext) {
     const ctx = previewState.audioContext;
@@ -1710,7 +1858,7 @@ function updatePreviewUI() {
   } else {
     elements.previewBtn.innerHTML = '<i data-lucide="play" class="w-[18px] h-5 fill-current"></i>';
   }
-  elements.previewBtn.style.color = '#eee';
+  elements.previewBtn.classList.add('text-foreground');
 
   createIcons({ icons });
 }
