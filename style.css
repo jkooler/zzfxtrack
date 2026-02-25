@@ -64,6 +64,8 @@
 
   /* Use html:root for higher specificity (0-1-1) to beat Strudel's inline :root (0-1-0) */
   html:root {
+    /* Dynamic base font size: portrait/narrow 15px, tablet landscape 17px, desktop 16px */
+    font-size: 15px;
     /* Dark Mode Default (Stone & Amber) */
     /* Stone 950 ~ #0c0a09 -> hsl(24, 5.7%, 8.2%) */
     --background: hsl(24 5.7% 8.2%) !important;
@@ -116,6 +118,19 @@
     /* Dedicated Input Background Token */
     --input-bg: hsl(180deg 13.24% 26.67% / 36%) !important;
   }
+
+  /* Tablet landscape (e.g. iPad landscape): 17px base */
+  @media (min-width: 900px) {
+    html:root {
+      font-size: 17px;
+    }
+  }
+  /* Desktop: 16px base */
+  @media (min-width: 1280px) {
+    html:root {
+      font-size: 16px;
+    }
+  }
 }
 
 @layer utilities {
@@ -146,15 +161,18 @@ body {
   min-width: 0;
 }
 
-/* Global Cursor Styles */
+/* Global Cursor Styles + iPad/single-tap: avoid double-tap to activate */
 button,
 select,
 input[type="button"],
 input[type="submit"],
 input[type="checkbox"],
 input[type="radio"],
-input[type="range"] {
+input[type="range"],
+a,
+[role="button"] {
   cursor: pointer;
+  touch-action: manipulation; /* Single tap = click; no 300ms delay or hover-on-first-tap on iOS */
 }
 
 input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not(
@@ -232,6 +250,11 @@ input[readonly]:focus-visible {
   transition: opacity 220ms ease;
 }
 
+.song-item,
+.instrument-item,
+.block-item {
+  touch-action: manipulation; /* iPad: single tap to select/activate, no double-tap */
+}
 .song-item {
   @apply flex items-center justify-between py-0 px-1.5 mb-0 min-h-9 rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative overflow-hidden text-sm font-medium;
 }
@@ -247,14 +270,23 @@ input[readonly]:focus-visible {
 .song-item-actions {
   @apply opacity-0 transition-opacity flex items-center gap-1;
 }
-.song-item:hover .song-item-actions,
-.instrument-item:hover .song-item-actions,
-.block-item:hover .song-item-actions {
-  @apply opacity-100;
+/* Only use hover/focus to reveal actions on devices with real hover (mouse); on iPad scrolling can trigger sticky hover and show trash by mistake */
+@media (hover: hover) {
+  .song-item:hover .song-item-actions,
+  .instrument-item:hover .song-item-actions,
+  .block-item:hover .song-item-actions {
+    @apply opacity-100;
+  }
+  .song-item:focus-within .song-item-actions,
+  .instrument-item:focus-within .song-item-actions,
+  .block-item:focus-within .song-item-actions {
+    @apply opacity-100;
+  }
 }
-.song-item:focus-within .song-item-actions,
-.instrument-item:focus-within .song-item-actions,
-.block-item:focus-within .song-item-actions {
+/* When item is selected/active (e.g. after tap on iPad), keep actions visible so delete/edit don’t disappear */
+.song-item.active .song-item-actions,
+.instrument-item.active .song-item-actions,
+.block-item.selected .song-item-actions {
   @apply opacity-100;
 }
 

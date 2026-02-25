@@ -1954,7 +1954,8 @@ export async function getInstrumentsForExporter() {
     };
 }
 /**
- * Enable drag-to-change (scrub) interaction on an input
+ * Enable drag-to-change (scrub) interaction on an input.
+ * Works with mouse and touch (iPad).
  */
 export function setupScrubInteraction(input) {
     if (input._scrubInitialized) return;
@@ -1966,74 +1967,86 @@ export function setupScrubInteraction(input) {
     let startValue = 0;
     let isDragging = false;
     
-    const onMouseDown = (e) => {
-        // Only left click
-        if (e.button !== 0) return;
-        
-        // Allow normal interaction if focusing (don't prevent default yet)
-        startY = e.clientY;
-        startValue = parseFloat(input.value) || 0;
-        isDragging = false;
-        
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-        
-        // Prevent text selection cursor flicker
-        document.body.classList.add('scrubbing');
-    };
-    
-    const onMouseMove = (e) => {
-        // Threshold to start dragging (3px) to distinguish from simple click-to-focus
-        const deltaY = startY - e.clientY;
-        if (!isDragging && Math.abs(deltaY) < 3) return;
-        
-        if (!isDragging) {
-            isDragging = true;
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        }
-        
-        e.preventDefault();
-        
-        // Determine step size
+    const applyDelta = (clientY, sensitivity = 1.0) => {
+        const deltaY = startY - clientY;
         let step = parseFloat(input.step);
         if (isNaN(step)) {
             step = input.value.includes('.') ? 0.01 : 1;
         }
-        
-        // Modifiers
-        const sensitivity = e.shiftKey ? 0.1 : 1.0;
-        
-        // Scale: 1px = 1 step is often too fast for small ranges (like 0-1) but fine if step is 0.01
-        // Actually, for ZzFX where range is 0-1 and step is 0.01, 100px = full range. That feels right.
-        // For Frequency (0-2000), step might be 1? 2000px drag is long. 
-        // Maybe dynamic scaling? No, simple strict "pixels * step" is standard and predictable.
-        
         let newValue = startValue + (deltaY * step * sensitivity);
-        
-        // Clamping
         if (input.min !== '' && !isNaN(parseFloat(input.min))) {
             newValue = Math.max(parseFloat(input.min), newValue);
         }
         if (input.max !== '' && !isNaN(parseFloat(input.max))) {
             newValue = Math.min(parseFloat(input.max), newValue);
         }
-        
-        // Rounding
         const decimals = (step.toString().split('.')[1] || '').length;
         input.value = newValue.toFixed(decimals);
-        
         input.dispatchEvent(new Event('input'));
+    };
+    
+    const onMouseDown = (e) => {
+        if (e.button !== 0) return;
+        startY = e.clientY;
+        startValue = parseFloat(input.value) || 0;
+        isDragging = false;
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        document.body.classList.add('scrubbing');
+    };
+    
+    const onMouseMove = (e) => {
+        const deltaY = startY - e.clientY;
+        if (!isDragging && Math.abs(deltaY) < 3) return;
+        if (!isDragging) {
+            isDragging = true;
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+        }
+        e.preventDefault();
+        applyDelta(e.clientY, e.shiftKey ? 0.1 : 1.0);
     };
     
     const onMouseUp = () => {
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
-        
+        document.body.classList.remove('scrubbing');
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         isDragging = false;
     };
     
+    const onTouchStart = (e) => {
+        if (e.touches.length !== 1) return;
+        startY = e.touches[0].clientY;
+        startValue = parseFloat(input.value) || 0;
+        isDragging = false;
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+        window.addEventListener('touchcancel', onTouchEnd);
+        document.body.classList.add('scrubbing');
+        e.preventDefault(); /* prevent input focus so virtual keyboard does not open */
+    };
+    
+    const onTouchMove = (e) => {
+        if (e.touches.length !== 1) return;
+        const clientY = e.touches[0].clientY;
+        const deltaY = startY - clientY;
+        if (!isDragging && Math.abs(deltaY) < 3) return;
+        if (!isDragging) isDragging = true;
+        e.preventDefault();
+        applyDelta(clientY, 1.0);
+    };
+    
+    const onTouchEnd = () => {
+        window.removeEventListener('touchmove', onTouchMove);
+        window.removeEventListener('touchend', onTouchEnd);
+        window.removeEventListener('touchcancel', onTouchEnd);
+        document.body.classList.remove('scrubbing');
+        if (!isDragging) input.focus(); /* tap without drag: focus so user can type */
+        isDragging = false;
+    };
+    
     input.addEventListener('mousedown', onMouseDown);
+    input.addEventListener('touchstart', onTouchStart, { passive: false });
 }
