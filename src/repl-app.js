@@ -1898,6 +1898,17 @@ function renderTrackerWorkspace() {
         const trackerHeader = trackerModal.querySelector('h2');
         if (trackerHeader) {
             trackerHeader.textContent = selectedBlock.name || selectedBlock.filename.replace(/\.js$/i, '');
+            trackerHeader.draggable = true;
+            if (!trackerHeader.dataset.arrTitleDragSetup) {
+                trackerHeader.dataset.arrTitleDragSetup = '1';
+                trackerHeader.addEventListener('dragstart', (e) => {
+                    const filename = activeArrangementBlockFilename;
+                    if (!filename || !e.dataTransfer) return;
+                    e.dataTransfer.effectAllowed = 'copyMove';
+                    e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({ filename }));
+                    e.dataTransfer.setData('text/plain', filename);
+                });
+            }
         }
     }).catch((err) => {
         if (loadToken !== trackerWorkspaceLoadToken) return;
@@ -2093,7 +2104,7 @@ function renderArrangementWorkspace() {
                 </div>
                 <div id="arrangementWorkspaceRows" class="flex flex-col"></div>
             </div>
-            <footer class="flex items-center border-t border-border p-3 shrink-0">
+            <footer class="flex items-center justify-between border-t border-border p-3 shrink-0">
                 <button
                     id="arrangementWorkspaceAddRowBtn"
                     type="button"
@@ -2102,6 +2113,18 @@ function renderArrangementWorkspace() {
                 >
                     <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Row
                 </button>
+                <div class="arr-trash-dropzone-wrap relative inline-flex shrink-0">
+                    <span id="arrangementWorkspaceTrashTooltip" class="arr-trash-tooltip" role="tooltip" aria-hidden="true">Drag blocks here to remove</span>
+                    <div
+                        id="arrangementWorkspaceTrashDropzone"
+                        class="arr-trash-dropzone inline-flex items-center justify-center rounded-md border border-transparent text-muted-foreground hover:text-destructive h-9 w-9 ${readonly ? 'opacity-40 pointer-events-none' : ''}"
+                        role="img"
+                        aria-label="Drag blocks here to remove"
+                        aria-describedby="arrangementWorkspaceTrashTooltip"
+                    >
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </div>
+                </div>
             </footer>
         </div>
     `;
@@ -2145,6 +2168,125 @@ function renderArrangementWorkspace() {
         scheduleArrangementAutoSave();
         emitArrangementStateChanged({ addedRowIndex: arrangementDraftState.rows.length - 1 });
     });
+
+    const trashDropzone = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceTrashDropzone');
+    const trashTooltip = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceTrashTooltip');
+    if (trashDropzone && !readonly) {
+        trashDropzone.addEventListener('click', (event) => {
+            event.preventDefault();
+            const wrap = trashDropzone.closest('.arr-trash-dropzone-wrap');
+            let portal = document.getElementById('arrangementWorkspaceTrashTooltipPortal');
+            const isShowing = portal && portal.isConnected;
+            if (isShowing && portal) {
+                portal.remove();
+                if (trashTooltip?._arrTrashTooltipHide) {
+                    document.removeEventListener('click', trashTooltip._arrTrashTooltipHide);
+                    trashTooltip._arrTrashTooltipHide = null;
+                }
+                return;
+            }
+            const rect = trashDropzone.getBoundingClientRect();
+            portal = document.createElement('div');
+            portal.id = 'arrangementWorkspaceTrashTooltipPortal';
+            portal.className = 'arr-trash-tooltip-portal';
+            portal.setAttribute('role', 'tooltip');
+            portal.textContent = 'Drag blocks here to remove';
+            document.body.appendChild(portal);
+            const tw = portal.offsetWidth;
+            const th = portal.offsetHeight;
+            const gap = 8;
+            portal.style.left = `${rect.left + rect.width / 2 - tw / 2}px`;
+            portal.style.top = `${rect.top - th - gap}px`;
+            const hide = () => {
+                const p = document.getElementById('arrangementWorkspaceTrashTooltipPortal');
+                if (p) p.remove();
+                if (trashTooltip?._arrTrashTooltipHide) {
+                    document.removeEventListener('click', trashTooltip._arrTrashTooltipHide);
+                    trashTooltip._arrTrashTooltipHide = null;
+                }
+            };
+            const onDocClick = (e) => {
+                if (wrap && wrap.contains(e.target)) return;
+                hide();
+            };
+            if (trashTooltip) trashTooltip._arrTrashTooltipHide = onDocClick;
+            requestAnimationFrame(() => document.addEventListener('click', onDocClick));
+            setTimeout(hide, 4000);
+        });
+        trashDropzone.addEventListener('dragover', (event) => {
+            const types = event.dataTransfer?.types;
+            const isChip = types?.includes('application/x-zzfxm-arr-chip');
+            const isRow = types?.includes('application/x-zzfxm-arr-row');
+            if (!isChip && !isRow) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            trashDropzone.classList.add('arr-trash-dropzone-dragover');
+        });
+        trashDropzone.addEventListener('dragleave', (event) => {
+            const related = event.relatedTarget;
+            if (related && related instanceof Node && trashDropzone.contains(related)) return;
+            trashDropzone.classList.remove('arr-trash-dropzone-dragover');
+        });
+        trashDropzone.addEventListener('drop', async (event) => {
+            if (!event.dataTransfer || readonly) return;
+            event.preventDefault();
+            trashDropzone.classList.remove('arr-trash-dropzone-dragover');
+            window.__arrRowDragFromIndex = undefined;
+
+            let rowPayload = null;
+            try {
+                rowPayload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-row') || 'null');
+            } catch (_e) {
+                rowPayload = null;
+            }
+            const fromRowIndex = Number.isInteger(rowPayload?.fromRowIndex) ? rowPayload.fromRowIndex : null;
+            if (fromRowIndex != null) {
+                const confirmed = await confirmDialog({
+                    title: 'Delete row?',
+                    message: 'Delete this row? This cannot be undone.',
+                    cancelLabel: 'No! Abort.',
+                    confirmLabel: 'Delete',
+                    confirmIcon: 'trash-2',
+                    variant: 'danger',
+                    overlayLight: true,
+                });
+                if (!confirmed) return;
+                if (arrangementDraftState.rows.length === 1) {
+                    arrangementDraftState.rows[0] = { repeats: 1, blocks: [] };
+                } else {
+                    arrangementDraftState.rows.splice(fromRowIndex, 1);
+                }
+                renderArrangementWorkspace();
+                scheduleArrangementAutoSave();
+                emitArrangementStateChanged();
+                return;
+            }
+
+            let payload = null;
+            try {
+                payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null');
+            } catch (_e) {
+                payload = null;
+            }
+            const filename = payload?.filename || event.dataTransfer.getData('text/plain') || '';
+            const fromRowIndexChip = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
+            if (filename && fromRowIndexChip != null) {
+                const row = arrangementDraftState.rows?.[fromRowIndexChip];
+                if (row?.blocks) {
+                    const idx = row.blocks.indexOf(filename);
+                    if (idx >= 0) row.blocks.splice(idx, 1);
+                    if (activeArrangementBlockFilename === filename) {
+                        activeArrangementBlockFilename = null;
+                    }
+                    renderArrangementWorkspace();
+                    renderTrackerWorkspace();
+                    scheduleArrangementAutoSave();
+                    emitArrangementStateChanged();
+                }
+            }
+        });
+    }
+
     previewBtn?.addEventListener('click', () => {
         if (isArrangementPreviewPlaying()) {
             stopArrangementPreview();
@@ -2164,7 +2306,7 @@ function renderArrangementWorkspace() {
             const rowEl = document.createElement('div');
             rowEl.className = 'arr-row';
             rowEl.dataset.rowIndex = String(rowIndex);
-            rowEl.addEventListener('dragover', (event) => {
+            const rowDragOver = (event) => {
                 if (!event.dataTransfer || readonly) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = isCopyModifier(event) ? 'copy' : 'move';
@@ -2177,7 +2319,13 @@ function renderArrangementWorkspace() {
                 } else {
                     rowEl.classList.add('arr-row-drop-target-below');
                 }
+            };
+            rowEl.addEventListener('dragenter', (event) => {
+                if (!event.dataTransfer || readonly) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = isCopyModifier(event) ? 'copy' : 'move';
             });
+            rowEl.addEventListener('dragover', rowDragOver);
             rowEl.addEventListener('dragleave', (event) => {
                 const related = event.relatedTarget;
                 if (related && related instanceof Node && rowEl.contains(related)) return;
@@ -2241,7 +2389,7 @@ function renderArrangementWorkspace() {
             }
             rowNumberEl.innerHTML = `
                 <span class="arr-row-number-value">${rowIndex + 1}</span>
-                <i data-lucide="play" class="arr-row-play-icon hidden w-[13px] h-[13px] fill-current"></i>
+                <i data-lucide="play" class="arr-row-play-icon hidden w-2.5 h-2.5 fill-current"></i>
             `;
 
             const repeatsEl = document.createElement('input');
@@ -2596,6 +2744,14 @@ async function refreshBlocksLibrary() {
                     <span class="font-medium text-xs">${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
                     ${isReadonly ? '' : `<div class="song-item-actions"><button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
                 `;
+                li.draggable = true;
+                li.addEventListener('dragstart', (e) => {
+                    if (e.target.closest('button')) return;
+                    if (!e.dataTransfer) return;
+                    e.dataTransfer.effectAllowed = 'copyMove';
+                    e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({ filename: block.filename }));
+                    e.dataTransfer.setData('text/plain', block.filename);
+                });
                 li.addEventListener('click', async () => {
                     activeArrangementBlockFilename = block.filename;
                     renderArrangementWorkspace();

@@ -161,6 +161,35 @@ body {
   min-width: 0;
 }
 
+/* Stack arrangement pane above tracker pane so footer tooltip (e.g. trash) is not hidden under tracker */
+#arrangementWorkspacePane {
+  position: relative;
+  z-index: 1;
+}
+#trackerWorkspacePane {
+  position: relative;
+  z-index: 0;
+}
+
+/* Disable text selection in arrangement, tracker and blocks library to avoid interfering with drag (re-enable for inputs).
+   WebKit props prevent long-press text selection / magnifier / callout on iPad. */
+#arrangementWorkspace,
+#trackerWorkspacePane,
+#blocksLibrarySidebar {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+#arrangementWorkspace input,
+#arrangementWorkspace textarea,
+#trackerWorkspacePane input,
+#trackerWorkspacePane textarea,
+#blocksLibrarySidebar input,
+#blocksLibrarySidebar textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* Global Cursor Styles + iPad/single-tap: avoid double-tap to activate */
 button,
 select,
@@ -827,8 +856,7 @@ strudel-editor {
   }
 }
 .arr-row-number {
-  @apply inline-flex h-8 items-center justify-center text-xs font-mono text-muted-foreground cursor-grab;
-  width: calc(var(--spacing) * 4);
+  @apply inline-flex items-center justify-center rounded-full w-6 h-6 text-[10px] font-mono text-muted-foreground cursor-grab shrink-0 border border-border bg-card/50;
 }
 .arr-row.playing .arr-row-number {
   @apply text-primary;
@@ -859,7 +887,7 @@ strudel-editor {
   @apply flex flex-wrap gap-2 flex-1 min-w-0;
 }
 .arr-chip {
-  @apply inline-flex items-center gap-1 px-2 py-1 h-8 rounded-md bg-muted border border-border text-xs text-foreground cursor-pointer;
+  @apply inline-flex items-center gap-3 px-1 py-1 h-8 rounded-md bg-muted border border-border text-xs text-foreground cursor-pointer;
   background-image: linear-gradient(
     90deg,
     var(--accent) 0%,
@@ -892,7 +920,37 @@ strudel-editor {
 }
 .arr-chip-del {
   @apply text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded-md;
+  width: 18px;
+  height: 18px;
 }
+.arr-chip-del svg {
+  width: 13px;
+  height: 13px;
+}
+
+.arr-trash-dropzone-wrap {
+  position: relative;
+}
+.arr-trash-tooltip {
+  @apply pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1.5 text-xs font-medium text-popover-foreground bg-popover border border-border rounded-md shadow-md whitespace-nowrap opacity-0 transition-opacity z-50;
+}
+.arr-trash-tooltip.arr-trash-tooltip-visible {
+  opacity: 1;
+}
+/* Portal copy appended to body so it always stacks above tracker/modal */
+.arr-trash-tooltip-portal {
+  @apply px-2 py-1.5 text-xs font-medium text-popover-foreground bg-popover border border-border rounded-md shadow-md whitespace-nowrap;
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+}
+.arr-trash-dropzone {
+  @apply transition-colors cursor-default;
+}
+.arr-trash-dropzone.arr-trash-dropzone-dragover {
+  @apply text-destructive border-destructive bg-destructive/10;
+}
+
 .arr-block-select {
   @apply h-8 w-40 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }

@@ -1170,7 +1170,7 @@ function renderArrangementRows() {
     });
     rowNumberEl.innerHTML = `
       <span class="arr-row-number-value">${rowIndex + 1}</span>
-      <i data-lucide="play" class="arr-row-play-icon hidden w-[13px] h-[13px] fill-current"></i>
+      <i data-lucide="play" class="arr-row-play-icon hidden w-2.5 h-2.5 fill-current"></i>
     `;
 
     const repeatsEl = document.createElement('input');
