@@ -590,7 +590,7 @@ function renderGrid() {
         repsEl.focus();
       });
 
-      setupScrubInteraction(repsEl);
+      setupScrubInteraction(repsEl, { sensitivity: 0.1 });
 
       const ndEl = document.createElement('input');
       ndEl.type = 'number';
@@ -633,7 +633,7 @@ function renderGrid() {
         ndEl.focus();
       });
 
-      setupScrubInteraction(ndEl);
+      setupScrubInteraction(ndEl, { sensitivity: 0.1 });
 
       rowEl.appendChild(cellEl);
       rowEl.appendChild(volEl);
@@ -1168,6 +1168,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
 
   const onMouseDown = (e) => {
     if (e.button !== 0) return;
+    if (state.focusedChannel !== ch || state.focusedStep !== step) return;
     startY = e.clientY;
     startIndex = getCurrentIndex();
     lastAppliedIndex = startIndex;
@@ -1202,6 +1203,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
 
   const onTouchStart = (e) => {
     if (e.touches.length !== 1) return;
+    if (state.focusedChannel !== ch || state.focusedStep !== step) return;
     startY = e.touches[0].clientY;
     startIndex = getCurrentIndex();
     lastAppliedIndex = startIndex;

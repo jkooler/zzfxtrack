@@ -1957,10 +1957,13 @@ export async function getInstrumentsForExporter() {
 /**
  * Enable drag-to-change (scrub) interaction on an input.
  * Works with mouse and touch (iPad).
+ * @param {HTMLInputElement} input
+ * @param {{ sensitivity?: number }} [options] - sensitivity: multiplier for drag→value (default 1). Use e.g. 0.1 so ~10px = 1 unit.
  */
-export function setupScrubInteraction(input) {
+export function setupScrubInteraction(input, options = {}) {
     if (input._scrubInitialized) return;
     input._scrubInitialized = true;
+    const baseSensitivity = options.sensitivity ?? 1;
     
     input.classList.add('scrub-input');
     
@@ -1968,7 +1971,8 @@ export function setupScrubInteraction(input) {
     let startValue = 0;
     let isDragging = false;
     
-    const applyDelta = (clientY, sensitivity = 1.0) => {
+    const applyDelta = (clientY, sensitivityOverride) => {
+        const sensitivity = sensitivityOverride ?? baseSensitivity;
         const deltaY = startY - clientY;
         let step = parseFloat(input.step);
         if (isNaN(step)) {
@@ -2005,7 +2009,7 @@ export function setupScrubInteraction(input) {
             document.body.style.userSelect = 'none';
         }
         e.preventDefault();
-        applyDelta(e.clientY, e.shiftKey ? 0.1 : 1.0);
+        applyDelta(e.clientY, e.shiftKey ? baseSensitivity * 0.1 : undefined);
     };
     
     const onMouseUp = () => {
@@ -2036,7 +2040,7 @@ export function setupScrubInteraction(input) {
         if (!isDragging && Math.abs(deltaY) < 3) return;
         if (!isDragging) isDragging = true;
         e.preventDefault();
-        applyDelta(clientY, 1.0);
+        applyDelta(clientY);
     };
     
     const onTouchEnd = () => {

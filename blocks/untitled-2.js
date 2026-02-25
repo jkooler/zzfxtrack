@@ -1,50 +1,37 @@
-// Block: Untitled-1
+// Block: Lop
 // Created from arrangement workspace
 
-export const name = "Untitled-1";
+export const name = "Lop";
 export const description = "Created from arrangement workspace";
 export const scope = "user";
 
-export const pattern = `note("~ ~ ~ ~ a5 ~ ~ ~ ~ ~ ~ ~ ~ d#3 ~ ~").s("kickdrum")`;
+export const pattern = `stack(
+  note("c#3 ~ ~ ~ g#3 ~ ~ ~ c#2 ~ ~ [d4 ~ d4 ~] ~ ~ ~ ~").s("test-kick"),
+  note("~ ~ ~ ~ ~ ~ g6 ~ ~ d3 ~ ~ d5 ~ ~ ~").s("test-kick"),
+  note("~ ~ f1 ~ ~ ~ ~ ~ ~ ~ d2 ~ ~ ~ ~ ~").s("synth-stab"),
+  note("~ ~ ~ ~ ~ ~ ~ ~ f1 ~ ~ ~ ~ ~ ~ ~").s("snare")
+)`;
 
 // Optional: Tracker state for re-editing
 export const trackerState = {
   "version": 1,
-  "channels": 1,
+  "channels": 4,
   "steps": 16,
   "bpm": 120,
   "grid": [
     [
+      "c#3",
       null,
       null,
       null,
-      null,
-      "a5",
-      null,
+      "g#3",
       null,
       null,
       null,
+      "c#2",
       null,
       null,
-      null,
-      null,
-      "d#3",
-      null,
-      null
-    ],
-    [
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
+      "d4",
       null,
       null,
       null,
@@ -57,11 +44,29 @@ export const trackerState = {
       null,
       null,
       null,
+      "g6",
+      null,
+      null,
+      "d3",
+      null,
+      null,
+      "d5",
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      "f1",
       null,
       null,
       null,
       null,
       null,
+      null,
+      null,
+      "d2",
       null,
       null,
       null,
@@ -77,7 +82,7 @@ export const trackerState = {
       null,
       null,
       null,
-      null,
+      "f1",
       null,
       null,
       null,
@@ -318,7 +323,7 @@ export const trackerState = {
       null,
       null,
       null,
-      null,
+      2,
       null,
       null,
       null,
@@ -598,10 +603,10 @@ export const trackerState = {
     ]
   ],
   "channelInstruments": [
-    "kickdrum",
-    "",
-    "",
-    "",
+    "test-kick",
+    "test-kick",
+    "synth-stab",
+    "snare",
     "",
     "",
     "",
