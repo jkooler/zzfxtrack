@@ -639,8 +639,8 @@ function undockTrackerModalFromWorkspace() {
     trackerDockRestoreNextSibling = null;
 }
 
-/** List item selector for touch activation (Songs, Arrangements, Instruments, Blocks). */
-const LIST_ITEM_SELECTOR = '.song-item, .instrument-item, .block-item';
+/** Selector for touch activation: list items + instrument drawer close (single-tap on iPad). */
+const LIST_ITEM_SELECTOR = '.song-item, .instrument-item, .block-item, #closeDrawerBtn';
 /** If touch started on one of these, we do not synthesize click (let the button handle it). */
 const LIST_ITEM_BUTTON_SELECTOR = '.sidebar-del-btn, .sidebar-edit-btn, .song-item-actions button, .arr-chip-del';
 

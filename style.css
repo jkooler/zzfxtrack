@@ -64,7 +64,7 @@
 
   /* Use html:root for higher specificity (0-1-1) to beat Strudel's inline :root (0-1-0) */
   html:root {
-    /* Dynamic base font size: portrait/narrow 15px, tablet landscape 17px, desktop 16px */
+    /* Dynamic base font size: portrait/narrow 15px, tablet landscape 16px, desktop 16px */
     font-size: 15px;
     /* Dark Mode Default (Stone & Amber) */
     /* Stone 950 ~ #0c0a09 -> hsl(24, 5.7%, 8.2%) */
@@ -119,10 +119,10 @@
     --input-bg: hsl(180deg 13.24% 26.67% / 36%) !important;
   }
 
-  /* Tablet landscape (e.g. iPad landscape): 17px base */
+  /* Tablet landscape (e.g. iPad landscape): 16px base */
   @media (min-width: 900px) {
     html:root {
-      font-size: 17px;
+      font-size: 16px;
     }
   }
   /* Desktop: 16px base */
