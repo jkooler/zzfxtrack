@@ -109,7 +109,10 @@ let playingPatternFilename = null;
 let isStrudelPaused = false; // true after Shift+click stop (pause); next play resumes
 let playBtnShiftHover = false; // shift held and mouse over play button (for pause icon)
 let pendingExternalUrl = null;
+const STATUS_ROW_COLLAPSE_MS = 3000;
+const STATUS_ROW_TRANSITION_MS = 300;
 let statusFadeClearTimeout = null;
+let statusAutoCollapseTimeout = null;
 let renameDebounceTimeout = null;
 let pendingUploadBundle = null;
 let patternEntriesCache = [];
@@ -179,6 +182,7 @@ const dom = {
     exportWavBtnLabel: document.getElementById('exportWavBtnLabel'),
     newPatternBtn: document.getElementById('newPatternBtn'),
     statusMsg: document.getElementById('statusMsg'),
+    footerStatusRow: document.getElementById('footerStatusRow'),
     demoModeBadge: document.getElementById('demoModeBadge'),
     devModeToolbarLabel: document.getElementById('devModeToolbarLabel'),
     
@@ -1906,7 +1910,7 @@ async function saveCurrentArrangement() {
         } catch (_e) {
             // Ignore localStorage failures.
         }
-        showSaveStatus('Saved arrangement', 900);
+        setStatus('Saved arrangement', 'success');
     } catch (err) {
         console.error('[Arrangements] Autosave failed:', err);
         setStatus('Failed to save arrangement', 'error');
@@ -3017,7 +3021,7 @@ async function renameArrangement(options = {}) {
         await refreshArrangementList();
         const nameInput = document.getElementById('arrangementWorkspaceName');
         if (nameInput) nameInput.value = baseName;
-        showSaveStatus('✅ Arrangement renamed');
+        setStatus('Arrangement renamed', 'success');
         if (!quiet) setStatus('Renamed successfully', 'success');
     } catch (e) {
         console.error(e);
@@ -3408,7 +3412,7 @@ async function loadPattern(filename) {
         
         // Clear ZzFXM export preview until this pattern/arrangement is exported again.
         clearZzfxmPreviewData();
-        hideSaveStatus();
+        setStatus('');
         
         renderPlayButton(); // Update play button context (Stop vs Play)
 
@@ -3594,10 +3598,8 @@ async function saveCurrentPattern() {
         });
         
         if (!res.ok) throw new Error('Save failed');
-        showSaveStatus('✅ Saved changes');
     } catch (e) {
         console.error(e);
-        setStatus('Error saving', 'error');
     }
 }
 
@@ -3838,6 +3840,14 @@ async function exportCurrentPattern(options = {}) {
             dom.statusMsg.classList.remove('status-error', 'status-success', 'status-normal');
             dom.statusMsg.classList.add('status-normal');
             dom.statusMsg.style.opacity = '1';
+            if (dom.footerStatusRow) {
+                const r = dom.footerStatusRow;
+                r.classList.remove('is-expanded');
+                void r.offsetHeight;
+                r.classList.add('is-expanded');
+            }
+            if (statusAutoCollapseTimeout) clearTimeout(statusAutoCollapseTimeout);
+            statusAutoCollapseTimeout = setTimeout(() => setStatus(''), STATUS_ROW_COLLAPSE_MS);
         } else {
             if (DEMO_MODE) {
                 statusMsg += ' • Demo mode: not written to /output';
@@ -3887,21 +3897,47 @@ function setStatus(msg, type = 'normal') {
         clearTimeout(statusFadeClearTimeout);
         statusFadeClearTimeout = null;
     }
+    if (statusAutoCollapseTimeout) {
+        clearTimeout(statusAutoCollapseTimeout);
+        statusAutoCollapseTimeout = null;
+    }
+
+    const row = dom.footerStatusRow;
 
     if (!msg) {
         dom.statusMsg.style.opacity = '0';
         dom.statusMsg.classList.remove('status-error', 'status-success', 'status-normal');
+        if (row) {
+            row.classList.remove('is-expanded');
+        }
         statusFadeClearTimeout = setTimeout(() => {
             dom.statusMsg.textContent = '';
             statusFadeClearTimeout = null;
-        }, 220);
+        }, STATUS_ROW_TRANSITION_MS);
         return;
     }
 
-    dom.statusMsg.innerText = msg;
-    dom.statusMsg.classList.remove('status-error', 'status-success', 'status-normal');
-    dom.statusMsg.classList.add(type === 'error' ? 'status-error' : (type === 'success' ? 'status-success' : 'status-normal'));
-    dom.statusMsg.style.opacity = '1';
+    if (row) {
+        row.classList.remove('is-expanded');
+        void row.offsetHeight;
+        row.classList.add('is-expanded');
+    }
+    requestAnimationFrame(() => {
+        dom.statusMsg.classList.remove('status-error', 'status-success', 'status-normal');
+        dom.statusMsg.classList.add(type === 'error' ? 'status-error' : (type === 'success' ? 'status-success' : 'status-normal'));
+        if (type === 'success') {
+            dom.statusMsg.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5 inline-block align-middle shrink-0 mr-1"></i>${escapeHtml(msg.replace(/^✅\s*/, ''))}`;
+            createIcons({ icons });
+        } else {
+            dom.statusMsg.innerText = msg;
+        }
+        dom.statusMsg.style.opacity = '1';
+    });
+
+    statusAutoCollapseTimeout = setTimeout(() => {
+        setStatus('');
+        statusAutoCollapseTimeout = null;
+    }, STATUS_ROW_COLLAPSE_MS);
 }
 
 function escapeHtml(value) {
@@ -3918,26 +3954,6 @@ document.addEventListener('app:status', (e) => {
     if (typeof message !== 'string') return;
     setStatus(message, type || 'normal');
 });
-
-function showSaveStatus(message = '✅ Saved changes', duration = 2000) {
-    // Use the saveStatus span for temporary messages
-    const saveStatus = document.getElementById('saveStatus');
-    if (!saveStatus) return;
-    
-    saveStatus.innerText = message;
-    saveStatus.style.opacity = '1';
-    
-    setTimeout(() => {
-        saveStatus.style.opacity = '0';
-    }, duration);
-}
-
-function hideSaveStatus() {
-    const saveStatus = document.getElementById('saveStatus');
-    if (saveStatus) {
-        saveStatus.style.opacity = '0';
-    }
-}
 
 function normalizePatternBaseName(input) {
     return String(input || '')
@@ -5343,16 +5359,12 @@ async function renamePattern(options = {}) {
         // Refresh pattern list
         await refreshPatternList();
         
-        if (!quiet) {
-            setStatus('Renamed successfully', 'success');
-        }
-        showSaveStatus('✅ Pattern renamed');
+        // Defer so footer isn't cleared by any same-tick updates from list refresh
+        setTimeout(() => setStatus('Pattern renamed', 'success'), 0);
         
     } catch (e) {
         console.error(e);
-        if (!quiet) {
-            setStatus('Error renaming pattern', 'error');
-        }
+        setStatus('Error renaming pattern', 'error');
         // Restore original name on error
         dom.patternNameInput.value = originalPatternName;
     }

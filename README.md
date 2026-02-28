@@ -1,10 +1,10 @@
 # Strudel to ZzFXM
 
-This is an authoring/export tool for ZzFXM that embeds Strudel for its REPL workflow. It’s not a Strudel fork and doesn’t aim to replace or extend Strudel; it focuses on ZzFXM export and related tooling, bridging these creative tools together.
+This is an authoring/export tool for ZzFXM that embeds Strudel for its REPL workflow and Visual Arranger. It’s not a Strudel fork and doesn’t aim to replace or extend Strudel; it focuses on ZzFXM export and related tooling, bridging these creative tools together.
 
 In practice it's a browser-based tool to compose **game-music loops** with Strudel patterns (and **Blocks**, a tracker-style workflow), design sounds with a **ZzFXMicro-friendly instrument editor**, and export **ZzFXM-ready song data** (plus WAV downloads for quick preview/sharing).
 
-Under the hood, Strudel is used for **pattern notation + event scheduling**, and instruments are **ZzFXMicro-compatible** (registered as Strudel sounds for playback). The export target is **ZzFXM**.
+Under the hood, Strudel is used for **pattern notation + event scheduling**, and instruments are **ZzFXMicro-compatible** (registered as Strudel sounds for playback). The Visual Arranger uses Strudel under it's hood, which means a valid path for integration efforts. The export target is **ZzFXM**.
 
 ## Who This Is For
 
@@ -15,11 +15,12 @@ Under the hood, Strudel is used for **pattern notation + event scheduling**, and
 
 ## 30-Second Demo Flow (In the App)
 
-1. Open an example pattern.
+1. Open an pattern or arrangement from the "Your" folder.
 1. Open the instrument editor and tweak a sound (ZzFXMicro-style params).
-1. (Optional) Open `Blocks` to sketch a beat/melody in a tracker-style grid, then preview the arrangement.
-1. Click `Pattern to ZzFXM`.
-1. Click the play button to preview ZzFXM playback.
+1. Try to modify either Strudel patterns or Arrangement.
+1. Note that they are separate things currently, because they aren't integrated into each other yet.
+1. Click `Pattern to ZzFXM` or `ARR. to ZzFXM` if you tried the Visual Arranger.
+1. After this, click the play button to preview ZzFXM playback.
 1. Open `Song Data` to inspect/download the exported JSON.
 1. Click `Export WAV` if you want a quick audio file to share/test.
 
@@ -43,7 +44,7 @@ Disclaimer: Currently this app is solely made for my specific needs, but I'm alw
 ## Alpha Status / Expectations
 
 This is an **alpha**:
-- The exporter is the “product”. The Strudel REPL is the authoring UI.
+- The exporter is the “product”. The Strudel REPL is the authoring UI. Visual Arranger is for those who like more traditional way.
 - Some Strudel features may preview fine but not export 1:1 (the README includes export-safe tips below).
 - If something exports incorrectly, please open an issue with a minimal pattern reproduction.
 
@@ -128,11 +129,10 @@ The welcome screen includes:
 - Published versions: GitHub Releases (`vX.Y.Z` tags)
 - Support policy: latest release is supported; older releases remain available as-is.
 
-## Author
+## Authors
 
-This application is founded and maintained by Jarno Koole.
+#### Jarno Koole
 
-I started my creative journey in 90s demoscene and tracker scene.
-In "real life" I'm a visual and UX designer and sometimes a developer.
-When I have the free time, I'm lost in music and games.
-But usually I just sleep and enjoy doing nothing.
+My background is in 90s demoscene and especially tracker scene.
+I'm fond of anything audio related and digital music production.
+I play different kinds of instruments too, but just for laughs.

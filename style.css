@@ -402,6 +402,16 @@ input[readonly]:focus-visible {
   transition: opacity 220ms ease;
 }
 
+/* Footer status row: animate expand/collapse with explicit height */
+#footerStatusRow {
+  height: 0;
+  overflow: hidden;
+  transition: height 0.3s ease-out;
+}
+#footerStatusRow.is-expanded {
+  height: 1.5rem;
+}
+
 .list-item,
 .instrument-item,
 .block-item {

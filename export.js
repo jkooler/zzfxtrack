@@ -10,7 +10,7 @@ await initStrudel();
 const args = process.argv.slice(2);
 const isAll = args.includes('--all');
 const isCombined = args.includes('--combined');
-const targetSong = args.find(a => !a.startsWith('--'));
+const targetPattern = args.find(a => !a.startsWith('--'));
 
 const OUTPUT_DIR = './output';
 const PATTERNS_DIR = path.resolve('./patterns');
@@ -31,7 +31,7 @@ function buildMonophonicByInstrumentIndex() {
     return byIndex;
 }
 
-function buildSongRegistry() {
+function buildPatternRegistry() {
     const registry = new Map();
     const byFile = [];
 
@@ -58,7 +58,7 @@ function buildSongRegistry() {
     return { registry, patterns: byFile };
 }
 
-async function loadSongModule(descriptor) {
+async function loadPatternModule(descriptor) {
     const moduleUrl = `${pathToFileURL(descriptor.fullPath).href}?t=${Date.now()}`;
     return import(moduleUrl);
 }
@@ -68,7 +68,7 @@ if (!fs.existsSync(OUTPUT_DIR)) {
 }
 
 async function runExport() {
-    const { registry, patterns } = buildSongRegistry();
+    const { registry, patterns } = buildPatternRegistry();
     const monophonicByInstrumentIndex = buildMonophonicByInstrumentIndex();
 
     if (isAll) {
@@ -79,7 +79,7 @@ async function runExport() {
         };
 
         for (const pattern of patterns) {
-            const module = await loadSongModule(pattern);
+            const module = await loadPatternModule(pattern);
             const result = exportPattern(module.pattern, module.bpm, instrumentArray, instrumentMapping, 8, {
                 monophonicByInstrumentIndex
             });
@@ -104,10 +104,10 @@ async function runExport() {
             fs.writeFileSync(filePath, JSON.stringify(bundle));
             console.log(`✅ Exported Bundle: ${filePath}`);
         }
-    } else if (targetSong && registry.has(targetSong)) {
-        const pattern = registry.get(targetSong);
+    } else if (targetPattern && registry.has(targetPattern)) {
+        const pattern = registry.get(targetPattern);
         console.log(`🚀 Exporting pattern: ${pattern.id} (${pattern.file})...`);
-        const module = await loadSongModule(pattern);
+        const module = await loadPatternModule(pattern);
         const result = exportPattern(module.pattern, module.bpm, instrumentArray, instrumentMapping, 8, {
             monophonicByInstrumentIndex
         });

@@ -553,11 +553,6 @@
           >
             <i data-lucide="settings" class="w-4 h-4"></i>
           </button>
-          <span
-            id="saveStatus"
-            class="ml-2 text-sm text-primary font-medium opacity-0 transition-opacity"
-            >Saved</span
-          >
         </div>
         <button
           id="demoModeBadge"
@@ -591,23 +586,23 @@
             Welcome to<br />STRUDEL TO ZZFXM
           </h1>
           <p class="text-base leading-relaxed text-foreground/80">
-            With this app you can create patterns using
+            With this app you can create musical content using
             <a
               href="https://github.com/KilledByAPixel/ZzFX"
               target="_blank"
               class="font-medium text-primary underline underline-offset-4 hover:no-underline"
               >ZzFXMicro.js</a
             >
-            synthesis and
+            synthesis with
             <a
               href="https://codeberg.org/uzu/strudel"
               target="_blank"
               class="font-medium text-primary underline underline-offset-4 hover:no-underline"
               >Strudel REPL</a
-            > interface.
+            > interface or Visual Arranger.
           </p>
           <p class="text-base text-muted-foreground">
-            After creating your pattern, export it to JSON format and use it in
+            After creating your musical content, export it to JSON format and use it in
             your games or other projects that use
             <a
               href="https://codeberg.org/uzu/zzfxm"
@@ -699,9 +694,9 @@
       </div>
       <footer
         id="mainFooter"
-        class="toolbar h-14 border-t border-border flex items-center px-3 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        class="toolbar border-t border-border flex flex-col bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
-        <div class="flex gap-2 items-center w-full">
+        <div class="flex gap-2 items-center w-full h-14 px-3 gap-4 shrink-0">
           <div id="footerExportGroup" class="flex gap-2 items-center flex-1 min-w-0 footer-export-group">
           <button
             id="exportSettingsBtn"
@@ -732,7 +727,7 @@
             disabled
             style="display: none"
           >
-            Pattern Data
+            Song Data
           </button>
           <span aria-hidden="true" class="h-5 w-px shrink-0 bg-border/80"></span>
           <button
@@ -742,10 +737,6 @@
             <i data-lucide="download" class="w-4 h-4"></i>
             <span id="exportWavBtnLabel">Export WAV</span>
           </button>
-          <span
-            id="statusMsg"
-            class="text-xs text-muted-foreground ml-2 font-mono flex-1 min-w-0 truncate"
-          ></span>
           </div>
           <div class="flex items-center gap-2 footer-utility-group">
           <span
@@ -763,6 +754,16 @@
             <i data-lucide="wrench" class="w-4 h-4"></i>
           </button>
           </div>
+        </div>
+        <div
+          id="footerStatusRow"
+          class="flex items-center px-3 shrink-0 border-t border-border/60"
+        >
+          <span
+            id="statusMsg"
+            class="text-xs text-muted-foreground font-mono w-full min-w-0 truncate transition-opacity duration-200"
+            aria-live="polite"
+          ></span>
         </div>
       </footer>
     </main>
@@ -783,7 +784,7 @@
           <h2
             class="text-lg font-semibold leading-none tracking-tight text-primary"
           >
-            Pattern Data
+            Song Data
           </h2>
           <button
             id="closeJsonModalBtn"
@@ -848,7 +849,7 @@
 
         <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
           <p class="text-foreground/90 leading-relaxed">
-            This is an authoring/export tool for <strong>ZzFXM</strong> that embeds <strong>Strudel</strong> for its REPL workflow. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
+            This is an authoring/export tool for <strong>ZzFXM</strong> that embeds <strong>Strudel</strong> for its REPL workflow and <strong>Visual Arranger</strong>. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
           </p>
 
           <div class="space-y-2">
