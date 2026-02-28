@@ -6,7 +6,7 @@ Status: Partially implemented (last verified 2026-02-18)
 Block insertion is now non-destructive, but it is not truly "cursor-based". The current implementation inserts a block as a named layer and updates `export const pattern = ...` to include that layer, rather than mapping the editor cursor position into the stored file and inserting arbitrary code.
 
 ## Current Behavior
-- Block insertion creates (or reuses) a `// BLOCKS START` ... `// BLOCKS END` section in the song file.
+- Block insertion creates (or reuses) a `// BLOCKS START` ... `// BLOCKS END` section in the Strudel pattern file.
 - The block is inserted as a `const <block_name> = ...` within that section.
 - `export const pattern = ...` is updated to include the new layer:
   - If the existing pattern is `stack(...)`, the new layer is appended as another argument.
@@ -168,7 +168,7 @@ function mapEditorToFilePosition(editorPos, editorCode, fileCode) {
 ## Alternative Approaches
 
 ### Alternative 1: Template-Based Insertion
-Instead of cursor-based, provide template slots in songs:
+Instead of cursor-based, provide template slots in Strudel patterns:
 ```javascript
 export const pattern = stack(
     note("c3 e3 g3").s("bd"),
@@ -179,7 +179,7 @@ export const pattern = stack(
 Blocks would replace these comment markers.
 
 **Pros:** Predictable, explicit
-**Cons:** Requires users to prepare songs with slots
+**Cons:** Requires users to prepare Strudel patterns with slots
 
 ### Alternative 2: Visual Block Arrangement
 Drag-and-drop interface showing blocks as tiles that can be arranged visually.

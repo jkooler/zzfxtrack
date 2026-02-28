@@ -54,7 +54,7 @@ const dom = {
     instrumentList: document.getElementById('instrumentList'),
     
     // Buttons
-    newSongBtn: document.getElementById('newPatternBtn'),
+    newPatternBtn: document.getElementById('newPatternBtn'),
     newArrangementBtn: document.getElementById('newArrangementBtn'),
     newInstrumentBtn: document.getElementById('newInstrumentBtn'),
     downloadProjectBtn: document.getElementById('downloadProjectBtn'),
@@ -1200,8 +1200,8 @@ function switchView(view) {
         dom.blocksTab?.classList.remove('active');
         dom.patternList.classList.remove('hidden');
         dom.arrangementList?.classList.add('hidden');
-        dom.newSongBtn.classList.remove('hidden');
-        dom.newSongBtn.classList.add('inline-flex');
+        dom.newPatternBtn.classList.remove('hidden');
+        dom.newPatternBtn.classList.add('inline-flex');
         dom.newArrangementBtn?.classList.add('hidden');
         dom.newArrangementBtn?.classList.remove('inline-flex');
     } else {
@@ -1209,8 +1209,8 @@ function switchView(view) {
         dom.blocksTab?.classList.add('active');
         dom.patternList.classList.add('hidden');
         dom.arrangementList?.classList.remove('hidden');
-        dom.newSongBtn.classList.add('hidden');
-        dom.newSongBtn.classList.remove('inline-flex');
+        dom.newPatternBtn.classList.add('hidden');
+        dom.newPatternBtn.classList.remove('inline-flex');
         dom.newArrangementBtn?.classList.remove('hidden');
         dom.newArrangementBtn?.classList.add('inline-flex');
     }

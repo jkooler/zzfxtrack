@@ -16,7 +16,7 @@ Focused validation for the remaining high-risk reliability paths:
 
 - Run in non-demo mode.
 - Open the app in a local browser from `npm run dev`.
-- Use a test song + test arrangement + test block you can freely edit/delete.
+- Use a test Strudel pattern + test arrangement + test block you can freely edit/delete.
 - Keep DevTools open (`Console` + `Network` + `Application > Local Storage`).
 
 ## Test Data Setup

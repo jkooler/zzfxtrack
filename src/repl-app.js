@@ -449,7 +449,7 @@ function stopAllPlaybackForSelectionChange() {
 
 function refreshZzfxmPreviewControlsVisibility() {
     const hasExportedData = Boolean(lastExportedData);
-    const matchesSong = hasExportedData
+    const matchesPattern = hasExportedData
         && lastExportedContext.type === 'pattern'
         && Boolean(currentPatternFilename)
         && lastExportedContext.filename === currentPatternFilename
@@ -459,7 +459,7 @@ function refreshZzfxmPreviewControlsVisibility() {
         && Boolean(currentArrangementFilename)
         && lastExportedContext.filename === currentArrangementFilename
         && isArrangementWorkspaceActive();
-    const shouldShow = matchesSong || matchesArrangement;
+    const shouldShow = matchesPattern || matchesArrangement;
 
     if (dom.previewPlayBtn) {
         dom.previewPlayBtn.style.display = shouldShow ? '' : 'none';
@@ -508,7 +508,7 @@ function updateFooterExportActionLabels() {
         dom.exportBtn.classList.toggle('export-arrangement-mode', arrangementMode);
     }
     if (dom.exportWavBtnLabel) {
-        dom.exportWavBtnLabel.textContent = arrangementMode ? 'Download WAV' : 'Download WAV';
+        dom.exportWavBtnLabel.textContent = arrangementMode ? 'Export WAV' : 'Export WAV';
     }
     if (dom.exportWavBtn) {
         dom.exportWavBtn.title = arrangementMode ? 'Download arrangement mix as WAV' : '';
@@ -762,7 +762,7 @@ async function init() {
     // 2. Load ZzFX Instruments into Strudel Registry
     loadZzFXInstruments(staticInstruments);
     
-    // 3. Load Songs List
+    // 3. Load Pattern List
     await refreshPatternList();
     await refreshArrangementList();
     await refreshBlocksLibrary();
@@ -808,7 +808,7 @@ async function init() {
     initBlocks();
     setupBlocksEventListeners();
 
-    // 11. iPad/touch: single-tap activation for list items (Songs, Arrangements, Instruments, Blocks)
+    // 11. iPad/touch: single-tap activation for list items (Patterns, Arrangements, Instruments, Blocks)
     setupListTouchActivation();
 
     // 12. Apply Strudel theme scope and sync colors, then hide init overlay (reduces flash)
@@ -3643,7 +3643,7 @@ export const pattern = note("c3 e3 g3").s("demo-kickdrum");
     }
 }
 
-// async function deleteCurrentSong() removed for new custom modal implementation below
+// async function deleteCurrentPattern() removed for new custom modal implementation below
 
 // --- BAKING LOGIC ---
 
@@ -4521,7 +4521,7 @@ async function downloadPatternsAndInstruments() {
                 return normalizePatternEntries(payload).map((entry) => entry.filename);
             })();
 
-        let downloadedSongs = 0;
+        let downloadedPatterns = 0;
         for (const filename of files) {
             let fileCode = '';
             if (filename === currentPatternFilename && dom.repl.editor?.code) {
@@ -4536,7 +4536,7 @@ async function downloadPatternsAndInstruments() {
 
             if (!fileCode.trim()) continue;
             zip.file(`patterns/${decodeURIComponent(filename)}`, fileCode);
-            downloadedSongs++;
+            downloadedPatterns++;
 
             if (DEMO_MODE) {
                 const metaFilename = filename.replace(/\.js$/i, '.meta.json');
@@ -4619,7 +4619,7 @@ async function downloadPatternsAndInstruments() {
             }
         }
 
-        if (!downloadedSongs && !downloadedBlocks && !downloadedArrangements && !downloadedInstruments) {
+        if (!downloadedPatterns && !downloadedBlocks && !downloadedArrangements && !downloadedInstruments) {
             setStatus('Nothing to download', 'error');
             return;
         }
@@ -4633,7 +4633,7 @@ async function downloadPatternsAndInstruments() {
                     version: 1,
                     generatedAt: stampIso,
                     counts: {
-                        patterns: downloadedSongs,
+                        patterns: downloadedPatterns,
                         blocks: downloadedBlocks,
                         arrangements: downloadedArrangements,
                         instruments: downloadedInstruments,
@@ -4650,7 +4650,7 @@ async function downloadPatternsAndInstruments() {
 
         const instrumentsLabel = downloadedInstruments ? ' + instruments.js' : ' (no instruments.js)';
         setStatus(
-            `Downloaded ZIP: ${downloadedSongs} pattern${downloadedSongs === 1 ? '' : 's'}, ${downloadedBlocks} block${downloadedBlocks === 1 ? '' : 's'}, ${downloadedArrangements} arrangement${downloadedArrangements === 1 ? '' : 's'}${instrumentsLabel}`,
+            `Downloaded ZIP: ${downloadedPatterns} pattern${downloadedPatterns === 1 ? '' : 's'}, ${downloadedBlocks} block${downloadedBlocks === 1 ? '' : 's'}, ${downloadedArrangements} arrangement${downloadedArrangements === 1 ? '' : 's'}${instrumentsLabel}`,
             'success'
         );
     } catch (e) {
@@ -5240,7 +5240,7 @@ function closeDeleteModal() {
 
 dom.cancelDeleteBtn.addEventListener('click', closeDeleteModal);
 
-// Song Rename Functionality
+// Pattern Rename Functionality
 let originalPatternName = '';
 
 // Input: do not save; draft is the input value. Save/rename only on blur (or Enter → blur).
@@ -5384,16 +5384,16 @@ async function deletePattern(filename) {
              updatePlayState(false);
         }
 
-        const wasCurrentSong = (filename === currentPatternFilename);
+        const wasCurrentPattern = (filename === currentPatternFilename);
         
-        if (wasCurrentSong) {
+        if (wasCurrentPattern) {
             showWelcome();
         }
         
         await refreshPatternList();
         
         // Clear status after a moment if we deleted the current pattern
-        if (wasCurrentSong) {
+        if (wasCurrentPattern) {
             setTimeout(() => setStatus(''), 1500);
         } else {
             setStatus('Deleted', 'success');
@@ -6469,7 +6469,7 @@ function setupBlocksEventListeners() {
 	            editor.stop();
 	            updatePlayState(false);
 	        }
-          document.dispatchEvent(new CustomEvent('blocks:targetSongScope', {
+          document.dispatchEvent(new CustomEvent('blocks:targetPatternScope', {
             detail: { scope: currentPatternScope }
           }));
 	    });

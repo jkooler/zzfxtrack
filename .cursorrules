@@ -25,9 +25,9 @@ Note: Don't install Shadcn, we should only imitate.
 The application uses a 3-column DAW (Digital Audio Workstation) layout.
 - **Mobile View:** Stack all sections vertically. We'll figure out how to optimize it later.
 - **Desktop View (lg+):** Maybe use a fixed grid e.g. `grid-cols-[320px_1fr_320px]`.
-  - **Left Column:** Song Library & Instrument tabs + The instrument drawer that is accessed by clicking an instrument.
-  - **Center Column:** Song Creator & Visualizer. Header contains some "our" functionality, those can be themed. Leave the Strudel alone.
-  - **Right Column:** Export & Data Output, showing the .json version of the song.
+  - **Left Column:** Strudel Pattern List, Arrangement List & Instruments. Also instrument drawer that is accessed by clicking an instrument.
+  - **Center Column:** Creation segment
+  - **Footer:** Export & Data Output, showing the .json version of the song.
 - **Viewport:** The main container should be `h-screen` and `overflow-hidden` to mimic native software.
 
 # CRITICAL CONSTRAINTS (AUDIO ENGINE SAFETY)

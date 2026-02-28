@@ -4,31 +4,31 @@ Status: Draft (created 2026-02-23)
 
 ## Summary
 
-Evolve “Blocks” from a modal-first workflow into a first-class **arrangements workspace** that lives alongside Songs and Instruments.
+Evolve “Blocks” from a modal-first workflow into a first-class **arrangements workspace** that lives alongside Strudel patterns and Instruments.
 
-- **Songs** remain Strudel-REPL-centric and keep the existing modal flow for inserting blocks/arrangements into a song (header button, renamed to **“+ Insert Blocks”**).
+- **Strudel patterns** remain Strudel-REPL-centric and keep the existing modal flow for inserting blocks/arrangements into a pattern (header button, renamed to **“+ Insert Blocks”**).
 - **Arrangements** become their own editable artifact with a dedicated UI: **arranger editor + tracker side-by-side**, plus a **global block library** in a right sidebar.
 - **Instruments** tab continues to behave as it does today (changes the list in the left sidebar; does not force a main-view switch).
 
-This design is selection-driven (no explicit “mode” toggle): selecting a Song shows the REPL; selecting an Arrangement shows the arrangements workspace.
+This design is selection-driven (no explicit “mode” toggle): selecting a pattern shows the REPL; selecting an Arrangement shows the arrangements workspace.
 
 ---
 
 ## Goals
 
 1. **Selection-driven main view**
-   - Click Song ⇒ show Strudel REPL view.
+   - Click Strudel pattern ⇒ show Strudel REPL view.
    - Click Arrangement ⇒ show Arranger+Tracker workspace.
-   - Switching between Song/Arrangement stops any playback.
+   - Switching between Pattern/Arrangement stops any playback.
 
 2. **Arrangements workspace layout**
-   - Left sidebar: existing tabs **Songs / Blocks / Instruments**.
+   - Left sidebar: existing tabs **Patterns / Arranger / Instruments**.
    - Main view (only when an arrangement is selected): **40% arranger / 60% tracker**.
    - Right sidebar: **global block library** (create/open/delete blocks).
    - Instrument editor panel stays where it is today: when opened it sits between left sidebar and main view.
 
 3. **Autosave-first**
-   - Arrangement saves on any structural/name/BPM change (same mental model as Song rename/autosave).
+   - Arrangement saves on any structural/name/BPM change (same mental model Strudel pattern rename/autosave).
    - Tracker saves with **200ms debounce**.
    - Add before-unload flush + close-confirmation when a debounced save is pending.
 
@@ -51,20 +51,20 @@ This design is selection-driven (no explicit “mode” toggle): selecting a Son
 
 ### Left sidebar tabs
 
-- Tabs: **Songs / Blocks / Instruments**
+- Tabs: **Patterns / Arranger / Instruments**
 - Tabs change *what list is visible*, not the main view.
 
 **Blocks tab**
-- Shows arrangements list with the same structure/behavior as Songs list today:
+- Shows arrangements list with the same structure/behavior as patterns list today:
   - User/Examples folder grouping (scope-aware)
   - Active row highlight
   - Delete affordance only when deletable (not examples)
-  - “New arrangement” button opens a name dialog (like New song)
-  - Note: Clicking the item will not start playback, so that is also identical how it's in the songs
+  - “New arrangement” button opens a name dialog (like New pattern)
+  - Note: Clicking the item will not start playback, so that is also identical how it's in the patterns
 
 ### Main view switching (selection-driven)
 
-**If a Song is selected**
+**If a pattern is selected**
 - Show current REPL view.
 - Header is visible (including **+ Insert Blocks** button).
 
@@ -80,8 +80,8 @@ This design is selection-driven (no explicit “mode” toggle): selecting a Son
 
 ### Playback rules
 
-- Only one playback source at a time (Song OR Arrangement preview).
-- On switching Song⇔Arrangement selection:
+- Only one playback source at a time (Pattern OR Arrangement preview).
+- On switching Pattern⇔Arrangement selection:
   - stop Strudel playback (if playing)
   - stop tracker preview / arrangement preview (if playing)
 - Additionally:
@@ -105,11 +105,11 @@ This design is selection-driven (no explicit “mode” toggle): selecting a Son
 
 ### Global selection state (in the app shell)
 
-- `selectedSong`: `{ filename, scope } | null`
+- `selectedPattern`: `{ filename, scope } | null`
 - `selectedArrangement`: `{ filename, scope } | null`
 - `selectedBlock`: `{ filename, scope } | null` (the block currently loaded into tracker)
 
-Invariant: `selectedSong` and `selectedArrangement` are mutually exclusive.
+Invariant: `selectedPattern` and `selectedArrangement` are mutually exclusive.
 
 ### Arrangement model (existing)
 
@@ -138,7 +138,7 @@ Blocks are stored as separate modules:
 
 - Arrangement:
   - Save immediately on any change (rows/chips/repeats/BPM/name), with a small debounce if needed to avoid request storms (start with 0–100ms).
-  - LocalStorage backup for resilience (same approach as Songs: `unsaved_<resource>`).
+  - LocalStorage backup for resilience (same approach as patterns: `unsaved_<resource>`).
 
 - Block (tracker):
   - Save with **200ms debounce** on edits.
@@ -184,7 +184,7 @@ The current arrangements and blocks UIs live inside `blocksModal` (`src/blocks.j
 
 To ship incrementally and keep risk low:
 
-1. **Keep the existing modal insertion flow** for Songs (now labeled **+ Insert Blocks**).
+1. **Keep the existing modal insertion flow** for Patterns (now labeled **+ Insert Blocks**).
 2. Build the new arrangements workspace as new UI surfaces, reusing as much rendering and state logic from `src/blocks.js` and `src/tracker.js` as possible.
 3. Only after parity is reached, consider extracting shared “arranger editor” logic out of `src/blocks.js`.
 
@@ -196,7 +196,7 @@ To ship incrementally and keep risk low:
 
 - Add app-level selection state for `selectedArrangement`.
 - Centralize playback stopping when selection changes.
-- Add unload-flush registration for arrangements and blocks (parallel to Songs).
+- Add unload-flush registration for arrangements and blocks (parallel to patterns).
 
 Likely files:
 - `src/repl-app.js` (selection, playback stop, autosave flush registration)
@@ -205,11 +205,11 @@ Likely files:
 ### Phase 1 — Left sidebar: arrangements list (Blocks tab)
 
 - Add “Blocks” tab button and list container in sidebar.
-- Implement arrangements list rendering to match Songs UX:
+- Implement arrangements list rendering to match patterns UX:
   - scope grouping (User/Examples)
   - delete button where allowed
   - create arrangement (name dialog)
-  - select arrangement (sets `selectedArrangement`, clears `selectedSong`)
+  - select arrangement (sets `selectedArrangement`, clears `selectedPattern`)
 
 Likely files:
 - `index.html` (sidebar tabs and list containers)
@@ -252,7 +252,7 @@ Likely files:
 
 ### Phase 5 — Right sidebar: global block library
 
-- Blocks list styled like Songs/Arrangements lists.
+- Blocks list styled like Patterns/Arrangements lists.
 - Actions:
   - create block (Untitled-n)
   - open block (loads into tracker)
@@ -265,7 +265,7 @@ Likely files:
 
 ### Phase 6 — Parity + cleanup
 
-- Keep modal insertion flow intact for Songs.
+- Keep modal insertion flow intact for patterns.
 - Update labels/tooltips/shortcuts for clarity.
 - Add/verify autosave status feedback for arrangements/blocks.
 - Manual QA pass (see below).
@@ -274,8 +274,8 @@ Likely files:
 
 ## Manual QA Checklist
 
-1. Select song; play; switch to arrangement ⇒ playback stops.
-2. Select arrangement; preview; switch to song ⇒ preview stops.
+1. Select pattern; play; switch to arrangement ⇒ playback stops.
+2. Select arrangement; preview; switch to pattern ⇒ preview stops.
 3. Edit arrangement name/BPM/rows ⇒ autosaves (and survives refresh).
 4. Select chip ⇒ tracker loads correct block; edits autosave with 200ms debounce.
 5. Create new block from arranger ⇒ appears as Untitled-n; rename in tracker; arrangement reflects updated name.
@@ -287,6 +287,6 @@ Likely files:
 ## Open Questions / Future Work
 
 - Where to place “Create user copy” for examples (context menu vs header action).
-- Export-from-arrangements UX (direct export without inserting to a Song).
+- Export-from-arrangements UX (direct export without inserting to a pattern).
 - Responsive/narrow layout behavior.
 - Potential “detached edits” (browse/edit blocks without changing the current arranger selection).

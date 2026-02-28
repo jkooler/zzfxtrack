@@ -78,7 +78,7 @@ export class ScopeVisualizer {
     }
 }
 
-// Global singleton for backward compatibility (Songs List)
+// Global singleton for backward compatibility (Patterns List)
 let globalVisualizer = null;
 let globalAnalyser = null;
 

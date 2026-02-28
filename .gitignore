@@ -4,26 +4,26 @@ output/
 dist/
 .agent/
 
-# songs: ignore everything by default
-songs/*.js
-songs/*.meta.json
+# Strudel patterns: ignore everything by default
+patterns/*.js
+patterns/*.meta.json
 
 # keep required file tracked
-!songs/index.js
+!patterns/index.js
 
 # keep curated user starters tracked
-!songs/01-Introduction.js
-!songs/02-Blocks.js
-!songs/03-Monophonic-Horn.js
+!patterns/01-Introduction.js
+!patterns/02-Blocks.js
+!patterns/03-Monophonic-Horn.js
 
 # keep curated examples tracked
-!songs/00-Introduction-Demo.js
-!songs/01-Monophon-Horn-Demo.js
-!songs/02-Blocks-Demo.js
-!songs/03-Diagnostic-sound.js
+!patterns/00-Introduction-Demo.js
+!patterns/01-Monophon-Horn-Demo.js
+!patterns/02-Blocks-Demo.js
+!patterns/03-Diagnostic-sound.js
 
 # keep curated scope metadata tracked
-!songs/00-Introduction-Demo.meta.json
-!songs/01-Monophon-Horn-Demo.meta.json
-!songs/02-Blocks-Demo.meta.json
-!songs/03-Diagnostic-sound.meta.json
+!patterns/00-Introduction-Demo.meta.json
+!patterns/01-Monophon-Horn-Demo.meta.json
+!patterns/02-Blocks-Demo.meta.json
+!patterns/03-Diagnostic-sound.meta.json

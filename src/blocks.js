@@ -42,7 +42,7 @@ let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, ex
 let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, example: false });
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
 const DEMO_MODE = import.meta.env.MODE === 'demo';
-let targetSongScope = 'user';
+let targetPatternScope = 'user';
 
 function normalizeScope(value) {
   return value === 'example' ? 'example' : 'user';
@@ -82,12 +82,12 @@ function updateArrangementSaveGuardUI() {
   }
 }
 
-function canInsertIntoCurrentSong() {
-  return !(normalizeScope(targetSongScope) === 'example' && !isDeveloperModeEnabled());
+function canInsertIntoCurrentPattern() {
+  return !(normalizeScope(targetPatternScope) === 'example' && !isDeveloperModeEnabled());
 }
 
 function updateInsertButtonsDisabledState() {
-  const canInsert = canInsertIntoCurrentSong();
+  const canInsert = canInsertIntoCurrentPattern();
   if (elements.insertBlockBtn) elements.insertBlockBtn.disabled = selectedBlockIndex == null || !canInsert;
   if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null || !canInsert;
 }
@@ -409,7 +409,7 @@ function setupEventListeners() {
 	  document.addEventListener('resource-scope:changed', async (e) => {
 	    const detail = e?.detail || {};
       if (detail.type === 'pattern') {
-        targetSongScope = normalizeScope(detail.scope);
+        targetPatternScope = normalizeScope(detail.scope);
         updateInsertButtonsDisabledState();
         return;
       }
@@ -431,8 +431,8 @@ function setupEventListeners() {
 	    }
 	  });
 
-  document.addEventListener('blocks:targetSongScope', (e) => {
-    targetSongScope = normalizeScope(e?.detail?.scope);
+  document.addEventListener('blocks:targetPatternScope', (e) => {
+    targetPatternScope = normalizeScope(e?.detail?.scope);
     updateInsertButtonsDisabledState();
   });
 
@@ -622,8 +622,8 @@ function setActiveTab(tab) {
   updateInsertButtonsDisabledState();
   if (elements.description) {
     elements.description.textContent = blocksActive
-      ? 'Blocks are reusable musical patterns. Create a block and insert it into a pattern or create arrangements from multiple blocks.'
-      : 'Create arrangements with Blocks to quickly test out your pattern ideas.';
+      ? 'Blocks are reusable musical patterns. Create a block and insert it into a Strudel pattern or create arrangements from multiple blocks.'
+      : 'Create arrangements with Blocks and add them to your Strudel patterns as a starting point.';
   }
   if (!blocksActive) {
     loadArrangementsList();
@@ -914,7 +914,7 @@ function getSelectedArrangement() {
 }
 
 function insertSelectedArrangement() {
-  if (!canInsertIntoCurrentSong()) {
+  if (!canInsertIntoCurrentPattern()) {
     emitStatus('Cannot insert into example pattern outside developer mode', 'error');
     return;
   }
@@ -1844,7 +1844,7 @@ async function openTrackerForArrangementBlock(filename) {
  * Insert the selected block into the current pattern
  */
 async function insertSelectedBlock() {
-  if (!canInsertIntoCurrentSong()) {
+  if (!canInsertIntoCurrentPattern()) {
     emitStatus('Cannot insert into example pattern outside developer mode', 'error');
     return;
   }

@@ -327,7 +327,7 @@ export function loadZzFXInstruments(instrumentMap, options = {}) {
             const analyser = getAnalyserById(0);
             if (analyser) gainNode.connect(analyser);
 
-            // Connect to our custom global visualizer (Songs list)
+            // Connect to our custom global visualizer (Patterns list)
             const vizAnalyser = getVisualizerAnalyser(audioCtx);
             if (vizAnalyser) gainNode.connect(vizAnalyser);
 

@@ -130,7 +130,7 @@
         </button>
       </div>
 
-      <!-- Songs / Arrangement lists (tabbed) -->
+      <!-- Strudel patterns / Arrangement lists (tabbed) -->
       <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
         <ul id="patternList" class="pattern-list flex-1 min-h-0 overflow-y-auto space-y-1"></ul>
         <ul id="arrangementList" class="pattern-list hidden flex-1 min-h-0 overflow-y-auto space-y-1"></ul>
@@ -732,7 +732,7 @@
             disabled
             style="display: none"
           >
-            Song Data
+            Pattern Data
           </button>
           <span aria-hidden="true" class="h-5 w-px shrink-0 bg-border/80"></span>
           <button
@@ -740,7 +740,7 @@
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 flex items-center gap-2"
           >
             <i data-lucide="download" class="w-4 h-4"></i>
-            <span id="exportWavBtnLabel">Download WAV</span>
+            <span id="exportWavBtnLabel">Export WAV</span>
           </button>
           <span
             id="statusMsg"
@@ -783,7 +783,7 @@
           <h2
             class="text-lg font-semibold leading-none tracking-tight text-primary"
           >
-            Song Data
+            Pattern Data
           </h2>
           <button
             id="closeJsonModalBtn"
@@ -858,7 +858,7 @@
               <li>Tweak a sound in the instrument editor (ZzFXMicro-style parameters).</li>
               <li>(Optional) Use <strong>Blocks</strong> to sketch parts in a tracker-style grid and preview an arrangement.</li>
               <li>Click <strong>Pattern to ZzFXM</strong> and preview playback.</li>
-              <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Download WAV</strong> to share/test.</li>
+              <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Export WAV</strong> to share/test.</li>
             </ol>
           </div>
 
@@ -1025,7 +1025,7 @@
             <ul class="list-disc pl-5 space-y-1">
               <li>Export is the main feature: it turns your composition into a ZzFXM song array <code>[instruments, patterns, sequence, BPM]</code> (plus optional stats), designed to be deterministic and engine-friendly.</li>
               <li>Preview uses the same exported ZzFXM structure and ZzFXMicro synthesis to let you verify the result before downloading.</li>
-              <li><code>Download WAV</code> renders the exported song to PCM audio and encodes it as a WAV file (sample rate and bit depth are configurable in Export Settings).</li>
+              <li><code>Export WAV</code> renders the exported song to PCM audio and encodes it as a WAV file (sample rate and bit depth are configurable in Export Settings).</li>
             </ul>
           </div>
 
@@ -2014,7 +2014,7 @@
 	        </div>
 
 	        <p id="blocksModalDescription" class="text-sm text-muted-foreground">
-	          Create arrangements with Blocks to quickly test out your pattern ideas.
+	          Create arrangements with Blocks and add them to your Strudel patterns as a starting point.
 	        </p>
 
 	        <div id="blocksTabPanel" class="hidden flex flex-col gap-4 flex-1 min-h-0">
