@@ -15,7 +15,7 @@ Under the hood, Strudel is used for **pattern notation + event scheduling**, and
 
 ## 30-Second Demo Flow (In the App)
 
-1. Open an example song.
+1. Open an example pattern.
 1. Open the instrument editor and tweak a sound (ZzFXMicro-style params).
 1. (Optional) Open `Blocks` to sketch a beat/melody in a tracker-style grid, then preview the arrangement.
 1. Click `Song to ZzFXM`.
@@ -57,9 +57,9 @@ npm install
 ```bash
 npm run dev
 ```
-3. Export songs:
+3. Export patterns:
 ```bash
-npm run export -- 01-demo-song
+npm run export -- 01-Introduction
 npm run export -- --all
 npm run export -- --all --combined
 ```
@@ -97,7 +97,7 @@ ZzFXM is effectively monophonic per channel. If you use chords, export may expan
 
 ## Project Structure
 
-- `songs/`: song definitions.
+- `patterns/`: pattern definitions (Strudel modules).
 - `instruments.js`: ZzFX instrument parameter definitions.
 - `export.js`: CLI exporter that writes JSON to `output/`.
 - `src/export-logic.js`: Strudel-to-ZzFXM export conversion logic.

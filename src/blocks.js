@@ -8,7 +8,7 @@ import { alertDialog } from './dialog.js';
  * Blocks Module
  * 
  * Manages reusable musical patterns (blocks) that can be created,
- * saved, and inserted into songs. Blocks are stored as separate files
+ * saved, and inserted into patterns. Blocks are stored as separate files
  * in the /blocks/ folder.
  */
 
@@ -155,7 +155,7 @@ function setArrangementRowPlayingVisual(rowEl, isPlaying) {
 function clearBlocksModalScopeVisualizer() {
   document.querySelectorAll('#blocksList .block-item, #arrangementsList .block-item').forEach((item) => {
     item.classList.remove('relative', 'overflow-hidden');
-    item.querySelector('canvas.song-visualizer')?.remove();
+    item.querySelector('canvas.list-item-visualizer')?.remove();
   });
   attachVisualizer(null);
 }
@@ -186,7 +186,7 @@ function updateBlocksModalScopeVisualizer() {
   document.querySelectorAll('#blocksList .block-item, #arrangementsList .block-item').forEach((item) => {
     if (item !== target) {
       item.classList.remove('relative', 'overflow-hidden');
-      item.querySelector('canvas.song-visualizer')?.remove();
+      item.querySelector('canvas.list-item-visualizer')?.remove();
     }
   });
 
@@ -196,10 +196,10 @@ function updateBlocksModalScopeVisualizer() {
   }
 
   target.classList.add('relative', 'overflow-hidden');
-  let canvas = target.querySelector('canvas.song-visualizer');
+  let canvas = target.querySelector('canvas.list-item-visualizer');
   if (!canvas) {
     canvas = document.createElement('canvas');
-    canvas.className = 'song-visualizer';
+    canvas.className = 'list-item-visualizer';
     target.insertBefore(canvas, target.firstChild);
   }
   canvas.width = target.clientWidth;
@@ -408,7 +408,7 @@ function setupEventListeners() {
 
 	  document.addEventListener('resource-scope:changed', async (e) => {
 	    const detail = e?.detail || {};
-      if (detail.type === 'song') {
+      if (detail.type === 'pattern') {
         targetSongScope = normalizeScope(detail.scope);
         updateInsertButtonsDisabledState();
         return;
@@ -622,8 +622,8 @@ function setActiveTab(tab) {
   updateInsertButtonsDisabledState();
   if (elements.description) {
     elements.description.textContent = blocksActive
-      ? 'Blocks are reusable musical patterns. Create a block and insert it into a song or create arrangements from multiple blocks.'
-      : 'Create arrangements with Blocks to quickly test out your song ideas.';
+      ? 'Blocks are reusable musical patterns. Create a block and insert it into a pattern or create arrangements from multiple blocks.'
+      : 'Create arrangements with Blocks to quickly test out your pattern ideas.';
   }
   if (!blocksActive) {
     loadArrangementsList();
@@ -711,14 +711,15 @@ function renderArrangementsList() {
       el.dataset.index = index;
       el.dataset.filename = arr.filename || '';
       el.tabIndex = 0;
+      const displayName = decodeURIComponent((arr.filename || '').replace(/\.js$/i, ''));
       el.innerHTML = `
         <div class="min-w-0">
-          <div class="block-name font-medium text-sm text-foreground">${escapeHtml(arr.name)}</div>
+          <div class="block-name font-medium text-sm text-foreground">${escapeHtml(displayName)}</div>
           <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(`BPM ${arr.bpm ?? 120}${isExample ? ' • Example' : ''}`)}</div>
         </div>
-        <div class="song-item-actions">
-          <button class="sidebar-edit-btn" title="Edit ${escapeHtml(arr.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
-          ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${escapeHtml(arr.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
+        <div class="list-item-actions">
+          <button class="sidebar-edit-btn" title="Edit ${escapeHtml(displayName)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
+          ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
         </div>
       `;
 
@@ -758,6 +759,16 @@ function renderArrangementsList() {
     elements.arrangementsList.appendChild(folder);
   };
 
+  const sortByLeadingNumber = (a, b) => {
+    const padNum = (s) => {
+      const m = (s || '').match(/^(\d+)/);
+      return m ? m[1].padStart(8, '0') + s : '\x00' + s;
+    };
+    const aKey = padNum(a.filename || '');
+    const bKey = padNum(b.filename || '');
+    return aKey.localeCompare(bKey);
+  };
+  arrangementsCache.sort(sortByLeadingNumber);
   const userEntries = [];
   const exampleEntries = [];
   arrangementsCache.forEach((arr, index) => {
@@ -768,7 +779,7 @@ function renderArrangementsList() {
     }
   });
   appendFolder('user', 'User', userEntries);
-  appendFolder('example', 'Examples (Read only)', exampleEntries);
+  appendFolder('example', 'Examples', exampleEntries);
 
   createIcons({ icons });
   updateBlocksModalScopeVisualizer();
@@ -904,7 +915,7 @@ function getSelectedArrangement() {
 
 function insertSelectedArrangement() {
   if (!canInsertIntoCurrentSong()) {
-    emitStatus('Cannot insert into example song outside developer mode', 'error');
+    emitStatus('Cannot insert into example pattern outside developer mode', 'error');
     return;
   }
   const arr = getSelectedArrangement();
@@ -956,9 +967,10 @@ async function openArrangementEditor(arrangement = null) {
   arrangementEditMode.scope = normalizeScope(arrangement?.scope);
 
   const state = arrangement?.arrangementState || null;
+  const nameFromFilename = arrangement?.filename ? arrangement.filename.replace(/\.js$/i, '') : '';
   arrangementDraft = {
     version: 1,
-    name: arrangement?.name || state?.name || '',
+    name: arrangement ? nameFromFilename : (state?.name || ''),
     bpm: state?.bpm ?? arrangement?.bpm ?? 120,
     rows: Array.isArray(state?.rows) && state.rows.length
       ? state.rows.map(r => ({
@@ -1197,6 +1209,10 @@ function renderArrangementRows() {
     });
     setupScrubInteraction(repeatsEl);
 
+    const repeatsWrap = document.createElement('div');
+    repeatsWrap.className = 'arr-repeats-wrap';
+    repeatsWrap.appendChild(repeatsEl);
+
 		    const chipsEl = document.createElement('div');
 		    chipsEl.className = 'arr-chips';
 
@@ -1369,7 +1385,7 @@ function renderArrangementRows() {
 		    const rowMain = document.createElement('div');
 		    rowMain.className = 'arr-row-main';
 		    rowMain.appendChild(rowNumberEl);
-		    rowMain.appendChild(repeatsEl);
+		    rowMain.appendChild(repeatsWrap);
 		    rowMain.appendChild(chipsEl);
 
 		    const rowActions = document.createElement('div');
@@ -1426,10 +1442,10 @@ async function saveArrangementFromEditor() {
   arrangementDraft.name = uniqueName;
   if (elements.arrangementName) elements.arrangementName.value = uniqueName;
 
-  const sanitizeBase = (str) => (str || 'arrangement')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') || 'arrangement';
+  const sanitizeBase = (str) => {
+    const base = String(str || '').trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '');
+    return base || 'arrangement';
+  };
 
   const arrangementState = {
     version: 1,
@@ -1444,7 +1460,26 @@ async function saveArrangementFromEditor() {
 
   try {
 	    if (arrangementEditMode.isEditing && arrangementEditMode.filename) {
-	      const res = await fetch(`/api/arrangements/${arrangementEditMode.filename}`, {
+	      const targetFilename = arrangementEditMode.filename;
+	      const baseSlug = sanitizeBase(uniqueName);
+	      const existingFilenames = new Set(existing.map((a) => String(a?.filename || '').toLowerCase()));
+	      let slugSuffix = 1;
+	      let uniqueSlug = baseSlug;
+	      while (existingFilenames.has(`${uniqueSlug}.js`.toLowerCase()) && `${uniqueSlug}.js`.toLowerCase() !== targetFilename.toLowerCase()) {
+	        slugSuffix++;
+	        uniqueSlug = `${baseSlug}-${slugSuffix}`;
+	      }
+	      const newFilename = `${uniqueSlug}.js`;
+	      if (newFilename.toLowerCase() !== targetFilename.toLowerCase()) {
+	        const renameRes = await fetch('/api/rename-arrangement', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
+	          body: JSON.stringify({ oldName: targetFilename, newName: newFilename }),
+	        });
+	        if (!renameRes.ok) throw new Error('Rename failed');
+	        arrangementEditMode.filename = newFilename;
+	      }
+	      const res = await fetch(`/api/arrangements/${encodeURIComponent(arrangementEditMode.filename)}`, {
 	        method: 'PUT',
 	        headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
 	        body: JSON.stringify({ name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope })
@@ -1455,7 +1490,7 @@ async function saveArrangementFromEditor() {
       const baseSlug = sanitizeBase(arrangementDraft.name);
       let uniqueSlug = baseSlug;
       suffix = 1;
-      while (existingFilenames.has(`${uniqueSlug}.js`)) {
+      while (existingFilenames.has(`${uniqueSlug}.js`.toLowerCase())) {
         suffix++;
         uniqueSlug = `${baseSlug}-${suffix}`;
       }
@@ -1585,7 +1620,7 @@ function renderBlocksList() {
           <div class="block-name font-medium text-sm text-foreground">${escapeHtml(block.name)}</div>
           <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(blockMeta)}</div>
         </div>
-        <div class="song-item-actions">
+        <div class="list-item-actions">
           <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
           ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
         </div>
@@ -1637,7 +1672,7 @@ function renderBlocksList() {
     }
   });
   appendFolder('user', 'User', userEntries);
-  appendFolder('example', 'Examples (Read only)', exampleEntries);
+  appendFolder('example', 'Examples', exampleEntries);
 
   createIcons({ icons });
   updateBlocksModalScopeVisualizer();
@@ -1806,11 +1841,11 @@ async function openTrackerForArrangementBlock(filename) {
 }
 
 /**
- * Insert the selected block into the current song
+ * Insert the selected block into the current pattern
  */
 async function insertSelectedBlock() {
   if (!canInsertIntoCurrentSong()) {
-    emitStatus('Cannot insert into example song outside developer mode', 'error');
+    emitStatus('Cannot insert into example pattern outside developer mode', 'error');
     return;
   }
   const block = getSelectedBlock();

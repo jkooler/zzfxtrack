@@ -48,7 +48,8 @@ export class ScopeVisualizer {
 
         ctx.clearRect(0, 0, width, height);
         ctx.lineWidth = 2;
-        ctx.strokeStyle = '#ffffff'; 
+        const scopeStroke = getComputedStyle(document.documentElement).getPropertyValue('--scope-stroke').trim();
+        ctx.strokeStyle = scopeStroke || '#ffffff';
         ctx.beginPath();
 
         // Amplify deviation from center so quiet signals are visible (zoom into waveform)

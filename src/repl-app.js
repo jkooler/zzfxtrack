@@ -9,7 +9,7 @@ import { exportPattern } from './export-logic.js';
 import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
-import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
+import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
@@ -50,9 +50,9 @@ function getDeveloperModeHeaders() {
 
 function updateAdvancedSettingsButtonsVisibility() {
     const show = !DEMO_MODE;
-    if (dom.openSongAdvancedSettingsBtn) {
-        const shouldShow = show && Boolean(currentSongFilename) && !dom.songNameInput.classList.contains('hidden');
-        dom.openSongAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
+    if (dom.openPatternAdvancedSettingsBtn) {
+        const shouldShow = show && Boolean(currentPatternFilename) && !dom.patternNameInput.classList.contains('hidden');
+        dom.openPatternAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
     }
     const arrangementWorkspaceSettingsBtn = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceAdvancedSettingsBtn');
     if (arrangementWorkspaceSettingsBtn) {
@@ -66,7 +66,7 @@ function updateDevModeToolbarLabelVisibility() {
     const show = !DEMO_MODE && isDeveloperModeEnabled();
     dom.devModeToolbarLabel.classList.toggle('hidden', !show);
 }
-const demoSongModules = import.meta.glob('../songs/*.js', {
+const demoPatternModules = import.meta.glob('../patterns/*.js', {
     query: '?raw',
     import: 'default',
     eager: true
@@ -81,8 +81,8 @@ const demoArrangementModules = import.meta.glob('../arrangements/*.js', {
     import: 'default',
     eager: true
 });
-const demoSongSourceByFile = new Map(
-    Object.entries(demoSongModules)
+const demoPatternSourceByFile = new Map(
+    Object.entries(demoPatternModules)
         .filter(([modulePath]) => !modulePath.endsWith('/index.js'))
         .map(([modulePath, source]) => [modulePath.split('/').pop(), source])
 );
@@ -98,22 +98,22 @@ const demoArrangementSourceByFile = new Map(
 );
 
 // --- Global State ---
-let currentSongFilename = null;
-let currentSongDisplayName = ''; // Store the display name for restoration
+let currentPatternFilename = null;
+let currentPatternDisplayName = ''; // Store the display name for restoration
 let lastExportedData = null;
 let lastExportedMeta = null;
 let lastExportedContext = { type: null, filename: null };
 let autoSaveTimeout = null; // Debounce timer for auto-save
 let isPreviewPlaying = false;
-let playingSongFilename = null;
+let playingPatternFilename = null;
 let isStrudelPaused = false; // true after Shift+click stop (pause); next play resumes
 let playBtnShiftHover = false; // shift held and mouse over play button (for pause icon)
 let pendingExternalUrl = null;
 let statusFadeClearTimeout = null;
 let renameDebounceTimeout = null;
 let pendingUploadBundle = null;
-let songEntriesCache = [];
-let currentSongScope = 'user';
+let patternEntriesCache = [];
+let currentPatternScope = 'user';
 let currentArrangementFilename = null;
 let currentArrangementScope = 'user';
 let arrangementEntriesCache = [];
@@ -134,6 +134,7 @@ let arrangementLiveEditSession = {
     committed: false,
 };
 let arrangementAutoSaveTimeout = null;
+let arrangementRenameDebounceTimeout = null;
 let trackerAutoSaveTimeout = null;
 let pendingTrackerSavePayload = null;
 let arrangementDraftState = null;
@@ -165,18 +166,18 @@ const DEFAULT_PLAYBACK_PRESET_ID = 'balanced';
 const dom = {
     repl: document.getElementById('repl'),
     sidebarTitle: document.getElementById('sidebarTitle'),
-    songList: document.getElementById('songList'),
+    patternList: document.getElementById('patternList'),
     arrangementList: document.getElementById('arrangementList'),
     blocksTab: document.getElementById('blocksTab'),
     newArrangementBtn: document.getElementById('newArrangementBtn'),
-    songNameInput: document.getElementById('songNameInput'),
-    openSongAdvancedSettingsBtn: document.getElementById('openSongAdvancedSettingsBtn'),
+    patternNameInput: document.getElementById('patternNameInput'),
+    openPatternAdvancedSettingsBtn: document.getElementById('openPatternAdvancedSettingsBtn'),
     playBtn: document.getElementById('playBtn'),
     exportBtn: document.getElementById('exportBtn'),
     exportBtnLabel: document.getElementById('exportBtnLabel'),
     exportWavBtn: document.getElementById('exportWavBtn'),
     exportWavBtnLabel: document.getElementById('exportWavBtnLabel'),
-    newSongBtn: document.getElementById('newSongBtn'),
+    newPatternBtn: document.getElementById('newPatternBtn'),
     statusMsg: document.getElementById('statusMsg'),
     demoModeBadge: document.getElementById('demoModeBadge'),
     devModeToolbarLabel: document.getElementById('devModeToolbarLabel'),
@@ -222,14 +223,16 @@ const dom = {
     systemSettingsThemeDefaultBtn: document.getElementById('systemSettingsThemeDefaultBtn'),
     systemSettingsThemeLegacyBtn: document.getElementById('systemSettingsThemeLegacyBtn'),
     systemSettingsThemeRomulanBtn: document.getElementById('systemSettingsThemeRomulanBtn'),
+    systemSettingsThemeMonoBtn: document.getElementById('systemSettingsThemeMonoBtn'),
+    systemSettingsThemeMilkBtn: document.getElementById('systemSettingsThemeMilkBtn'),
     systemSettingsThemeWhiteDebugBtn: document.getElementById('systemSettingsThemeWhiteDebugBtn'),
     systemSettingsReplThemeSelect: document.getElementById('systemSettingsReplThemeSelect'),
 
     // Modals
-    newSongModal: document.getElementById('newSongModal'),
-    newSongName: document.getElementById('newSongName'),
-    confirmNewSong: document.getElementById('confirmNewSong'),
-    cancelNewSong: document.getElementById('cancelNewSong'),
+    newPatternModal: document.getElementById('newPatternModal'),
+    newPatternName: document.getElementById('newPatternName'),
+    confirmNewPattern: document.getElementById('confirmNewPattern'),
+    cancelNewPattern: document.getElementById('cancelNewPattern'),
     newArrangementModal: document.getElementById('newArrangementModal'),
     newArrangementName: document.getElementById('newArrangementName'),
     confirmNewArrangement: document.getElementById('confirmNewArrangement'),
@@ -315,9 +318,36 @@ const dom = {
     saveAdvancedSettingsBtn: document.getElementById('saveAdvancedSettingsBtn'),
 };
 
-const SONG_FOLDER_STATE_KEY = 'zzfxm-folder-state-songs-v1';
+const PATTERN_FOLDER_STATE_KEY = 'zzfxm-folder-state-patterns-v1';
 /** Default: user folder open, examples collapsed. User toggles are persisted and restored on next launch. */
-let songFolderState = loadFolderState(SONG_FOLDER_STATE_KEY, { user: true, example: false });
+let patternFolderState = loadFolderState(PATTERN_FOLDER_STATE_KEY, { user: true, example: false });
+
+const ARRANGEMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v1';
+let arrangementFolderState = loadFolderState(ARRANGEMENT_FOLDER_STATE_KEY, { user: true, example: false });
+
+const COLOR_THEME_KEY = 'zzfxm-color-theme';
+// Apply saved theme or default to Phantom when none saved (non-destructive: html:root keeps original default)
+(function applyInitialColorTheme() {
+    try {
+        let saved = localStorage.getItem(COLOR_THEME_KEY);
+        if (saved === 'legacy' || saved === 'gotham') {
+            saved = 'crusader';
+            localStorage.setItem(COLOR_THEME_KEY, 'crusader');
+        }
+        if (saved === 'romulan') {
+            saved = 'phantom';
+            localStorage.setItem(COLOR_THEME_KEY, 'phantom');
+        }
+        if (saved === null) {
+            document.documentElement.setAttribute('data-theme', 'phantom');
+            localStorage.setItem(COLOR_THEME_KEY, 'phantom');
+        } else if (saved !== '') {
+            document.documentElement.setAttribute('data-theme', saved);
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+        }
+    } catch (_e) { /* ignore */ }
+})();
 
 function normalizeScope(value) {
     return value === 'example' ? 'example' : 'user';
@@ -345,7 +375,7 @@ function saveFolderState(key, value) {
     }
 }
 
-function normalizeSongEntries(payload) {
+function normalizePatternEntries(payload) {
     if (!Array.isArray(payload)) return [];
     return payload
         .map((item) => {
@@ -363,8 +393,8 @@ function normalizeSongEntries(payload) {
         .filter(Boolean);
 }
 
-function getSongEntry(filename) {
-    return songEntriesCache.find((entry) => entry.filename === filename) || null;
+function getPatternEntry(filename) {
+    return patternEntriesCache.find((entry) => entry.filename === filename) || null;
 }
 
 function normalizeArrangementEntries(payload) {
@@ -379,7 +409,7 @@ function normalizeArrangementEntries(payload) {
             }
             return {
                 filename: item.filename,
-                name: typeof item.name === 'string' ? item.name : item.filename.replace(/\.js$/i, ''),
+                name: item.filename.replace(/\.js$/i, ''),
                 scope: normalizeScope(item.scope),
                 bpm: Number.isFinite(Number(item.bpm)) ? Number(item.bpm) : 120,
                 arrangementState: item.arrangementState ?? null,
@@ -420,9 +450,9 @@ function stopAllPlaybackForSelectionChange() {
 function refreshZzfxmPreviewControlsVisibility() {
     const hasExportedData = Boolean(lastExportedData);
     const matchesSong = hasExportedData
-        && lastExportedContext.type === 'song'
-        && Boolean(currentSongFilename)
-        && lastExportedContext.filename === currentSongFilename
+        && lastExportedContext.type === 'pattern'
+        && Boolean(currentPatternFilename)
+        && lastExportedContext.filename === currentPatternFilename
         && !isArrangementWorkspaceActive();
     const matchesArrangement = hasExportedData
         && lastExportedContext.type === 'arrangement'
@@ -456,7 +486,7 @@ function setZzfxmPreviewData(songData, meta = null, { type, filename, reveal = t
     }
 }
 
-function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFXM song' } = {}) {
+function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFXM data' } = {}) {
     if (isPreviewPlaying) {
         stopZzfxmSong();
         updatePreviewPlayButton(false);
@@ -471,7 +501,7 @@ function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFX
 function updateFooterExportActionLabels() {
     const arrangementMode = isArrangementWorkspaceActive();
     if (dom.exportBtnLabel) {
-        dom.exportBtnLabel.textContent = arrangementMode ? 'Arr. to ZzFXM' : 'Song to ZzFXM';
+        dom.exportBtnLabel.textContent = arrangementMode ? 'Arr. to ZzFXM' : 'Pattern to ZzFXM';
     }
     if (dom.exportBtn) {
         dom.exportBtn.title = arrangementMode ? 'Export arrangement to ZzFXM JSON' : '';
@@ -491,12 +521,15 @@ function showWelcome() {
     dom.editorContainer.style.display = 'none';
     if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'none';
     if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
-    if (dom.mainFooter) dom.mainFooter.classList.add('hidden');
+    if (dom.mainFooter) {
+        dom.mainFooter.classList.remove('hidden');
+        dom.mainFooter.classList.add('footer-intro-mode');
+    }
     dom.playBtn.style.visibility = 'hidden';
     dom.exportBtn.disabled = true;
     if (dom.exportWavBtn) dom.exportWavBtn.disabled = true;
     
-    updateSongSelectionState(false);
+    updatePatternSelectionState(false);
     dom.previewPlayBtn.style.display = 'none';
     dom.previewPlayBtn.disabled = true;
     if(dom.showJsonBtn) {
@@ -506,22 +539,22 @@ function showWelcome() {
     updateAdvancedSettingsButtonsVisibility();
     
     // Clear state
-    currentSongFilename = null;
-    currentSongScope = 'user';
+    currentPatternFilename = null;
+    currentPatternScope = 'user';
     currentArrangementFilename = null;
     currentArrangementScope = 'user';
     arrangementDraftState = null;
     activeArrangementBlockFilename = null;
-    playingSongFilename = null;
-    dom.songNameInput.classList.add('hidden');
+    playingPatternFilename = null;
+    dom.patternNameInput.classList.add('hidden');
     if(dom.repl.editor) dom.repl.editor.stop();
     renderPlayButton();
-    updateSongListVisualizer();
+    updatePatternListVisualizer();
     
     // Clear preview
     clearZzfxmPreviewData({ placeholder: '' });
 
-    // No highlight on initial load or when returning to welcome with no song
+    // No highlight on initial load or when returning to welcome with no pattern
     dom.sidebarTitle?.classList.remove('active');
     refreshArrangementListActiveState();
     renderArrangementWorkspace();
@@ -529,8 +562,8 @@ function showWelcome() {
 }
 
 function handleSidebarTitleClick() {
-    // If introduction is visible and a song is selected, return to that song; otherwise show introduction.
-    if (dom.sidebarTitle?.classList.contains('active') && currentSongFilename) {
+    // If introduction is visible and a pattern is selected, return to that pattern; otherwise show introduction.
+    if (dom.sidebarTitle?.classList.contains('active') && currentPatternFilename) {
         showEditor();
     } else {
         showIntroduction();
@@ -538,8 +571,8 @@ function handleSidebarTitleClick() {
 }
 
 function showIntroduction() {
-    // If no song is loaded, the introduction view is also the "empty" state.
-    if (!currentSongFilename) {
+    // If no pattern is loaded, the introduction view is also the "empty" state.
+    if (!currentPatternFilename) {
         showWelcome();
         return;
     }
@@ -549,8 +582,12 @@ function showIntroduction() {
     dom.editorContainer.style.display = 'none';
     if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'none';
     if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
-    if (dom.mainFooter) dom.mainFooter.classList.add('hidden');
-    dom.songNameInput.classList.add('hidden');
+    if (dom.mainFooter) {
+        dom.mainFooter.classList.remove('hidden');
+        dom.mainFooter.classList.add('footer-intro-mode');
+    }
+    dom.patternNameInput.classList.add('hidden');
+    updateArrangementSelectionState(false);
     updateAdvancedSettingsButtonsVisibility();
 
     // Keep controls available so the user can stop playback while reading intro.
@@ -559,10 +596,10 @@ function showIntroduction() {
     if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
 
     renderPlayButton();
-    updateSongListVisualizer();
+    updatePatternListVisualizer();
 
-    // Remove selection highlight from song list when introduction page is selected
-    Array.from(dom.songList.querySelectorAll('.song-item')).forEach((li) => li.classList.remove('active'));
+    // Remove selection highlight from pattern list when introduction page is selected
+    Array.from(dom.patternList.querySelectorAll('.list-item')).forEach((li) => li.classList.remove('active'));
     dom.sidebarTitle?.classList.add('active');
     refreshZzfxmPreviewControlsVisibility();
     updateFooterExportActionLabels();
@@ -578,8 +615,8 @@ function isTrackerDocked() {
 }
 
 function showEditor() {
-    // When switching to song editor, do not undock the tracker if it is docked and playing.
-    // Playback should only stop when the user clicks Play on the song (togglePlay → stopAllPlaybackForSelectionChange).
+    // When switching to pattern editor, do not undock the tracker if it is docked and playing.
+    // Playback should only stop when the user clicks Play on the pattern (togglePlay → stopAllPlaybackForSelectionChange).
     if (!isTrackerDocked()) {
         undockTrackerModalFromWorkspace();
     }
@@ -587,12 +624,16 @@ function showEditor() {
     dom.editorContainer.style.display = 'flex';
     if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'none';
     if (dom.mainHeader) dom.mainHeader.classList.remove('hidden');
-    if (dom.mainFooter) dom.mainFooter.classList.remove('hidden');
+    if (dom.mainFooter) {
+        dom.mainFooter.classList.remove('hidden');
+        dom.mainFooter.classList.remove('footer-intro-mode');
+    }
+    updateArrangementSelectionState(false);
     dom.playBtn.style.visibility = 'visible';
     dom.exportBtn.disabled = false;
     if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
-    dom.songNameInput.classList.remove('hidden');
-    updateSongSelectionState(!!currentSongFilename);
+    dom.patternNameInput.classList.remove('hidden');
+    updatePatternSelectionState(!!currentPatternFilename);
     refreshZzfxmPreviewControlsVisibility();
     updateAdvancedSettingsButtonsVisibility();
     dom.sidebarTitle?.classList.remove('active');
@@ -604,10 +645,15 @@ function showArrangementWorkspace() {
     dom.editorContainer.style.display = 'none';
     if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'flex';
     if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
-    if (dom.mainFooter) dom.mainFooter.classList.remove('hidden');
+    if (dom.mainFooter) {
+        dom.mainFooter.classList.remove('hidden');
+        dom.mainFooter.classList.remove('footer-intro-mode');
+    }
     dom.sidebarTitle?.classList.remove('active');
-    dom.songNameInput.classList.add('hidden');
-    updateSongSelectionState(false);
+    dom.patternNameInput.classList.add('hidden');
+    updatePatternSelectionState(false);
+    updateArrangementSelectionState(!!currentArrangementFilename);
+    updateArrangementInstrumentUsage();
     dom.exportBtn.disabled = false;
     if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
     refreshZzfxmPreviewControlsVisibility();
@@ -658,9 +704,9 @@ function undockTrackerModalFromWorkspace() {
 }
 
 /** Selector for touch activation: list items + instrument drawer close (single-tap on iPad). */
-const LIST_ITEM_SELECTOR = '.song-item, .instrument-item, .block-item, #closeDrawerBtn';
+const LIST_ITEM_SELECTOR = '.list-item, .instrument-item, .block-item, #closeDrawerBtn';
 /** If touch started on one of these, we do not synthesize click (let the button handle it). */
-const LIST_ITEM_BUTTON_SELECTOR = '.sidebar-del-btn, .sidebar-edit-btn, .song-item-actions button, .arr-chip-del';
+const LIST_ITEM_BUTTON_SELECTOR = '.sidebar-del-btn, .sidebar-edit-btn, .list-item-actions button, .arr-chip-del';
 
 /**
  * iPad / touch: make first tap activate list items instead of requiring double-tap.
@@ -717,11 +763,11 @@ async function init() {
     loadZzFXInstruments(staticInstruments);
     
     // 3. Load Songs List
-    await refreshSongList();
+    await refreshPatternList();
     await refreshArrangementList();
     await refreshBlocksLibrary();
-    if (DEMO_MODE && dom.newSongBtn) {
-        dom.newSongBtn.style.display = 'none';
+    if (DEMO_MODE && dom.newPatternBtn) {
+        dom.newPatternBtn.style.display = 'none';
     }
     if (dom.demoModeBadge) {
         dom.demoModeBadge.hidden = !DEMO_MODE;
@@ -745,17 +791,14 @@ async function init() {
     // Start in Welcome State
     showWelcome();
     
-    // Clear status - no song loaded yet
+    // Clear status - no pattern loaded yet
     setStatus('');
 
     // 7. Initialize Icons
     // 7. Initialize Icons
     createIcons({ icons });
 
-    // 8. Sync Theme Colors from CodeMirror to Sidebar
-    setTimeout(syncThemeColors, 1000); // Wait for editor render
-    // Scope Strudel REPL theme vars to .editor-pane so they don't override app --background/--foreground
-    setTimeout(scopeStrudelThemeVarsToRepl, 1200);
+    // 8. Theme sync and scope run in step 12 before hiding overlay to avoid late flash
 
     // 9. Initialize Tracker
     initTrackerWithInstruments();
@@ -767,6 +810,13 @@ async function init() {
 
     // 11. iPad/touch: single-tap activation for list items (Songs, Arrangements, Instruments, Blocks)
     setupListTouchActivation();
+
+    // 12. Apply Strudel theme scope and sync colors, then hide init overlay (reduces flash)
+    setTimeout(() => {
+        scopeStrudelThemeVarsToRepl();
+        syncThemeColors();
+        hideInitOverlay();
+    }, 150);
 }
 
 /**
@@ -836,7 +886,7 @@ export async function reloadInstruments() {
     });
 
     // Ensure every static instrument (e.g. cowbell) is in the registry even if missing from
-    // localStorage — so reload never unregisters them and songs play without a full page reload.
+    // localStorage — so reload never unregisters them and patterns play without a full page reload.
     for (const [alias, params] of Object.entries(staticInstruments)) {
         if (Array.isArray(params) && map[alias] === undefined) {
             map[alias] = params;
@@ -883,8 +933,8 @@ function setupAutoSave() {
             // Listen to the view's update events via DOM observation
             // CodeMirror updates the DOM on every change, so we can detect that
             const observer = new MutationObserver(() => {
-                // Only process if editor is focused and a song is loaded
-                if (!currentSongFilename || !view.hasFocus) return;
+                // Only process if editor is focused and a pattern is loaded
+                if (!currentPatternFilename || !view.hasFocus) return;
                 
                 const currentCode = view.state.doc.toString();
                 
@@ -895,9 +945,9 @@ function setupAutoSave() {
                     // Update indicators in sidebar
                     updateInstrumentUsage(currentCode);
                     
-                    if (currentSongScope !== 'example' || isDeveloperModeEnabled()) {
+                    if (currentPatternScope !== 'example' || isDeveloperModeEnabled()) {
                         // IMMEDIATELY save to localStorage as backup
-                        localStorage.setItem(`unsaved_${currentSongFilename}`, currentCode);
+                        localStorage.setItem(`unsaved_${currentPatternFilename}`, currentCode);
                         
                         // Clear existing auto-save timeout
                         if (autoSaveTimeout) {
@@ -906,9 +956,9 @@ function setupAutoSave() {
                         
                         // Set new timeout for 1 second (debounced server save)
                         autoSaveTimeout = setTimeout(() => {
-                            saveCurrentSong();
+                            saveCurrentPattern();
                             // Clear localStorage after successful server save
-                            localStorage.removeItem(`unsaved_${currentSongFilename}`);
+                            localStorage.removeItem(`unsaved_${currentPatternFilename}`);
                         }, 1000);
                     }
                     
@@ -951,14 +1001,14 @@ function setupAutoSave() {
 
 registerBeforeUnloadConfirmer(() => {
     if (DEMO_MODE) return false;
-    if (currentSongScope === 'example' && !isDeveloperModeEnabled()) return false;
-    return Boolean(autoSaveTimeout && currentSongFilename);
+    if (currentPatternScope === 'example' && !isDeveloperModeEnabled()) return false;
+    return Boolean(autoSaveTimeout && currentPatternFilename);
 });
 
 registerBeforeUnloadFlusher(() => {
     if (DEMO_MODE) return;
-    if (currentSongScope === 'example' && !isDeveloperModeEnabled()) return;
-    if (!(autoSaveTimeout && currentSongFilename)) return;
+    if (currentPatternScope === 'example' && !isDeveloperModeEnabled()) return;
+    if (!(autoSaveTimeout && currentPatternFilename)) return;
 
     clearTimeout(autoSaveTimeout);
     autoSaveTimeout = null;
@@ -969,8 +1019,8 @@ registerBeforeUnloadFlusher(() => {
     // Use sendBeacon for reliable delivery even as page closes.
     // Note: sendBeacon cannot send custom headers, so for developer mode (which needs a header)
     // we use fetch({ keepalive: true }) instead.
-    if (currentSongScope === 'example' && isDeveloperModeEnabled()) {
-        fetch(`/api/song/${currentSongFilename}`, {
+    if (currentPatternScope === 'example' && isDeveloperModeEnabled()) {
+        fetch(`/api/pattern/${currentPatternFilename}`, {
             method: 'POST',
             headers: getDeveloperModeHeaders(),
             body: fileCode,
@@ -978,12 +1028,12 @@ registerBeforeUnloadFlusher(() => {
         }).catch(() => {});
     } else {
         const blob = new Blob([fileCode], { type: 'text/plain' });
-        navigator.sendBeacon(`/api/song/${currentSongFilename}`, blob);
+        navigator.sendBeacon(`/api/pattern/${currentPatternFilename}`, blob);
     }
 
     // Also keep in localStorage as backup
     try {
-        localStorage.setItem(`unsaved_${currentSongFilename}`, editorCode);
+        localStorage.setItem(`unsaved_${currentPatternFilename}`, editorCode);
     } catch (_e) {
         // Ignore storage failures.
     }
@@ -1027,7 +1077,7 @@ registerBeforeUnloadFlusher(() => {
         pendingTrackerSavePayload = null;
         fetch(`/api/blocks/${encodeURIComponent(payload.filename)}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
             body: JSON.stringify(payload),
             keepalive: true,
         }).catch(() => {});
@@ -1041,27 +1091,33 @@ registerBeforeUnloadFlusher(() => {
 
 // --- API Interactions ---
 
-async function refreshSongList() {
+async function refreshPatternList() {
     try {
         const entries = DEMO_MODE
-            ? Array.from(demoSongSourceByFile.keys())
+            ? Array.from(demoPatternSourceByFile.keys())
                 .sort()
                 .map((filename) => ({ filename, scope: 'example' }))
             : await (async () => {
-                const res = await fetch('/api/songs');
-                if (!res.ok) throw new Error('Failed to list songs');
+                const res = await fetch('/api/patterns');
+                if (!res.ok) throw new Error('Failed to list patterns');
                 const payload = await res.json();
-                return normalizeSongEntries(payload).sort((a, b) => a.filename.localeCompare(b.filename));
+                const collator = typeof Intl !== 'undefined' && Intl.Collator
+                    ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+                    : null;
+                const sorted = normalizePatternEntries(payload).sort((a, b) =>
+                    collator ? collator.compare(a.filename, b.filename) : a.filename.localeCompare(b.filename)
+                );
+                return sorted;
             })();
 
-        songEntriesCache = entries;
-        dom.songList.innerHTML = '';
+        patternEntriesCache = entries;
+        dom.patternList.innerHTML = '';
 
         if (!entries.length) {
-            dom.songList.innerHTML = `
-                <li class="text-xs text-muted-foreground px-3 py-2">No songs available.</li>
+            dom.patternList.innerHTML = `
+                <li class="text-xs text-muted-foreground px-3 py-2">No patterns available.</li>
             `;
-            updateSongListVisualizer();
+            updatePatternListVisualizer();
             createIcons({ icons });
             return;
         }
@@ -1070,40 +1126,40 @@ async function refreshSongList() {
             const isEmpty = items.length === 0;
             const expanded = isEmpty
                 ? true
-                : (scope === 'example' ? songFolderState.example : songFolderState.user);
+                : (scope === 'example' ? patternFolderState.example : patternFolderState.user);
             const folderIcon = expanded ? 'folder-open' : 'folder';
             const highlightIcon = expanded && (scope !== 'user' || items.length > 0);
 
             const folderLi = document.createElement('li');
             folderLi.className = 'mt-1 pb-1 border-b border-border/40';
             folderLi.innerHTML = `
-                <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-song-folder="${scope}">
+                <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-pattern-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
                         <i data-lucide="${folderIcon}" class="w-5 h-5 ${expanded ? 'fill-current' : 'fill-[var(--secondary)]'} stroke-[var(--card)]"></i>
                         ${label}
                     </span>
                     <span class="opacity-70">${items.length}</span>
                 </button>
-                <ul class="list-none m-0 p-0 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-song-folder-items="${scope}"></ul>
+                <ul class="list-none m-0 p-0 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-pattern-folder-items="${scope}"></ul>
             `;
-            const list = folderLi.querySelector(`[data-song-folder-items="${scope}"]`);
-            folderLi.querySelector(`[data-song-folder="${scope}"]`)?.addEventListener('click', () => {
+            const list = folderLi.querySelector(`[data-pattern-folder-items="${scope}"]`);
+            folderLi.querySelector(`[data-pattern-folder="${scope}"]`)?.addEventListener('click', () => {
                 if (isEmpty) return;
                 if (scope === 'example') {
-                    songFolderState.example = !songFolderState.example;
+                    patternFolderState.example = !patternFolderState.example;
                 } else {
-                    songFolderState.user = !songFolderState.user;
+                    patternFolderState.user = !patternFolderState.user;
                 }
-                saveFolderState(SONG_FOLDER_STATE_KEY, songFolderState);
-                refreshSongList();
+                saveFolderState(PATTERN_FOLDER_STATE_KEY, patternFolderState);
+                refreshPatternList();
             });
 
             if (items.length === 0) {
                 const empty = document.createElement('li');
                 empty.className = 'text-xs text-muted-foreground px-2 py-1';
                 empty.textContent = scope === 'user'
-                    ? 'Create a new song to get started.'
-                    : 'No example songs available.';
+                    ? 'Create a new pattern to get started.'
+                    : 'No example patterns available.';
                 list?.appendChild(empty);
             }
 
@@ -1115,7 +1171,7 @@ async function refreshSongList() {
                 const isImmutable = isExample && !devMode;
                 const li = document.createElement('li');
                 const isIntroductionVisible = dom.welcomeView?.style?.display === 'flex';
-                li.className = `song-item ${file === currentSongFilename && !isIntroductionVisible ? 'active' : ''}`;
+                li.className = `list-item ${file === currentPatternFilename && !isIntroductionVisible ? 'active' : ''}`;
                 li.dataset.scope = normalizeScope(entry.scope);
                 li.dataset.filename = file;
 
@@ -1123,16 +1179,16 @@ async function refreshSongList() {
                     ? `<span class="font-medium">${fileName}</span>`
                     : `
                         <span class="font-medium">${fileName}</span>
-                        <div class="song-item-actions">
+                        <div class="list-item-actions">
                             <button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
                     `;
 
                 li.querySelector('span').onclick = (e) => {
                     e.stopPropagation();
-                    loadSong(file);
+                    loadPattern(file);
                 };
-                li.onclick = () => loadSong(file);
+                li.onclick = () => loadPattern(file);
 
                 if (!DEMO_MODE && !isImmutable) {
                     li.querySelector('.sidebar-del-btn').onclick = (e) => {
@@ -1144,53 +1200,53 @@ async function refreshSongList() {
                 list?.appendChild(li);
             });
 
-            dom.songList.appendChild(folderLi);
+            dom.patternList.appendChild(folderLi);
         };
 
         const userEntries = entries.filter((entry) => normalizeScope(entry.scope) !== 'example');
         const exampleEntries = entries.filter((entry) => normalizeScope(entry.scope) === 'example');
-        appendFolder('user', 'User', userEntries);
-        appendFolder('example', 'Examples (Read only)', exampleEntries);
+        appendFolder('user', 'Your patterns', userEntries);
+        appendFolder('example', 'Examples', exampleEntries);
         
-        updateSongListVisualizer();
+        updatePatternListVisualizer();
         createIcons({ icons });
     } catch (e) {
         console.error(e);
-        setStatus('Error loading songs', 'error');
+        setStatus('Error loading patterns', 'error');
     }
 }
 
-function isSongListVisible() {
-    return Boolean(dom.songList && !dom.songList.classList.contains('hidden'));
+function isPatternListVisible() {
+    return Boolean(dom.patternList && !dom.patternList.classList.contains('hidden'));
 }
 
 function isArrangementListVisible() {
     return Boolean(dom.arrangementList && !dom.arrangementList.classList.contains('hidden'));
 }
 
-function updateSongListVisualizer() {
-    if (!isSongListVisible()) return;
+function updatePatternListVisualizer() {
+    if (!isPatternListVisible()) return;
 
-    const playingEntry = songEntriesCache.find((e) => e.filename === playingSongFilename);
+    const playingEntry = patternEntriesCache.find((e) => e.filename === playingPatternFilename);
     const playingScope = playingEntry ? normalizeScope(playingEntry.scope) : null;
     let visualizerAttached = false;
 
-    // When the playing song's folder is collapsed, show the scope visualizer on the folder row
-    const folderRows = Array.from(dom.songList.children).filter((li) =>
-        li.querySelector('[data-song-folder]')
+    // When the playing pattern's folder is collapsed, show the scope visualizer on the folder row
+    const folderRows = Array.from(dom.patternList.children).filter((li) =>
+        li.querySelector('[data-pattern-folder]')
     );
     folderRows.forEach((folderLi) => {
-        const folderButton = folderLi.querySelector('[data-song-folder]');
-        const scope = folderButton?.getAttribute('data-song-folder');
-        const itemsUl = folderLi.querySelector('[data-song-folder-items]');
+        const folderButton = folderLi.querySelector('[data-pattern-folder]');
+        const scope = folderButton?.getAttribute('data-pattern-folder');
+        const itemsUl = folderLi.querySelector('[data-pattern-folder-items]');
         const isCollapsed = itemsUl?.classList.contains('hidden');
-        const isPlayingInThisFolder = playingScope === scope && playingSongFilename;
+        const isPlayingInThisFolder = playingScope === scope && playingPatternFilename;
 
         if (isCollapsed && isPlayingInThisFolder) {
-            let canvas = folderLi.querySelector('canvas.song-visualizer');
+            let canvas = folderLi.querySelector('canvas.list-item-visualizer');
             if (!canvas) {
                 canvas = document.createElement('canvas');
-                canvas.className = 'song-visualizer';
+                canvas.className = 'list-item-visualizer';
                 folderLi.classList.add('relative', 'overflow-hidden');
                 folderLi.insertBefore(canvas, folderLi.firstChild);
             }
@@ -1199,27 +1255,27 @@ function updateSongListVisualizer() {
             attachVisualizer(canvas);
             visualizerAttached = true;
         } else {
-            const canvas = folderLi.querySelector('canvas.song-visualizer');
+            const canvas = folderLi.querySelector('canvas.list-item-visualizer');
             if (canvas) canvas.remove();
             folderLi.classList.remove('relative', 'overflow-hidden');
         }
     });
 
-    const listItems = Array.from(dom.songList.querySelectorAll('.song-item'));
+    const listItems = Array.from(dom.patternList.querySelectorAll('.list-item'));
     listItems.forEach((li) => {
         const span = li.querySelector('span');
-        // Visualizer should track the PLAYING song, not necessarily the selected one
+        // Visualizer should track the PLAYING pattern, not necessarily the selected one
         const isPlayingTarget =
             span &&
-            playingSongFilename &&
-            span.innerText === decodeURIComponent(playingSongFilename.replace('.js', ''));
+            playingPatternFilename &&
+            span.innerText === decodeURIComponent(playingPatternFilename.replace('.js', ''));
         
-        let canvas = li.querySelector('canvas.song-visualizer');
+        let canvas = li.querySelector('canvas.list-item-visualizer');
 
         if (isPlayingTarget && !visualizerAttached) {
             if (!canvas) {
                 canvas = document.createElement('canvas');
-                canvas.className = 'song-visualizer';
+                canvas.className = 'list-item-visualizer';
                 // Set internal resolution to match element size
                 canvas.width = li.clientWidth;
                 canvas.height = li.clientHeight;
@@ -1247,14 +1303,14 @@ function updateArrangementListScopeVisualizer() {
     let target = null;
     const playingFilename = arrangementPreviewPlayingFilename ?? (isArrangementPreviewPlaying() ? currentArrangementFilename : null);
     if (isArrangementPreviewPlaying() && playingFilename) {
-        target = Array.from(dom.arrangementList.querySelectorAll('.song-item'))
+        target = Array.from(dom.arrangementList.querySelectorAll('.list-item'))
             .find((item) => item.dataset.filename === playingFilename) || null;
     }
 
-    Array.from(dom.arrangementList.querySelectorAll('.song-item')).forEach((item) => {
+    Array.from(dom.arrangementList.querySelectorAll('.list-item')).forEach((item) => {
         if (item !== target) {
             item.classList.remove('relative', 'overflow-hidden');
-            item.querySelector('canvas.song-visualizer')?.remove();
+            item.querySelector('canvas.list-item-visualizer')?.remove();
         }
     });
 
@@ -1264,10 +1320,10 @@ function updateArrangementListScopeVisualizer() {
     }
 
     target.classList.add('relative', 'overflow-hidden');
-    let canvas = target.querySelector('canvas.song-visualizer');
+    let canvas = target.querySelector('canvas.list-item-visualizer');
     if (!canvas) {
         canvas = document.createElement('canvas');
-        canvas.className = 'song-visualizer';
+        canvas.className = 'list-item-visualizer';
         target.insertBefore(canvas, target.firstChild);
     }
     canvas.width = target.clientWidth;
@@ -1276,13 +1332,13 @@ function updateArrangementListScopeVisualizer() {
 }
 
 /**
- * Re-apply active highlight to the currently selected song in the sidebar.
- * Used when user switches from introduction view to Songs/Instruments tab.
+ * Re-apply active highlight to the currently selected pattern in the sidebar.
+ * Used when user switches from introduction view to Strudel/Instruments tab.
  */
-export function refreshSongListActiveState() {
-    if (!currentSongFilename || !dom.songList) return;
-    Array.from(dom.songList.querySelectorAll('.song-item')).forEach((li) => {
-        li.classList.toggle('active', li.dataset.filename === currentSongFilename);
+export function refreshPatternListActiveState() {
+    if (!currentPatternFilename || !dom.patternList) return;
+    Array.from(dom.patternList.querySelectorAll('.list-item')).forEach((li) => {
+        li.classList.toggle('active', li.dataset.filename === currentPatternFilename);
     });
 }
 
@@ -1297,15 +1353,26 @@ async function refreshArrangementList() {
     if (!dom.arrangementList) return;
 
     try {
+        const sortByLeadingNumber = (a, b) => {
+            const padNum = (s) => {
+                const m = (s || '').match(/^(\d+)/);
+                return m ? m[1].padStart(8, '0') + s : '\x00' + s;
+            };
+            const aKey = padNum(a.filename || '');
+            const bKey = padNum(b.filename || '');
+            return aKey.localeCompare(bKey);
+        };
         const entries = DEMO_MODE
             ? Array.from(demoArrangementSourceByFile.keys())
-                .sort()
                 .map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'example' }))
+                .sort(sortByLeadingNumber)
             : await (async () => {
                 const res = await fetch('/api/arrangements');
                 if (!res.ok) throw new Error('Failed to list arrangements');
                 const payload = await res.json();
-                return normalizeArrangementEntries(payload).sort((a, b) => a.filename.localeCompare(b.filename));
+                const entries = normalizeArrangementEntries(payload);
+                entries.sort(sortByLeadingNumber);
+                return entries;
             })();
 
         arrangementEntriesCache = entries;
@@ -1313,19 +1380,33 @@ async function refreshArrangementList() {
 
         const appendFolder = (scope, label, items) => {
             const isEmpty = items.length === 0;
+            const expanded = isEmpty
+                ? true
+                : (scope === 'example' ? arrangementFolderState.example : arrangementFolderState.user);
+            const folderIcon = expanded ? 'folder-open' : 'folder';
             const folderLi = document.createElement('li');
             folderLi.className = 'mt-1 pb-1 border-b border-border/40';
             folderLi.innerHTML = `
-                <div class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground">
+                <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-arrangement-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
-                        <i data-lucide="folder-open" class="w-5 h-5 fill-current stroke-[var(--card)]"></i>
+                        <i data-lucide="${folderIcon}" class="w-5 h-5 ${expanded ? 'fill-current' : 'fill-[var(--secondary)]'} stroke-[var(--card)]"></i>
                         ${label}
                     </span>
                     <span class="opacity-70">${items.length}</span>
-                </div>
-                <ul class="list-none m-0 p-0 space-y-1 mt-1" data-arrangement-folder-items="${scope}"></ul>
+                </button>
+                <ul class="list-none m-0 p-0 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-arrangement-folder-items="${scope}"></ul>
             `;
             const list = folderLi.querySelector(`[data-arrangement-folder-items="${scope}"]`);
+            folderLi.querySelector(`[data-arrangement-folder="${scope}"]`)?.addEventListener('click', () => {
+                if (isEmpty) return;
+                if (scope === 'example') {
+                    arrangementFolderState.example = !arrangementFolderState.example;
+                } else {
+                    arrangementFolderState.user = !arrangementFolderState.user;
+                }
+                saveFolderState(ARRANGEMENT_FOLDER_STATE_KEY, arrangementFolderState);
+                refreshArrangementList();
+            });
 
             if (isEmpty) {
                 const empty = document.createElement('li');
@@ -1341,16 +1422,17 @@ async function refreshArrangementList() {
                 const devMode = isDeveloperModeEnabled();
                 const isImmutable = isExample && !devMode;
                 const li = document.createElement('li');
-                li.className = `song-item ${entry.filename === currentArrangementFilename ? 'active' : ''}`;
+                li.className = `list-item ${entry.filename === currentArrangementFilename ? 'active' : ''}`;
                 li.dataset.scope = normalizeScope(entry.scope);
                 li.dataset.filename = entry.filename;
 
+                const displayName = decodeURIComponent((entry.filename || '').replace(/\.js$/i, ''));
                 li.innerHTML = (DEMO_MODE || isImmutable)
-                    ? `<span class="font-medium">${escapeHtml(entry.name || decodeURIComponent(entry.filename.replace(/\.js$/i, '')))}</span>`
+                    ? `<span class="font-medium">${escapeHtml(displayName)}</span>`
                     : `
-                        <span class="font-medium">${escapeHtml(entry.name || decodeURIComponent(entry.filename.replace(/\.js$/i, '')))}</span>
-                        <div class="song-item-actions">
-                            <button class="sidebar-del-btn" title="Delete ${escapeHtml(entry.name || entry.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        <span class="font-medium">${escapeHtml(displayName)}</span>
+                        <div class="list-item-actions">
+                            <button class="sidebar-del-btn" title="Delete ${escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
                     `;
 
@@ -1373,9 +1455,9 @@ async function refreshArrangementList() {
             dom.arrangementList.appendChild(folderLi);
         };
 
-        const userItems = entries.filter((entry) => normalizeScope(entry.scope) === 'user');
-        const exampleItems = entries.filter((entry) => normalizeScope(entry.scope) === 'example');
-        appendFolder('user', 'User', userItems);
+        const userItems = [...entries.filter((entry) => normalizeScope(entry.scope) === 'user')].sort(sortByLeadingNumber);
+        const exampleItems = [...entries.filter((entry) => normalizeScope(entry.scope) === 'example')].sort(sortByLeadingNumber);
+        appendFolder('user', 'Your arrangements', userItems);
         appendFolder('example', 'Examples', exampleItems);
         createIcons({ icons });
         updateArrangementListScopeVisualizer();
@@ -1388,7 +1470,7 @@ async function refreshArrangementList() {
 
 function refreshArrangementListActiveState() {
     if (!dom.arrangementList) return;
-    Array.from(dom.arrangementList.querySelectorAll('.song-item')).forEach((li) => {
+    Array.from(dom.arrangementList.querySelectorAll('.list-item')).forEach((li) => {
         li.classList.toggle('active', li.dataset.filename === currentArrangementFilename);
     });
     updateArrangementListScopeVisualizer();
@@ -1448,10 +1530,10 @@ async function createNewArrangement(name) {
     try {
         const existing = await fetch('/api/arrangements').then((r) => (r.ok ? r.json() : [])).catch(() => []);
         const existingFilenames = new Set((existing || []).map((item) => String(item?.filename || '').toLowerCase()));
-        let baseSlug = normalizedBase.toLowerCase();
+        let baseSlug = normalizedBase;
         let slug = baseSlug;
         let suffix = 1;
-        while (existingFilenames.has(`${slug}.js`)) {
+        while (existingFilenames.has(`${slug}.js`.toLowerCase())) {
             suffix += 1;
             slug = `${baseSlug}-${suffix}`;
         }
@@ -1666,6 +1748,25 @@ async function resolveBlockDetailForArrangement(filename) {
     }
 }
 
+/**
+ * Gather block patterns from the current arrangement and update instrument usage for "List used instruments".
+ * Fire-and-forget; called when arrangement is loaded or when blocks change.
+ */
+async function updateArrangementInstrumentUsage() {
+    if (!currentArrangementFilename || !arrangementDraftState) return;
+    const arrangementState = buildArrangementStatePayload();
+    const blockFiles = Array.from(new Set(
+        (arrangementState.rows || []).flatMap((row) => Array.isArray(row?.blocks) ? row.blocks : []).filter(Boolean)
+    ));
+    const patterns = [];
+    for (const filename of blockFiles) {
+        const block = await resolveBlockDetailForArrangement(filename);
+        if (block?.pattern) patterns.push(block.pattern);
+    }
+    const combinedCode = patterns.join('\n');
+    updateInstrumentUsage(combinedCode);
+}
+
 async function buildArrangementExportContext() {
     if (!currentArrangementFilename || !arrangementDraftState) return null;
 
@@ -1841,10 +1942,12 @@ function scheduleTrackerAutoSave({ filename, trackerState }) {
         pendingTrackerSavePayload = null;
         trackerAutoSaveTimeout = null;
         if (!activePayload) return;
+        const blockNow = getBlockByFilename(activePayload.filename);
+        if (blockNow && normalizeScope(blockNow.scope) === 'example' && !isDeveloperModeEnabled()) return;
         try {
             const res = await fetch(`/api/blocks/${encodeURIComponent(activePayload.filename)}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
                 body: JSON.stringify({
                     name: activePayload.name,
                     description: activePayload.description,
@@ -1853,7 +1956,7 @@ function scheduleTrackerAutoSave({ filename, trackerState }) {
                     scope: activePayload.scope,
                 }),
             });
-            if (!res.ok) throw new Error('Autosave failed');
+            if (!res.ok) throw new Error(res.status === 403 ? 'Example block is read-only' : 'Autosave failed');
             try {
                 localStorage.removeItem(`unsaved_block_${activePayload.filename}`);
             } catch (_e) {
@@ -1878,7 +1981,7 @@ function scheduleTrackerAutoSave({ filename, trackerState }) {
             } catch (_e) {
                 // Ignore storage failures.
             }
-            setStatus('Failed to autosave block', 'error');
+            setStatus(err.message === 'Example block is read-only' ? err.message : 'Failed to autosave block', 'error');
         }
     }, 200);
 }
@@ -2178,25 +2281,50 @@ function renderArrangementWorkspace() {
 
     nameInput?.addEventListener('input', () => {
         arrangementDraftState.name = String(nameInput.value || '').trim() || arrangementDraftState.name;
-        scheduleArrangementAutoSave();
-        emitArrangementStateChanged();
     });
     nameInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
+            if (arrangementRenameDebounceTimeout) {
+                clearTimeout(arrangementRenameDebounceTimeout);
+                arrangementRenameDebounceTimeout = null;
+            }
             nameInput.blur();
         }
     });
     nameInput?.addEventListener('blur', () => {
         const newName = String(nameInput?.value ?? '').trim() || arrangementDraftState.name;
         arrangementDraftState.name = newName;
-        if (currentArrangementFilename) updateArrangementDisplayName(currentArrangementFilename, newName);
+        if (arrangementRenameDebounceTimeout) {
+            clearTimeout(arrangementRenameDebounceTimeout);
+            arrangementRenameDebounceTimeout = null;
+        }
+        if (currentArrangementFilename && !getArrangementReadonly()) {
+            void saveCurrentArrangement();
+            void renameArrangement({ quiet: true });
+        } else if (currentArrangementFilename && currentArrangementScope === 'example') {
+            setStatus('Example arrangements cannot be renamed', 'normal');
+            updateArrangementDisplayName(currentArrangementFilename, newName);
+        } else if (currentArrangementFilename) {
+            updateArrangementDisplayName(currentArrangementFilename, newName);
+        }
     });
     bpmInput?.addEventListener('input', () => {
         const bpm = parseInt(bpmInput.value || '120', 10);
         arrangementDraftState.bpm = Number.isFinite(bpm) ? Math.max(20, Math.min(300, bpm)) : 120;
         scheduleArrangementAutoSave();
         emitArrangementStateChanged();
+    });
+    bpmInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            bpmInput.blur();
+        }
+    });
+    bpmInput?.addEventListener('blur', () => {
+        if (currentArrangementFilename && !getArrangementReadonly()) {
+            void saveCurrentArrangement();
+        }
     });
     if (bpmInput) setupScrubInteraction(bpmInput);
     addRowBtn?.addEventListener('click', () => {
@@ -2332,7 +2460,7 @@ function renderArrangementWorkspace() {
             document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: false } }));
             return;
         }
-        // Stop any other playback (Strudel song, ZzFXM preview, tracker, or another arrangement) before starting this arrangement's preview.
+        // Stop any other playback (Strudel pattern, ZzFXM preview, tracker, or another arrangement) before starting this arrangement's preview.
         stopAllPlaybackForSelectionChange();
         document.dispatchEvent(new CustomEvent('arrangements:preview', {
             detail: { arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() }, filename: currentArrangementFilename }
@@ -2458,6 +2586,9 @@ function renderArrangementWorkspace() {
                 scheduleArrangementAutoSave();
                 emitArrangementStateChanged();
             });
+            const repeatsWrap = document.createElement('div');
+            repeatsWrap.className = 'arr-repeats-wrap';
+            repeatsWrap.appendChild(repeatsEl);
             const chipsEl = document.createElement('div');
             chipsEl.className = 'arr-chips';
 
@@ -2615,7 +2746,7 @@ function renderArrangementWorkspace() {
             const rowMain = document.createElement('div');
             rowMain.className = 'arr-row-main';
             rowMain.appendChild(rowNumberEl);
-            rowMain.appendChild(repeatsEl);
+            rowMain.appendChild(repeatsWrap);
             rowMain.appendChild(chipsEl);
 
             const rowActions = document.createElement('div');
@@ -2639,6 +2770,7 @@ function renderArrangementWorkspace() {
         clearArrangementWorkspacePlayheadVisuals();
     }
     renderTrackerWorkspace();
+    updateArrangementInstrumentUsage();
 }
 
 function updateArrangementWorkspacePreviewButtonState() {
@@ -2795,12 +2927,12 @@ async function refreshBlocksLibrary() {
             .forEach((block) => {
                 const li = document.createElement('li');
                 const isSelected = block.filename === activeArrangementBlockFilename;
-                li.className = `song-item ${isSelected ? 'active' : ''}`;
+                li.className = `list-item ${isSelected ? 'active' : ''}`;
                 li.dataset.filename = block.filename;
                 const isReadonly = normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled();
                 li.innerHTML = `
                     <span class="font-medium text-xs">${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
-                    ${isReadonly ? '' : `<div class="song-item-actions"><button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
+                    ${isReadonly ? '' : `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
                 `;
                 li.draggable = true;
                 li.addEventListener('dragstart', (e) => {
@@ -2830,6 +2962,69 @@ async function refreshBlocksLibrary() {
     }
 }
 
+function sanitizeArrangementBaseName(input) {
+    return normalizePatternBaseName(input) || 'arrangement';
+}
+
+async function renameArrangement(options = {}) {
+    const { quiet = false } = options;
+    if (!currentArrangementFilename || !arrangementDraftState) return;
+    if (getArrangementReadonly()) return;
+
+    const rawName = document.getElementById('arrangementWorkspaceName')?.value?.trim() || arrangementDraftState.name || '';
+    const baseName = sanitizeArrangementBaseName(rawName);
+    const newFilename = `${baseName}.js`;
+
+    if (newFilename === currentArrangementFilename) return;
+
+    try {
+        const res = await fetch('/api/arrangements');
+        if (!res.ok) throw new Error('Failed to check arrangements');
+        const list = await res.json();
+        const existing = (list || []).map((a) => String(a?.filename || '').toLowerCase());
+        if (existing.includes(newFilename.toLowerCase()) && newFilename.toLowerCase() !== currentArrangementFilename.toLowerCase()) {
+            if (!quiet) setStatus('An arrangement with that name already exists', 'error');
+            return;
+        }
+    } catch (e) {
+        console.error(e);
+        if (!quiet) setStatus('Error checking arrangement names', 'error');
+        return;
+    }
+
+    if (!quiet) setStatus('Renaming...');
+
+    try {
+        await saveCurrentArrangement();
+        const res = await fetch('/api/rename-arrangement', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
+            body: JSON.stringify({ oldName: currentArrangementFilename, newName: newFilename }),
+        });
+        if (!res.ok) throw new Error('Rename failed');
+
+        const wasPlaying = arrangementPreviewPlayingFilename === currentArrangementFilename;
+        const oldFilename = currentArrangementFilename;
+        currentArrangementFilename = newFilename;
+        arrangementDraftState.name = baseName;
+        if (wasPlaying) arrangementPreviewPlayingFilename = newFilename;
+        if (oldFilename && arrangementSelectedBlockByArrangement[oldFilename] != null) {
+            arrangementSelectedBlockByArrangement[newFilename] = arrangementSelectedBlockByArrangement[oldFilename];
+            delete arrangementSelectedBlockByArrangement[oldFilename];
+        }
+        arrangementRenameDebounceTimeout = null;
+
+        await refreshArrangementList();
+        const nameInput = document.getElementById('arrangementWorkspaceName');
+        if (nameInput) nameInput.value = baseName;
+        showSaveStatus('✅ Arrangement renamed');
+        if (!quiet) setStatus('Renamed successfully', 'success');
+    } catch (e) {
+        console.error(e);
+        if (!quiet) setStatus('Error renaming arrangement', 'error');
+    }
+}
+
 /**
  * Update arrangement display name in cache and sidebar list (no save). Only updates if name changed.
  */
@@ -2841,12 +3036,12 @@ function updateArrangementDisplayName(filename, newName) {
     if (name === prevName) return;
     if (entry) entry.name = name;
     try {
-        const li = dom.arrangementList.querySelector(`.song-item[data-filename="${CSS.escape(filename)}"]`);
+        const li = dom.arrangementList.querySelector(`.list-item[data-filename="${CSS.escape(filename)}"]`);
         const span = li?.querySelector('.font-medium');
         if (span) span.textContent = name;
     } catch (_e) {
         // fallback if CSS.escape not available
-        dom.arrangementList.querySelectorAll('.song-item[data-filename]').forEach((li) => {
+        dom.arrangementList.querySelectorAll('.list-item[data-filename]').forEach((li) => {
             if (li.dataset.filename === filename) {
                 const span = li.querySelector('.font-medium');
                 if (span) span.textContent = name;
@@ -2863,7 +3058,7 @@ function updateBlockDisplayName(filename, name) {
     const block = blocksLibraryCache.find((b) => b.filename === filename);
     if (block) block.name = name;
     const displayName = String(name || filename.replace(/\.js$/i, ''));
-    dom.blocksLibraryList?.querySelectorAll('.song-item[data-filename]').forEach((li) => {
+    dom.blocksLibraryList?.querySelectorAll('.list-item[data-filename]').forEach((li) => {
         if (li.dataset.filename === filename) {
             const span = li.querySelector('.font-medium');
             if (span) span.textContent = displayName;
@@ -2973,7 +3168,7 @@ async function loadArrangement(filename) {
     }
 
     try {
-        // Do not stop playback when switching: like songs, only the Play button stops current and starts the selected resource.
+        // Do not stop playback when switching: like patterns, only the Play button stops current and starts the selected resource.
         const loadedScope = DEMO_MODE ? 'example' : normalizeScope(getArrangementEntry(filename)?.scope);
         const detail = DEMO_MODE
             ? null
@@ -2993,10 +3188,11 @@ async function loadArrangement(filename) {
         currentArrangementFilename = filename;
         currentArrangementScope = loadedScope;
         arrangementDraftState = arrangementState;
+        arrangementDraftState.name = (filename || '').replace(/\.js$/i, '');
         const savedBlock = arrangementSelectedBlockByArrangement[filename];
         const blockInArrangement = savedBlock && (arrangementState.rows || []).some((row) => Array.isArray(row?.blocks) && row.blocks.includes(savedBlock));
         activeArrangementBlockFilename = blockInArrangement ? savedBlock : null;
-        // Keep currentSongFilename so song selection is remembered when switching back to Songs tab.
+        // Keep currentPatternFilename so pattern selection is remembered when switching back to Strudel tab.
 
         refreshArrangementListActiveState();
         await refreshBlocksLibrary();
@@ -3133,9 +3329,9 @@ export const pattern = ${finalExpr};
 `;
 }
 
-async function loadSong(filename) {
-    // IMPORTANT: Clear any pending auto-save from the previous song
-    // This prevents saving the new song's content to the old song's file
+async function loadPattern(filename) {
+    // IMPORTANT: Clear any pending auto-save from the previous pattern
+    // This prevents saving the new pattern's content to the old pattern's file
     if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
         autoSaveTimeout = null;
@@ -3146,17 +3342,17 @@ async function loadSong(filename) {
     }
     
     try {
-        // Do not stop playback here: let the Strudel play button stop arrangement (etc.) and start song when user presses play.
+        // Do not stop playback here: let the Strudel play button stop arrangement (etc.) and start pattern when user presses play.
         let fileCode = '';
-        const loadedSongScope = DEMO_MODE
+        const loadedPatternScope = DEMO_MODE
             ? 'example'
-            : normalizeScope(getSongEntry(filename)?.scope);
+            : normalizeScope(getPatternEntry(filename)?.scope);
         if (DEMO_MODE) {
-            fileCode = demoSongSourceByFile.get(filename);
-            if (typeof fileCode !== 'string') throw new Error('Song not available in demo bundle');
+            fileCode = demoPatternSourceByFile.get(filename);
+            if (typeof fileCode !== 'string') throw new Error('Pattern not available in demo bundle');
         } else {
-            const res = await fetch(`/api/song/${filename}`);
-            if (!res.ok) throw new Error('Failed to load song');
+            const res = await fetch(`/api/pattern/${filename}`);
+            if (!res.ok) throw new Error('Failed to load pattern');
             fileCode = await res.text();
         }
         
@@ -3164,7 +3360,7 @@ async function loadSong(filename) {
         let editorCode = fileToEditor(fileCode);
         
         // Check if there's an unsaved version in localStorage
-        if (loadedSongScope !== 'example' || isDeveloperModeEnabled()) {
+        if (loadedPatternScope !== 'example' || isDeveloperModeEnabled()) {
             const unsavedCode = localStorage.getItem(`unsaved_${filename}`);
             if (unsavedCode) {
                 // Recover from localStorage
@@ -3172,7 +3368,7 @@ async function loadSong(filename) {
                 setStatus('⚠️ Recovered unsaved changes from cache', 'error');
                 setTimeout(() => {
                     // Auto-save the recovered content
-                    saveCurrentSong();
+                    saveCurrentPattern();
                     localStorage.removeItem(`unsaved_${filename}`);
                 }, 500);
             }
@@ -3180,27 +3376,27 @@ async function loadSong(filename) {
         
         // Keep currentArrangementFilename and arrangementDraftState so arrangement selection is remembered when switching back to Blocks tab.
 
-        currentSongFilename = filename;
-        currentSongScope = loadedSongScope;
+        currentPatternFilename = filename;
+        currentPatternScope = loadedPatternScope;
 
         showEditor();
         refreshArrangementListActiveState();
         renderArrangementWorkspace();
-        currentSongDisplayName = decodeURIComponent(filename.replace('.js', '')); // Store without extension
-        originalSongName = currentSongDisplayName; // Track for rename detection
-        dom.songNameInput.value = currentSongDisplayName;
-        dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
-        dom.songNameInput.placeholder = '';
-        if (dom.openSongAdvancedSettingsBtn) {
+        currentPatternDisplayName = decodeURIComponent(filename.replace('.js', '')); // Store without extension
+        originalPatternName = currentPatternDisplayName; // Track for rename detection
+        dom.patternNameInput.value = currentPatternDisplayName;
+        dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled());
+        dom.patternNameInput.placeholder = '';
+        if (dom.openPatternAdvancedSettingsBtn) {
             updateAdvancedSettingsButtonsVisibility();
         }
         
-        Array.from(dom.songList.querySelectorAll('.song-item')).forEach(li => {
+        Array.from(dom.patternList.querySelectorAll('.list-item')).forEach(li => {
             const isActive = li.dataset.filename === filename;
             li.classList.toggle('active', Boolean(isActive));
         });
         
-        updateSongListVisualizer();
+        updatePatternListVisualizer();
         
         if (dom.repl.editor) {
             dom.repl.editor.setCode(editorCode);
@@ -3210,17 +3406,17 @@ async function loadSong(filename) {
         
         dom.exportBtn.disabled = false;
         
-        // Clear ZzFXM export preview until this song/arrangement is exported again.
+        // Clear ZzFXM export preview until this pattern/arrangement is exported again.
         clearZzfxmPreviewData();
         hideSaveStatus();
         
         renderPlayButton(); // Update play button context (Stop vs Play)
 
-        await loadSongMeta(filename);
+        await loadPatternMeta(filename);
         
         // Update indicators in sidebar
         updateInstrumentUsage(editorCode);
-        updateSongSelectionState(true);
+        updatePatternSelectionState(true);
 
         setStatus('');
     } catch (e) {
@@ -3229,15 +3425,15 @@ async function loadSong(filename) {
     }
 }
 
-async function loadSongMeta(filename) {
+async function loadPatternMeta(filename) {
     if (DEMO_MODE) return;
     try {
-        const res = await fetch(`/api/song-meta/${filename}`);
+        const res = await fetch(`/api/pattern-meta/${filename}`);
         if (!res.ok) return;
         const data = await res.json();
         if (typeof data?.scope === 'string') {
-            currentSongScope = normalizeScope(data.scope);
-            dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
+            currentPatternScope = normalizeScope(data.scope);
+            dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled());
         }
         const mixSettings = sanitizePlaybackMixSettings({
             targetPeak: data?.playbackTargetPeak,
@@ -3271,13 +3467,13 @@ async function loadSongMeta(filename) {
         const event = new Event('change', { bubbles: true });
         document.querySelector('input[name="exportResolution"]:checked')?.dispatchEvent(event);
     } catch (e) {
-        console.warn('Failed to load song meta', e);
+        console.warn('Failed to load pattern meta', e);
     }
 }
 
-async function saveSongMeta() {
+async function savePatternMeta() {
     if (DEMO_MODE) return;
-    if (!currentSongFilename) return;
+    if (!currentPatternFilename) return;
     const resolutionInput = document.querySelector('input[name="exportResolution"]:checked');
     let rowsPerCycle = 96;
     if (resolutionInput?.value === '48') {
@@ -3300,14 +3496,14 @@ async function saveSongMeta() {
     try {
         let existing = {};
         try {
-            const res = await fetch(`/api/song-meta/${currentSongFilename}`);
+            const res = await fetch(`/api/pattern-meta/${currentPatternFilename}`);
             if (res.ok) {
                 existing = await res.json();
             }
         } catch (_e) {
             existing = {};
         }
-        await fetch(`/api/song-meta/${currentSongFilename}`, {
+        await fetch(`/api/pattern-meta/${currentPatternFilename}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3322,7 +3518,7 @@ async function saveSongMeta() {
             })
         });
     } catch (e) {
-        console.warn('Failed to save song meta', e);
+        console.warn('Failed to save pattern meta', e);
     }
 }
 
@@ -3382,16 +3578,16 @@ function setPlaybackPresetControl(presetId) {
     dom.playbackLoudnessPreset.value = normalized;
 }
 
-async function saveCurrentSong() {
+async function saveCurrentPattern() {
     if (DEMO_MODE) return;
-    if (!currentSongFilename) return;
-    if (currentSongScope === 'example' && !isDeveloperModeEnabled()) return;
+    if (!currentPatternFilename) return;
+    if (currentPatternScope === 'example' && !isDeveloperModeEnabled()) return;
     
     try {
         const editorCode = dom.repl.editor.code;
         const fileCode = editorToFile(editorCode);
         
-        const res = await fetch(`/api/song/${currentSongFilename}`, {
+        const res = await fetch(`/api/pattern/${currentPatternFilename}`, {
             method: 'POST',
             headers: getDeveloperModeHeaders(),
             body: fileCode
@@ -3405,12 +3601,12 @@ async function saveCurrentSong() {
     }
 }
 
-async function createNewSong(name) {
+async function createNewPattern(name) {
     if (DEMO_MODE) {
-        setStatus('Demo mode: creating songs is disabled', 'normal');
+        setStatus('Demo mode: creating patterns is disabled', 'normal');
         return;
     }
-    const normalizedBase = normalizeSongBaseName(name);
+    const normalizedBase = normalizePatternBaseName(name);
     if (!normalizedBase) {
         setStatus('Invalid name. Use letters, numbers, spaces, hyphens, or underscores.', 'error');
         return;
@@ -3430,7 +3626,7 @@ export const pattern = note("c3 e3 g3").s("demo-kickdrum");
 `;
 
     try {
-        const res = await fetch(`/api/song/${name}`, {
+        const res = await fetch(`/api/pattern/${name}`, {
             method: 'POST',
             body: template
         });
@@ -3438,12 +3634,12 @@ export const pattern = note("c3 e3 g3").s("demo-kickdrum");
         if (!res.ok) throw new Error('Create failed');
         
         closeModal();
-        await refreshSongList();
-        await loadSong(name); // loadSong will handle the transform
+        await refreshPatternList();
+        await loadPattern(name); // loadPattern will handle the transform
         
     } catch (e) {
         console.error(e);
-        setStatus('Error creating song', 'error');
+        setStatus('Error creating pattern', 'error');
     }
 }
 
@@ -3528,9 +3724,9 @@ function inferArrangeCyclesFromCode(code) {
     return maxCycles > 0 ? maxCycles : null;
 }
 
-async function exportCurrentSong(options = {}) {
+async function exportCurrentPattern(options = {}) {
     const { revealZzfxmPreview = true } = options;
-    if (!currentSongFilename) return;
+    if (!currentPatternFilename) return;
     
     validateCode(dom.repl.editor.code);
     if (dom.statusMsg.innerText.startsWith('⚠️')) {
@@ -3550,7 +3746,7 @@ async function exportCurrentSong(options = {}) {
         const code = dom.repl.editor.code;
         
         // Save first (good practice)
-        await saveCurrentSong();
+        await saveCurrentPattern();
         
         // Use the live pattern from the scheduler!
         // This avoids file cache issues or import delays.
@@ -3563,7 +3759,7 @@ async function exportCurrentSong(options = {}) {
         // Get pattern
         const pattern = editor.repl.scheduler.pattern;
         
-        if (!pattern) throw new Error('No pattern found. Try playing the song first?');
+        if (!pattern) throw new Error('No pattern found. Try playing the pattern first?');
         
         // Get BPM from text (since it's a variable, not on the pattern object)
         let bpm = 120;
@@ -3609,13 +3805,13 @@ async function exportCurrentSong(options = {}) {
         
         // Store for preview
         setZzfxmPreviewData(songData, { monophonicByInstrumentIndex: monophonicByIndex }, {
-            type: 'song',
-            filename: currentSongFilename,
+            type: 'pattern',
+            filename: currentPatternFilename,
             reveal: revealZzfxmPreview,
         });
         
         // 4. Send JSON to server (local mode only)
-        const jsonFilename = currentSongFilename.replace('.js', '.json');
+        const jsonFilename = currentPatternFilename.replace('.js', '.json');
         if (!DEMO_MODE) {
             const res = await fetch(`/api/save-exported/${jsonFilename}`, {
                 method: 'POST',
@@ -3743,23 +3939,23 @@ function hideSaveStatus() {
     }
 }
 
-function normalizeSongBaseName(input) {
+function normalizePatternBaseName(input) {
     return String(input || '')
         .trim()
         .replace(/\s+/g, '-')
         .replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-async function updateSongScope(filename, scope) {
-    const res = await fetch(`/api/song-meta/${encodeURIComponent(filename)}`);
+async function updatePatternScope(filename, scope) {
+    const res = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
     const existing = res.ok ? await res.json() : {};
     const updated = { ...(existing || {}), scope: normalizeScope(scope) };
-    const writeRes = await fetch(`/api/song-meta/${encodeURIComponent(filename)}`, {
+    const writeRes = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
     });
-    if (!writeRes.ok) throw new Error('Failed to update song scope');
+    if (!writeRes.ok) throw new Error('Failed to update pattern scope');
 }
 
 async function updateBlockScope(filename, scope) {
@@ -3851,16 +4047,16 @@ async function applyAdvancedSettings() {
     const context = pendingAdvancedSettingsContext;
 
     try {
-        if (context.type === 'song') {
-            if (!context.filename) throw new Error('No song selected');
-            await updateSongScope(context.filename, nextScope);
-            const entry = getSongEntry(context.filename);
+        if (context.type === 'pattern') {
+            if (!context.filename) throw new Error('No pattern selected');
+            await updatePatternScope(context.filename, nextScope);
+            const entry = getPatternEntry(context.filename);
             if (entry) entry.scope = nextScope;
-                if (context.filename === currentSongFilename) {
-                    currentSongScope = nextScope;
-                    dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
+                if (context.filename === currentPatternFilename) {
+                    currentPatternScope = nextScope;
+                    dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled());
                 }
-            await refreshSongList();
+            await refreshPatternList();
         } else if (context.type === 'instrument') {
             if (!context.id) throw new Error('No instrument selected');
             const updated = setInstrumentScope(context.id, nextScope);
@@ -3901,8 +4097,8 @@ async function applyAdvancedSettings() {
 }
 
 function openModal() {
-    dom.newSongModal.classList.add('open');
-    dom.newSongName.focus();
+    dom.newPatternModal.classList.add('open');
+    dom.newPatternName.focus();
 }
 
 function openNewArrangementModal() {
@@ -4004,12 +4200,12 @@ function encodeWavMono(samples, sampleRate, bitDepth = 16) {
     return buffer;
 }
 
-async function exportCurrentSongWav() {
-    if (!currentSongFilename) return;
+async function exportCurrentPatternWav() {
+    if (!currentPatternFilename) return;
 
-    await exportCurrentSong({ revealZzfxmPreview: false });
+    await exportCurrentPattern({ revealZzfxmPreview: false });
     if (!lastExportedData) {
-        setStatus('WAV export failed: no song data generated.', 'error');
+        setStatus('WAV export failed: no pattern data generated.', 'error');
         return;
     }
 
@@ -4025,7 +4221,7 @@ async function exportCurrentSongWav() {
             ? pcm44k
             : resampleLinear(pcm44k, 44100, wavSettings.sampleRate);
         const wavBuffer = encodeWavMono(pcm, wavSettings.sampleRate, wavSettings.bitDepth);
-        const wavName = currentSongFilename.replace(/\.js$/i, '.wav');
+        const wavName = currentPatternFilename.replace(/\.js$/i, '.wav');
         triggerFileDownload(wavName, new Blob([wavBuffer], { type: 'audio/wav' }), 'audio/wav');
         setStatus(`Downloaded WAV: ${wavName} (${wavSettings.sampleRate} Hz, ${wavSettings.bitDepth}-bit)`, 'success');
     } catch (e) {
@@ -4305,7 +4501,7 @@ async function getInstrumentsFileContent() {
     return fileCode.trim() ? fileCode : '';
 }
 
-async function downloadSongsAndInstruments() {
+async function downloadPatternsAndInstruments() {
     try {
         const zip = new JSZip();
 
@@ -4317,29 +4513,29 @@ async function downloadSongsAndInstruments() {
         }
 
         const files = DEMO_MODE
-            ? Array.from(demoSongSourceByFile.keys()).sort()
+            ? Array.from(demoPatternSourceByFile.keys()).sort()
             : await (async () => {
-                const res = await fetch('/api/songs');
-                if (!res.ok) throw new Error('Failed to list songs');
+                const res = await fetch('/api/patterns');
+                if (!res.ok) throw new Error('Failed to list patterns');
                 const payload = await res.json();
-                return normalizeSongEntries(payload).map((entry) => entry.filename);
+                return normalizePatternEntries(payload).map((entry) => entry.filename);
             })();
 
         let downloadedSongs = 0;
         for (const filename of files) {
             let fileCode = '';
-            if (filename === currentSongFilename && dom.repl.editor?.code) {
+            if (filename === currentPatternFilename && dom.repl.editor?.code) {
                 fileCode = editorToFile(dom.repl.editor.code);
             } else if (DEMO_MODE) {
-                fileCode = demoSongSourceByFile.get(filename) || '';
+                fileCode = demoPatternSourceByFile.get(filename) || '';
             } else {
-                const res = await fetch(`/api/song/${filename}`);
+                const res = await fetch(`/api/pattern/${filename}`);
                 if (!res.ok) continue;
                 fileCode = await res.text();
             }
 
             if (!fileCode.trim()) continue;
-            zip.file(`songs/${decodeURIComponent(filename)}`, fileCode);
+            zip.file(`patterns/${decodeURIComponent(filename)}`, fileCode);
             downloadedSongs++;
         }
 
@@ -4425,7 +4621,7 @@ async function downloadSongsAndInstruments() {
                     version: 1,
                     generatedAt: stampIso,
                     counts: {
-                        songs: downloadedSongs,
+                        patterns: downloadedSongs,
                         blocks: downloadedBlocks,
                         arrangements: downloadedArrangements,
                         instruments: downloadedInstruments,
@@ -4442,7 +4638,7 @@ async function downloadSongsAndInstruments() {
 
         const instrumentsLabel = downloadedInstruments ? ' + instruments.js' : ' (no instruments.js)';
         setStatus(
-            `Downloaded ZIP: ${downloadedSongs} song${downloadedSongs === 1 ? '' : 's'}, ${downloadedBlocks} block${downloadedBlocks === 1 ? '' : 's'}, ${downloadedArrangements} arrangement${downloadedArrangements === 1 ? '' : 's'}${instrumentsLabel}`,
+            `Downloaded ZIP: ${downloadedSongs} pattern${downloadedSongs === 1 ? '' : 's'}, ${downloadedBlocks} block${downloadedBlocks === 1 ? '' : 's'}, ${downloadedArrangements} arrangement${downloadedArrangements === 1 ? '' : 's'}${instrumentsLabel}`,
             'success'
         );
     } catch (e) {
@@ -4467,7 +4663,7 @@ async function buildUploadBundle(file) {
     const zip = await JSZip.loadAsync(file);
     const entries = Object.values(zip.files).filter((entry) => !entry.dir);
 
-    const songs = new Map();
+    const patterns = new Map();
     const blocks = new Map();
     const arrangements = new Map();
     let instrumentsContent = '';
@@ -4495,9 +4691,9 @@ async function buildUploadBundle(file) {
             continue;
         }
 
-        const songFile = getFilenameFromSection(normalized, 'songs');
-        if (songFile) {
-            songs.set(songFile, content);
+        const patternFile = getFilenameFromSection(normalized, 'patterns');
+        if (patternFile) {
+            patterns.set(patternFile, content);
             continue;
         }
 
@@ -4518,7 +4714,7 @@ async function buildUploadBundle(file) {
 
     return {
         fileName: file.name || 'upload.zip',
-        songs: Array.from(songs, ([filename, content]) => ({ filename, content })),
+        patterns: Array.from(patterns, ([filename, content]) => ({ filename, content })),
         blocks: Array.from(blocks, ([filename, content]) => ({ filename, content })),
         arrangements: Array.from(arrangements, ([filename, content]) => ({ filename, content })),
         instrumentsContent,
@@ -4530,7 +4726,7 @@ async function buildUploadBundle(file) {
 
 function describeUploadBundle(bundle) {
     if (!bundle) return '';
-    return `${bundle.songs.length} songs, ${bundle.blocks.length} blocks, ${bundle.arrangements.length} arrangements${bundle.instrumentsContent ? ', instruments.js' : ''}`;
+    return `${bundle.patterns.length} patterns, ${bundle.blocks.length} blocks, ${bundle.arrangements.length} arrangements${bundle.instrumentsContent ? ', instruments.js' : ''}`;
 }
 
 function setUploadProjectFooterMessage(message, type = 'normal') {
@@ -4567,7 +4763,7 @@ function setUploadProjectValidationState(bundle) {
 function validateUploadBundle(bundle) {
     if (!bundle) return 'No file selected.';
 
-    const hasAnyData = Boolean(bundle.songs.length || bundle.blocks.length || bundle.arrangements.length || bundle.instrumentsContent);
+    const hasAnyData = Boolean(bundle.patterns.length || bundle.blocks.length || bundle.arrangements.length || bundle.instrumentsContent);
     if (!hasAnyData) return 'Incompatible ZIP: no importable app data found.';
 
     if (bundle.hasInvalidManifest) {
@@ -4583,7 +4779,7 @@ function validateUploadBundle(bundle) {
         }
         const expected = bundle.manifest.counts || {};
         const countChecks = [
-            ['songs', bundle.songs.length],
+            ['patterns', bundle.patterns.length],
             ['blocks', bundle.blocks.length],
             ['arrangements', bundle.arrangements.length],
             ['instruments', bundle.instrumentsContent ? 1 : 0],
@@ -4597,8 +4793,8 @@ function validateUploadBundle(bundle) {
         return '';
     }
 
-    const songsLookValid = bundle.songs.every((item) => /export\s+default\b/.test(item.content));
-    if (!songsLookValid) return 'Incompatible ZIP: songs payload is invalid.';
+    const patternsLookValid = bundle.patterns.every((item) => /export\s+default\b/.test(item.content));
+    if (!patternsLookValid) return 'Incompatible ZIP: patterns payload is invalid.';
 
     const blocksLookValid = bundle.blocks.every((item) => /export\s+const\s+name\b/.test(item.content) && /export\s+const\s+pattern\b/.test(item.content));
     if (!blocksLookValid) return 'Incompatible ZIP: blocks payload is invalid.';
@@ -4615,20 +4811,20 @@ function validateUploadBundle(bundle) {
 async function getExistingNamesBySection() {
     if (DEMO_MODE) {
         return {
-            songs: new Set(Array.from(demoSongSourceByFile.keys(), (f) => f.toLowerCase())),
+            patterns: new Set(Array.from(demoPatternSourceByFile.keys(), (f) => f.toLowerCase())),
             blocks: new Set(Array.from(demoBlockSourceByFile.keys(), (f) => f.toLowerCase())),
             arrangements: new Set(Array.from(demoArrangementSourceByFile.keys(), (f) => f.toLowerCase())),
         };
     }
 
-    const [songs, blocks, arrangements] = await Promise.all([
-        fetch('/api/songs').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    const [patternsList, blocks, arrangements] = await Promise.all([
+        fetch('/api/patterns').then((r) => (r.ok ? r.json() : [])).catch(() => []),
         fetch('/api/blocks').then((r) => (r.ok ? r.json() : [])).catch(() => []),
         fetch('/api/arrangements').then((r) => (r.ok ? r.json() : [])).catch(() => []),
     ]);
 
     return {
-        songs: new Set(normalizeSongEntries(songs || []).map((entry) => String(entry.filename || '').toLowerCase())),
+        patterns: new Set(normalizePatternEntries(patternsList || []).map((entry) => String(entry.filename || '').toLowerCase())),
         blocks: new Set((blocks || []).map((b) => String(b?.filename || '').toLowerCase())),
         arrangements: new Set((arrangements || []).map((a) => String(a?.filename || '').toLowerCase())),
     };
@@ -4653,14 +4849,14 @@ function normalizeContent(content) {
 
 async function fetchExistingContent(section, filename) {
     if (DEMO_MODE) {
-        if (section === 'songs') return demoSongSourceByFile.get(filename) || '';
+        if (section === 'patterns') return demoPatternSourceByFile.get(filename) || '';
         if (section === 'blocks') return demoBlockSourceByFile.get(filename) || '';
         if (section === 'arrangements') return demoArrangementSourceByFile.get(filename) || '';
         return '';
     }
 
-    if (section === 'songs') {
-        const res = await fetch(`/api/song/${encodeURIComponent(filename)}`);
+    if (section === 'patterns') {
+        const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`);
         return res.ok ? res.text() : '';
     }
     if (section === 'blocks') {
@@ -4686,14 +4882,14 @@ async function fetchExistingContent(section, filename) {
 
 async function writeImportedFile(section, filename, content) {
     if (DEMO_MODE) {
-        if (section === 'songs') demoSongSourceByFile.set(filename, content);
+        if (section === 'patterns') demoPatternSourceByFile.set(filename, content);
         if (section === 'blocks') demoBlockSourceByFile.set(filename, content);
         if (section === 'arrangements') demoArrangementSourceByFile.set(filename, content);
         return true;
     }
 
-    if (section === 'songs') {
-        const res = await fetch(`/api/song/${encodeURIComponent(filename)}`, {
+    if (section === 'patterns') {
+        const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`, {
             method: 'POST',
             headers: getDeveloperModeHeaders(),
             body: content
@@ -4769,7 +4965,7 @@ async function importSectionItems(section, items, include, mode, existingSet) {
 async function applyUploadProject() {
     if (!pendingUploadBundle) return;
 
-    const includeSongs = pendingUploadBundle.songs.length > 0;
+    const includePatterns = pendingUploadBundle.patterns.length > 0;
     const includeBlocks = pendingUploadBundle.blocks.length > 0;
     const includeArrangements = pendingUploadBundle.arrangements.length > 0;
     const includeInstruments = Boolean(pendingUploadBundle.instrumentsContent);
@@ -4782,7 +4978,7 @@ async function applyUploadProject() {
         setStatus('Importing ZIP...', 'normal');
         const existing = await getExistingNamesBySection();
 
-        const songsStats = await importSectionItems('songs', pendingUploadBundle.songs, includeSongs, mode, existing.songs);
+        const patternsStats = await importSectionItems('patterns', pendingUploadBundle.patterns, includePatterns, mode, existing.patterns);
         const blocksStats = await importSectionItems('blocks', pendingUploadBundle.blocks, includeBlocks, mode, existing.blocks);
         const arrangementsStats = await importSectionItems('arrangements', pendingUploadBundle.arrangements, includeArrangements, mode, existing.arrangements);
 
@@ -4800,11 +4996,11 @@ async function applyUploadProject() {
             }
         }
 
-        await refreshSongList();
+        await refreshPatternList();
         if (instrumentsImported) await reloadInstruments();
 
         setStatus(
-            `Imported songs ${songsStats.written} (renamed ${songsStats.renamed}, skipped ${songsStats.skipped}), blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), instruments ${instrumentsImported}`,
+            `Imported patterns ${patternsStats.written} (renamed ${patternsStats.renamed}, skipped ${patternsStats.skipped}), blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), instruments ${instrumentsImported}`,
             'success'
         );
         closeUploadProjectModal();
@@ -4849,8 +5045,8 @@ async function handleUploadSelection(file) {
 }
 
 function closeModal() {
-    dom.newSongModal.classList.remove('open');
-    dom.newSongName.value = '';
+    dom.newPatternModal.classList.remove('open');
+    dom.newPatternName.value = '';
 }
 
 // --- Event Listeners ---
@@ -4862,7 +5058,7 @@ dom.exportBtn.addEventListener('click', () => {
         exportCurrentArrangement();
         return;
     }
-    exportCurrentSong();
+    exportCurrentPattern();
 });
 if (dom.exportWavBtn) {
     dom.exportWavBtn.addEventListener('click', () => {
@@ -4870,10 +5066,10 @@ if (dom.exportWavBtn) {
             exportCurrentArrangementWav();
             return;
         }
-        exportCurrentSongWav();
+        exportCurrentPatternWav();
     });
 }
-if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadSongsAndInstruments);
+if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadPatternsAndInstruments);
 if (dom.uploadProjectBtn) dom.uploadProjectBtn.addEventListener('click', openUploadProjectModal);
 if (dom.uploadProjectInput) {
     dom.uploadProjectInput.addEventListener('change', (e) => {
@@ -4914,7 +5110,7 @@ if (dom.uploadProjectModal) {
 }
 
 dom.sidebarTitle.addEventListener('click', handleSidebarTitleClick);
-dom.newSongBtn.addEventListener('click', openModal);
+dom.newPatternBtn.addEventListener('click', openModal);
 dom.newArrangementBtn?.addEventListener('click', openNewArrangementModal);
 dom.blocksLibraryToggle?.addEventListener('click', () => {
     const sidebar = dom.blocksLibrarySidebar;
@@ -4926,16 +5122,16 @@ dom.blocksLibraryToggle?.addEventListener('click', () => {
 dom.newSidebarBlockBtn?.addEventListener('click', () => {
     void createUntitledBlock();
 });
-dom.cancelNewSong.addEventListener('click', closeModal);
+dom.cancelNewPattern.addEventListener('click', closeModal);
 dom.cancelNewArrangement?.addEventListener('click', closeNewArrangementModal);
-if (dom.openSongAdvancedSettingsBtn) {
-    dom.openSongAdvancedSettingsBtn.addEventListener('click', () => {
-        if (!currentSongFilename) return;
+if (dom.openPatternAdvancedSettingsBtn) {
+    dom.openPatternAdvancedSettingsBtn.addEventListener('click', () => {
+        if (!currentPatternFilename) return;
         openAdvancedSettingsModal({
-            type: 'song',
-            filename: currentSongFilename,
-            name: currentSongDisplayName || currentSongFilename.replace(/\.js$/, ''),
-            scope: currentSongScope,
+            type: 'pattern',
+            filename: currentPatternFilename,
+            name: currentPatternDisplayName || currentPatternFilename.replace(/\.js$/, ''),
+            scope: currentPatternScope,
         });
     });
 }
@@ -4944,9 +5140,9 @@ document.addEventListener('resource-scope:open', (e) => {
     if (!detail) return;
     openAdvancedSettingsModal(detail);
 });
-dom.confirmNewSong.addEventListener('click', () => {
-    const name = dom.newSongName.value.trim();
-    if (name) createNewSong(name);
+dom.confirmNewPattern.addEventListener('click', () => {
+    const name = dom.newPatternName.value.trim();
+    if (name) createNewPattern(name);
 });
 dom.confirmNewArrangement?.addEventListener('click', () => {
     const name = dom.newArrangementName?.value?.trim() || '';
@@ -4956,42 +5152,32 @@ dom.confirmNewArrangement?.addEventListener('click', () => {
 });
 document.addEventListener('sidebar:viewChanged', async (e) => {
     const view = e?.detail?.view;
-    if (view === 'songs') {
-        if (currentSongFilename) {
+    if (view === 'strudel') {
+        if (currentPatternFilename) {
             showEditor();
         }
-        refreshSongListActiveState();
+        refreshPatternListActiveState();
     } else if (view === 'blocks') {
         await refreshArrangementList();
         await refreshBlocksLibrary();
         if (currentArrangementFilename) {
             showArrangementWorkspace();
-        } else if (!currentSongFilename) {
+        } else if (!currentPatternFilename) {
             showWelcome();
         }
-    } else if (view === 'instruments') {
-        // Tie Instruments tab to currently playing source: show that context in the center.
-        if (isStrudelPlaybackActive()) {
-            showEditor();
-        } else if (isArrangementPreviewPlaying()) {
-            showArrangementWorkspace();
-        } else {
-            if (currentSongFilename) showEditor();
-            else if (currentArrangementFilename) showArrangementWorkspace();
-        }
     }
-    updateSongListVisualizer();
+    updatePatternListVisualizer();
     updateArrangementListScopeVisualizer();
 });
 document.addEventListener('visualizer:ready', () => {
-    updateSongListVisualizer();
+    updatePatternListVisualizer();
     updateArrangementListScopeVisualizer();
 });
-dom.newSongName.addEventListener('keydown', (event) => {
+dom.newPatternName.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
-    const name = dom.newSongName.value.trim();
-    if (name) createNewSong(name);
+    const name = dom.newPatternName.value.trim();
+    if (name) createNewPattern(name);
 });
 dom.newArrangementName?.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
@@ -5020,22 +5206,22 @@ if (dom.newArrangementModal) {
 }
 
 // Delete Confirmation
-let songToDelete = null;
+let patternToDelete = null;
 
 function showDeleteConfirmation(filename) {
-    const scope = normalizeScope(getSongEntry(filename)?.scope);
+    const scope = normalizeScope(getPatternEntry(filename)?.scope);
     if (scope === 'example' && !isDeveloperModeEnabled()) {
-        setStatus('Example songs cannot be deleted', 'normal');
+        setStatus('Example patterns cannot be deleted', 'normal');
         return;
     }
-    songToDelete = filename;
-    dom.deleteConfirmText.innerHTML = `Song: <strong>${decodeURIComponent(filename)}</strong><br>This cannot be undone.`;
+    patternToDelete = filename;
+    dom.deleteConfirmText.innerHTML = `Pattern: <strong>${decodeURIComponent(filename)}</strong><br>This cannot be undone.`;
     dom.deleteConfirmModal.classList.add('open');
 }
 
 function closeDeleteModal() {
     dom.deleteConfirmModal.classList.remove('open');
-    songToDelete = null;
+    patternToDelete = null;
 }
 
 
@@ -5043,65 +5229,54 @@ function closeDeleteModal() {
 dom.cancelDeleteBtn.addEventListener('click', closeDeleteModal);
 
 // Song Rename Functionality
-let originalSongName = '';
+let originalPatternName = '';
 
-// Auto-save rename with debounce
-dom.songNameInput.addEventListener('input', () => {
-    if (!currentSongFilename) return;
-    if (DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled())) return;
-    if (renameDebounceTimeout) clearTimeout(renameDebounceTimeout);
-    renameDebounceTimeout = setTimeout(() => {
-        renameSong({ quiet: true });
-    }, 1000);
+// Input: do not save; draft is the input value. Save/rename only on blur (or Enter → blur).
+dom.patternNameInput.addEventListener('input', () => {
+    if (!currentPatternFilename) return;
+    if (DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled())) return;
+    // No-op: name is saved on blur only.
 });
 
-// Save song name immediately when leaving the input
-dom.songNameInput.addEventListener('blur', () => {
-    if (!currentSongFilename) return;
-    if (DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled())) return;
-    if (renameDebounceTimeout) {
-        clearTimeout(renameDebounceTimeout);
-        renameDebounceTimeout = null;
-    }
-    renameSong({ quiet: true });
+// Save/rename when leaving the input (only renames if name actually changed).
+dom.patternNameInput.addEventListener('blur', () => {
+    if (!currentPatternFilename) return;
+    if (DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled())) return;
+    renamePattern({ quiet: true });
 });
 
-// Enter blurs the field; blur handler runs rename and refreshes sidebar when name changed
-dom.songNameInput.addEventListener('keydown', (e) => {
+// Enter blurs the field; blur handler runs rename when name has changed.
+dom.patternNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         e.preventDefault();
-        if (renameDebounceTimeout) {
-            clearTimeout(renameDebounceTimeout);
-            renameDebounceTimeout = null;
-        }
-        dom.songNameInput.blur();
+        dom.patternNameInput.blur();
     }
 });
 
-async function renameSong(options = {}) {
+async function renamePattern(options = {}) {
     if (DEMO_MODE) return;
     const { quiet = false } = options;
-    if (!currentSongFilename) return;
-    if (currentSongScope === 'example' && !isDeveloperModeEnabled()) {
-        if (!quiet) setStatus('Example songs are immutable', 'normal');
+    if (!currentPatternFilename) return;
+    if (currentPatternScope === 'example' && !isDeveloperModeEnabled()) {
+        if (!quiet) setStatus('Example patterns are immutable', 'normal');
         return;
     }
     
-    const rawName = dom.songNameInput.value.trim();
-    const newName = normalizeSongBaseName(rawName);
+    const rawName = dom.patternNameInput.value.trim();
+    const newName = normalizePatternBaseName(rawName);
     if (!newName) {
         if (!quiet) {
             setStatus('Invalid name. Use letters, numbers, spaces, hyphens, or underscores.', 'error');
         }
         return;
     }
-    if (dom.songNameInput.value !== newName) {
-        dom.songNameInput.value = newName;
+    if (dom.patternNameInput.value !== newName) {
+        dom.patternNameInput.value = newName;
         if (!quiet && rawName !== newName) {
             setStatus(`Using normalized name: ${newName}`, 'normal');
         }
     }
-    if (newName === originalSongName) {
+    if (newName === originalPatternName) {
         return;
     }
     
@@ -5109,21 +5284,21 @@ async function renameSong(options = {}) {
     
     // Check if name already exists
     try {
-        const res = await fetch('/api/songs');
-        if (!res.ok) throw new Error('Failed to check existing songs');
+        const res = await fetch('/api/patterns');
+        if (!res.ok) throw new Error('Failed to check existing patterns');
         const payload = await res.json();
-        const files = normalizeSongEntries(payload).map((entry) => entry.filename);
+        const files = normalizePatternEntries(payload).map((entry) => entry.filename);
         
-        if (files.includes(newFilename) && newFilename !== currentSongFilename) {
+        if (files.includes(newFilename) && newFilename !== currentPatternFilename) {
             if (!quiet) {
-                setStatus('A song with that name already exists', 'error');
+                setStatus('A pattern with that name already exists', 'error');
             }
             return;
         }
     } catch (e) {
         console.error(e);
         if (!quiet) {
-            setStatus('Error checking song names', 'error');
+            setStatus('Error checking pattern names', 'error');
         }
         return;
     }
@@ -5134,11 +5309,11 @@ async function renameSong(options = {}) {
     
     try {
         // Rename via API
-        const res = await fetch('/api/rename-song', {
+        const res = await fetch('/api/rename-pattern', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
             body: JSON.stringify({
-                oldName: currentSongFilename,
+                oldName: currentPatternFilename,
                 newName: newFilename
             })
         });
@@ -5146,66 +5321,66 @@ async function renameSong(options = {}) {
         if (!res.ok) throw new Error('Rename failed');
         
         // Update local state
-        const wasPlaying = playingSongFilename === currentSongFilename;
-        currentSongFilename = newFilename;
-        currentSongDisplayName = newName;
-        originalSongName = newName;
-        if (wasPlaying) playingSongFilename = newFilename;
+        const wasPlaying = playingPatternFilename === currentPatternFilename;
+        currentPatternFilename = newFilename;
+        currentPatternDisplayName = newName;
+        originalPatternName = newName;
+        if (wasPlaying) playingPatternFilename = newFilename;
         renameDebounceTimeout = null;
         
-        // Refresh song list
-        await refreshSongList();
+        // Refresh pattern list
+        await refreshPatternList();
         
         if (!quiet) {
             setStatus('Renamed successfully', 'success');
         }
-        showSaveStatus('✅ Song renamed');
+        showSaveStatus('✅ Pattern renamed');
         
     } catch (e) {
         console.error(e);
         if (!quiet) {
-            setStatus('Error renaming song', 'error');
+            setStatus('Error renaming pattern', 'error');
         }
         // Restore original name on error
-        dom.songNameInput.value = originalSongName;
+        dom.patternNameInput.value = originalPatternName;
     }
 }
 
 dom.confirmDeleteBtn.addEventListener('click', async () => {
-    if (songToDelete) {
-        await deleteSong(songToDelete);
+    if (patternToDelete) {
+        await deletePattern(patternToDelete);
         closeDeleteModal();
     }
 });
 
-async function deleteSong(filename) {
+async function deletePattern(filename) {
     if (DEMO_MODE) {
-        setStatus('Demo mode: deleting songs is disabled', 'normal');
+        setStatus('Demo mode: deleting patterns is disabled', 'normal');
         return;
     }
-    if (normalizeScope(getSongEntry(filename)?.scope) === 'example' && !isDeveloperModeEnabled()) {
-        setStatus('Example songs cannot be deleted', 'normal');
+    if (normalizeScope(getPatternEntry(filename)?.scope) === 'example' && !isDeveloperModeEnabled()) {
+        setStatus('Example patterns cannot be deleted', 'normal');
         return;
     }
     setStatus('Deleting...');
     try {
-        const res = await fetch(`/api/song/${filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
+        const res = await fetch(`/api/pattern/${filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
         if (!res.ok) throw new Error('Delete failed');
         
-        if (filename === playingSongFilename) {
+        if (filename === playingPatternFilename) {
              if (dom.repl.editor) dom.repl.editor.stop();
              updatePlayState(false);
         }
 
-        const wasCurrentSong = (filename === currentSongFilename);
+        const wasCurrentSong = (filename === currentPatternFilename);
         
         if (wasCurrentSong) {
             showWelcome();
         }
         
-        await refreshSongList();
+        await refreshPatternList();
         
-        // Clear status after a moment if we deleted the current song
+        // Clear status after a moment if we deleted the current pattern
         if (wasCurrentSong) {
             setTimeout(() => setStatus(''), 1500);
         } else {
@@ -5214,7 +5389,7 @@ async function deleteSong(filename) {
         }
     } catch (e) {
         console.error(e);
-        setStatus('Error deleting song', 'error');
+        setStatus('Error deleting pattern', 'error');
     }
 }
 
@@ -5254,7 +5429,7 @@ document.addEventListener('keydown', (e) => {
         if (DEMO_MODE) {
             setStatus('Demo mode: save is disabled', 'normal');
         } else {
-            saveCurrentSong();
+            saveCurrentPattern();
         }
     }
 });
@@ -5270,7 +5445,7 @@ async function togglePlay(e) {
 
     const scheduler = editor.repl.scheduler;
     const isRunning = scheduler.started;
-    const isPlayingCurrent = isRunning && playingSongFilename === currentSongFilename;
+    const isPlayingCurrent = isRunning && playingPatternFilename === currentPatternFilename;
     const shiftPause = e && e.shiftKey;
 
     if (isPlayingCurrent) {
@@ -5280,7 +5455,7 @@ async function togglePlay(e) {
             isStrudelPaused = true;
             updatePlayState(false);
         } else {
-            // Stop current song
+            // Stop current pattern
             editor.stop();
             isStrudelPaused = false;
             updatePlayState(false);
@@ -5301,19 +5476,19 @@ async function togglePlay(e) {
     }
 
     if (isRunning) {
-        // Another song is currently running. Switch to selected song and restart
+        // Another pattern is currently running. Switch to selected pattern and restart
         editor.stop();
         isStrudelPaused = false;
         editor.evaluate();
         updatePlayState(true);
     } else {
-        if (isStrudelPaused && playingSongFilename === currentSongFilename) {
+        if (isStrudelPaused && playingPatternFilename === currentPatternFilename) {
             // Resume from pause
             editor.repl.start();
             isStrudelPaused = false;
             updatePlayState(true);
         } else {
-            // Start selected song from the beginning
+            // Start selected pattern from the beginning
             editor.evaluate();
             updatePlayState(true);
         }
@@ -5323,11 +5498,11 @@ async function togglePlay(e) {
 function updatePlayState(isPlaying) {
     // Sync visualizer location and playing state context
     if (isPlaying) {
-        playingSongFilename = currentSongFilename;
+        playingPatternFilename = currentPatternFilename;
     } else {
-        playingSongFilename = null;
+        playingPatternFilename = null;
     }
-    updateSongListVisualizer();
+    updatePatternListVisualizer();
     renderPlayButton();
 }
 
@@ -5339,7 +5514,7 @@ export function isStrudelPlaybackActive() {
 function renderPlayButton() {
     const editor = dom.repl.editor;
     const isRunning = editor && editor.repl.scheduler.started;
-    const showStop = isRunning && playingSongFilename === currentSongFilename;
+    const showStop = isRunning && playingPatternFilename === currentPatternFilename;
     const showPauseIcon = showStop && playBtnShiftHover;
 
     let iconName = 'play';
@@ -5422,10 +5597,10 @@ function downloadJsonData() {
         setStatus('No exported data to download.', 'error');
         return;
     }
-    const contextFilename = lastExportedContext?.filename || currentSongFilename || currentArrangementFilename || null;
+    const contextFilename = lastExportedContext?.filename || currentPatternFilename || currentArrangementFilename || null;
     const filename = contextFilename
         ? contextFilename.replace(/\.js$/i, '.json')
-        : 'song-data.json';
+        : 'pattern-data.json';
     triggerFileDownload(filename, text, 'application/json;charset=utf-8');
     setStatus(`Downloaded ${filename}`, 'success');
 }
@@ -5706,20 +5881,52 @@ function getThemeCssBlock() {
         const value = inline || fromComputed || fromSheet;
         return value ? `  --${name}: ${value};` : null;
     }).filter(Boolean);
-    return lines.join('\n');
+    const block = lines.join('\n');
+    if (!block) return '';
+    const selector = theme ? `html[data-theme="${theme}"]` : 'html:root';
+    return `${selector} {\n${block}\n}`;
+}
+
+function setCopyButtonFeedback(message, resetAfterMs = 2000) {
+    if (!dom.systemSettingsThemeCopyBtn) return;
+    const label = dom.systemSettingsThemeCopyBtn.textContent.trim();
+    dom.systemSettingsThemeCopyBtn.textContent = message;
+    setTimeout(() => { dom.systemSettingsThemeCopyBtn.textContent = label; }, resetAfterMs);
 }
 
 async function copyThemeToClipboard() {
     const block = getThemeCssBlock();
+    if (!block) {
+        setCopyButtonFeedback('Nothing to copy');
+        return;
+    }
+    const fallbackCopy = () => {
+        const ta = document.createElement('textarea');
+        ta.value = block;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, block.length);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+    };
     try {
-        await navigator.clipboard.writeText(block);
-        if (dom.systemSettingsThemeCopyBtn) {
-            const label = dom.systemSettingsThemeCopyBtn.textContent;
-            dom.systemSettingsThemeCopyBtn.textContent = 'Copied!';
-            setTimeout(() => { dom.systemSettingsThemeCopyBtn.textContent = label; }, 2000);
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            await navigator.clipboard.writeText(block);
+        } else {
+            if (!fallbackCopy()) throw new Error('execCommand copy failed');
         }
+        setCopyButtonFeedback('Copied!');
     } catch (err) {
-        console.warn('Copy failed:', err);
+        if (fallbackCopy()) {
+            setCopyButtonFeedback('Copied!');
+        } else {
+            console.warn('Copy failed:', err);
+            setCopyButtonFeedback('Copy failed');
+        }
     }
 }
 
@@ -5733,13 +5940,16 @@ function setColorTheme(theme) {
     } else {
         document.documentElement.removeAttribute('data-theme');
     }
+    try {
+        localStorage.setItem(COLOR_THEME_KEY, theme || '');
+    } catch (_e) { /* ignore */ }
     updateThemeOptionButtonsState();
     syncThemeColorPickers();
 }
 
 function updateThemeOptionButtonsState() {
     const active = getActiveColorTheme();
-    [dom.systemSettingsThemeDefaultBtn, dom.systemSettingsThemeLegacyBtn].forEach((btn) => {
+    [dom.systemSettingsThemeDefaultBtn, dom.systemSettingsThemeLegacyBtn, dom.systemSettingsThemeRomulanBtn, dom.systemSettingsThemeMonoBtn, dom.systemSettingsThemeMilkBtn].forEach((btn) => {
         if (!btn) return;
         const value = (btn.getAttribute('data-theme') || '').trim();
         const isActive = value === active;
@@ -5828,10 +6038,16 @@ if (dom.systemSettingsThemeDefaultBtn) {
     dom.systemSettingsThemeDefaultBtn.addEventListener('click', () => setColorTheme(''));
 }
 if (dom.systemSettingsThemeLegacyBtn) {
-    dom.systemSettingsThemeLegacyBtn.addEventListener('click', () => setColorTheme('legacy'));
+    dom.systemSettingsThemeLegacyBtn.addEventListener('click', () => setColorTheme('crusader'));
 }
 if (dom.systemSettingsThemeRomulanBtn) {
-    dom.systemSettingsThemeRomulanBtn.addEventListener('click', () => setColorTheme('romulan'));
+    dom.systemSettingsThemeRomulanBtn.addEventListener('click', () => setColorTheme('phantom'));
+}
+if (dom.systemSettingsThemeMonoBtn) {
+    dom.systemSettingsThemeMonoBtn.addEventListener('click', () => setColorTheme('mono'));
+}
+if (dom.systemSettingsThemeMilkBtn) {
+    dom.systemSettingsThemeMilkBtn.addEventListener('click', () => setColorTheme('milk'));
 }
 if (dom.systemSettingsThemeWhiteDebugBtn) {
     dom.systemSettingsThemeWhiteDebugBtn.addEventListener('click', setAllThemeColorsToWhite);
@@ -5869,12 +6085,12 @@ Coloris({
 
 document.addEventListener('developer-mode:changed', () => {
     // Immediately update local read-only flags and rerender lists.
-    if (dom.songNameInput) {
-        dom.songNameInput.readOnly = DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled());
+    if (dom.patternNameInput) {
+        dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled());
     }
     updateAdvancedSettingsButtonsVisibility();
     updateDevModeToolbarLabelVisibility();
-    void refreshSongList();
+    void refreshPatternList();
     try {
         refreshInstrumentListUI?.();
     } catch (_e) {
@@ -5996,12 +6212,12 @@ function setupExportSettingsModal() {
     resolutionInputs.forEach(input => {
         input.addEventListener('change', () => {
             updateResolutionUi();
-            saveSongMeta();
+            savePatternMeta();
         });
     });
     dom.exportResolutionCustom?.addEventListener('input', () => {
         updateResolutionUi();
-        saveSongMeta();
+        savePatternMeta();
     });
     updateResolutionUi();
     
@@ -6015,15 +6231,15 @@ function setupExportSettingsModal() {
             dom.channelLimitGroup.classList.add('hidden');
             dom.maxChannelsInput.disabled = true;
         }
-        saveSongMeta();
+        savePatternMeta();
     });
 
-    dom.maxChannelsInput?.addEventListener('input', saveSongMeta);
-    dom.normalizeLayers?.addEventListener('change', saveSongMeta);
+    dom.maxChannelsInput?.addEventListener('input', savePatternMeta);
+    dom.normalizeLayers?.addEventListener('change', savePatternMeta);
     const handlePlaybackMixChange = () => {
         const inferred = inferPlaybackPresetId(getPlaybackMixSettings());
         setPlaybackPresetControl(inferred);
-        saveSongMeta();
+        savePatternMeta();
         if (!isArrangementPreviewPlaying()) return;
         updateArrangementPreview({
             mixSettings: getPlaybackMixSettings(),
@@ -6043,8 +6259,8 @@ function setupExportSettingsModal() {
     dom.playbackTargetPeak?.addEventListener('input', handlePlaybackMixChange);
     dom.playbackMasterGainDb?.addEventListener('input', handlePlaybackMixChange);
     dom.playbackSoftClipDrive?.addEventListener('input', handlePlaybackMixChange);
-    dom.wavSampleRate?.addEventListener('change', saveSongMeta);
-    dom.wavBitDepth?.addEventListener('change', saveSongMeta);
+    dom.wavSampleRate?.addEventListener('change', savePatternMeta);
+    dom.wavBitDepth?.addEventListener('change', savePatternMeta);
 
     if (!dom.playbackTargetPeak?.value || !dom.playbackMasterGainDb?.value || !dom.playbackSoftClipDrive?.value) {
         applyPlaybackMixSettingsToInputs(PLAYBACK_LOUDNESS_PRESETS[DEFAULT_PLAYBACK_PRESET_ID]);
@@ -6099,7 +6315,7 @@ function setupTrackerEventListeners() {
         const detail = e?.detail || {};
         const aliases = Array.isArray(detail.aliases) ? detail.aliases : [];
         if (detail.playing) {
-            // Stop Strudel song and ZzFXM export preview so only tracker preview is heard
+            // Stop Strudel pattern and ZzFXM export preview so only tracker preview is heard
             try {
                 if (dom.repl.editor?.repl?.scheduler?.started) {
                     dom.repl.editor.stop();
@@ -6198,7 +6414,7 @@ async function openTrackerModalForEdit(block, trackerState, options = {}) {
     const recoveredBlockFromCache = Boolean(recoveredBlockCache);
     if (recoveredBlockCache) {
         recoveredTrackerState = recoveredBlockCache;
-        setStatus('⚠️ Recovered unsaved block edits from cache', 'error');
+        setStatus('Recovered unsaved block edits from previous session', 'normal');
     }
 
     const blockData = {
@@ -6230,7 +6446,7 @@ function setupBlocksEventListeners() {
 	    // Blocks button in header
 	    const blocksBtn = document.getElementById('blocksBtn');
 	    blocksBtn?.addEventListener('click', () => {
-            if (!currentSongFilename) return;
+            if (!currentPatternFilename) return;
             openBlocksModal();
         });
 
@@ -6242,7 +6458,7 @@ function setupBlocksEventListeners() {
 	            updatePlayState(false);
 	        }
           document.dispatchEvent(new CustomEvent('blocks:targetSongScope', {
-            detail: { scope: currentSongScope }
+            detail: { scope: currentPatternScope }
           }));
 	    });
 
@@ -6621,8 +6837,8 @@ function setupBlocksEventListeners() {
             let scaledPattern = pattern;
             if (preserveBlockBpm && blockBpm) {
                 const bpmMatch = fileCode.match(/export\s+const\s+bpm\s*=\s*(\d+)/);
-                const songBpm = bpmMatch ? Number(bpmMatch[1]) : 120;
-                const factor = songBpm && blockBpm ? (songBpm / blockBpm) : 1;
+                const patternBpm = bpmMatch ? Number(bpmMatch[1]) : 120;
+                const factor = patternBpm && blockBpm ? (patternBpm / blockBpm) : 1;
                 if (Number.isFinite(factor) && factor !== 1) {
                     const factorStr = Number(factor.toFixed(4));
                     scaledPattern = `(${pattern}).slow(${factorStr})`;
@@ -6652,13 +6868,13 @@ function setupBlocksEventListeners() {
             dom.repl.editor.setCode(editorCode);
             
             // Also save to server
-            fetch(`/api/song/${currentSongFilename}`, {
+            fetch(`/api/pattern/${currentPatternFilename}`, {
                 method: 'POST',
                 headers: getDeveloperModeHeaders(),
                 body: fileCode
             });
             
-            setStatus(`Block "${name}" inserted into song`, 'success');
+            setStatus(`Block "${name}" inserted into pattern`, 'success');
         }
     });
 
@@ -6987,13 +7203,13 @@ function setupBlocksEventListeners() {
         const editorCode = fileToEditor(fileCode);
         dom.repl.editor.setCode(editorCode);
 
-        fetch(`/api/song/${currentSongFilename}`, {
+        fetch(`/api/pattern/${currentPatternFilename}`, {
             method: 'POST',
             headers: getDeveloperModeHeaders(),
             body: fileCode
         });
 
-        setStatus(`Arrangement "${arrName}" inserted into song`, 'success');
+        setStatus(`Arrangement "${arrName}" inserted into pattern`, 'success');
     });
 
 	    // Listen for blocks:preview event
@@ -7267,7 +7483,7 @@ function setupBlocksEventListeners() {
     // Keyboard shortcut for blocks (Ctrl/Cmd + B)
     document.addEventListener('keydown', (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-            if (!currentSongFilename) return;
+            if (!currentPatternFilename) return;
             // Only if not in an input field
             if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT') {
                 e.preventDefault();

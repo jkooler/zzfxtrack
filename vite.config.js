@@ -5,7 +5,7 @@ import { pathToFileURL } from 'url';
 import tailwindcss from '@tailwindcss/vite';
 
 // Helper to resolve paths
-const SONGS_DIR = path.resolve(__dirname, 'songs');
+const PATTERNS_DIR = path.resolve(__dirname, 'patterns');
 const OUTPUT_DIR = path.resolve(__dirname, 'output');
 const BLOCKS_DIR = path.resolve(__dirname, 'blocks');
 const ARRANGEMENTS_DIR = path.resolve(__dirname, 'arrangements');
@@ -23,13 +23,13 @@ function readScopeFromContent(content, fallback = 'user') {
   return normalizeScope(scopeMatch ? scopeMatch[1] : null, fallback);
 }
 
-function songMetaPath(songFilename) {
-  return path.join(SONGS_DIR, songFilename.replace(/\.js$/, '.meta.json'));
+function patternMetaPath(patternFilename) {
+  return path.join(PATTERNS_DIR, patternFilename.replace(/\.js$/, '.meta.json'));
 }
 
-function readSongScope(songFilename) {
+function readPatternScope(patternFilename) {
   try {
-    const metaPath = songMetaPath(songFilename);
+    const metaPath = patternMetaPath(patternFilename);
     if (!fs.existsSync(metaPath)) return 'user';
     const parsed = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
     return normalizeScope(parsed?.scope, 'user');
@@ -40,8 +40,8 @@ function readSongScope(songFilename) {
 
 /**
  * Custom Vite Plugin to provide a simple API for:
- * - Listing songs
- * - Reading/Saving/Deleting songs
+ * - Listing patterns (Strudel files)
+ * - Reading/Saving/Deleting patterns
  * - Saving exported JSON files
  * - Managing blocks (reusable patterns)
  */
@@ -88,21 +88,21 @@ const apiPlugin = () => ({
       return usedBy;
     };
     
-    // API: List Songs
-    // GET /api/songs
-    server.middlewares.use('/api/songs', (req, res, next) => {
+    // API: List Patterns (Strudel files)
+    // GET /api/patterns
+    server.middlewares.use('/api/patterns', (req, res, next) => {
       if (req.method === 'GET' && req.url === '/') {
         try {
-            if (!fs.existsSync(SONGS_DIR)) {
-                fs.mkdirSync(SONGS_DIR, { recursive: true });
+            if (!fs.existsSync(PATTERNS_DIR)) {
+                fs.mkdirSync(PATTERNS_DIR, { recursive: true });
             }
-            const files = fs.readdirSync(SONGS_DIR).filter(f => f.endsWith('.js') && f !== 'index.js');
-            const songs = files.map((filename) => ({
+            const files = fs.readdirSync(PATTERNS_DIR).filter(f => f.endsWith('.js') && f !== 'index.js');
+            const patterns = files.map((filename) => ({
                 filename,
-                scope: readSongScope(filename),
+                scope: readPatternScope(filename),
             }));
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(songs));
+            res.end(JSON.stringify(patterns));
         } catch (e) {
             res.statusCode = 500;
             res.end(JSON.stringify({ error: e.message }));
@@ -112,34 +112,34 @@ const apiPlugin = () => ({
       next();
     });
 
-    // API: Manage Song
-    // GET/POST/DELETE /api/song/:filename
+    // API: Manage Pattern (Strudel file)
+    // GET/POST/DELETE /api/pattern/:filename
     server.middlewares.use((req, res, next) => {
-        if (!req.url.startsWith('/api/song/')) {
+        if (!req.url.startsWith('/api/pattern/')) {
             return next();
         }
         
-        const songNameRaw = req.url.replace('/api/song/', '');
-        let songName = songNameRaw;
+        const patternNameRaw = req.url.replace('/api/pattern/', '');
+        let patternName = patternNameRaw;
         try {
-            songName = decodeURIComponent(songNameRaw);
+            patternName = decodeURIComponent(patternNameRaw);
         } catch (e) {
             res.statusCode = 400;
             res.end('Invalid filename encoding');
             return;
         }
         // Basic security: prevent escaping directory
-        if (songName.includes('..') || !songName.endsWith('.js')) {
+        if (patternName.includes('..') || !patternName.endsWith('.js')) {
             res.statusCode = 400;
             res.end('Invalid filename');
             return;
         }
-        const candidates = songName === songNameRaw ? [songName] : [songName, songNameRaw];
-        const existingCandidate = candidates.find((name) => fs.existsSync(path.join(SONGS_DIR, name)));
-        const resolvedSongName = existingCandidate || songName;
-        const filePath = path.join(SONGS_DIR, resolvedSongName);
+        const candidates = patternName === patternNameRaw ? [patternName] : [patternName, patternNameRaw];
+        const existingCandidate = candidates.find((name) => fs.existsSync(path.join(PATTERNS_DIR, name)));
+        const resolvedPatternName = existingCandidate || patternName;
+        const filePath = path.join(PATTERNS_DIR, resolvedPatternName);
 
-        // GET - Read song content
+        // GET - Read pattern content
         if (req.method === 'GET') {
              if (fs.existsSync(filePath)) {
                  res.setHeader('Content-Type', 'text/plain');
@@ -151,11 +151,11 @@ const apiPlugin = () => ({
              return;
         }
         
-        // POST - Save song content
+        // POST - Save pattern content
         if (req.method === 'POST') {
-            if (readSongScope(resolvedSongName) === 'example' && !isDeveloperModeRequest(req)) {
+            if (readPatternScope(resolvedPatternName) === 'example' && !isDeveloperModeRequest(req)) {
                 res.statusCode = 403;
-                res.end('Example songs are immutable');
+                res.end('Example patterns are immutable');
                 return;
             }
             let body = '';
@@ -167,16 +167,16 @@ const apiPlugin = () => ({
             return;
         }
 
-        // DELETE - Delete song
+        // DELETE - Delete pattern
         if (req.method === 'DELETE') {
              if (fs.existsSync(filePath)) {
-                 if (readSongScope(resolvedSongName) === 'example' && !isDeveloperModeRequest(req)) {
+                 if (readPatternScope(resolvedPatternName) === 'example' && !isDeveloperModeRequest(req)) {
                      res.statusCode = 403;
-                     res.end('Example songs are immutable and cannot be removed');
+                     res.end('Example patterns are immutable and cannot be removed');
                      return;
                  }
                  fs.unlinkSync(filePath);
-                 const metaPath = path.join(SONGS_DIR, resolvedSongName.replace(/\.js$/, '.meta.json'));
+                 const metaPath = path.join(PATTERNS_DIR, resolvedPatternName.replace(/\.js$/, '.meta.json'));
                  if (fs.existsSync(metaPath)) {
                      fs.unlinkSync(metaPath);
                  }
@@ -191,31 +191,31 @@ const apiPlugin = () => ({
         next();
     });
 
-    // API: Song metadata
-    // GET/POST/DELETE /api/song-meta/:filename
+    // API: Pattern metadata
+    // GET/POST/DELETE /api/pattern-meta/:filename
     server.middlewares.use((req, res, next) => {
-        if (!req.url.startsWith('/api/song-meta/')) {
+        if (!req.url.startsWith('/api/pattern-meta/')) {
             return next();
         }
 
-        const songNameRaw = req.url.replace('/api/song-meta/', '');
-        let songName = songNameRaw;
+        const patternNameRaw = req.url.replace('/api/pattern-meta/', '');
+        let patternName = patternNameRaw;
         try {
-            songName = decodeURIComponent(songNameRaw);
+            patternName = decodeURIComponent(patternNameRaw);
         } catch (e) {
             res.statusCode = 400;
             res.end('Invalid filename encoding');
             return;
         }
-        if (songName.includes('..') || !songName.endsWith('.js')) {
+        if (patternName.includes('..') || !patternName.endsWith('.js')) {
             res.statusCode = 400;
             res.end('Invalid filename');
             return;
         }
-        const candidates = songName === songNameRaw ? [songName] : [songName, songNameRaw];
-        const existingCandidate = candidates.find((name) => fs.existsSync(path.join(SONGS_DIR, name)));
-        const resolvedSongName = existingCandidate || songName;
-        const metaPath = path.join(SONGS_DIR, resolvedSongName.replace(/\.js$/, '.meta.json'));
+        const candidates = patternName === patternNameRaw ? [patternName] : [patternName, patternNameRaw];
+        const existingCandidate = candidates.find((name) => fs.existsSync(path.join(PATTERNS_DIR, name)));
+        const resolvedPatternName = existingCandidate || patternName;
+        const metaPath = path.join(PATTERNS_DIR, resolvedPatternName.replace(/\.js$/, '.meta.json'));
 
         if (req.method === 'GET') {
             if (fs.existsSync(metaPath)) {
@@ -234,8 +234,8 @@ const apiPlugin = () => ({
             req.on('end', () => {
                 try {
                     const data = JSON.parse(body || '{}');
-                    if (!fs.existsSync(SONGS_DIR)) {
-                        fs.mkdirSync(SONGS_DIR, { recursive: true });
+                    if (!fs.existsSync(PATTERNS_DIR)) {
+                        fs.mkdirSync(PATTERNS_DIR, { recursive: true });
                     }
                     fs.writeFileSync(metaPath, JSON.stringify(data, null, 2));
                     res.end('Saved');
@@ -293,9 +293,9 @@ const apiPlugin = () => ({
         next();
      });
      
-     // API: Rename Song
-     // POST /api/rename-song
-	     server.middlewares.use('/api/rename-song', (req, res, next) => {
+     // API: Rename Pattern
+     // POST /api/rename-pattern
+	     server.middlewares.use('/api/rename-pattern', (req, res, next) => {
 	       if (req.method === 'POST') {
          let body = '';
          req.on('data', chunk => body += chunk);
@@ -312,43 +312,110 @@ const apiPlugin = () => ({
                return;
              }
              
-             const oldPath = path.join(SONGS_DIR, oldName);
-             const newPath = path.join(SONGS_DIR, newName);
+             const oldPath = path.join(PATTERNS_DIR, oldName);
+             const newPath = path.join(PATTERNS_DIR, newName);
              
              // Check if old file exists
 	             if (!fs.existsSync(oldPath)) {
                res.statusCode = 404;
-               res.end('Song not found');
+               res.end('Pattern not found');
                return;
              }
-	             if (readSongScope(oldName) === 'example' && !isDeveloperModeRequest(req)) {
+	             if (readPatternScope(oldName) === 'example' && !isDeveloperModeRequest(req)) {
 	               res.statusCode = 403;
-	               res.end('Example songs are immutable');
+	               res.end('Example patterns are immutable');
 	               return;
 	             }
              
              // Check if new name already exists
              if (fs.existsSync(newPath) && oldPath !== newPath) {
                res.statusCode = 409;
-               res.end('A song with that name already exists');
+               res.end('A pattern with that name already exists');
                return;
              }
              
              // Rename the file
              fs.renameSync(oldPath, newPath);
-             const oldMetaPath = songMetaPath(oldName);
-             const newMetaPath = songMetaPath(newName);
+             const oldMetaPath = patternMetaPath(oldName);
+             const newMetaPath = patternMetaPath(newName);
              if (fs.existsSync(oldMetaPath)) {
                fs.renameSync(oldMetaPath, newMetaPath);
              }
              
-             console.log(`[API] Renamed song: ${oldName} -> ${newName}`);
-             res.end('Song renamed successfully');
+             console.log(`[API] Renamed pattern: ${oldName} -> ${newName}`);
+             res.end('Pattern renamed successfully');
              
            } catch (e) {
              console.error('[API] Rename error:', e);
              res.statusCode = 500;
-             res.end(`Error renaming song: ${e.message}`);
+             res.end(`Error renaming pattern: ${e.message}`);
+           }
+         });
+         return;
+       }
+       next();
+     });
+
+     // API: Rename Arrangement
+     // POST /api/rename-arrangement
+     server.middlewares.use('/api/rename-arrangement', (req, res, next) => {
+       if (req.method === 'POST') {
+         let body = '';
+         req.on('data', chunk => body += chunk);
+         req.on('end', () => {
+           try {
+             const { oldName, newName } = JSON.parse(body);
+
+             if (!oldName || !newName ||
+                 oldName.includes('..') || newName.includes('..') ||
+                 !oldName.endsWith('.js') || !newName.endsWith('.js')) {
+               res.statusCode = 400;
+               res.end('Invalid filename');
+               return;
+             }
+
+             const oldPath = path.join(ARRANGEMENTS_DIR, oldName);
+             const newPath = path.join(ARRANGEMENTS_DIR, newName);
+
+             if (!fs.existsSync(oldPath)) {
+               res.statusCode = 404;
+               res.end('Arrangement not found');
+               return;
+             }
+             const content = fs.readFileSync(oldPath, 'utf-8');
+             if (readScopeFromContent(content, 'user') === 'example' && !isDeveloperModeRequest(req)) {
+               res.statusCode = 403;
+               res.end('Example arrangements cannot be renamed. Enable developer mode to edit.');
+               return;
+             }
+
+             const caseOnly = oldName.toLowerCase() === newName.toLowerCase();
+             const targetPath = caseOnly
+               ? path.join(ARRANGEMENTS_DIR, `__rename_${Date.now()}_${Math.random().toString(36).slice(2)}.js`)
+               : newPath;
+
+             if (!caseOnly && fs.existsSync(newPath)) {
+               res.statusCode = 409;
+               res.end('An arrangement with that name already exists');
+               return;
+             }
+
+             fs.renameSync(oldPath, targetPath);
+             if (caseOnly) fs.renameSync(targetPath, newPath);
+
+             const nameFromFilename = newName.replace(/\.js$/i, '');
+             const updatedContent = content.replace(
+               /export\s+const\s+name\s*=\s*["'][^"']*["']/,
+               `export const name = "${nameFromFilename}"`
+             );
+             fs.writeFileSync(caseOnly ? newPath : targetPath, updatedContent);
+
+             console.log(`[API] Renamed arrangement: ${oldName} -> ${newName}`);
+             res.end('Arrangement renamed successfully');
+           } catch (e) {
+             console.error('[API] Rename arrangement error:', e);
+             res.statusCode = 500;
+             res.end(`Error renaming arrangement: ${e.message}`);
            }
          });
          return;
@@ -695,10 +762,10 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
              fs.mkdirSync(ARRANGEMENTS_DIR, { recursive: true });
            }
 
-           const files = fs.readdirSync(ARRANGEMENTS_DIR)
-             .filter(f => f.endsWith('.js') && f !== 'index.js');
+          const files = fs.readdirSync(ARRANGEMENTS_DIR)
+            .filter(f => f.endsWith('.js') && f !== 'index.js');
 
-           const arrangements = files.map(filename => {
+          const arrangements = files.map(filename => {
              const filePath = path.join(ARRANGEMENTS_DIR, filename);
              try {
                const content = fs.readFileSync(filePath, 'utf-8');
@@ -726,6 +793,14 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
              }
            });
 
+           arrangements.sort((a, b) => {
+             const padNum = (s) => {
+               const m = (s || '').match(/^(\d+)/);
+               return m ? m[1].padStart(8, '0') + s : '\x00' + s;
+             };
+             return padNum(a.filename || '').localeCompare(padNum(b.filename || ''));
+           });
+
            res.setHeader('Content-Type', 'application/json');
            res.end(JSON.stringify(arrangements));
          } catch (e) {
@@ -742,7 +817,7 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
          req.on('end', () => {
            try {
              const arrangementData = JSON.parse(body);
-             const { filename, name, arrangementState, scope } = arrangementData;
+             const { filename, arrangementState, scope } = arrangementData;
              const normalizedScope = normalizeScope(scope, 'user');
 
              if (!filename || filename.includes('..') || !filename.endsWith('.js')) {
@@ -755,10 +830,11 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
                fs.mkdirSync(ARRANGEMENTS_DIR, { recursive: true });
              }
 
+             const nameFromFilename = filename.replace(/\.js$/i, '');
              const filePath = path.join(ARRANGEMENTS_DIR, filename);
-             const fileContent = `// Arrangement: ${name}
+             const fileContent = `// Arrangement: ${nameFromFilename}
 
-export const name = "${name}";
+export const name = "${nameFromFilename}";
 export const scope = "${normalizedScope}";
 
 export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
@@ -861,7 +937,7 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
           req.on('end', () => {
             try {
               const arrangementData = JSON.parse(body);
-              const { name, arrangementState, scope } = arrangementData;
+              const { arrangementState, scope } = arrangementData;
               let existingScope = 'user';
               if (fs.existsSync(filePath)) {
                 try {
@@ -881,9 +957,10 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
                 fs.mkdirSync(ARRANGEMENTS_DIR, { recursive: true });
               }
 
-              const fileContent = `// Arrangement: ${name}
+              const nameFromFilename = filename.replace(/\.js$/i, '');
+              const fileContent = `// Arrangement: ${nameFromFilename}
 
-export const name = "${name}";
+export const name = "${nameFromFilename}";
 export const scope = "${normalizedScope}";
 
 export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
@@ -991,7 +1068,7 @@ export default defineConfig({
     strictPort: false, // Allow using next available port if 5173 is taken
     host: true, // Listen on all network interfaces for better accessibility
     watch: {
-      ignored: ['**/songs/**', '**/output/**', '**/instruments.js', '**/blocks/**']
+      ignored: ['**/patterns/**', '**/output/**', '**/instruments.js', '**/blocks/**', '**/arrangements/**']
     }
   }
 });

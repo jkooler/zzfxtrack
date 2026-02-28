@@ -44,6 +44,9 @@
   --color-input: var(--input);
   --color-input-bg: var(--input-bg);
   --color-ring: var(--ring);
+
+  /* Scope waveform stroke – inherits from theme via tertiary/accent */
+  --scope-stroke: var(--tertiary-foreground);
 }
 
 @layer base {
@@ -66,51 +69,50 @@
   html:root {
     /* Dynamic base font size: portrait/narrow 15px, tablet landscape 16px, desktop 16px */
     font-size: 15px;
-    /* Default theme */
+    /* Default theme (Stone & Amber) */
 
-    --background: #222;
-    --foreground: #fff;
-    --card: hsl(61, 10%, 13%);
-    --card-foreground: hsla(0, 0%, 100%, 0.74);
-    --popover: hsl(24 5.7% 8.2%);
-    --popover-foreground: hsl(60 9.1% 80%);
-    --primary: hsl(45, 40%, 55%);
-    --primary-foreground: hsl(36, 17%, 13%);
-    --secondary: hsl(178.29 13.08% 27.01%);
-    --secondary-foreground: hsl(60 9.1% 97.8%);
-    --tertiary: hsl(180, 40%, 25%);
-    --tertiary-foreground: hsl(95, 43%, 83%);
-    --quaternary: hsl(278, 21%, 34%);
-    --quaternary-foreground: hsl(201, 100%, 88%);
-    --muted: hsl(24 5.4% 15.1%);
-    --muted-foreground: hsl(60 9.1% 97.8% / 0.5);
-    --accent: hsl(180 13.24% 26.67% / 0.9);
-    --accent-foreground: hsl(60 9.1% 97.8%);
-    --destructive: hsl(0 84.2% 60.2%);
-    --destructive-foreground: hsl(60 9.1% 97.8%);
-    --border: hsla(37, 100%, 69%, 0.18);
-    --input: hsla(20, 0%, 100%, 0.14);
-    --ring: hsl(45 93% 47% / 0.5);
-    --input-bg: hsla(180, 0%, 0%, 0.17);
-    --radius: 0.5rem;
+    --background: hsl(0, 8%, 8%);
+  --foreground: #fff;
+  --card: hsl(61, 10%, 13%);
+  --card-foreground: hsla(0, 0%, 100%, 0.74);
+  --popover: hsl(24 5.7% 8.2%);
+  --popover-foreground: hsl(60 9.1% 80%);
+  --primary: hsl(26, 63%, 62%);
+  --primary-foreground: hsl(36, 17%, 13%);
+  --secondary: hsl(176, 23%, 28%);
+  --secondary-foreground: hsl(60 9.1% 97.8%);
+  --tertiary: hsl(199, 44%, 34%);
+  --tertiary-foreground: hsl(95, 43%, 83%);
+  --quaternary: hsl(278, 21%, 34%);
+  --quaternary-foreground: hsl(201, 100%, 88%);
+  --muted: hsl(24 5.4% 15.1%);
+  --muted-foreground: hsl(60 9.1% 97.8% / 0.5);
+  --accent: hsl(180 13.24% 26.67% / 0.9);
+  --accent-foreground: hsl(60 9.1% 97.8%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(60 9.1% 97.8%);
+  --border: hsla(37, 100%, 69%, 0.18);
+  --input: hsla(20, 0%, 100%, 0.14);
+  --ring: hsl(45 93% 47% / 0.5);
+  --input-bg: hsla(180, 0%, 0%, 0.17);
+  --radius: 0.5rem;
   }
 
-  /* Legacy theme: snapshot of the original Stone & Amber (safe to switch back from default) */
-  html[data-theme="legacy"] {
-    font-size: 15px;
-    --background: hsl(24 5.7% 8.2%);
+  /* Crusader theme: snapshot of the original Stone & Amber (safe to switch back from default) */
+  html[data-theme="crusader"] {
+    --background: hsl(245, 39%, 7%);
     --foreground: hsl(60 9.1% 80%);
-    --card: hsl(24 5.4% 10.9%);
+    --card: hsl(209, 39%, 5%);
     --card-foreground: hsl(60 9.1% 80%);
     --popover: hsl(24 5.7% 8.2%);
     --popover-foreground: hsl(60 9.1% 80%);
-    --primary: hsl(45 62.76% 60.43%);
+    --primary: hsl(45, 59%, 61%);
     --primary-foreground: hsl(24 9.8% 10%);
-    --secondary: hsl(178.29 13.08% 27.01%);
+    --secondary: hsl(176, 23%, 28%);
     --secondary-foreground: hsl(60 9.1% 97.8%);
-    --tertiary: hsl(180 100% 16.57%);
+    --tertiary: hsl(328, 71%, 22%);
     --tertiary-foreground: hsl(0 0% 100%);
-    --quaternary: hsl(279.09 32.93% 27.76%);
+    --quaternary: hsl(279, 34%, 39%);
     --quaternary-foreground: hsl(0 0% 100%);
     --muted: hsl(24 5.4% 15.1%);
     --muted-foreground: hsl(60 9.1% 97.8% / 0.5);
@@ -121,12 +123,12 @@
     --border: hsl(24 5.4% 23.9%);
     --input: hsl(24 5.4% 23.9%);
     --ring: hsl(45 93% 47% / 0.5);
-    --radius: 0.5rem;
     --input-bg: hsl(180 13.24% 26.67% / 0.36);
+    --radius: 0.2rem;
   }
 
-  /* Romulan theme */
-  html[data-theme="romulan"] {
+  /* Phantom theme */
+  html[data-theme="phantom"] {
     font-size: 15px;
     --background: hsl(214, 30%, 14%);
     --foreground: hsl(72, 14%, 73%);
@@ -153,6 +155,62 @@
     --ring: hsl(45 93% 47% / 0.5);
     --input-bg: hsla(180, 0%, 0%, 0.17);
     --radius: 0.5rem;
+  }
+
+  html[data-theme="mono"] {
+    --background: hsl(30, 0%, 4%);
+    --foreground: hsl(60, 100%, 100%);
+    --card: hsl(0, 0%, 4%);
+    --card-foreground: hsl(0, 0%, 78%);
+    --popover: hsl(30, 0%, 25%);
+    --popover-foreground: hsl(60, 0%, 74%);
+    --primary: hsl(0, 0%, 85%);
+    --primary-foreground: hsl(0, 0%, 0%);
+    --secondary: hsl(162, 0%, 27%);
+    --secondary-foreground: hsl(60, 0%, 78%);
+    --tertiary: hsl(327, 0%, 30%);
+    --tertiary-foreground: hsl(0 0% 100%);
+    --quaternary: hsl(0, 0%, 28%);
+    --quaternary-foreground: hsl(0 0% 100%);
+    --muted: hsl(0, 0%, 14%);
+    --muted-foreground: hsl(60, 0%, 80%);
+    --accent: hsl(0, 0%, 29%);
+    --accent-foreground: hsl(0, 0%, 100%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(60 9.1% 97.8%);
+    --border: hsla(20, 0%, 100%, 0.26);
+    --input: hsl(24 5.4% 23.9%);
+    --ring: hsl(183, 100%, 50%);
+    --input-bg: hsl(180, 0%, 0%);
+    --radius: 0.2rem;
+  }
+
+  html[data-theme="milk"] {
+    --background: hsl(190, 12%, 94%);
+    --foreground: hsl(0, 0%, 0%);
+    --card: hsl(0, 0%, 100%);
+    --card-foreground: hsl(0, 0%, 0%);
+    --popover: hsl(0, 0%, 100%);
+    --popover-foreground: hsl(0, 0%, 0%);
+    --primary: hsl(0, 0%, 0%);
+    --primary-foreground: hsl(0, 0%, 100%);
+    --secondary: hsl(0, 0%, 80%);
+    --secondary-foreground: hsl(0, 0%, 0%);
+    --tertiary: hsl(0, 0%, 78%);
+    --tertiary-foreground: hsl(0, 0%, 0%);
+    --quaternary: hsl(0, 0%, 28%);
+    --quaternary-foreground: hsl(0 0% 100%);
+    --muted: hsl(0, 0%, 94%);
+    --muted-foreground: hsl(0, 0%, 20%);
+    --accent: hsl(212, 54%, 85%);
+    --accent-foreground: hsl(0, 0%, 0%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(60 9.1% 97.8%);
+    --border: hsl(0, 0%, 90%);
+    --input: hsl(0, 0%, 76%);
+    --ring: hsl(183, 100%, 50%);
+    --input-bg: hsl(173, 25%, 91%);
+    --radius: 0.2rem;
   }
 
   /* Tablet landscape (e.g. iPad landscape): 16px base */
@@ -324,7 +382,7 @@ input[readonly]:focus-visible {
 }
 
 /* Dynamic Classes used by JS */
-.song-list {
+.pattern-list {
   @apply list-none m-0 p-2 space-y-1;
 }
 
@@ -344,43 +402,43 @@ input[readonly]:focus-visible {
   transition: opacity 220ms ease;
 }
 
-.song-item,
+.list-item,
 .instrument-item,
 .block-item {
   touch-action: manipulation; /* iPad: single tap to select/activate, no double-tap */
 }
-.song-item {
+.list-item {
   @apply flex items-center justify-between py-0 px-1.5 mb-0 min-h-9 rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative overflow-hidden text-sm font-medium;
 }
-.song-item.active {
+.list-item.active {
   @apply bg-accent text-accent-foreground;
 }
 
-/* Introduction page selection: same highlight as selected song */
+/* Introduction page selection: same highlight as selected pattern */
 #sidebarTitle.active {
   @apply bg-accent text-accent-foreground rounded-md px-2;
 }
 
-.song-item-actions {
+.list-item-actions {
   @apply opacity-0 transition-opacity flex items-center gap-1;
 }
 /* Only use hover/focus to reveal actions on devices with real hover (mouse); on iPad scrolling can trigger sticky hover and show trash by mistake */
 @media (hover: hover) {
-  .song-item:hover .song-item-actions,
-  .instrument-item:hover .song-item-actions,
-  .block-item:hover .song-item-actions {
+  .list-item:hover .list-item-actions,
+  .instrument-item:hover .list-item-actions,
+  .block-item:hover .list-item-actions {
     @apply opacity-100;
   }
-  .song-item:focus-within .song-item-actions,
-  .instrument-item:focus-within .song-item-actions,
-  .block-item:focus-within .song-item-actions {
+  .list-item:focus-within .list-item-actions,
+  .instrument-item:focus-within .list-item-actions,
+  .block-item:focus-within .list-item-actions {
     @apply opacity-100;
   }
 }
 /* When item is selected/active (e.g. after tap on iPad), keep actions visible so delete/edit don’t disappear */
-.song-item.active .song-item-actions,
-.instrument-item.active .song-item-actions,
-.block-item.selected .song-item-actions {
+.list-item.active .list-item-actions,
+.instrument-item.active .list-item-actions,
+.block-item.selected .list-item-actions {
   @apply opacity-100;
 }
 
@@ -405,6 +463,21 @@ input[readonly]:focus-visible {
   box-shadow: 0 0 10px var(--strudel-inst-color-glow, hsl(45 93% 47% / 0.2));
 }
 
+/* Instrument list: use tertiary for visualizations (scope, playing highlight, usage dot) */
+.instrument-list .instrument-item.playing .instrument-name {
+  color: var(--tertiary-foreground);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--tertiary) 60%, transparent);
+}
+
+.instrument-list .instrument-item.playing .instrument-scope {
+  border-color: var(--tertiary);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--tertiary) 40%, transparent);
+}
+
+.instrument-list .usage-indicator {
+  background-color: var(--tertiary);
+}
+
 .instrument-info {
   @apply flex-1 min-w-0 mr-2;
 }
@@ -421,7 +494,7 @@ input[readonly]:focus-visible {
 .sidebar-del-btn {
   @apply text-muted-foreground hover:text-destructive focus-visible:text-destructive transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none;
 }
-.song-item .sidebar-del-btn {
+.list-item .sidebar-del-btn {
   @apply p-1;
 }
 .sidebar-edit-btn {
@@ -500,7 +573,7 @@ input[readonly]:focus-visible {
   display: none !important;
 }
 
-.song-visualizer {
+.list-item-visualizer {
   @apply absolute inset-0 z-0 opacity-50 pointer-events-none w-full h-full;
 }
 
@@ -851,7 +924,7 @@ strudel-editor {
 }
 
 .tracker-cell.has-note {
-  @apply bg-accent/20 text-accent-foreground font-bold;
+  @apply bg-accent/20 text-foreground font-bold;
 }
 
 .tracker-cell.rest {
@@ -996,11 +1069,10 @@ strudel-editor {
   background-color: var(--quaternary);
   border-color: var(--quaternary);
 }
-.arr-repeats {
-  @apply h-8 rounded-md border border-input bg-input-bg pl-1 pr-0 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+.arr-repeats-wrap {
+  @apply relative h-8 min-w-[2.5rem] rounded-md border border-input flex items-stretch;
   width: fit-content;
-  -moz-appearance: textfield;
-  appearance: textfield;
+  background-color: var(--input-bg);
   background-image: linear-gradient(
     90deg,
     var(--accent) 0%,
@@ -1013,6 +1085,14 @@ strudel-editor {
   background-position: left top;
 }
 
+.arr-repeats {
+  @apply h-8 pl-1 pr-0 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-transparent border-0 min-w-0 w-full;
+  color: white;
+  mix-blend-mode: difference;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .arr-repeats::-webkit-outer-spin-button,
 .arr-repeats::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -1022,7 +1102,7 @@ strudel-editor {
   @apply flex flex-wrap gap-2 flex-1 min-w-0;
 }
 .arr-chip {
-  @apply inline-flex items-center gap-3 px-1 py-1 h-8 rounded-md bg-muted border border-border text-xs text-foreground cursor-pointer;
+  @apply inline-flex items-center gap-3 px-1 py-1 h-8 rounded-md bg-muted border border-border text-xs cursor-pointer;
   background-image: linear-gradient(
     90deg,
     var(--accent) 0%,
@@ -1033,6 +1113,11 @@ strudel-editor {
   background-size: 100% 100%;
   background-repeat: no-repeat;
   background-position: left top;
+}
+
+.arr-chip-label {
+  color: white;
+  mix-blend-mode: difference;
 }
 
 .arr-chip.shake {
@@ -1054,7 +1139,9 @@ strudel-editor {
   border-bottom: 2px solid color-mix(in srgb, var(--primary), transparent 40%);
 }
 .arr-chip-del {
-  @apply text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded-md;
+  @apply hover:text-destructive transition-colors p-0.5 rounded-md;
+  color: white;
+  mix-blend-mode: difference;
   width: 18px;
   height: 18px;
 }
@@ -1193,7 +1280,7 @@ strudel-editor {
 
 /* Shared modal overlay: lighter dim, no blur (overrides Tailwind bg-black/80 backdrop-blur-sm on .modal-overlay) */
 .modal-overlay {
-  background-color: color-mix(in srgb, var(--background) 50%, transparent);
+  background-color: rgba(0, 0, 0, 0.2);
   backdrop-filter: none;
 }
 
@@ -1218,4 +1305,12 @@ strudel-editor {
 /* Coloris: ensure picker appears above System settings modal (z-[80]) */
 .clr-picker {
   z-index: 90 !important;
+}
+
+/* Footer on introduction/welcome page: hide export, show only wrench + dev mode */
+#mainFooter.footer-intro-mode .footer-export-group {
+  display: none;
+}
+#mainFooter.footer-intro-mode .footer-utility-group {
+  margin-left: auto;
 }

@@ -6,7 +6,7 @@ export const description = "Created from arrangement workspace";
 export const scope = "user";
 
 export const pattern = `stack(
-  note("d3 ~ ~ ~ ~ ~ a3 ~ ~ ~ ~ ~ ~ ~ ~ ~").s("synth-stab"),
+  note("d3 ~ ~ ~ ~ ~ a3 ~ ~ ~ ~ ~ ~ ~ ~ ~").s("synth-stab").gain("0.01 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"),
   note("f3 ~ ~ f3 ~ ~ ~ ~ ~ ~ ~ e3 ~ ~ ~ ~").s("pad")
 )`;
 
@@ -164,7 +164,7 @@ export const trackerState = {
   ],
   "vol": [
     [
-      null,
+      1,
       null,
       null,
       null,

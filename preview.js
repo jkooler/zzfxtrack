@@ -1,5 +1,5 @@
 import { getAudioContext, initAudio, webaudioRepl, drawTimeScope, getAnalyserById } from "@strudel/webaudio"; 
-import { songs } from "./songs/index.js";
+import { patterns } from "./patterns/index.js";
 import { instruments, instruments as instrumentMap } from "./instruments.js";
 import { exportPattern } from "./src/export-logic.js";
 import { initStrudel } from "./src/init.js";
@@ -9,7 +9,7 @@ await initStrudel();
 
 const repl = webaudioRepl();
 
-const songSelect = document.getElementById('songSelect');
+const patternSelect = document.getElementById('patternSelect') || document.getElementById('songSelect');
 const playBtn = document.getElementById('playBtn');
 const stopBtn = document.getElementById('stopBtn');
 const exportBtn = document.getElementById('exportBtn');
@@ -20,18 +20,18 @@ let currentPattern = null;
 let currentBpm = 125;
 let animationId = null;
 
-// Populate Song Selector
-Object.keys(songs).forEach(id => {
+// Populate Pattern Selector
+Object.keys(patterns).forEach(id => {
     const opt = document.createElement('option');
     opt.value = id;
     opt.textContent = id;
-    songSelect.appendChild(opt);
+    patternSelect.appendChild(opt);
 });
 
-async function loadSong(id) {
+async function loadPattern(id) {
     status.innerText = `⏳ Loading ${id}...`;
     try {
-        const module = await songs[id]();
+        const module = await patterns[id]();
         currentPattern = module.pattern;
         currentBpm = module.bpm || 125;
         status.innerText = `✅ Loaded ${id}. Ready to play.`;
@@ -89,7 +89,7 @@ function startVisualizer() {
 
 async function playSong() {
     if (!currentPattern) {
-        await loadSong(songSelect.value);
+        await loadPattern(patternSelect.value);
     }
 
     // Ensure audio is initialized
@@ -100,7 +100,7 @@ async function playSong() {
     // Load/Refresh ZzFX Instruments
     loadZzFXInstruments(instrumentMap);
 
-    status.innerText = `🎵 Playing ${songSelect.value} at ${currentBpm} BPM...`;
+    status.innerText = `🎵 Playing ${patternSelect.value} at ${currentBpm} BPM...`;
     
     // In Strudel 1.x, we set the pattern on the repl.
     await repl.setPattern(currentPattern.cpm(currentBpm).orbit(0));
@@ -115,7 +115,7 @@ function stopSong() {
 
 function exportSong() {
     if (!currentPattern) {
-        status.innerText = "❌ Load a song first!";
+        status.innerText = "❌ Load a pattern first!";
         return;
     }
 
@@ -127,17 +127,17 @@ function exportSong() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${songSelect.value}.json`;
+    a.download = `${patternSelect.value}.json`;
     a.click();
     URL.revokeObjectURL(url);
     
-    status.innerText = `✅ Exported ${songSelect.value}.json successfully!`;
+    status.innerText = `✅ Exported ${patternSelect.value}.json successfully!`;
 }
 
 // Bind Events
-songSelect.addEventListener('change', () => {
+patternSelect.addEventListener('change', () => {
     stopSong();
-    loadSong(songSelect.value);
+    loadPattern(patternSelect.value);
 });
 
 playBtn.addEventListener('click', playSong);
@@ -145,9 +145,9 @@ stopBtn.addEventListener('click', stopSong);
 exportBtn.addEventListener('click', exportSong);
 
 // Initial Load
-loadSong(songSelect.value);
+loadPattern(patternSelect.value);
 
 // HMR
 if (import.meta.hot) {
-    import.meta.hot.accept('./songs/index.js', () => window.location.reload());
+    import.meta.hot.accept('./patterns/index.js', () => window.location.reload());
 }

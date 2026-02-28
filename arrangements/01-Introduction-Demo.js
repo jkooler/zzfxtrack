@@ -1,4 +1,4 @@
-// Arrangement: 01-Introduction-Demo
+// Arrangement: 01-introduction-demo
 
 export const name = "01-Introduction-Demo";
 export const scope = "example";

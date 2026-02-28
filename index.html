@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Strudel to ZzFXM</title>
+    <script>
+      (function() {
+        var key = 'zzfxm-color-theme';
+        try {
+          var saved = localStorage.getItem(key);
+          if (saved === 'legacy') { saved = 'crusader'; localStorage.setItem(key, 'crusader'); }
+          if (saved === 'gotham') { saved = 'crusader'; localStorage.setItem(key, 'crusader'); }
+          if (saved === 'romulan') { saved = 'phantom'; localStorage.setItem(key, 'phantom'); }
+          if (saved === null) {
+            document.documentElement.setAttribute('data-theme', 'phantom');
+            localStorage.setItem(key, 'phantom');
+          } else if (saved !== '') {
+            document.documentElement.setAttribute('data-theme', saved);
+          } else {
+            document.documentElement.removeAttribute('data-theme');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="stylesheet" href="./style.css" />
 
     <!-- Development Mode: Tailwind Play CDN for Inspector Prototyping
@@ -76,44 +95,32 @@
         <h1
           id="sidebarTitle"
           class="text-sm font-extrabold tracking-tight text-primary font-mono text-center pt-2 pb-2 mt-0 mb-0 cursor-pointer hover:text-primary/90 transition-colors"
-          title="Show introduction (click again when viewing intro to return to song)"
+          title="Show introduction (click again when viewing intro to return to pattern)"
         >
           STRUDEL TO ZZFXM
         </h1>
         <!-- Tabs -->
-        <div class="sidebar-tabs grid grid-cols-3 rounded-md gap-x-0 gap-y-1">
+        <div class="sidebar-tabs grid grid-cols-2 rounded-md gap-x-0 gap-y-1">
           <button
-            id="songsTab"
+            id="strudelTab"
             class="sidebar-tab active inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
-            Songs
+            Strudel
           </button>
           <button
             id="blocksTab"
             class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
-            Arrang
-          </button>
-          <button
-            id="instrumentsTab"
-            class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
-          >
-            Instr
+            Arranger
           </button>
         </div>
 
         <!-- Buttons -->
         <button
-          id="newSongBtn"
+          id="newPatternBtn"
           class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 w-full shadow-sm uppercase flex items-center gap-2"
         >
-          <i data-lucide="plus" class="w-4 h-4"></i> New song
-        </button>
-        <button
-          id="newInstrumentBtn"
-          class="hidden items-center justify-center whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-tertiary text-tertiary-foreground hover:bg-tertiary/80 h-9 px-4 py-2 w-full uppercase flex items-center gap-2"
-        >
-          <i data-lucide="plus" class="w-4 h-4"></i> New instrument
+          <i data-lucide="plus" class="w-4 h-4"></i> New pattern
         </button>
         <button
           id="newArrangementBtn"
@@ -123,30 +130,43 @@
         </button>
       </div>
 
-      <!-- Lists -->
-      <ul id="songList" class="song-list flex-1 overflow-y-auto space-y-1"></ul>
-      <ul id="arrangementList" class="song-list hidden flex-1 overflow-y-auto space-y-1"></ul>
-
-      <div
-        id="instrumentControls"
-        class="hidden px-3 py-1 border-b border-border/30 flex justify-end items-center"
-      >
-        <label
-          class="flex items-center gap-2 text-[10px] font-bold tracking-wider text-muted-foreground uppercase cursor-pointer hover:text-foreground transition-colors"
-        >
-          <span>Used in selected song</span>
-          <input
-            type="checkbox"
-            id="usedInstrumentsOnly"
-            class="w-3 h-3 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
-          />
-        </label>
+      <!-- Songs / Arrangement lists (tabbed) -->
+      <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <ul id="patternList" class="pattern-list flex-1 min-h-0 overflow-y-auto space-y-1"></ul>
+        <ul id="arrangementList" class="pattern-list hidden flex-1 min-h-0 overflow-y-auto space-y-1"></ul>
       </div>
 
-      <ul
-        id="instrumentList"
-        class="instrument-list flex-1 overflow-y-auto p-2 space-y-1"
-      ></ul>
+      <!-- Instruments (persistent, 50vh) -->
+      <div class="sidebar-instruments shrink-0 min-w-0 flex flex-col border-t border-border overflow-hidden" style="height: 50vh; min-height: 0;">
+        <div
+          id="instrumentControls"
+          class="hidden px-3 py-1 border-b border-border/30 flex justify-end items-center shrink-0"
+        >
+          <label
+            class="flex items-center gap-2 text-[10px] font-bold tracking-wider text-muted-foreground uppercase cursor-pointer hover:text-foreground transition-colors"
+          >
+            <span>List used instruments</span>
+            <input
+              type="checkbox"
+              id="usedInstrumentsOnly"
+              class="w-3 h-3 rounded border-border bg-input-bg text-primary focus:ring-primary focus:ring-offset-background"
+            />
+          </label>
+        </div>
+        <ul
+          id="instrumentList"
+          class="instrument-list flex-1 min-h-0 overflow-y-auto p-2 space-y-1"
+        ></ul>
+        <div class="sidebar-instruments-footer shrink-0 border-t border-border p-2 min-w-0 bg-card">
+          <button
+            id="newInstrumentBtn"
+            class="w-full min-w-0 inline-flex items-center justify-center gap-2 rounded-md text-xs font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-tertiary text-tertiary-foreground hover:bg-tertiary/80 h-8 px-2 py-1.5 uppercase overflow-hidden"
+          >
+            <i data-lucide="plus" class="w-3.5 h-3.5 shrink-0"></i>
+            <span class="truncate">New instrument</span>
+          </button>
+        </div>
+      </div>
 
       <div class="p-3 border-t border-border bg-card flex items-center gap-1">
         <span class="text-xs text-muted-foreground font-medium">Data:</span>
@@ -173,7 +193,7 @@
       class="instrument-drawer hidden w-[240px] border-r border-border bg-card flex-col h-full overflow-y-auto [&.active]:flex shadow-xl absolute right-0 top-0 bottom-0 z-20 md:static md:z-auto col-start-2"
     >
       <div
-        class="instrument-drawer-header p-3 bg-muted/50 border-b border-border sticky top-0 z-10 backdrop-blur"
+        class="instrument-drawer-header p-3 bg-card/50 border-b border-border sticky top-0 z-10 backdrop-blur"
       >
         <h3 id="drawerTitle" class="text-lg font-semibold text-primary mb-3">
           Edit Instrument
@@ -210,14 +230,14 @@
                   type="text"
                   id="instExportName"
                   readonly
-                  class="flex h-8 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm shadow-sm opacity-50 cursor-not-allowed"
+                  class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm opacity-70 cursor-not-allowed"
                 />
               </div>
               <input
                 type="number"
                 id="instChannel"
                 readonly
-                class="flex h-8 w-12 text-center rounded-md border border-input bg-muted px-1 py-1 text-sm shadow-sm opacity-50 cursor-not-allowed"
+                class="flex h-8 w-12 text-center rounded-md border border-input bg-input-bg px-1 py-1 text-sm shadow-sm opacity-70 cursor-not-allowed"
                 title="Channel"
               />
             </div>
@@ -520,13 +540,13 @@
         <div class="flex items-center gap-2 flex-1">
           <input
             type="text"
-            id="songNameInput"
-            placeholder="Select a song..."
+            id="patternNameInput"
+            placeholder="Select a pattern..."
             readonly
             class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 max-w-sm"
           />
           <button
-            id="openSongAdvancedSettingsBtn"
+            id="openPatternAdvancedSettingsBtn"
             type="button"
             class="dev-only-hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 w-9 p-0"
             title="Advanced settings"
@@ -552,8 +572,8 @@
         <!-- Blocks Button (Header Right) -->
 	        <button
 	          id="blocksBtn"
-	          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 flex items-center gap-2"
-	          title="Insert blocks into song (Ctrl+B)"
+	          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-transparent text-secondary-foreground hover:bg-secondary/10 h-9 px-4 flex items-center gap-2"
+	          title="Insert blocks into pattern (Ctrl+B)"
 	        >
 	          <i data-lucide="toy-brick" class="w-4 h-4"></i> Insert Blocks
 	        </button>
@@ -571,7 +591,7 @@
             Welcome to<br />STRUDEL TO ZZFXM
           </h1>
           <p class="text-base leading-relaxed text-foreground/80">
-            With this app you can create songs using
+            With this app you can create patterns using
             <a
               href="https://github.com/KilledByAPixel/ZzFX"
               target="_blank"
@@ -587,7 +607,7 @@
             > interface.
           </p>
           <p class="text-base text-muted-foreground">
-            After creating your song, export it to JSON format and use it in
+            After creating your pattern, export it to JSON format and use it in
             your games or other projects that use
             <a
               href="https://codeberg.org/uzu/zzfxm"
@@ -682,6 +702,7 @@
         class="toolbar h-14 border-t border-border flex items-center px-3 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
         <div class="flex gap-2 items-center w-full">
+          <div id="footerExportGroup" class="flex gap-2 items-center flex-1 min-w-0 footer-export-group">
           <button
             id="exportSettingsBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 w-9 p-0 flex items-center justify-center"
@@ -694,7 +715,7 @@
             class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-2 uppercase"
           >
             <i data-lucide="file-music" class="w-4 h-4"></i>
-            <span id="exportBtnLabel">Song to ZzFXM</span>
+            <span id="exportBtnLabel">Pattern to ZzFXM</span>
           </button>
           <button
             id="previewPlayBtn"
@@ -725,6 +746,8 @@
             id="statusMsg"
             class="text-xs text-muted-foreground ml-2 font-mono flex-1 min-w-0 truncate"
           ></span>
+          </div>
+          <div class="flex items-center gap-2 footer-utility-group">
           <span
             id="devModeToolbarLabel"
             class="hidden text-xs text-muted-foreground font-mono tracking-wide uppercase"
@@ -739,6 +762,7 @@
           >
             <i data-lucide="wrench" class="w-4 h-4"></i>
           </button>
+          </div>
         </div>
       </footer>
     </main>
@@ -830,10 +854,10 @@
           <div class="space-y-2">
             <h3 class="text-foreground font-semibold">30-second workflow</h3>
             <ol class="list-decimal pl-5 space-y-1">
-              <li>Load an example song.</li>
+              <li>Load an example pattern.</li>
               <li>Tweak a sound in the instrument editor (ZzFXMicro-style parameters).</li>
               <li>(Optional) Use <strong>Blocks</strong> to sketch parts in a tracker-style grid and preview an arrangement.</li>
-              <li>Click <strong>Song to ZzFXM</strong> and preview playback.</li>
+              <li>Click <strong>Pattern to ZzFXM</strong> and preview playback.</li>
               <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Download WAV</strong> to share/test.</li>
             </ol>
           </div>
@@ -966,7 +990,7 @@
             <ul class="list-disc pl-5 space-y-1">
               <li>The editor is the embedded <code>&lt;strudel-editor&gt;</code> REPL component. When you press Play (or run code via Strudel shortcuts), Strudel evaluates your code and drives timing/scheduling in the browser.</li>
               <li>Sound is produced by ZzFXMicro instruments: the app maps instrument definitions to ZzFXMicro parameters and uses them for preview playback and for export.</li>
-              <li>The app keeps a small amount of UI state (selected song, play state, export settings) and mirrors it into the sidebar, toolbar, and modals.</li>
+              <li>The app keeps a small amount of UI state (selected pattern, play state, export settings) and mirrors it into the sidebar, toolbar, and modals.</li>
               <li>Auto-save is event-driven: changes are debounced to avoid excessive writes, but key actions (like leaving certain inputs) can trigger immediate saves.</li>
             </ul>
           </div>
@@ -974,7 +998,7 @@
           <div class="space-y-2">
             <h3 class="text-foreground font-semibold">Project files</h3>
             <ul class="list-disc pl-5 space-y-1">
-              <li>Songs are JavaScript modules stored under <code>songs/</code>. A selected song is loaded into the editor and also used as the source of truth for export and playback.</li>
+              <li>Patterns (Strudel files) are JavaScript modules stored under <code>patterns/</code>. A selected pattern is loaded into the editor and also used as the source of truth for export and playback.</li>
               <li>Blocks are reusable patterns stored under <code>blocks/</code>. They can include an embedded <code>trackerState</code> object so the Tracker can re-open them for editing.</li>
               <li>Arrangements live under <code>arrangements/</code> and reference blocks, letting you build longer pieces out of smaller patterns.</li>
               <li>Instruments are stored in <code>instruments.js</code> and mapped to ZzFXMicro parameters for both preview and export.</li>
@@ -984,7 +1008,7 @@
           <div class="space-y-2">
             <h3 class="text-foreground font-semibold">Local API (dev server)</h3>
             <p class="leading-relaxed">
-              During development, the app talks to a small local API exposed by Vite middleware (endpoints like <code>/api/songs</code>, <code>/api/song/&lt;name&gt;</code>, <code>/api/blocks</code>, and rename endpoints). These endpoints read and write files in the project directories so your edits persist as real modules you can commit.
+              During development, the app talks to a small local API exposed by Vite middleware (endpoints like <code>/api/patterns</code>, <code>/api/pattern/&lt;name&gt;</code>, <code>/api/blocks</code>, and rename endpoints). These endpoints read and write files in the project directories so your edits persist as real modules you can commit.
             </p>
           </div>
 
@@ -992,7 +1016,7 @@
             <h3 class="text-foreground font-semibold">Tracker and blocks</h3>
             <ul class="list-disc pl-5 space-y-1">
               <li>The Tracker modal is a lightweight step sequencer. When you save a block, it generates a Strudel pattern string and stores the underlying grid state (<code>trackerState</code>) for later edits.</li>
-              <li>When inserting a block into a song, the app can optionally keep the block BPM, and it passes the block’s row count so insertion can align musically.</li>
+              <li>When inserting a block into a pattern, the app can optionally keep the block BPM, and it passes the block’s row count so insertion can align musically.</li>
             </ul>
           </div>
 
@@ -1008,7 +1032,7 @@
           <div class="space-y-2">
             <h3 class="text-foreground font-semibold">Demo mode</h3>
             <p class="leading-relaxed">
-              In demo mode, song management is read-only and edits are kept in memory for the session. You can still download a ZIP to move the project files into a local workspace.
+              In demo mode, pattern management is read-only and edits are kept in memory for the session. You can still download a ZIP to move the project files into a local workspace.
             </p>
           </div>
         </div>
@@ -1094,13 +1118,13 @@
         </div>
         <div class="text-sm text-muted-foreground space-y-3">
           <p>
-            In demo mode, song edits are kept only in your browser memory for this session.
+            In demo mode, pattern edits are kept only in your browser memory for this session.
           </p>
           <p>
             Changes are not written to project files or the <code>output/</code> directory.
           </p>
           <p>
-            You can still use <strong>Download songs and instruments</strong> to export a ZIP with songs, blocks, arrangements, and <code>instruments.js</code>. Extract it into your app root folder to place files under the correct directories.
+            You can still use <strong>Download</strong> (project ZIP) to export patterns, blocks, arrangements, and <code>instruments.js</code>. Extract it into your app root folder to place files under the correct directories.
           </p>
         </div>
         <div class="flex justify-end">
@@ -1273,9 +1297,9 @@
       </div>
     </div>
 
-    <!-- New Song Modal -->
+    <!-- New Pattern Modal -->
     <div
-      id="newSongModal"
+      id="newPatternModal"
       class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
     >
       <div
@@ -1284,23 +1308,23 @@
         <h2
           class="text-lg font-semibold leading-none tracking-tight text-primary"
         >
-          New Song
+          New Pattern
         </h2>
         <input
           type="text"
-          id="newSongName"
-          placeholder="song-name (e.g. boss-theme)"
+          id="newPatternName"
+          placeholder="pattern-name (e.g. boss-theme)"
           class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         <div class="flex justify-end gap-2">
           <button
-            id="cancelNewSong"
+            id="cancelNewPattern"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
           >
             Cancel
           </button>
           <button
-            id="confirmNewSong"
+            id="confirmNewPattern"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm flex items-center gap-2"
           >
             <i data-lucide="plus" class="w-4 h-4"></i> Create
@@ -1382,7 +1406,7 @@
       </div>
     </div>
 
-    <!-- Delete Song Modal -->
+    <!-- Delete Pattern Modal -->
     <div
       id="deleteConfirmModal"
       class="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
@@ -1393,7 +1417,7 @@
         <h2
           class="text-lg font-semibold leading-none tracking-tight text-destructive-foreground"
         >
-          Delete song?
+          Delete pattern?
         </h2>
         <p id="deleteConfirmText" class="text-sm text-muted-foreground">
           This action cannot be undone.
@@ -1837,32 +1861,16 @@
             <i data-lucide="x" class="w-6 h-6"></i>
           </button>
         </div>
-        <div class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
+        <div class="flex flex-col gap-2 p-3 rounded-md border border-input bg-card/40">
           <span class="text-sm text-foreground leading-snug">Color theme</span>
-          <div class="flex gap-1 rounded-md p-0.5 border border-input bg-background">
-            <button type="button" id="systemSettingsThemeDefaultBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="">Default</button>
-            <button type="button" id="systemSettingsThemeLegacyBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="legacy">Legacy</button>
-            <button type="button" id="systemSettingsThemeRomulanBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="romulan">Romulan</button>
+          <div class="flex gap-1 rounded-md p-0.5 border border-input bg-background [&>button]:flex-1">
+            <button type="button" id="systemSettingsThemeDefaultBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="">Cigar</button>
+            <button type="button" id="systemSettingsThemeLegacyBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="crusader">Crusader</button>
+            <button type="button" id="systemSettingsThemeRomulanBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="phantom">Phantom</button>
+            <button type="button" id="systemSettingsThemeMonoBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="mono">Mono</button>
+            <button type="button" id="systemSettingsThemeMilkBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="milk">Milk</button>
           </div>
         </div>
-        <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
-          <span class="text-sm text-foreground leading-snug">REPL editor theme</span>
-          <select id="systemSettingsReplThemeSelect" class="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-ring min-w-[11rem]">
-            <!-- Options filled by repl-app.js from Strudel presets -->
-          </select>
-        </label>
-        <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
-          <span class="text-sm text-foreground leading-snug">Developer mode</span>
-          <span class="relative inline-flex h-6 w-11 items-center">
-            <input type="checkbox" id="systemSettingsDevModeToggle" class="peer sr-only" />
-            <span class="absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-primary/70"></span>
-            <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background border border-border transition-transform peer-checked:translate-x-5"></span>
-          </span>
-        </label>
-        <p class="text-xs text-muted-foreground/90 leading-relaxed">
-          Use with caution. Will enable functionality that can lead to unintended data loss.
-        </p>
-
         <details id="systemSettingsThemeDetails" class="group rounded-md border border-input bg-card/40 overflow-hidden">
           <summary class="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-medium text-foreground select-none hover:bg-accent/50 transition-colors [&::-webkit-details-marker]:hidden">
             <i data-lucide="palette" class="w-4 h-4 text-muted-foreground shrink-0"></i>
@@ -1928,8 +1936,30 @@
               <button type="button" id="systemSettingsThemeCopyBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3" title="Copy current theme variable values for style.css or to share">
                 Copy theme to clipboard
               </button>
-              <button type="button" id="systemSettingsThemeWhiteDebugBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground h-8 px-3" title="Set every theme color to white to find elements that don’t use theme variables">
+              <button type="button" id="systemSettingsThemeWhiteDebugBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground h-8 px-3" title="Set every theme color to white to find elements that don't use theme variables">
                 Set all to white (debug)
+              </button>
+            </div>
+          </div>
+        </details>
+        <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
+          <span class="text-sm text-foreground leading-snug">REPL editor theme</span>
+          <select id="systemSettingsReplThemeSelect" class="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-ring min-w-[11rem]">
+            <!-- Options filled by repl-app.js from Strudel presets -->
+          </select>
+        </label>
+        <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
+          <span class="text-sm text-foreground leading-snug">Developer mode</span>
+          <span class="relative inline-flex h-6 w-11 items-center">
+            <input type="checkbox" id="systemSettingsDevModeToggle" class="peer sr-only" />
+            <span class="absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-primary/70"></span>
+            <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background border border-border transition-transform peer-checked:translate-x-5"></span>
+          </span>
+        </label>
+        <p class="text-xs text-muted-foreground/90 leading-relaxed">
+          Use with caution. Will enable functionality that can lead to unintended data loss.
+        </p>
+
               </button>
             </div>
           </div>
@@ -1984,7 +2014,7 @@
 	        </div>
 
 	        <p id="blocksModalDescription" class="text-sm text-muted-foreground">
-	          Create arrangements with Blocks to quickly test out your song ideas.
+	          Create arrangements with Blocks to quickly test out your pattern ideas.
 	        </p>
 
 	        <div id="blocksTabPanel" class="hidden flex flex-col gap-4 flex-1 min-h-0">
@@ -2018,7 +2048,7 @@
 	                disabled
 	                class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2 disabled:bg-transparent disabled:opacity-30"
 	              >
-	                <i data-lucide="arrow-down" class="w-4 h-4"></i> Insert into Song
+	                <i data-lucide="arrow-down" class="w-4 h-4"></i> Insert into Pattern
 	              </button>
             </div>
           </div>
@@ -2047,7 +2077,7 @@
 		              disabled
 		              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2 shadow-sm flex items-center gap-2 disabled:bg-transparent disabled:opacity-30"
 		            >
-		              <i data-lucide="arrow-down" class="w-4 h-4"></i> Insert into Song
+		              <i data-lucide="arrow-down" class="w-4 h-4"></i> Insert into Pattern
 		            </button>
 	          </div>
 	        </div>
@@ -2501,7 +2531,7 @@
     <!-- Initializing Overlay -->
     <div
       id="initOverlay"
-      class="init-overlay fixed inset-0 z-[100] bg-background flex items-center justify-center hidden [&.active]:flex"
+      class="init-overlay active fixed inset-0 z-[100] bg-background flex items-center justify-center [&:not(.active)]:hidden"
     >
       <div class="init-overlay-content flex flex-col items-center gap-4">
         <div

@@ -13,7 +13,7 @@ const isCombined = args.includes('--combined');
 const targetSong = args.find(a => !a.startsWith('--'));
 
 const OUTPUT_DIR = './output';
-const SONGS_DIR = path.resolve('./songs');
+const PATTERNS_DIR = path.resolve('./patterns');
 const instrumentArray = instrumentModule.instrumentArray || [];
 const instrumentMapping = instrumentModule.instrumentMapping || {};
 const instrumentMonophonic = instrumentModule.instrumentMonophonic || {};
@@ -35,12 +35,12 @@ function buildSongRegistry() {
     const registry = new Map();
     const byFile = [];
 
-    if (!fs.existsSync(SONGS_DIR)) {
-        return { registry, songs: byFile };
+    if (!fs.existsSync(PATTERNS_DIR)) {
+        return { registry, patterns: byFile };
     }
 
     const files = fs
-        .readdirSync(SONGS_DIR)
+        .readdirSync(PATTERNS_DIR)
         .filter((f) => f.endsWith('.js') && f !== 'index.js')
         .sort();
 
@@ -48,14 +48,14 @@ function buildSongRegistry() {
         const base = file.replace(/\.js$/, '');
         const id = base;
 
-        const fullPath = path.resolve(SONGS_DIR, file);
+        const fullPath = path.resolve(PATTERNS_DIR, file);
         const descriptor = { id, base, file, fullPath };
         byFile.push(descriptor);
 
         registry.set(id, descriptor);
     }
 
-    return { registry, songs: byFile };
+    return { registry, patterns: byFile };
 }
 
 async function loadSongModule(descriptor) {
@@ -68,62 +68,62 @@ if (!fs.existsSync(OUTPUT_DIR)) {
 }
 
 async function runExport() {
-    const { registry, songs } = buildSongRegistry();
+    const { registry, patterns } = buildSongRegistry();
     const monophonicByInstrumentIndex = buildMonophonicByInstrumentIndex();
 
     if (isAll) {
-        console.log(`🚀 Exporting ALL songs...`);
+        console.log(`🚀 Exporting ALL patterns...`);
         const bundle = {
             instruments: instrumentArray,
-            songs: {}
+            patterns: {}
         };
 
-        for (const song of songs) {
-            const module = await loadSongModule(song);
+        for (const pattern of patterns) {
+            const module = await loadSongModule(pattern);
             const result = exportPattern(module.pattern, module.bpm, instrumentArray, instrumentMapping, 8, {
                 monophonicByInstrumentIndex
             });
             const songData = result.song;
             
             if (isCombined) {
-                // For combined, we store patterns/sequence/bpm separately per song
-                bundle.songs[song.id] = {
+                // For combined, we store patterns/sequence/bpm separately per pattern
+                bundle.patterns[pattern.id] = {
                     patterns: songData[1],
                     sequence: songData[2],
                     bpm: songData[3]
                 };
             } else {
-                const filePath = path.join(OUTPUT_DIR, `${song.id}.json`);
+                const filePath = path.join(OUTPUT_DIR, `${pattern.id}.json`);
                 fs.writeFileSync(filePath, JSON.stringify(songData));
                 console.log(`✅ Exported: ${filePath}`);
             }
         }
 
         if (isCombined) {
-            const filePath = path.join(OUTPUT_DIR, `songs-bundle.json`);
+            const filePath = path.join(OUTPUT_DIR, `patterns-bundle.json`);
             fs.writeFileSync(filePath, JSON.stringify(bundle));
             console.log(`✅ Exported Bundle: ${filePath}`);
         }
     } else if (targetSong && registry.has(targetSong)) {
-        const song = registry.get(targetSong);
-        console.log(`🚀 Exporting song: ${song.id} (${song.file})...`);
-        const module = await loadSongModule(song);
+        const pattern = registry.get(targetSong);
+        console.log(`🚀 Exporting pattern: ${pattern.id} (${pattern.file})...`);
+        const module = await loadSongModule(pattern);
         const result = exportPattern(module.pattern, module.bpm, instrumentArray, instrumentMapping, 8, {
             monophonicByInstrumentIndex
         });
         const songData = result.song;
-        const filePath = path.join(OUTPUT_DIR, `${song.id}.json`);
+        const filePath = path.join(OUTPUT_DIR, `${pattern.id}.json`);
         fs.writeFileSync(filePath, JSON.stringify(songData));
         console.log(`✅ Exported: ${filePath}`);
     } else {
-        console.log('❌ Please specify a song name or use --all');
+        console.log('❌ Please specify a pattern name or use --all');
         console.log('Usage:');
-        console.log('  npm run export -- <song-name>');
+        console.log('  npm run export -- <pattern-name>');
         console.log('  npm run export -- --all');
         console.log('  npm run export -- --all --combined');
-        if (songs.length) {
-            const songNames = songs.map((s) => s.id).join(', ');
-            console.log(`Available songs: ${songNames}`);
+        if (patterns.length) {
+            const patternNames = patterns.map((s) => s.id).join(', ');
+            console.log(`Available patterns: ${patternNames}`);
         }
         process.exit(1);
     }

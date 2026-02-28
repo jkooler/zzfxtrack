@@ -17,7 +17,7 @@ import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { getAudioContext } from '@strudel/webaudio';
 
-import { reloadInstruments, isStrudelPlaybackActive, refreshSongListActiveState } from './repl-app.js';
+import { reloadInstruments, isStrudelPlaybackActive, refreshPatternListActiveState } from './repl-app.js';
 import { createIcons, icons } from 'lucide';
 import { getInstrumentAnalyser } from './zzfx-loader.js';
 import { ScopeVisualizer, getVisualizerAnalyser } from './visualizer.js';
@@ -26,8 +26,9 @@ const DEMO_MODE = import.meta.env.MODE === 'demo';
 
 // State
 let currentInstrumentId = null;
-let currentView = 'songs'; // 'songs' | 'blocks' | 'instruments'
-let hasSelectedSong = false;
+let currentView = 'strudel'; // 'strudel' | 'blocks'
+let hasSelectedPattern = false;
+let hasSelectedArrangement = false;
 const playbackAliasesBySource = new Map();
 const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-instruments-v1';
 let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, example: false });
@@ -44,17 +45,16 @@ function isDeveloperModeEnabled() {
 // DOM Elements
 const dom = {
     // Tabs
-    songsTab: document.getElementById('songsTab'),
+    strudelTab: document.getElementById('strudelTab'),
     blocksTab: document.getElementById('blocksTab'),
-    instrumentsTab: document.getElementById('instrumentsTab'),
     
     // Lists
-    songList: document.getElementById('songList'),
+    patternList: document.getElementById('patternList'),
     arrangementList: document.getElementById('arrangementList'),
     instrumentList: document.getElementById('instrumentList'),
     
     // Buttons
-    newSongBtn: document.getElementById('newSongBtn'),
+    newSongBtn: document.getElementById('newPatternBtn'),
     newArrangementBtn: document.getElementById('newArrangementBtn'),
     newInstrumentBtn: document.getElementById('newInstrumentBtn'),
     downloadProjectBtn: document.getElementById('downloadProjectBtn'),
@@ -238,7 +238,7 @@ export async function initInstrumentUI() {
     setupEventListeners();
 
     // Set initial view state
-    switchView('songs');
+    switchView('strudel');
 
     // Resolve initial sync (local vs file)
     await syncInstrumentSources();
@@ -252,8 +252,6 @@ export async function initInstrumentUI() {
         dom.openInstrumentAdvancedSettingsBtn.classList.add('dev-only-hidden');
     }
 
-    hideInitOverlay();
-
     console.log('[InstrumentUI] Initialized');
 }
 
@@ -266,10 +264,8 @@ export function refreshInstrumentListUI() {
  */
 function setupEventListeners() {
     // Tab switching
-    dom.songsTab.addEventListener('click', () => switchView('songs'));
+    dom.strudelTab.addEventListener('click', () => switchView('strudel'));
     dom.blocksTab?.addEventListener('click', () => switchView('blocks'));
-    dom.instrumentsTab.addEventListener('click', () => switchView('instruments'));
-
     // Instrument Controls
     if (dom.usedInstrumentsOnly) {
         dom.usedInstrumentsOnly.addEventListener('change', () => {
@@ -392,7 +388,7 @@ function showInitOverlay() {
     }
 }
 
-function hideInitOverlay() {
+export function hideInitOverlay() {
     if (dom.initOverlay) {
         dom.initOverlay.classList.remove('active');
     }
@@ -1062,7 +1058,7 @@ function createParamField(index, label, hint, showIndex) {
             wrapper.appendChild(input);
             
             const noteSelect = document.createElement('select');
-            noteSelect.className = 'h-8 rounded-md border border-input bg-muted px-1 py-1 text-xs shadow-sm font-mono w-14 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+            noteSelect.className = 'h-8 rounded-md border border-input bg-input-bg px-1 py-1 text-xs shadow-sm font-mono w-14 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
             
             // Populate notes C0 (12) to B8 (119)
             const notes = ['C', 'c#', 'D', 'd#', 'E', 'F', 'f#', 'G', 'g#', 'A', 'a#', 'B'];
@@ -1105,7 +1101,7 @@ function createParamField(index, label, hint, showIndex) {
             
             // Prev Button
             const prevBtn = document.createElement('button');
-            prevBtn.className = 'h-8 w-6 flex items-center justify-center rounded-md border border-input bg-muted hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+            prevBtn.className = 'h-8 w-6 flex items-center justify-center rounded-md border border-input bg-input-bg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
             prevBtn.innerHTML = '<i data-lucide="chevron-left" class="w-4 h-4"></i>';
             prevBtn.addEventListener('click', () => {
                 if (noteSelect.selectedIndex > 0) {
@@ -1116,7 +1112,7 @@ function createParamField(index, label, hint, showIndex) {
 
             // Next Button
             const nextBtn = document.createElement('button');
-            nextBtn.className = 'h-8 w-6 flex items-center justify-center rounded-md border border-input bg-muted hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+            nextBtn.className = 'h-8 w-6 flex items-center justify-center rounded-md border border-input bg-input-bg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
             nextBtn.innerHTML = '<i data-lucide="chevron-right" class="w-4 h-4"></i>';
             nextBtn.addEventListener('click', () => {
                  if (noteSelect.selectedIndex < noteSelect.options.length - 1) {
@@ -1158,13 +1154,13 @@ function createParamField(index, label, hint, showIndex) {
 }
 
 /**
- * Refresh visibility of instrument-specific controls (like 'Used in song' checkbox)
+ * Refresh visibility of instrument-specific controls (like 'Used in pattern' checkbox)
  */
 function refreshInstrumentControlsVisibility() {
     if (!dom.instrumentControls) return;
     
-    // Only show if we are in instruments view AND a song is actually selected/loaded
-    if (currentView === 'instruments' && hasSelectedSong) {
+    // Show "List used instruments" when a pattern or arrangement is loaded
+    if (hasSelectedPattern || hasSelectedArrangement) {
         dom.instrumentControls.classList.remove('hidden');
     } else {
         dom.instrumentControls.classList.add('hidden');
@@ -1172,80 +1168,51 @@ function refreshInstrumentControlsVisibility() {
 }
 
 /**
- * Handle song selection state from main app
+ * Handle pattern selection state from main app
  */
-export function updateSongSelectionState(isLoaded) {
-    hasSelectedSong = isLoaded;
+export function updatePatternSelectionState(isLoaded) {
+    hasSelectedPattern = isLoaded;
     refreshInstrumentControlsVisibility();
 }
 
 /**
- * Switch between songs and instruments view
+ * Handle arrangement selection state from main app
+ * When an arrangement is loaded, "List used instruments" is shown and filters by instruments used in the arrangement's blocks.
+ */
+export function updateArrangementSelectionState(isLoaded) {
+    hasSelectedArrangement = isLoaded;
+    refreshInstrumentControlsVisibility();
+}
+
+/**
+ * Switch between Strudel patterns and arrangements view (instrument list is always visible below)
  */
 function switchView(view) {
     currentView = view;
 
-    // Clear introduction page highlight and restore current song highlight when user switches to Songs or Instruments tab
     document.getElementById('sidebarTitle')?.classList.remove('active');
-    if (view === 'songs' || view === 'instruments') {
-        refreshSongListActiveState();
+    if (view === 'strudel') {
+        refreshPatternListActiveState();
     }
 
-    if (view === 'songs') {
-        dom.songsTab.classList.add('active');
+    if (view === 'strudel') {
+        dom.strudelTab.classList.add('active');
         dom.blocksTab?.classList.remove('active');
-        dom.instrumentsTab.classList.remove('active');
-        
-        dom.songList.classList.remove('hidden');
+        dom.patternList.classList.remove('hidden');
         dom.arrangementList?.classList.add('hidden');
-        dom.instrumentList.classList.add('hidden');
-        dom.instrumentList.classList.remove('active');
-        
-        // Show Song stuff
         dom.newSongBtn.classList.remove('hidden');
         dom.newSongBtn.classList.add('inline-flex');
         dom.newArrangementBtn?.classList.add('hidden');
         dom.newArrangementBtn?.classList.remove('inline-flex');
-        
-        dom.newInstrumentBtn.classList.add('hidden');
-        dom.newInstrumentBtn.classList.remove('inline-flex');
-        
-    } else if (view === 'blocks') {
-        dom.songsTab.classList.remove('active');
+    } else {
+        dom.strudelTab.classList.remove('active');
         dom.blocksTab?.classList.add('active');
-        dom.instrumentsTab.classList.remove('active');
-
-        dom.songList.classList.add('hidden');
+        dom.patternList.classList.add('hidden');
         dom.arrangementList?.classList.remove('hidden');
-        dom.instrumentList.classList.add('hidden');
-        dom.instrumentList.classList.remove('active');
-
         dom.newSongBtn.classList.add('hidden');
         dom.newSongBtn.classList.remove('inline-flex');
         dom.newArrangementBtn?.classList.remove('hidden');
         dom.newArrangementBtn?.classList.add('inline-flex');
-
-        dom.newInstrumentBtn.classList.add('hidden');
-        dom.newInstrumentBtn.classList.remove('inline-flex');
-    } else {
-        dom.songsTab.classList.remove('active');
-        dom.blocksTab?.classList.remove('active');
-        dom.instrumentsTab.classList.add('active');
-        
-        dom.songList.classList.add('hidden');
-        dom.arrangementList?.classList.add('hidden');
-        dom.instrumentList.classList.remove('hidden');
-        dom.instrumentList.classList.add('active');
-        
-        // Show Instrument stuff
-        dom.newSongBtn.classList.add('hidden');
-        dom.newSongBtn.classList.remove('inline-flex');
-        dom.newArrangementBtn?.classList.add('hidden');
-        dom.newArrangementBtn?.classList.remove('inline-flex');
-        
-        dom.newInstrumentBtn.classList.remove('hidden');
-        dom.newInstrumentBtn.classList.add('inline-flex');
-        
     }
     
     refreshInstrumentControlsVisibility();
@@ -1346,7 +1313,7 @@ function renderInstrumentList() {
                         <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">${waveShapeLabel} • CH: ${inst.channel}</div>
                     </div>
                 </div>
-                <div class="song-item-actions">
+                <div class="list-item-actions">
                     ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
                 </div>
             `;
@@ -1389,8 +1356,8 @@ function renderInstrumentList() {
         dom.instrumentList.appendChild(folderItem);
     };
 
-    appendFolder('user', 'User', userInstruments);
-    appendFolder('example', 'Examples (Read only)', exampleInstruments);
+    appendFolder('user', 'Instruments (User)', userInstruments);
+    appendFolder('example', 'Examples', exampleInstruments);
     
     createIcons({ icons });
 
@@ -1402,7 +1369,7 @@ function renderInstrumentList() {
 let lastKnownCode = '';
 
 /**
- * Update instrument usage indicators based on song code
+ * Update instrument usage indicators based on pattern code
  */
 export function updateInstrumentUsage(code) {
     if (code !== undefined) {
@@ -1470,8 +1437,8 @@ function handleDragOver(e) {
         target.style.borderTop = '';
         target.style.borderBottom = '';
         
-        // Show indicator on the appropriate side based on drag direction (use theme primary)
-        const dropColor = 'var(--primary)';
+        // Show indicator on the appropriate side based on drag direction (use tertiary for instrument list)
+        const dropColor = 'var(--tertiary)';
         if (draggedIndex < targetIndex) {
             // Dragging down - show indicator on bottom
             target.style.borderBottom = `2px solid ${dropColor}`;
