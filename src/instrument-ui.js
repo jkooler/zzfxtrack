@@ -1047,7 +1047,7 @@ function createParamField(index, label, hint, showIndex) {
         if (index === 2) {
             // Frequency Note Selector
             const wrapper = document.createElement('div');
-            wrapper.className = 'flex items-center gap-2';
+            wrapper.className = 'flex items-center gap-3';
             
             // Layout adjust
             if (input._originalClass) input.className = input._originalClass;
@@ -1307,7 +1307,7 @@ function renderInstrumentList() {
             li.innerHTML = `
                 <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
                 <div class="instrument-info" style="cursor: ${isExample ? 'pointer' : 'move'}; display: flex; align-items: center; gap: 8px;">
-                    <canvas class="instrument-scope w-[1.6rem] h-[1.6rem] rounded-full bg-black/20 border border-border/20 hidden md:block opacity-50 transition-opacity shrink-0" width="64" height="64"></canvas>
+                    <canvas class="instrument-scope w-[1.6rem] h-[1.6rem] rounded-full bg-black/20 border border-border/20 opacity-50 transition-opacity shrink-0" width="64" height="64"></canvas>
                     <div class="min-w-0">
                         <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
                         <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">${waveShapeLabel} • CH: ${inst.channel}</div>
