@@ -4537,6 +4537,18 @@ async function downloadPatternsAndInstruments() {
             if (!fileCode.trim()) continue;
             zip.file(`patterns/${decodeURIComponent(filename)}`, fileCode);
             downloadedSongs++;
+
+            if (DEMO_MODE) {
+                const metaFilename = filename.replace(/\.js$/i, '.meta.json');
+                zip.file(`patterns/${decodeURIComponent(metaFilename)}`, JSON.stringify({ scope: 'example' }, null, 2));
+            } else {
+                const metaRes = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
+                if (metaRes.ok) {
+                    const metaText = await metaRes.text();
+                    const metaFilename = filename.replace(/\.js$/i, '.meta.json');
+                    zip.file(`patterns/${decodeURIComponent(metaFilename)}`, metaText);
+                }
+            }
         }
 
         let downloadedBlocks = 0;

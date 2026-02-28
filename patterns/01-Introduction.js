@@ -2,7 +2,7 @@ import { stack, arrange, note, s, slow, silence, gain } from "@strudel/core";
 
 export const bpm = 120;
 
-// Welcome to the introduction pattern
+// Welcome to the introduction Strudel pattern
 
 // If you're new to Strudel, it's recommended to read the official docs.
 // https://patterns.slab.org/learn/getting-started/
@@ -20,7 +20,7 @@ const pattern = stack(
 
 export const pattern = arrange([16, pattern])
 
-// If you look down, you'll see the "Song to ZzFXM" button.
+// If you look down, you'll see the "Pattern to ZzFXM" button.
 // Clicking it will generate the song data as .json, that is compatible with ZzFXM.
 
 // 1. Audio processing effects will not carry over to exported .json file.
