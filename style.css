@@ -282,7 +282,7 @@ body {
 .blocks-library-chevron {
   transition: transform 0.2s ease;
 }
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   #blocksLibrarySidebar.blocks-library[data-collapsed="true"] .blocks-library-list {
     max-height: 0;
     overflow: hidden;
@@ -293,7 +293,7 @@ body {
     transform: rotate(-180deg);
   }
 }
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   #blocksLibrarySidebar .blocks-library-list {
     max-height: none !important;
   }
