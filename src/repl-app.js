@@ -139,6 +139,8 @@ let pendingTrackerSavePayload = null;
 let arrangementDraftState = null;
 let blocksLibraryCache = [];
 let activeArrangementBlockFilename = null;
+/** Per-arrangement last selected block filename (key = arrangement filename, value = block filename or null). */
+const arrangementSelectedBlockByArrangement = {};
 let trackerDockRestoreParent = null;
 let trackerDockRestoreNextSibling = null;
 let trackerWorkspaceLoadedFilename = null;
@@ -2492,6 +2494,7 @@ function renderArrangementWorkspace() {
                     row.blocks.push(val);
                 }
                 activeArrangementBlockFilename = val;
+                if (currentArrangementFilename) arrangementSelectedBlockByArrangement[currentArrangementFilename] = val;
                 selectEl.selectedIndex = 0;
                 renderArrangementWorkspace();
                 scheduleArrangementAutoSave();
@@ -2581,6 +2584,7 @@ function renderArrangementWorkspace() {
                         chip.addEventListener('click', (event) => {
                             if (event.target?.closest('.arr-chip-del')) return;
                             activeArrangementBlockFilename = filename;
+                            if (currentArrangementFilename) arrangementSelectedBlockByArrangement[currentArrangementFilename] = filename;
                             renderArrangementWorkspace();
                             renderTrackerWorkspace();
                         });
@@ -2591,6 +2595,7 @@ function renderArrangementWorkspace() {
                             if (idx >= 0) row.blocks.splice(idx, 1);
                             if (activeArrangementBlockFilename === filename) {
                                 activeArrangementBlockFilename = null;
+                                if (currentArrangementFilename) arrangementSelectedBlockByArrangement[currentArrangementFilename] = null;
                             }
                             renderArrangementWorkspace();
                             renderTrackerWorkspace();
@@ -2807,6 +2812,7 @@ async function refreshBlocksLibrary() {
                 });
                 li.addEventListener('click', async () => {
                     activeArrangementBlockFilename = block.filename;
+                    if (currentArrangementFilename) arrangementSelectedBlockByArrangement[currentArrangementFilename] = block.filename;
                     renderArrangementWorkspace();
                     renderTrackerWorkspace();
                 });
@@ -2987,7 +2993,9 @@ async function loadArrangement(filename) {
         currentArrangementFilename = filename;
         currentArrangementScope = loadedScope;
         arrangementDraftState = arrangementState;
-        activeArrangementBlockFilename = null;
+        const savedBlock = arrangementSelectedBlockByArrangement[filename];
+        const blockInArrangement = savedBlock && (arrangementState.rows || []).some((row) => Array.isArray(row?.blocks) && row.blocks.includes(savedBlock));
+        activeArrangementBlockFilename = blockInArrangement ? savedBlock : null;
         // Keep currentSongFilename so song selection is remembered when switching back to Songs tab.
 
         refreshArrangementListActiveState();
