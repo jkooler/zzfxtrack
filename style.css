@@ -67,8 +67,7 @@
 
   /* Use html:root for higher specificity (0-1-1) to beat Strudel's inline :root (0-1-0) */
   html:root {
-    /* Dynamic base font size: portrait/narrow 15px, tablet landscape 16px, desktop 16px */
-    font-size: 15px;
+    font-size: 16px;
     /* Default theme (Stone & Amber) */
 
     --background: hsl(0, 8%, 8%);
@@ -129,7 +128,7 @@
 
   /* Phantom theme */
   html[data-theme="phantom"] {
-    font-size: 15px;
+    font-size: 16px;
     --background: hsl(214, 30%, 14%);
     --foreground: hsl(72, 14%, 73%);
     --card: hsl(314, 8%, 14%);
@@ -212,19 +211,6 @@
     --input-bg: hsl(173, 25%, 91%);
     --radius: 0.2rem;
   }
-
-  /* Tablet landscape (e.g. iPad landscape): 16px base */
-  @media (min-width: 900px) {
-    html:root {
-      font-size: 16px;
-    }
-  }
-  /* Desktop: 16px base */
-  @media (min-width: 1280px) {
-    html:root {
-      font-size: 16px;
-    }
-  }
 }
 
 @layer utilities {
@@ -260,7 +246,7 @@ body {
   position: relative;
   z-index: 1;
 }
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   #arrangementWorkspacePane {
     max-height: 261px;
   }
@@ -402,14 +388,18 @@ input[readonly]:focus-visible {
   transition: opacity 220ms ease;
 }
 
-/* Footer status row: animate expand/collapse with explicit height */
+/* Footer status row: animate expand/collapse with explicit height; no space when collapsed */
 #footerStatusRow {
   height: 0;
   overflow: hidden;
   transition: height 0.3s ease-out;
+  border-top: none;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 #footerStatusRow.is-expanded {
   height: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 .list-item,
@@ -508,7 +498,7 @@ input[readonly]:focus-visible {
   @apply p-1;
 }
 .sidebar-edit-btn {
-  @apply text-muted-foreground hover:text-primary focus-visible:text-primary transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none inline-flex items-center gap-2 text-xs;
+  @apply text-muted-foreground hover:text-primary focus-visible:text-primary transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none inline-flex items-center gap-3 text-xs;
 }
 .sidebar-del-btn:hover,
 .sidebar-del-btn:focus-visible,
@@ -740,7 +730,7 @@ strudel-editor {
 
 .param-field {
   height: fit-content;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .param-field > .flex {
@@ -1008,7 +998,7 @@ strudel-editor {
 
 /* Arranger */
 .arr-rows-header {
-  @apply flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase select-none;
+  @apply flex items-center gap-3 text-[11px] font-bold text-muted-foreground uppercase select-none;
   padding-left: 4px;
   padding-right: 4px;
   padding-bottom: calc(var(--spacing) * 2);
@@ -1053,7 +1043,7 @@ strudel-editor {
 }
 
 .arr-row-main {
-  @apply flex items-center gap-2 min-w-0;
+  @apply flex items-center gap-3 min-w-0;
   align-self: flex-start;
 }
 @media (min-width: 1536px) {
