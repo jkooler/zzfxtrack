@@ -1,11 +1,11 @@
-// Arrangement: Demo-Arrangement
+// Arrangement: 01-Introduction-Demo
 
-export const name = "Demo-Arrangement";
+export const name = "01-Introduction-Demo";
 export const scope = "example";
 
 export const arrangementState = {
   "version": 1,
-  "name": "Demo-Arrangement",
+  "name": "01-Introduction-Demo",
   "bpm": 120,
   "rows": [
     {

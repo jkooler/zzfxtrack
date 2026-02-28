@@ -9,7 +9,7 @@ import { exportPattern } from './export-logic.js';
 import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
-import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases } from './instrument-ui.js';
+import { initInstrumentUI, getInstrumentsForExporter, updateInstrumentUsage, updateSongSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
@@ -49,7 +49,7 @@ function getDeveloperModeHeaders() {
 }
 
 function updateAdvancedSettingsButtonsVisibility() {
-    const show = !DEMO_MODE && isDeveloperModeEnabled();
+    const show = !DEMO_MODE;
     if (dom.openSongAdvancedSettingsBtn) {
         const shouldShow = show && Boolean(currentSongFilename) && !dom.songNameInput.classList.contains('hidden');
         dom.openSongAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
@@ -120,6 +120,8 @@ let arrangementEntriesCache = [];
 let pendingAdvancedSettingsContext = null;
 const UPLOAD_BUNDLE_MANIFEST_NAME = 'strudel-project-bundle.json';
 const UPLOAD_BUNDLE_KIND = 'strudel-project-bundle';
+/** Filename of the arrangement currently being previewed (null when not playing). Used to show playhead only on that arrangement's workspace. */
+let arrangementPreviewPlayingFilename = null;
 let arrangementPreviewContext = {
     arrangementState: null,
     trackerStateByFilename: {},
@@ -186,6 +188,7 @@ const dom = {
     trackerWorkspacePane: document.getElementById('trackerWorkspacePane'),
     blocksLibrarySidebar: document.getElementById('blocksLibrarySidebar'),
     blocksLibraryList: document.getElementById('blocksLibraryList'),
+    blocksLibraryToggle: document.getElementById('blocksLibraryToggle'),
     newSidebarBlockBtn: document.getElementById('newSidebarBlockBtn'),
     mainHeader: document.getElementById('mainHeader'),
     mainFooter: document.getElementById('mainFooter'),
@@ -303,6 +306,8 @@ const dom = {
     advancedSettingsTitle: document.getElementById('advancedSettingsTitle'),
     advancedSettingsResourceLabel: document.getElementById('advancedSettingsResourceLabel'),
     advancedSettingsExamplesToggle: document.getElementById('advancedSettingsExamplesToggle'),
+    advancedSettingsExampleLockIcon: document.getElementById('advancedSettingsExampleLockIcon'),
+    advancedSettingsExampleLabel: document.getElementById('advancedSettingsExampleLabel'),
     closeAdvancedSettingsModalBtn: document.getElementById('closeAdvancedSettingsModalBtn'),
     cancelAdvancedSettingsBtn: document.getElementById('cancelAdvancedSettingsBtn'),
     saveAdvancedSettingsBtn: document.getElementById('saveAdvancedSettingsBtn'),
@@ -1238,9 +1243,10 @@ function updateArrangementListScopeVisualizer() {
     if (!isArrangementListVisible()) return;
 
     let target = null;
-    if (isArrangementPreviewPlaying() && currentArrangementFilename) {
+    const playingFilename = arrangementPreviewPlayingFilename ?? (isArrangementPreviewPlaying() ? currentArrangementFilename : null);
+    if (isArrangementPreviewPlaying() && playingFilename) {
         target = Array.from(dom.arrangementList.querySelectorAll('.song-item'))
-            .find((item) => item.dataset.filename === currentArrangementFilename) || null;
+            .find((item) => item.dataset.filename === playingFilename) || null;
     }
 
     Array.from(dom.arrangementList.querySelectorAll('.song-item')).forEach((item) => {
@@ -2069,51 +2075,55 @@ function renderArrangementWorkspace() {
     };
 
     dom.arrangementWorkspacePane.innerHTML = `
-        <div class="h-full flex flex-col gap-4 p-0">
-            <div class="flex min-w-0 gap-2 items-center px-3 py-2">
-                <button
-                    id="arrangementWorkspacePreviewBtn"
-                    type="button"
-                    class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-0 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 w-10 h-10 p-0 shadow-sm"
-                    title="${isPreviewPlaying ? 'Stop arrangement preview' : 'Preview arrangement'}"
-                >
-                    <i data-lucide="${isPreviewPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>
-                </button>
-                <label for="arrangementWorkspaceBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM:</label>
-                <input
-                    type="number"
-                    id="arrangementWorkspaceBpm"
-                    min="20"
-                    max="300"
-                    step="1"
-                    value="${arrangementDraftState.bpm}"
-                    class="w-16 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    ${readonly ? 'readonly' : ''}
-                >
-                <label for="arrangementWorkspaceName" class="text-xs font-bold text-muted-foreground uppercase">Name:</label>
-                <input
-                    type="text"
-                    id="arrangementWorkspaceName"
-                    value="${escapeHtml(arrangementDraftState.name)}"
-                    placeholder="Arrangement Name"
-                    class="min-w-0 flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    ${readonly ? 'readonly' : ''}
-                >
-                <button
-                    id="arrangementWorkspaceAdvancedSettingsBtn"
-                    type="button"
-                    class="dev-only-hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
-                    title="Advanced settings"
-                >
-                    <i data-lucide="settings" class="w-4 h-4"></i>
-                </button>
+        <div class="h-full flex flex-col p-0">
+            <div class="flex flex-col xl:flex-row xl:items-center gap-2 px-3 py-2">
+                <div class="flex gap-2 items-center min-w-0 flex-1">
+                    <button
+                        id="arrangementWorkspacePreviewBtn"
+                        type="button"
+                        class="inline-flex items-center justify-center shrink-0 whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-0 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 w-10 h-10 p-0 shadow-sm"
+                        title="${isPreviewPlaying ? 'Stop arrangement preview' : 'Preview arrangement'}"
+                    >
+                        <i data-lucide="${isPreviewPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>
+                    </button>
+                    <label for="arrangementWorkspaceName" class="hidden lg:inline text-xs font-bold text-muted-foreground uppercase shrink-0">Name</label>
+                    <input
+                        type="text"
+                        id="arrangementWorkspaceName"
+                        value="${escapeHtml(arrangementDraftState.name)}"
+                        placeholder="Arrangement Name"
+                        class="min-w-0 flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        ${readonly ? 'readonly' : ''}
+                    >
+                </div>
+                <div class="flex gap-2 items-center shrink-0">
+                    <label for="arrangementWorkspaceBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM</label>
+                    <input
+                        type="number"
+                        id="arrangementWorkspaceBpm"
+                        min="20"
+                        max="300"
+                        step="1"
+                        value="${arrangementDraftState.bpm}"
+                        class="bpm-input w-12 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        ${readonly ? 'readonly' : ''}
+                    >
+                    <button
+                        id="arrangementWorkspaceAdvancedSettingsBtn"
+                        type="button"
+                        class="dev-only-hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
+                        title="Advanced settings"
+                    >
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                    </button>
+                </div>
             </div>
 
             <div class="flex-1 min-h-0 overflow-auto rounded-md p-0 bg-card/30">
                 <div class="arr-rows-header">
                     <span class="arr-rows-header-spacer" aria-hidden="true"></span>
-                    <span class="arr-rows-header-repeat" title="1 repeat = 16 steps">Repeat</span>
-                    <span class="arr-rows-header-blocks" aria-hidden="true">Blocks</span>
+                    <span class="arr-rows-header-repeat" title="1 repeat = 16 steps" aria-hidden="true"></span>
+                    <span class="arr-rows-header-blocks" aria-hidden="true"></span>
                 </div>
                 <div id="arrangementWorkspaceRows" class="flex flex-col"></div>
             </div>
@@ -2151,7 +2161,7 @@ function renderArrangementWorkspace() {
 
     if (advancedSettingsBtn) {
         advancedSettingsBtn.addEventListener('click', () => {
-            if (!isDeveloperModeEnabled() || DEMO_MODE) return;
+            if (DEMO_MODE) return;
             const name = (nameInput?.value ?? arrangementDraftState?.name ?? '').trim();
             document.dispatchEvent(new CustomEvent('resource-scope:open', {
                 detail: {
@@ -2169,12 +2179,24 @@ function renderArrangementWorkspace() {
         scheduleArrangementAutoSave();
         emitArrangementStateChanged();
     });
+    nameInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            nameInput.blur();
+        }
+    });
+    nameInput?.addEventListener('blur', () => {
+        const newName = String(nameInput?.value ?? '').trim() || arrangementDraftState.name;
+        arrangementDraftState.name = newName;
+        if (currentArrangementFilename) updateArrangementDisplayName(currentArrangementFilename, newName);
+    });
     bpmInput?.addEventListener('input', () => {
         const bpm = parseInt(bpmInput.value || '120', 10);
         arrangementDraftState.bpm = Number.isFinite(bpm) ? Math.max(20, Math.min(300, bpm)) : 120;
         scheduleArrangementAutoSave();
         emitArrangementStateChanged();
     });
+    if (bpmInput) setupScrubInteraction(bpmInput);
     addRowBtn?.addEventListener('click', () => {
         arrangementDraftState.rows.push({ repeats: 1, blocks: [] });
         renderArrangementWorkspace();
@@ -2301,16 +2323,17 @@ function renderArrangementWorkspace() {
     }
 
     previewBtn?.addEventListener('click', () => {
-        if (isArrangementPreviewPlaying()) {
+        const selectedIsPlaying = isArrangementPreviewPlaying() && arrangementPreviewPlayingFilename === currentArrangementFilename;
+        if (selectedIsPlaying) {
             stopArrangementPreview();
             clearArrangementLiveOverrides({ scheduleUpdate: false });
             document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: false } }));
             return;
         }
-        // Stop any other playback (Strudel song, ZzFXM preview, tracker) before starting arrangement preview.
+        // Stop any other playback (Strudel song, ZzFXM preview, tracker, or another arrangement) before starting this arrangement's preview.
         stopAllPlaybackForSelectionChange();
         document.dispatchEvent(new CustomEvent('arrangements:preview', {
-            detail: { arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() } }
+            detail: { arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() }, filename: currentArrangementFilename }
         }));
     });
 
@@ -2384,7 +2407,8 @@ function renderArrangementWorkspace() {
 
             const rowNumberEl = document.createElement('span');
             rowNumberEl.className = 'arr-row-number';
-            rowNumberEl.setAttribute('aria-label', 'Row ' + (rowIndex + 1) + ' (drag to reorder)');
+            rowNumberEl.setAttribute('aria-label', 'Row ' + (rowIndex + 1) + ' (click to play from here, drag to reorder)');
+            rowNumberEl.title = 'Click to play from this row';
             if (!readonly) {
                 rowNumberEl.draggable = true;
                 rowNumberEl.addEventListener('dragstart', (e) => {
@@ -2395,11 +2419,24 @@ function renderArrangementWorkspace() {
                 });
                 rowNumberEl.addEventListener('dragend', () => {
                     window.__arrRowDragFromIndex = undefined;
+                    window.__arrRowDragJustEnded = true;
+                    setTimeout(() => { window.__arrRowDragJustEnded = false; }, 100);
                     rowsRoot.querySelectorAll('.arr-row').forEach((el) => {
                         el.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
                     });
                 });
             }
+            rowNumberEl.addEventListener('click', () => {
+                if (window.__arrRowDragJustEnded) return;
+                stopAllPlaybackForSelectionChange();
+                document.dispatchEvent(new CustomEvent('arrangements:preview', {
+                    detail: {
+                        arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() },
+                        startRowIndex: rowIndex,
+                        filename: currentArrangementFilename,
+                    },
+                }));
+            });
             rowNumberEl.innerHTML = `
                 <span class="arr-row-number-value">${rowIndex + 1}</span>
                 <i data-lucide="play" class="arr-row-play-icon hidden w-2.5 h-2.5 fill-current"></i>
@@ -2602,9 +2639,9 @@ function renderArrangementWorkspace() {
 function updateArrangementWorkspacePreviewButtonState() {
     const previewBtn = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspacePreviewBtn');
     if (!previewBtn) return;
-    const playing = isArrangementPreviewPlaying();
-    previewBtn.title = playing ? 'Stop arrangement preview' : 'Preview arrangement';
-    previewBtn.innerHTML = `<i data-lucide="${playing ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>`;
+    const selectedIsPlaying = isArrangementPreviewPlaying() && arrangementPreviewPlayingFilename === currentArrangementFilename;
+    previewBtn.title = selectedIsPlaying ? 'Stop arrangement preview' : 'Preview arrangement';
+    previewBtn.innerHTML = `<i data-lucide="${selectedIsPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>`;
     createIcons({ icons });
 }
 
@@ -2618,10 +2655,8 @@ function getBlockSteps(block) {
 
 function setArrangementWorkspaceRowPlayingVisual(rowEl, isPlaying) {
     if (!rowEl) return;
-    const valueEl = rowEl.querySelector('.arr-row-number-value');
     const iconEl = rowEl.querySelector('.arr-row-play-icon');
-    valueEl?.classList.toggle('hidden', !!isPlaying);
-    iconEl?.classList.toggle('hidden', !isPlaying);
+    iconEl?.classList.add('hidden');
 }
 
 function clearArrangementWorkspacePlayheadVisuals() {
@@ -2700,6 +2735,11 @@ function applyArrangementWorkspacePlayhead(detail = {}) {
     setArrangementWorkspaceRowPlayingVisual(rowEl, true);
     const pct = Math.max(0, Math.min(progress, 1)) * 100;
     rowEl.style.setProperty('--arr-row-play-progress', `${pct.toFixed(2)}%`);
+
+    const rowChanged = arrangementWorkspacePlayingRowIndex !== rowIndex;
+    if (rowChanged && window.matchMedia('(max-width: 767px)').matches) {
+        rowEl.scrollIntoView({ block: 'center', behavior: 'smooth', inline: 'nearest' });
+    }
 
     const row = arrangementDraftState?.rows?.[rowIndex];
     const rowSteps = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) * 16 : 16;
@@ -2782,6 +2822,53 @@ async function refreshBlocksLibrary() {
         console.error('[Blocks] Failed to refresh library:', err);
         dom.blocksLibraryList.innerHTML = '<li class="text-xs text-destructive px-2 py-2">Failed to load block library.</li>';
     }
+}
+
+/**
+ * Update arrangement display name in cache and sidebar list (no save). Only updates if name changed.
+ */
+function updateArrangementDisplayName(filename, newName) {
+    if (!filename || !dom.arrangementList) return;
+    const entry = arrangementEntriesCache.find((e) => e.filename === filename);
+    const prevName = entry?.name ?? '';
+    const name = String(newName ?? '').trim() || filename.replace(/\.js$/i, '');
+    if (name === prevName) return;
+    if (entry) entry.name = name;
+    try {
+        const li = dom.arrangementList.querySelector(`.song-item[data-filename="${CSS.escape(filename)}"]`);
+        const span = li?.querySelector('.font-medium');
+        if (span) span.textContent = name;
+    } catch (_e) {
+        // fallback if CSS.escape not available
+        dom.arrangementList.querySelectorAll('.song-item[data-filename]').forEach((li) => {
+            if (li.dataset.filename === filename) {
+                const span = li.querySelector('.font-medium');
+                if (span) span.textContent = name;
+            }
+        });
+    }
+}
+
+/**
+ * Update block display name in cache, blocks library list, and arrangement chips (no save).
+ */
+function updateBlockDisplayName(filename, name) {
+    if (!filename || name == null) return;
+    const block = blocksLibraryCache.find((b) => b.filename === filename);
+    if (block) block.name = name;
+    const displayName = String(name || filename.replace(/\.js$/i, ''));
+    dom.blocksLibraryList?.querySelectorAll('.song-item[data-filename]').forEach((li) => {
+        if (li.dataset.filename === filename) {
+            const span = li.querySelector('.font-medium');
+            if (span) span.textContent = displayName;
+        }
+    });
+    dom.arrangementWorkspacePane?.querySelectorAll('.arr-chip[data-filename]').forEach((chip) => {
+        if (chip.dataset.filename === filename) {
+            const label = chip.querySelector('.arr-chip-label');
+            if (label) label.textContent = displayName;
+        }
+    });
 }
 
 function getArrangementReferencesForBlock(filename) {
@@ -2874,8 +2961,13 @@ async function loadArrangement(filename) {
         arrangementAutoSaveTimeout = null;
     }
 
+    const isSwitching = currentArrangementFilename !== null && currentArrangementFilename !== filename;
+    if (isSwitching) {
+        clearArrangementWorkspacePlayheadVisuals();
+    }
+
     try {
-        // Do not stop playback here: let the arrangement workspace play button stop Strudel (etc.) and start arrangement preview when user presses play.
+        // Do not stop playback when switching: like songs, only the Play button stops current and starts the selected resource.
         const loadedScope = DEMO_MODE ? 'example' : normalizeScope(getArrangementEntry(filename)?.scope);
         const detail = DEMO_MODE
             ? null
@@ -2901,6 +2993,7 @@ async function loadArrangement(filename) {
         refreshArrangementListActiveState();
         await refreshBlocksLibrary();
         renderArrangementWorkspace();
+        updateArrangementWorkspacePreviewButtonState();
         showArrangementWorkspace();
         if (recoveredFromCache) {
             setTimeout(() => {
@@ -3711,9 +3804,17 @@ function openAdvancedSettingsModal(context) {
             ? `${typeLabel[0].toUpperCase()}${typeLabel.slice(1)}: ${resourceName}`
             : `${typeLabel[0].toUpperCase()}${typeLabel.slice(1)}`;
     }
+    const devMode = isDeveloperModeEnabled();
     if (dom.advancedSettingsExamplesToggle) {
         dom.advancedSettingsExamplesToggle.checked = pendingAdvancedSettingsContext.scope === 'example';
-        dom.advancedSettingsExamplesToggle.disabled = DEMO_MODE;
+        dom.advancedSettingsExamplesToggle.disabled = DEMO_MODE || !devMode;
+    }
+    if (dom.advancedSettingsExampleLockIcon) {
+        dom.advancedSettingsExampleLockIcon.classList.toggle('hidden', devMode);
+    }
+    if (dom.advancedSettingsExampleLabel) {
+        dom.advancedSettingsExampleLabel.classList.toggle('text-muted-foreground', !devMode);
+        dom.advancedSettingsExampleLabel.classList.toggle('text-foreground', devMode);
     }
     if (dom.saveAdvancedSettingsBtn) {
         dom.saveAdvancedSettingsBtn.disabled = DEMO_MODE;
@@ -3735,6 +3836,10 @@ async function applyAdvancedSettings() {
         return;
     }
     const nextScope = dom.advancedSettingsExamplesToggle?.checked ? 'example' : 'user';
+    if (nextScope === 'example' && !isDeveloperModeEnabled()) {
+        setStatus('Enable developer mode to set resource as example', 'normal');
+        return;
+    }
     const context = pendingAdvancedSettingsContext;
 
     try {
@@ -4803,6 +4908,13 @@ if (dom.uploadProjectModal) {
 dom.sidebarTitle.addEventListener('click', handleSidebarTitleClick);
 dom.newSongBtn.addEventListener('click', openModal);
 dom.newArrangementBtn?.addEventListener('click', openNewArrangementModal);
+dom.blocksLibraryToggle?.addEventListener('click', () => {
+    const sidebar = dom.blocksLibrarySidebar;
+    if (!sidebar) return;
+    const collapsed = sidebar.getAttribute('data-collapsed') === 'true';
+    sidebar.setAttribute('data-collapsed', String(!collapsed));
+    dom.blocksLibraryToggle?.setAttribute('aria-expanded', String(collapsed));
+});
 dom.newSidebarBlockBtn?.addEventListener('click', () => {
     void createUntitledBlock();
 });
@@ -4810,7 +4922,6 @@ dom.cancelNewSong.addEventListener('click', closeModal);
 dom.cancelNewArrangement?.addEventListener('click', closeNewArrangementModal);
 if (dom.openSongAdvancedSettingsBtn) {
     dom.openSongAdvancedSettingsBtn.addEventListener('click', () => {
-        if (!isDeveloperModeEnabled()) return;
         if (!currentSongFilename) return;
         openAdvancedSettingsModal({
             type: 'song',
@@ -4821,7 +4932,6 @@ if (dom.openSongAdvancedSettingsBtn) {
     });
 }
 document.addEventListener('resource-scope:open', (e) => {
-    if (!isDeveloperModeEnabled()) return;
     const detail = e?.detail || null;
     if (!detail) return;
     openAdvancedSettingsModal(detail);
@@ -4948,16 +5058,15 @@ dom.songNameInput.addEventListener('blur', () => {
     renameSong({ quiet: true });
 });
 
-// Save song name on Enter key
+// Enter blurs the field; blur handler runs rename and refreshes sidebar when name changed
 dom.songNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         e.preventDefault();
-        if (DEMO_MODE || (currentSongScope === 'example' && !isDeveloperModeEnabled())) return;
         if (renameDebounceTimeout) {
             clearTimeout(renameDebounceTimeout);
             renameDebounceTimeout = null;
         }
-        renameSong();
+        dom.songNameInput.blur();
     }
 });
 
@@ -6897,7 +7006,7 @@ function setupBlocksEventListeners() {
 
 	    // Listen for arrangements:preview event
 	    document.addEventListener('arrangements:preview', async (e) => {
-	        const { arrangement } = e.detail || {};
+	        const { arrangement, startRowIndex, filename: previewFilename } = e.detail || {};
 	        const arrangementState = arrangement?.arrangementState;
 	        if (!arrangementState) return;
 
@@ -6991,10 +7100,12 @@ function setupBlocksEventListeners() {
 	                const started = startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm, {
 	                    keepPosition: false,
 	                    mixSettings,
+	                    startRowIndex: Number.isInteger(startRowIndex) ? startRowIndex : undefined,
 	                });
 	                if (!started) {
 	                    setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
 	                }
+	                arrangementPreviewPlayingFilename = started ? (previewFilename ?? null) : null;
 	                document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: started } }));
 	                return started;
 	            };
@@ -7084,7 +7195,9 @@ function setupBlocksEventListeners() {
 
         document.addEventListener('arrangements:playhead', (e) => {
             const detail = e?.detail || {};
-            applyArrangementWorkspacePlayhead(detail);
+            if (arrangementPreviewPlayingFilename === currentArrangementFilename) {
+                applyArrangementWorkspacePlayhead(detail);
+            }
             updateArrangementPlaybackInstrumentAliases(detail);
             updateArrangementListScopeVisualizer();
         });
@@ -7093,6 +7206,7 @@ function setupBlocksEventListeners() {
             updateArrangementWorkspacePreviewButtonState();
             const playing = e?.detail?.playing ?? isArrangementPreviewPlaying();
             if (!playing) {
+                arrangementPreviewPlayingFilename = null;
                 clearArrangementWorkspacePlayheadVisuals();
                 clearArrangementPlaybackInstrumentAliases();
                 updateArrangementListScopeVisualizer();
@@ -7156,6 +7270,22 @@ function setupBlocksEventListeners() {
 }
 
 
+
+document.addEventListener('arrangement:displayNameChanged', (e) => {
+    const { filename, name } = e?.detail || {};
+    if (!filename) return;
+    updateArrangementDisplayName(filename, name);
+});
+
+document.addEventListener('arrangements:saved', () => {
+    refreshArrangementList();
+});
+
+document.addEventListener('block:displayNameChanged', (e) => {
+    const { filename, name } = e?.detail || {};
+    if (!filename) return;
+    updateBlockDisplayName(filename, name);
+});
 
 // Listen for tracker:saveBlock event (when saving edits)
 document.addEventListener('tracker:saveBlock', async (e) => {

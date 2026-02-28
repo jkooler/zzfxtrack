@@ -202,6 +202,11 @@ body {
   position: relative;
   z-index: 1;
 }
+@media (max-width: 767px) {
+  #arrangementWorkspacePane {
+    max-height: 261px;
+  }
+}
 #trackerWorkspacePane {
   position: relative;
   z-index: 0;
@@ -224,6 +229,30 @@ body {
 #blocksLibrarySidebar textarea {
   user-select: text;
   -webkit-user-select: text;
+}
+
+/* Blocks library: expandable on mobile, collapsed by default */
+.blocks-library-list {
+  transition: max-height 0.2s ease, padding 0.2s ease;
+}
+.blocks-library-chevron {
+  transition: transform 0.2s ease;
+}
+@media (max-width: 767px) {
+  #blocksLibrarySidebar.blocks-library[data-collapsed="true"] .blocks-library-list {
+    max-height: 0;
+    overflow: hidden;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  #blocksLibrarySidebar.blocks-library[data-collapsed="true"] .blocks-library-chevron {
+    transform: rotate(-180deg);
+  }
+}
+@media (min-width: 768px) {
+  #blocksLibrarySidebar .blocks-library-list {
+    max-height: none !important;
+  }
 }
 
 /* Global Cursor Styles + iPad/single-tap: avoid double-tap to activate */
@@ -435,6 +464,8 @@ input[readonly]:focus-visible {
   pointer-events: auto !important;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   display: flex !important;
   align-items: stretch !important;
   justify-content: stretch !important;
@@ -447,27 +478,17 @@ input[readonly]:focus-visible {
   max-width: none !important;
   max-height: none !important;
   height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
   border-radius: 0 !important;
   border: 0 !important;
   box-shadow: none !important;
   padding: 0 !important;
 }
 
-/* Modal only: original header layout — Play left, Title, Close right */
+/* Modal only: header layout — Play left, Close right */
 #trackerModal:not(.workspace-docked) > .modal > div:first-child {
   display: flex;
-}
-#trackerModal:not(.workspace-docked) > .modal > div:first-child > div:last-child {
-  display: contents;
-}
-#trackerModal:not(.workspace-docked) #previewTrackerBtn {
-  order: 1;
-}
-#trackerModal:not(.workspace-docked) > .modal > div:first-child > h2 {
-  order: 2;
-}
-#trackerModal:not(.workspace-docked) #closeTrackerBtn {
-  order: 3;
 }
 
 #trackerModal.workspace-docked #closeTrackerBtn {
@@ -647,37 +668,76 @@ strudel-editor {
   @apply block text-sm font-medium leading-none text-foreground mb-1.5;
 }
 
-/* Tracker Styles: container scrolls horizontally when modal is narrower than grid */
+/* Tracker Styles: headers fixed; only body scrolls vertically; container scrolls horizontally */
 .tracker-container {
-  @apply overflow-x-auto overflow-y-auto min-w-0;
+  @apply overflow-x-auto min-w-0 flex flex-col;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
 }
 
 .tracker-grid {
-  @apply flex gap-3 p-2 flex-nowrap;
+  @apply flex flex-col gap-0 p-2 min-h-0 flex-1;
+  width: max(100%, 960px);
+  min-width: 960px;
+}
+
+/* Headers row: stays fixed when scrolling vertically; scrolls with container horizontally */
+.tracker-headers {
+  @apply flex gap-1 flex-nowrap shrink-0;
+}
+
+.tracker-headers .tracker-timetrack-header {
+  @apply shrink-0;
+  width: 2ch;
+  min-width: 2ch;
+}
+
+.tracker-headers .tracker-channel-header {
+  @apply flex-1 min-w-[72px];
+}
+
+.tracker-grid[data-channels="1"] .tracker-headers .tracker-channel-header,
+.tracker-grid[data-channels="2"] .tracker-headers .tracker-channel-header,
+.tracker-grid[data-channels="3"] .tracker-headers .tracker-channel-header,
+.tracker-grid[data-channels="4"] .tracker-headers .tracker-channel-header {
+  flex: none;
+  width: 192px;
+  min-width: 192px;
+}
+
+/* Body: only this part scrolls vertically */
+.tracker-body-scroll {
+  @apply overflow-y-auto overflow-x-hidden flex-1 min-h-0 mt-2;
+}
+
+.tracker-grid-body {
+  @apply flex gap-1 flex-nowrap;
   width: max(100%, 960px);
   min-width: 960px;
 }
 
 .tracker-timetrack {
-  @apply flex flex-col gap-1 shrink-0;
+  @apply flex flex-col gap-1 shrink-0 bg-background;
+  min-width: 2ch;
+  width: 2ch;
+  overflow: hidden;
 }
 
 .tracker-timetrack-header {
-  @apply flex flex-col gap-1 pb-2 border-b border-border sticky top-0 z-10 bg-background;
-}
-
-.tracker-timetrack-label-spacer {
-  @apply text-xs font-bold text-muted-foreground uppercase tracking-wider text-center select-none h-4 flex items-center justify-center;
-  visibility: hidden;
+  @apply flex flex-col gap-1 pb-2 bg-background;
 }
 
 .tracker-timetrack-select-spacer {
-  @apply h-8;
+  @apply h-8 shrink-0;
+  width: 2ch;
 }
 
 .tracker-timetrack-row {
-  @apply h-7 text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-0 select-none cursor-pointer;
-  width: calc(var(--spacing) * 2);
+  @apply text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-0.5 select-none cursor-pointer;
+  min-height: 1.75rem;
+  height: 1.75rem;
+  width: 2ch;
+  min-width: 2ch;
 }
 
 .tracker-timetrack-row.beat {
@@ -698,12 +758,12 @@ strudel-editor {
 .tracker-grid[data-channels="3"] .tracker-channel,
 .tracker-grid[data-channels="4"] .tracker-channel {
   flex: none;
-  width: 220px;
-  min-width: 220px;
+  width: 192px;
+  min-width: 192px;
 }
 
 .tracker-channel-header {
-  @apply flex flex-col gap-1 pb-2 border-b border-border sticky top-0 z-10 bg-background;
+  @apply flex flex-col gap-1 pb-2 border-b border-border bg-background;
 }
 
 .tracker-channel-header-row {
@@ -713,10 +773,6 @@ strudel-editor {
 
 .tracker-channel-select {
   @apply w-full min-w-0 h-8 rounded-md border border-input bg-input-bg px-1 text-xs font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
-}
-
-.tracker-channel-label {
-  @apply text-xs font-bold text-muted-foreground uppercase tracking-wider text-center h-4 flex items-center justify-center;
 }
 
 .tracker-reps-label {
@@ -734,6 +790,8 @@ strudel-editor {
 .tracker-row {
   @apply grid items-center gap-1;
   grid-template-columns: minmax(0, 1fr) 24px 24px 24px;
+  min-height: 1.75rem;
+  height: 1.75rem;
 }
 
 .tracker-cell {
@@ -775,6 +833,17 @@ strudel-editor {
 .tracker-nd-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* BPM inputs: no spinner buttons, scrub interaction */
+.bpm-input::-webkit-outer-spin-button,
+.bpm-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.bpm-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .tracker-cell.active {
@@ -883,6 +952,17 @@ strudel-editor {
   border-color: var(--border);
   border-image: none;
 }
+@media (max-width: 639px) {
+  .arr-row {
+    @apply flex-row items-center justify-between;
+  }
+  .arr-row-main {
+    align-self: center;
+  }
+  .arr-row-actions {
+    align-self: center;
+  }
+}
 @media (min-width: 1536px) {
   .arr-row {
     @apply flex-row items-center justify-between;
@@ -912,7 +992,9 @@ strudel-editor {
   @apply inline-flex items-center justify-center rounded-full w-6 h-6 text-[10px] font-mono text-muted-foreground cursor-grab shrink-0 border border-border bg-card/50;
 }
 .arr-row.playing .arr-row-number {
-  @apply text-white;
+  color: white;
+  background-color: var(--quaternary);
+  border-color: var(--quaternary);
 }
 .arr-repeats {
   @apply h-8 rounded-md border border-input bg-input-bg pl-1 pr-0 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
@@ -1033,28 +1115,57 @@ strudel-editor {
 }
 /* Arrangement row actions: add block (+), duplicate, delete — single button group */
 .arr-row-btn-group {
-  @apply inline-flex flex-row;
-}
-.arr-row-btn-group .arr-block-select-wrap {
-  border-top-left-radius: 8px;
-  border-top-right-radius: 0;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 0;
-  margin-bottom: 0;
-  margin-right: -1px;
+  @apply inline-flex flex-col sm:flex-row;
 }
 .arr-row-btn-group .arr-row-del {
   @apply rounded-none;
-  margin-left: -1px;
 }
-.arr-row-btn-group .arr-row-del:first-of-type {
-  margin-left: 0;
+/* Column layout: 0–640px */
+@media (max-width: 639px) {
+  .arr-row-btn-group .arr-block-select-wrap {
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    margin-bottom: -1px;
+    margin-right: 0;
+  }
+  .arr-row-btn-group .arr-row-del {
+    margin-left: 0;
+    margin-top: -1px;
+  }
+  .arr-row-btn-group .arr-row-del:first-of-type {
+    margin-top: 0;
+  }
+  .arr-row-btn-group .arr-row-del:last-child {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: var(--radius);
+    border-bottom-right-radius: var(--radius);
+  }
 }
-.arr-row-btn-group .arr-row-del:last-child {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-top-right-radius: var(--radius);
-  border-bottom-right-radius: var(--radius);
+/* Row layout: 640px+ */
+@media (min-width: 640px) {
+  .arr-row-btn-group .arr-block-select-wrap {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 0;
+    margin-bottom: 0;
+    margin-right: -1px;
+  }
+  .arr-row-btn-group .arr-row-del {
+    margin-left: -1px;
+  }
+  .arr-row-btn-group .arr-row-del:first-of-type {
+    margin-left: 0;
+  }
+  .arr-row-btn-group .arr-row-del:last-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: var(--radius);
+    border-bottom-right-radius: var(--radius);
+  }
 }
 
 .arr-row-del {

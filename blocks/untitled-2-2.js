@@ -7,7 +7,7 @@ export const scope = "user";
 
 export const pattern = `stack(
   note("d3 ~ ~ ~ ~ ~ a3 ~ ~ ~ ~ ~ ~ ~ ~ ~").s("synth-stab"),
-  note("~ ~ ~ ~ g3 ~ ~ ~ ~ ~ ~ ~ d#1 ~ ~ ~").s("horn").gain("1 1 1 1 0.25 1 1 1 1 1 1 1 1 1 1 1")
+  note("f3 ~ ~ f3 ~ ~ ~ ~ ~ ~ ~ e3 ~ ~ ~ ~").s("pad")
 )`;
 
 // Optional: Tracker state for re-editing
@@ -36,21 +36,21 @@ export const trackerState = {
       null
     ],
     [
+      "f3",
+      "-",
+      null,
+      "f3",
+      "-",
       null,
       null,
       null,
       null,
-      "g3",
       null,
       null,
+      "e3",
       null,
       null,
-      null,
-      null,
-      null,
-      "d#1",
-      null,
-      null,
+      "-",
       null
     ],
     [
@@ -186,7 +186,7 @@ export const trackerState = {
       null,
       null,
       null,
-      25,
+      null,
       null,
       null,
       null,
@@ -602,8 +602,8 @@ export const trackerState = {
   ],
   "channelInstruments": [
     "synth-stab",
+    "pad",
     "horn",
-    "",
     "",
     "",
     "",

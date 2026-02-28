@@ -325,7 +325,7 @@ function setupEventListeners() {
     dom.testInstrumentBtn.addEventListener('click', handleTestInstrument);
     if (dom.openInstrumentAdvancedSettingsBtn) {
         dom.openInstrumentAdvancedSettingsBtn.addEventListener('click', () => {
-            if (!isDeveloperModeEnabled() || DEMO_MODE) return;
+            if (DEMO_MODE) return;
             const instrument = currentInstrumentId ? getInstrumentById(currentInstrumentId) : null;
             if (!instrument) return;
             document.dispatchEvent(new CustomEvent('resource-scope:open', {
@@ -366,9 +366,6 @@ function setupEventListeners() {
         renderInstrumentList();
         if (currentInstrumentId) {
             openDrawer(currentInstrumentId);
-        }
-        if (!isDeveloperModeEnabled() && dom.openInstrumentAdvancedSettingsBtn) {
-            dom.openInstrumentAdvancedSettingsBtn.classList.add('dev-only-hidden');
         }
     });
 
@@ -1588,7 +1585,7 @@ function openDrawer(instrumentId) {
         }
     });
     if (dom.openInstrumentAdvancedSettingsBtn) {
-        const shouldShow = !DEMO_MODE && isDeveloperModeEnabled();
+        const shouldShow = !DEMO_MODE;
         dom.openInstrumentAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
     }
     if (dom.exportZzFXBtn) {

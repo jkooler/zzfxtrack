@@ -62,7 +62,7 @@ function getDeveloperModeHeaders() {
 
 function updateArrangementAdvancedSettingsVisibility() {
   if (!elements.arrangementAdvancedSettingsBtn) return;
-  const shouldShow = !DEMO_MODE && isDeveloperModeEnabled() && elements.arrangementModal?.classList.contains('open');
+  const shouldShow = !DEMO_MODE && elements.arrangementModal?.classList.contains('open');
   elements.arrangementAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
 }
 
@@ -371,8 +371,18 @@ function setupEventListeners() {
     emitArrangementStateChanged();
   });
   elements.saveArrangementBtn?.addEventListener('click', saveArrangementFromEditor);
+  elements.arrangementName?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      elements.arrangementName.blur();
+    }
+  });
+  elements.arrangementName?.addEventListener('blur', () => {
+    const newName = (elements.arrangementName?.value ?? '').trim() || arrangementDraft.name || '';
+    arrangementDraft.name = newName;
+  });
   elements.arrangementAdvancedSettingsBtn?.addEventListener('click', () => {
-    if (!isDeveloperModeEnabled() || DEMO_MODE) return;
+    if (DEMO_MODE) return;
     const name = (elements.arrangementName?.value || arrangementDraft.name || '').trim();
     document.dispatchEvent(new CustomEvent('resource-scope:open', {
       detail: {
@@ -1461,6 +1471,7 @@ async function saveArrangementFromEditor() {
     }
 
     await loadArrangementsList();
+    document.dispatchEvent(new CustomEvent('arrangements:saved', { detail: { filename: arrangementEditMode.filename, name: arrangementDraft.name } }));
     closeArrangementEditor();
     emitStatus('Arrangement saved.', 'success');
   } catch (err) {

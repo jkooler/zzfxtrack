@@ -322,7 +322,8 @@ function cacheElements() {
     copyBtn: document.getElementById('copyTrackerBtn'),
     saveBtn: document.getElementById('saveTrackerBtn'),
     previewBtn: document.getElementById('previewTrackerBtn'),
-    blockProps: document.getElementById('trackerBlockProps'),
+    blockPropsRow1: document.getElementById('trackerBlockPropsRow1'),
+    blockPropsRow2: document.getElementById('trackerBlockPropsRow2'),
     blockNameInput: document.getElementById('trackerBlockName'),
     blockBpmInput: document.getElementById('trackerBlockBpm'),
     blockRowsPreset: document.getElementById('trackerBlockRowsPreset'),
@@ -371,77 +372,36 @@ function renderGrid() {
   elements.grid.dataset.channels = String(state.channels);
   elements.grid.innerHTML = '';
 
-  // Global time track column on the left (shared step numbering)
-  const timeTrackEl = document.createElement('div');
-  timeTrackEl.className = 'tracker-timetrack';
+  // ---- Headers row (stays fixed when scrolling vertically) ----
+  const headersRow = document.createElement('div');
+  headersRow.className = 'tracker-headers';
 
   const timeTrackHeaderEl = document.createElement('div');
   timeTrackHeaderEl.className = 'tracker-timetrack-header';
 
-  const timeTrackLabelSpacer = document.createElement('div');
-  timeTrackLabelSpacer.className = 'tracker-timetrack-label-spacer';
-  timeTrackLabelSpacer.textContent = ' ';
-
   const timeTrackSelectSpacer = document.createElement('div');
   timeTrackSelectSpacer.className = 'tracker-timetrack-select-spacer';
 
-  timeTrackHeaderEl.appendChild(timeTrackLabelSpacer);
   timeTrackHeaderEl.appendChild(timeTrackSelectSpacer);
-  timeTrackEl.appendChild(timeTrackHeaderEl);
-
-  for (let step = 0; step < state.steps; step++) {
-    const stepEl = document.createElement('div');
-    stepEl.className = 'tracker-timetrack-row';
-    stepEl.dataset.step = step;
-    stepEl.textContent = String(step + 1);
-    if (step % 4 === 0) {
-      stepEl.classList.add('beat');
-    }
-
-    if (step === state.focusedStep) {
-      stepEl.classList.add('active');
-    }
-
-    stepEl.addEventListener('click', () => {
-      setFocus(state.focusedChannel, step);
-    });
-
-    timeTrackEl.appendChild(stepEl);
-  }
-
-  elements.grid.appendChild(timeTrackEl);
+  headersRow.appendChild(timeTrackHeaderEl);
 
   for (let ch = 0; ch < state.channels; ch++) {
-    const channelEl = document.createElement('div');
-    channelEl.className = 'tracker-channel';
-    channelEl.dataset.channel = ch;
-
-    // Channel header with instrument select
     const headerEl = document.createElement('div');
     headerEl.className = 'tracker-channel-header';
-
-    const labelEl = document.createElement('div');
-    labelEl.className = 'tracker-channel-label';
-    labelEl.textContent = `CH ${ch + 1}`;
 
     const selectEl = document.createElement('select');
     selectEl.className = 'tracker-channel-select';
     selectEl.dataset.channel = ch;
-    
-    // Add default option
     const defaultOpt = document.createElement('option');
     defaultOpt.value = '';
     defaultOpt.textContent = 'Select instrument...';
     selectEl.appendChild(defaultOpt);
-
-    // Add instrument options
     state.instruments.forEach(inst => {
       const opt = document.createElement('option');
       opt.value = inst.id;
       opt.textContent = inst.name || inst.id;
       selectEl.appendChild(opt);
     });
-
     selectEl.value = state.channelInstruments[ch] || '';
     selectEl.addEventListener('change', (e) => {
       state.channelInstruments[ch] = e.target.value;
@@ -451,11 +411,9 @@ function renderGrid() {
     const repsLabelEl = document.createElement('div');
     repsLabelEl.className = 'tracker-reps-label';
     repsLabelEl.textContent = 'RP';
-
     const ndLabelEl = document.createElement('div');
     ndLabelEl.className = 'tracker-nd-label';
     ndLabelEl.textContent = 'DL';
-
     const volLabelEl = document.createElement('div');
     volLabelEl.className = 'tracker-vol-label';
     volLabelEl.textContent = '';
@@ -467,11 +425,42 @@ function renderGrid() {
     headerRowEl.appendChild(repsLabelEl);
     headerRowEl.appendChild(ndLabelEl);
 
-    headerEl.appendChild(labelEl);
     headerEl.appendChild(headerRowEl);
-    channelEl.appendChild(headerEl);
+    headersRow.appendChild(headerEl);
+  }
 
-    // Step rows
+  elements.grid.appendChild(headersRow);
+
+  // ---- Scrollable body (only this part scrolls vertically) ----
+  const bodyScroll = document.createElement('div');
+  bodyScroll.className = 'tracker-body-scroll';
+
+  const gridBody = document.createElement('div');
+  gridBody.className = 'tracker-grid-body';
+
+  // Time track column (rows only)
+  const timeTrackEl = document.createElement('div');
+  timeTrackEl.className = 'tracker-timetrack';
+
+  for (let step = 0; step < state.steps; step++) {
+    const stepEl = document.createElement('div');
+    stepEl.className = 'tracker-timetrack-row';
+    stepEl.dataset.step = step;
+    stepEl.textContent = String(step + 1);
+    if (step % 4 === 0) stepEl.classList.add('beat');
+    if (step === state.focusedStep) stepEl.classList.add('active');
+    stepEl.addEventListener('click', () => setFocus(state.focusedChannel, step));
+    timeTrackEl.appendChild(stepEl);
+  }
+
+  gridBody.appendChild(timeTrackEl);
+
+  // Channel columns (rows only)
+  for (let ch = 0; ch < state.channels; ch++) {
+    const channelEl = document.createElement('div');
+    channelEl.className = 'tracker-channel';
+    channelEl.dataset.channel = ch;
+
     for (let step = 0; step < state.steps; step++) {
       const rowEl = document.createElement('div');
       rowEl.className = 'tracker-row';
@@ -642,8 +631,11 @@ function renderGrid() {
       channelEl.appendChild(rowEl);
     }
 
-    elements.grid.appendChild(channelEl);
+    gridBody.appendChild(channelEl);
   }
+
+  bodyScroll.appendChild(gridBody);
+  elements.grid.appendChild(bodyScroll);
 }
 
 /**
@@ -674,20 +666,15 @@ function setFocus(channel, step) {
   );
   if (newCell) {
     newCell.classList.add('active');
-    const container = newCell.closest('.tracker-container');
-    if (container) {
-      const containerRect = container.getBoundingClientRect();
+    const bodyScroll = newCell.closest('.tracker-body-scroll');
+    if (bodyScroll) {
+      const bodyRect = bodyScroll.getBoundingClientRect();
       const cellRect = newCell.getBoundingClientRect();
-      const headerEl = container.querySelector('.tracker-channel-header');
-      const headerHeight = headerEl ? headerEl.getBoundingClientRect().height : 0;
-      const visibleTop = containerRect.top + headerHeight;
-      const visibleBottom = containerRect.bottom;
-
-      if (cellRect.top < visibleTop || cellRect.bottom > visibleBottom) {
-        const targetTop = container.scrollTop + (cellRect.top - containerRect.top) - headerHeight;
-        const maxTop = Math.max(container.scrollHeight - container.clientHeight, 0);
+      if (cellRect.top < bodyRect.top || cellRect.bottom > bodyRect.bottom) {
+        const targetTop = bodyScroll.scrollTop + (cellRect.top - bodyRect.top);
+        const maxTop = Math.max(bodyScroll.scrollHeight - bodyScroll.clientHeight, 0);
         const clampedTop = Math.min(Math.max(targetTop, 0), maxTop);
-        container.scrollTo({ top: clampedTop, behavior: 'smooth' });
+        bodyScroll.scrollTo({ top: clampedTop, behavior: 'smooth' });
       }
     } else {
       newCell.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -785,7 +772,7 @@ function setupEventListeners() {
   elements.previewBtn?.addEventListener('click', togglePreview);
   elements.blockAdvancedSettingsBtn?.addEventListener('click', () => {
     if (!editMode.isEditing) return;
-    if (!isDeveloperModeEnabled() || DEMO_MODE) return;
+    if (DEMO_MODE) return;
     const name = (elements.blockNameInput?.value || editMode.blockName || '').trim();
     document.dispatchEvent(new CustomEvent('resource-scope:open', {
       detail: {
@@ -829,6 +816,18 @@ function setupEventListeners() {
     elements.blockNameInput.addEventListener('input', (e) => {
       editMode.blockName = e.target.value;
       scheduleArrangementLiveEditUpdate();
+    });
+    elements.blockNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        elements.blockNameInput.blur();
+      }
+    });
+    elements.blockNameInput.addEventListener('blur', () => {
+      const name = (elements.blockNameInput?.value ?? '').trim();
+      if (name !== (editMode.blockName ?? '').trim()) {
+        editMode.blockName = name || editMode.blockName;
+      }
     });
   }
 
@@ -1041,6 +1040,26 @@ function handleKeyDown(e) {
     return;
   }
 
+  // Note-only octave shift (Impulse Tracker-style): affects only the focused note cell.
+  // Does NOT change octaveOffset (used for note entry).
+  if (key === ',' || key === '.') {
+    const activeEl = document.activeElement;
+    const isNoteCellFocused = Boolean(activeEl && activeEl.classList && activeEl.classList.contains('tracker-cell'));
+    if (isNoteCellFocused) {
+      e.preventDefault();
+      const current = state.grid?.[state.focusedChannel]?.[state.focusedStep]?.note;
+      if (typeof current === 'string' && current && current !== '-' && current !== '~') {
+        const delta = key === ',' ? -1 : 1;
+        const next = applyOctaveOffset(current, delta);
+        if (next && next !== current) {
+          setNote(state.focusedChannel, state.focusedStep, next);
+          focusNoteCell(state.focusedChannel, state.focusedStep);
+        }
+      }
+      return;
+    }
+  }
+
   // Note input
   if (KEYBOARD_MAP[key]) {
     e.preventDefault();
@@ -1051,8 +1070,8 @@ function handleKeyDown(e) {
     return;
   }
 
-  // Rest
-  if (key === '-') {
+  // Note cut (Impulse Tracker-style)
+  if (key === '1') {
     e.preventDefault();
     setNote(state.focusedChannel, state.focusedStep, '-');
     const newStep = (state.focusedStep + 1) % state.steps;
@@ -1658,12 +1677,23 @@ function playPreview(startOffset = 0) {
       const { reps, delaySteps, substepCount } = resolveSubsteps(cell.reps, cell.nd);
       const noteGain = Number.isInteger(cell.vol) ? Math.min(Math.max(cell.vol, 1), 99) / 99 : 1;
       const stepSize = substepCount / reps;
+      // Cut at first later step that is a rest or has a note (not just the immediate next row)
+      let cutAtStep = null;
+      for (let t = step + 1; t < state.steps; t++) {
+        const n = state.grid[ch][t].note;
+        if (n === '-' || (n && n !== '~')) {
+          cutAtStep = t;
+          break;
+        }
+      }
+      const stepEndSample = cutAtStep != null ? cutAtStep * samplesPerStep : patternSamples;
       for (let r = 0; r < reps; r++) {
         const subOffset = Math.floor(samplesPerStep * ((delaySteps + r * stepSize) / substepCount));
         const noteStart = step * samplesPerStep + subOffset;
         for (let j = 0; j < samples.length; j++) {
           const bufferIndex = noteStart + j;
           if (bufferIndex >= patternSamples) break;
+          if (bufferIndex >= stepEndSample) break;
           mixBuffer[bufferIndex] += samples[j] * noteGain;
         }
       }
@@ -2074,12 +2104,24 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
       const { reps, delaySteps, substepCount } = resolveSubsteps(repsVal, ndVal);
       const noteGain = Number.isInteger(volVal) ? Math.min(Math.max(volVal, 1), 99) / 99 : 1;
       const stepSize = substepCount / reps;
+      // Cut at first later step that is a rest or has a note (not just the immediate next row)
+      let cutAtStep = null;
+      for (let t = step + 1; t < steps; t++) {
+        const cell = channel[t];
+        const n = cell && typeof cell === 'object' ? cell.note : cell;
+        if (n === '-' || (n && n !== '~')) {
+          cutAtStep = t;
+          break;
+        }
+      }
+      const stepEndSample = cutAtStep != null ? cutAtStep * samplesPerStep : mixBuffer.length;
       for (let r = 0; r < reps; r++) {
         const subOffset = Math.floor(samplesPerStep * ((delaySteps + r * stepSize) / substepCount));
         const noteStart = step * samplesPerStep + subOffset;
         for (let j = 0; j < samples.length; j++) {
           const bufferIndex = noteStart + j;
           if (bufferIndex >= mixBuffer.length) break;
+          if (bufferIndex >= stepEndSample) break;
           mixBuffer[bufferIndex] += samples[j] * noteGain;
         }
       }
@@ -2466,7 +2508,7 @@ function scheduleArrangementLoopStarts() {
   arrangementPreviewState.schedulerId = setTimeout(scheduleArrangementLoopStarts, pollMs);
 }
 
-function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition } = {}) {
+function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false, startOffsetSeconds } = {}) {
   if (!mixBuffer || mixBuffer.length === 0) return false;
 
   const ctx = ensureArrangementAudioContext();
@@ -2477,7 +2519,9 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition } = {}) 
     : 0;
 
   let phase = 0;
-  if (keepPosition && arrangementPreviewState.isPlaying && arrangementPreviewState.startTime != null && loopDuration > 0) {
+  if (Number.isFinite(startOffsetSeconds) && startOffsetSeconds >= 0 && loopDuration > 0) {
+    phase = startOffsetSeconds % loopDuration;
+  } else if (keepPosition && arrangementPreviewState.isPlaying && arrangementPreviewState.startTime != null && loopDuration > 0) {
     const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
     phase = ((elapsed % loopDuration) + loopDuration) % loopDuration;
   }
@@ -2522,7 +2566,7 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition } = {}) 
   return true;
 }
 
-export function startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, { keepPosition = false, mixSettings = null } = {}) {
+export function startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, { keepPosition = false, mixSettings = null, startRowIndex } = {}) {
   stopPreview();
 
   arrangementPreviewState.arrangementState = arrangementState || null;
@@ -2544,7 +2588,18 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
   arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
   arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
   arrangementPreviewState.rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
-  const started = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, { keepPosition });
+
+  let startOffsetSeconds;
+  if (Number.isInteger(startRowIndex) && startRowIndex >= 0) {
+    const rowBounds = arrangementPreviewState.rowBounds || [];
+    const bound = rowBounds[startRowIndex];
+    const secondsPerStep = arrangementPreviewState.secondsPerStep || 0;
+    if (bound && secondsPerStep > 0) {
+      startOffsetSeconds = bound.start * secondsPerStep;
+    }
+  }
+
+  const started = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, { keepPosition, startOffsetSeconds });
   if (started) {
     startArrangementPlayhead();
   }
@@ -2795,9 +2850,10 @@ function updateEditModeUI() {
   }
   
   // Show/hide block properties (name input)
-  if (elements.blockProps) {
+  if (elements.blockPropsRow1 && elements.blockPropsRow2) {
     if (editMode.isEditing) {
-      elements.blockProps.classList.remove('hidden');
+      elements.blockPropsRow1.classList.remove('hidden');
+      elements.blockPropsRow2.classList.remove('hidden');
       if (elements.blockNameInput) {
         elements.blockNameInput.value = editMode.blockName || '';
         elements.blockNameInput.readOnly = isReadonlyExample;
@@ -2817,7 +2873,8 @@ function updateEditModeUI() {
       }
       syncChannelsUI();
     } else {
-      elements.blockProps.classList.add('hidden');
+      elements.blockPropsRow1.classList.add('hidden');
+      elements.blockPropsRow2.classList.add('hidden');
     }
 
     // Ensure icons render when the block props row is revealed.
@@ -2825,7 +2882,7 @@ function updateEditModeUI() {
   }
 
   if (elements.blockAdvancedSettingsBtn) {
-    const shouldShow = editMode.isEditing && isDeveloperModeEnabled() && !DEMO_MODE;
+    const shouldShow = editMode.isEditing && !DEMO_MODE;
     elements.blockAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
   }
 
