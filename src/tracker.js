@@ -108,6 +108,8 @@ let editMode = {
 
 /** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
 let lastSavedSnapshot = '';
+/** When user reduces step count, we keep the previous grid here so restoring the count is non-destructive. */
+let gridBackupBeforeStepsReduce = null; // { steps: number, grid: grid }
 
 // Preview playback state
 let previewState = {
@@ -222,6 +224,25 @@ function initGrid() {
   state.channelInstruments = state.channelInstruments.slice(0, MAX_CHANNELS);
 }
 
+/** Deep-copy grid so we can store/restore it without sharing references. */
+function deepCopyGrid(grid) {
+  if (!Array.isArray(grid)) return [];
+  return grid.map((channel) => {
+    if (!Array.isArray(channel)) return [];
+    return channel.map((cell) =>
+      cell
+        ? {
+            note: cell.note ?? null,
+            vol: cell.vol ?? null,
+            reps: cell.reps ?? null,
+            nd: cell.nd ?? null,
+            active: false,
+          }
+        : { note: null, vol: null, reps: null, nd: null, active: false }
+    );
+  });
+}
+
 function setSteps(nextSteps) {
   const desired = parseInt(nextSteps, 10);
   if (Number.isNaN(desired)) return;
@@ -229,6 +250,33 @@ function setSteps(nextSteps) {
   if (clamped === state.steps) return;
 
   const prevGrid = state.grid;
+  const isReducing = clamped < state.steps;
+  const isIncreasing = clamped > state.steps;
+
+  if (isReducing) {
+    gridBackupBeforeStepsReduce = { steps: state.steps, grid: deepCopyGrid(state.grid) };
+  }
+
+  if (isIncreasing && gridBackupBeforeStepsReduce && gridBackupBeforeStepsReduce.steps === clamped) {
+    state.steps = clamped;
+    state.grid = deepCopyGrid(gridBackupBeforeStepsReduce.grid);
+    gridBackupBeforeStepsReduce = null;
+
+    state.focusedStep = Math.min(Math.max(state.focusedStep, 0), state.steps - 1);
+    renderGrid();
+    updateOutput();
+
+    if (previewState.isPlaying && previewState.audioContext) {
+      const ctx = previewState.audioContext;
+      const duration = previewState.bufferDuration || 2.0;
+      const elapsed = ctx.currentTime - previewState.startTime;
+      const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+      playPreview(currentOffset);
+    }
+    focusNoteCell(state.focusedChannel, state.focusedStep);
+    return;
+  }
+
   state.steps = clamped;
 
   state.grid = Array(MAX_CHANNELS).fill(null).map((_, ch) =>
@@ -2708,7 +2756,8 @@ export function isArrangementPreviewPlaying() {
 export function openTracker(instrumentList, options = {}) {
   // Reset edit mode
   resetEditMode();
-  
+  gridBackupBeforeStepsReduce = null;
+
   // Enable editing for new blocks so we can save them
   editMode.isEditing = true;
   editMode.isNewBlock = true;
@@ -3055,6 +3104,8 @@ export function deserializeTrackerState(data) {
   }
 
   try {
+    gridBackupBeforeStepsReduce = null;
+
     const nextSteps = Number.isInteger(data.steps) ? Math.min(Math.max(data.steps, 1), 256) : state.steps;
     state.steps = nextSteps;
     const savedChannels = Number.isInteger(data.channels) ? Math.min(Math.max(data.channels, 1), MAX_CHANNELS) : null;

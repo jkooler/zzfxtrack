@@ -1,5 +1,5 @@
 import '@strudel/repl/index.mjs';
-import { codemirrorSettings, themes as strudelReplThemes } from '@strudel/codemirror';
+import { codemirrorSettings, themes as strudelReplThemes, updateMiniLocations } from '@strudel/codemirror';
 import '@melloware/coloris/dist/coloris.css';
 import Coloris from '@melloware/coloris';
 import { instruments as staticInstruments, instrumentMonophonic as staticMonophonic } from '../instruments.js';
@@ -2254,7 +2254,7 @@ function renderArrangementWorkspace() {
                         aria-label="Drag blocks here to remove"
                         aria-describedby="arrangementWorkspaceTrashTooltip"
                     >
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        <i data-lucide="trash" class="w-4 h-4"></i>
                     </div>
                 </div>
             </footer>
@@ -3404,6 +3404,18 @@ async function loadPattern(filename) {
         
         if (dom.repl.editor) {
             dom.repl.editor.setCode(editorCode);
+            const view = dom.repl.editor.editor;
+            if (view) {
+                // Force CodeMirror to refresh syntax highlighting after document replace
+                // (fixes highlighting breaking when switching away and back to the playing pattern)
+                view.dispatch({});
+                // Restore playback highlights when returning to the pattern that is playing;
+                // clear them when loading a different pattern so we don't show stale/wrong ranges
+                const locations = (filename === playingPatternFilename && dom.repl.editor.miniLocations)
+                    ? dom.repl.editor.miniLocations
+                    : [];
+                updateMiniLocations(view, locations);
+            }
         } else {
             dom.repl.setAttribute('code', editorCode);
         }
@@ -3726,6 +3738,56 @@ function inferArrangeCyclesFromCode(code) {
     return maxCycles > 0 ? maxCycles : null;
 }
 
+/** Duration (seconds) above which we show the export length warning (5 min). */
+const EXPORT_LENGTH_WARNING_DURATION_SEC = 300;
+/** Max cycles above which we show the export length warning. */
+const EXPORT_LENGTH_WARNING_CYCLES = 512;
+/** Cycles above which we show "large structure" message; below = "simple structure". */
+const EXPORT_LENGTH_LARGE_STRUCTURE_CYCLES = 256;
+
+function getExportDurationSeconds(cycles, bpm) {
+    if (!Number.isFinite(cycles) || !Number.isFinite(bpm) || bpm <= 0) return 0;
+    return (cycles * 240) / bpm;
+}
+
+function formatExportDuration(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '0 sec';
+    if (seconds < 60) return `${Math.round(seconds)} sec`;
+    const min = Math.floor(seconds / 60);
+    const sec = Math.round(seconds % 60);
+    if (sec === 0) return `${min} min`;
+    return `${min} min ${sec} sec`;
+}
+
+function shouldWarnExportLength(cycles, bpm) {
+    if (!Number.isFinite(cycles) || cycles <= 0) return false;
+    const durationSec = getExportDurationSeconds(cycles, bpm);
+    return durationSec > EXPORT_LENGTH_WARNING_DURATION_SEC || cycles > EXPORT_LENGTH_WARNING_CYCLES;
+}
+
+/** Rough estimate of ZzFXM JSON size in bytes (instruments + pattern data). */
+function estimateExportSizeBytes(cycles, rowsPerCycle, instrumentCount, channelCount) {
+    const totalRows = cycles * rowsPerCycle;
+    const instrumentBytes = Math.max(0, instrumentCount) * 280;
+    const patternBytes = Math.max(0, channelCount) * totalRows * 14;
+    return Math.ceil(instrumentBytes + patternBytes + 400);
+}
+
+function formatExportSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '—';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `~${(bytes / 1024).toFixed(1)} KB`;
+    return `~${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function buildExportLengthWarningMessage({ durationSec, cycles, bpm, estimatedSizeText }) {
+    const durationStr = formatExportDuration(durationSec);
+    const structureLine = cycles >= EXPORT_LENGTH_LARGE_STRUCTURE_CYCLES
+        ? 'The song structure is large and uses lots of cycles. This can attribute to increased file size.'
+        : 'The song structure is simple with a lower set of cycles. This will affect file size positively.';
+    return `Your exported song duration exceeds 5 minutes. It will contribute to file size and can be unoptimal for small games or demos.\n\nTotal play time: about ${durationStr} (at ${bpm} BPM).\nEstimated export file size: ${estimatedSizeText}.\n\n${structureLine}`;
+}
+
 async function exportCurrentPattern(options = {}) {
     const { revealZzfxmPreview = true } = options;
     if (!currentPatternFilename) return;
@@ -3742,11 +3804,45 @@ async function exportCurrentPattern(options = {}) {
         if (!confirmed) return;
     }
 
+    const code = dom.repl.editor.code;
+    let bpmEarly = 120;
+    const bpmMatch = code.match(/(?:const|let|var)\s+bpm\s*=\s*(\d+)/);
+    if (bpmMatch) bpmEarly = Number(bpmMatch[1]);
+    const inferredCycles = inferArrangeCyclesFromCode(code);
+    const baseExportCycles = Number.isFinite(inferredCycles) && inferredCycles > 0 ? inferredCycles : 4;
+
+    if (shouldWarnExportLength(baseExportCycles, bpmEarly)) {
+        const resolutionInputPat = document.querySelector('input[name="exportResolution"]:checked');
+        let rowsPerCyclePat = 96;
+        if (resolutionInputPat?.value === '48') rowsPerCyclePat = 48;
+        else if (resolutionInputPat?.value === 'custom') {
+            const parsed = parseInt(dom.exportResolutionCustom?.value, 10);
+            if (parsed && !Number.isNaN(parsed)) rowsPerCyclePat = parsed;
+        }
+        const { array: instrumentsPat } = await getInstrumentsForExporter();
+        const limitEnabledPat = dom.limitChannels?.checked;
+        const channelCountPat = limitEnabledPat ? (parseInt(dom.maxChannelsInput?.value, 10) || 16) : 24;
+        const durationSec = getExportDurationSeconds(baseExportCycles, bpmEarly);
+        const estimatedBytes = estimateExportSizeBytes(baseExportCycles, rowsPerCyclePat, instrumentsPat?.length ?? 0, channelCountPat);
+        const message = buildExportLengthWarningMessage({
+            durationSec,
+            cycles: baseExportCycles,
+            bpm: bpmEarly,
+            estimatedSizeText: formatExportSize(estimatedBytes),
+        });
+        const confirmed = await confirmDialog({
+            title: 'Warning',
+            message,
+            confirmLabel: 'Proceed',
+            cancelLabel: 'Cancel',
+            variant: 'danger',
+        });
+        if (!confirmed) return;
+    }
+
     setStatus('Exporting...');
     
     try {
-        const code = dom.repl.editor.code;
-        
         // Save first (good practice)
         await saveCurrentPattern();
         
@@ -4263,6 +4359,39 @@ async function exportCurrentArrangement() {
             const repeats = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) : 1;
             return sum + repeats;
         }, 0);
+
+        // Export length warning: duration > 5 min or high cycle count
+        const resolutionInputArr = document.querySelector('input[name="exportResolution"]:checked');
+        let rowsPerCycleForWarning = 96;
+        if (resolutionInputArr?.value === '48') rowsPerCycleForWarning = 48;
+        else if (resolutionInputArr?.value === 'custom') {
+            const parsed = parseInt(dom.exportResolutionCustom?.value, 10);
+            if (parsed && !Number.isNaN(parsed)) rowsPerCycleForWarning = parsed;
+        }
+        const { array: instrumentsForCount } = await getInstrumentsForExporter();
+        const limitEnabledArr = dom.limitChannels?.checked;
+        const channelCountForWarning = limitEnabledArr ? (parseInt(dom.maxChannelsInput?.value, 10) || 16) : 24;
+        if (shouldWarnExportLength(arrangementCycles, bpm)) {
+            const durationSec = getExportDurationSeconds(arrangementCycles, bpm);
+            const estimatedBytes = estimateExportSizeBytes(arrangementCycles, rowsPerCycleForWarning, instrumentsForCount?.length ?? 0, channelCountForWarning);
+            const message = buildExportLengthWarningMessage({
+                durationSec,
+                cycles: arrangementCycles,
+                bpm,
+                estimatedSizeText: formatExportSize(estimatedBytes),
+            });
+            const confirmed = await confirmDialog({
+                title: 'Warning',
+                message,
+                confirmLabel: 'Proceed',
+                cancelLabel: 'Cancel',
+                variant: 'danger',
+            });
+            if (!confirmed) {
+                setStatus('');
+                return;
+            }
+        }
 
         const slugify = (str) => (str || 'x')
             .toLowerCase()
