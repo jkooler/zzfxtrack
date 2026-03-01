@@ -13,7 +13,7 @@ import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateIns
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport } from './tracker.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
@@ -138,6 +138,7 @@ let arrangementLiveEditSession = {
 };
 let arrangementAutoSaveTimeout = null;
 let arrangementRenameDebounceTimeout = null;
+let arrangementPreviewPrimeTimeoutId = null;
 let trackerAutoSaveTimeout = null;
 let pendingTrackerSavePayload = null;
 let arrangementDraftState = null;
@@ -1546,7 +1547,7 @@ async function createNewArrangement(name) {
             version: 1,
             name: normalizedBase,
             bpm: 120,
-            rows: [{ repeats: 1, blocks: [] }],
+            rows: [{ repeats: 1, blocks: [], loop: false }],
         };
 
         const res = await fetch('/api/arrangements', {
@@ -1614,14 +1615,21 @@ function readUnsavedBlockTrackerState(filename, scope) {
 
 function cloneArrangementState(value) {
     const rows = Array.isArray(value?.rows) ? value.rows : [];
+    const outRows = rows.length ? rows.map((row) => ({
+        repeats: Number.isFinite(Number(row?.repeats)) ? Math.max(1, Math.min(16, Number(row.repeats))) : 1,
+        blocks: Array.isArray(row?.blocks) ? row.blocks.filter(Boolean).map(String) : [],
+        loop: Boolean(row?.loop),
+    })) : [{ repeats: 1, blocks: [], loop: false }];
+    const loopIndices = outRows.map((r, i) => (r.loop ? i : -1)).filter((i) => i >= 0);
+    if (loopIndices.length > 1) {
+        const keepIndex = loopIndices[loopIndices.length - 1];
+        outRows.forEach((r, i) => { r.loop = i === keepIndex; });
+    }
     return {
         version: 1,
         name: String(value?.name || 'Arrangement').trim() || 'Arrangement',
         bpm: Number.isFinite(Number(value?.bpm)) ? Math.max(20, Math.min(300, Number(value.bpm))) : 120,
-        rows: rows.length ? rows.map((row) => ({
-            repeats: Number.isFinite(Number(row?.repeats)) ? Math.max(1, Math.min(16, Number(row.repeats))) : 1,
-            blocks: Array.isArray(row?.blocks) ? row.blocks.filter(Boolean).map(String) : [],
-        })) : [{ repeats: 1, blocks: [] }],
+        rows: outRows,
     };
 }
 
@@ -1852,8 +1860,16 @@ function buildArrangementStatePayload() {
     return cloneArrangementState(arrangementDraftState || {
         name: getArrangementEntry(currentArrangementFilename)?.name || 'Arrangement',
         bpm: 120,
-        rows: [{ repeats: 1, blocks: [] }],
+        rows: [{ repeats: 1, blocks: [], loop: false }],
     });
+}
+
+/** Same as buildArrangementStatePayload but with loop stripped from every row so loop is not persisted. */
+function buildArrangementStatePayloadForSave() {
+    const state = buildArrangementStatePayload();
+    if (!state || !Array.isArray(state.rows)) return state;
+    state.rows = state.rows.map((r) => ({ ...r, loop: false }));
+    return state;
 }
 
 function emitArrangementStateChanged(extraDetail = {}) {
@@ -1886,7 +1902,7 @@ async function saveCurrentArrangement() {
         arrangementAutoSaveTimeout = null;
     }
 
-    const arrangementState = buildArrangementStatePayload();
+    const arrangementState = buildArrangementStatePayloadForSave();
     const storageKey = `unsaved_arrangement_${currentArrangementFilename}`;
     try {
         localStorage.setItem(storageKey, JSON.stringify(arrangementState));
@@ -2332,7 +2348,7 @@ function renderArrangementWorkspace() {
     });
     if (bpmInput) setupScrubInteraction(bpmInput);
     addRowBtn?.addEventListener('click', () => {
-        arrangementDraftState.rows.push({ repeats: 1, blocks: [] });
+        arrangementDraftState.rows.push({ repeats: 1, blocks: [], loop: false });
         renderArrangementWorkspace();
         scheduleArrangementAutoSave();
         emitArrangementStateChanged({ addedRowIndex: arrangementDraftState.rows.length - 1 });
@@ -2421,7 +2437,7 @@ function renderArrangementWorkspace() {
                 });
                 if (!confirmed) return;
                 if (arrangementDraftState.rows.length === 1) {
-                    arrangementDraftState.rows[0] = { repeats: 1, blocks: [] };
+                    arrangementDraftState.rows[0] = { repeats: 1, blocks: [], loop: false };
                 } else {
                     arrangementDraftState.rows.splice(fromRowIndex, 1);
                 }
@@ -2562,10 +2578,32 @@ function renderArrangementWorkspace() {
             }
             rowNumberEl.addEventListener('click', () => {
                 if (window.__arrRowDragJustEnded) return;
-                stopAllPlaybackForSelectionChange();
+                // When only changing start row on the same arrangement, defer stop until we're ready to start (reduces pause)
+                const sameArrangementAlreadyPlaying = isArrangementPreviewPlaying() && arrangementPreviewPlayingFilename === currentArrangementFilename;
+                if (!sameArrangementAlreadyPlaying) {
+                    stopAllPlaybackForSelectionChange();
+                } else {
+                    stopTrackerPreviewPlayback();
+                    try {
+                        if (dom.repl.editor?.repl?.scheduler?.started) {
+                            dom.repl.editor.stop();
+                            updatePlayState(false);
+                        }
+                    } catch (_e) {}
+                    if (isPreviewPlaying) {
+                        stopZzfxmSong();
+                        updatePreviewPlayButton(false);
+                    }
+                }
+                const payload = buildArrangementStatePayload();
+                console.log('[Arranger] dispatch arrangements:preview (from row click):', {
+                    startRowIndex: rowIndex,
+                    payloadRowLoops: (payload?.rows || []).map((r, i) => ({ i, loop: Boolean(r?.loop) })),
+                    draftRowLoops: (arrangementDraftState?.rows || []).map((r, i) => ({ i, loop: Boolean(r?.loop) })),
+                });
                 document.dispatchEvent(new CustomEvent('arrangements:preview', {
                     detail: {
-                        arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() },
+                        arrangement: { name: arrangementDraftState.name, arrangementState: payload },
                         startRowIndex: rowIndex,
                         filename: currentArrangementFilename,
                     },
@@ -2575,6 +2613,46 @@ function renderArrangementWorkspace() {
                 <span class="arr-row-number-value">${rowIndex + 1}</span>
                 <i data-lucide="play" class="arr-row-play-icon hidden w-2.5 h-2.5 fill-current"></i>
             `;
+
+            const rowNumberWrap = document.createElement('div');
+            rowNumberWrap.className = 'arr-row-number-wrap';
+            rowNumberWrap.appendChild(rowNumberEl);
+            const loopRowBtn = document.createElement('button');
+            loopRowBtn.type = 'button';
+            loopRowBtn.className = 'arr-loop-row-btn';
+            loopRowBtn.setAttribute('aria-label', row.loop ? 'Loop row (on)' : 'Loop row (off)');
+            loopRowBtn.title = row.loop ? 'Loop row (on)' : 'Loop row (off)';
+            loopRowBtn.dataset.loop = row.loop ? 'true' : 'false';
+            loopRowBtn.innerHTML = '<i data-lucide="repeat-1" class="w-4 h-4"></i>';
+            if (readonly) loopRowBtn.disabled = true;
+            loopRowBtn.addEventListener('click', () => {
+                if (readonly) return;
+                if (row.loop) {
+                    row.loop = false;
+                } else {
+                    arrangementDraftState.rows.forEach((r) => { r.loop = false; });
+                    row.loop = true;
+                }
+                loopRowBtn.dataset.loop = row.loop ? 'true' : 'false';
+                loopRowBtn.setAttribute('aria-label', row.loop ? 'Loop row (on)' : 'Loop row (off)');
+                loopRowBtn.title = loopRowBtn.getAttribute('aria-label');
+                rowsRoot.querySelectorAll('.arr-row').forEach((rowEl) => {
+                    const i = parseInt(rowEl.dataset.rowIndex, 10);
+                    const r = arrangementDraftState.rows?.[i];
+                    const btn = rowEl.querySelector('.arr-loop-row-btn');
+                    if (btn && r != null) {
+                        btn.dataset.loop = r.loop ? 'true' : 'false';
+                        btn.setAttribute('aria-label', r.loop ? 'Loop row (on)' : 'Loop row (off)');
+                        btn.title = btn.getAttribute('aria-label');
+                    }
+                });
+                if (window.lucide?.createIcons) window.lucide.createIcons();
+                // Loop is runtime-only: notify tracker for loop-row switch at end of cycle, without triggering save
+                document.dispatchEvent(new CustomEvent('arrangements:previewLoopChanged', {
+                    detail: { arrangementState: buildArrangementStatePayload() },
+                }));
+            });
+            rowNumberWrap.appendChild(loopRowBtn);
 
             const repeatsEl = document.createElement('input');
             repeatsEl.type = 'number';
@@ -2656,6 +2734,7 @@ function renderArrangementWorkspace() {
                 const duplicatedRow = {
                     repeats: Number.isInteger(sourceRow.repeats) ? sourceRow.repeats : 1,
                     blocks: Array.isArray(sourceRow.blocks) ? sourceRow.blocks.slice() : [],
+                    loop: Boolean(sourceRow.loop),
                 };
                 arrangementDraftState.rows.splice(rowIndex + 1, 0, duplicatedRow);
                 renderArrangementWorkspace();
@@ -2684,7 +2763,7 @@ function renderArrangementWorkspace() {
                 });
                 if (!confirmed) return;
                 if (arrangementDraftState.rows.length === 1) {
-                    arrangementDraftState.rows[0] = { repeats: 1, blocks: [] };
+                    arrangementDraftState.rows[0] = { repeats: 1, blocks: [], loop: false };
                 } else {
                     arrangementDraftState.rows.splice(rowIndex, 1);
                 }
@@ -2749,7 +2828,7 @@ function renderArrangementWorkspace() {
 
             const rowMain = document.createElement('div');
             rowMain.className = 'arr-row-main';
-            rowMain.appendChild(rowNumberEl);
+            rowMain.appendChild(rowNumberWrap);
             rowMain.appendChild(repeatsWrap);
             rowMain.appendChild(chipsEl);
 
@@ -3159,6 +3238,40 @@ async function deleteBlockFromLibrary(filename, displayName) {
     }
 }
 
+async function runArrangementPreviewPrime(filename) {
+  if (currentArrangementFilename !== filename) return;
+  const state = buildArrangementStatePayload();
+  if (!state?.rows?.length) return;
+  const wantedBlockFiles = Array.from(new Set((state.rows || []).flatMap((r) => Array.isArray(r?.blocks) ? r.blocks : [])));
+  if (!wantedBlockFiles.length) return;
+  const trackerStateByFilename = {};
+  const cachedBlocks = Array.isArray(blocksLibraryCache) ? blocksLibraryCache : [];
+  for (const f of wantedBlockFiles) {
+    const block = cachedBlocks.find((b) => b?.filename === f);
+    if (block?.trackerState) trackerStateByFilename[f] = block.trackerState;
+  }
+  if (Object.keys(trackerStateByFilename).length === 0) return;
+  const instrumentList = await getArrangementInstrumentList();
+  if (!instrumentList?.length) return;
+  primeArrangementPreviewBuffer(state, trackerStateByFilename, instrumentList, state.bpm || 120, getPlaybackMixSettings());
+  const hasLoopRow = (state.rows || []).some((r) => Boolean(r?.loop));
+  if (hasLoopRow) {
+    primeArrangementPreviewBuffer(state, trackerStateByFilename, instrumentList, state.bpm || 120, getPlaybackMixSettings(), true);
+  }
+}
+
+function scheduleArrangementPreviewPrime(filename) {
+  if (arrangementPreviewPrimeTimeoutId) {
+    clearTimeout(arrangementPreviewPrimeTimeoutId);
+    arrangementPreviewPrimeTimeoutId = null;
+  }
+  if (!filename) return;
+  arrangementPreviewPrimeTimeoutId = setTimeout(() => {
+    arrangementPreviewPrimeTimeoutId = null;
+    runArrangementPreviewPrime(filename).catch(() => {});
+  }, 350);
+}
+
 async function loadArrangement(filename) {
     if (!filename) return;
     if (arrangementAutoSaveTimeout) {
@@ -3180,7 +3293,7 @@ async function loadArrangement(filename) {
         let arrangementState = cloneArrangementState(detail?.arrangementState || {
             name: decodeURIComponent(filename.replace(/\.js$/i, '')),
             bpm: 120,
-            rows: [{ repeats: 1, blocks: [] }],
+            rows: [{ repeats: 1, blocks: [], loop: false }],
         });
         const recoveredArrangementState = readUnsavedArrangementState(filename, loadedScope);
         const recoveredFromCache = Boolean(recoveredArrangementState);
@@ -3193,6 +3306,9 @@ async function loadArrangement(filename) {
         currentArrangementScope = loadedScope;
         arrangementDraftState = arrangementState;
         arrangementDraftState.name = (filename || '').replace(/\.js$/i, '');
+        if (Array.isArray(arrangementDraftState.rows)) {
+            arrangementDraftState.rows.forEach((r) => { if (r && typeof r === 'object') r.loop = false; });
+        }
         const savedBlock = arrangementSelectedBlockByArrangement[filename];
         const blockInArrangement = savedBlock && (arrangementState.rows || []).some((row) => Array.isArray(row?.blocks) && row.blocks.includes(savedBlock));
         activeArrangementBlockFilename = blockInArrangement ? savedBlock : null;
@@ -3203,6 +3319,7 @@ async function loadArrangement(filename) {
         renderArrangementWorkspace();
         updateArrangementWorkspacePreviewButtonState();
         showArrangementWorkspace();
+        scheduleArrangementPreviewPrime(filename);
         if (recoveredFromCache) {
             setTimeout(() => {
                 if (currentArrangementFilename !== filename) return;
@@ -7387,6 +7504,45 @@ function setupBlocksEventListeners() {
 	        const arrangementState = arrangement?.arrangementState;
 	        if (!arrangementState) return;
 
+	        // Fast path: same arrangement already playing, just changing start row — use cached context to avoid async work and minimize pause
+	        if (Number.isInteger(startRowIndex) && startRowIndex >= 0 &&
+	            arrangementPreviewPlayingFilename === previewFilename &&
+	            arrangementPreviewContext?.trackerStateByFilename != null &&
+	            Array.isArray(arrangementPreviewContext?.instrumentList)) {
+	            const stateToPlay = (currentArrangementFilename === previewFilename)
+	                ? buildArrangementStatePayload()
+	                : arrangementState;
+	            arrangementPreviewContext = {
+	                ...arrangementPreviewContext,
+	                arrangementState: stateToPlay,
+	                mixSettings: getPlaybackMixSettings(),
+	            };
+	            arrangementPreviewPlayingFilename = previewFilename ?? null;
+	            stopArrangementPreview();
+	            const started = startArrangementPreview(
+	                stateToPlay,
+	                arrangementPreviewContext.trackerStateByFilename,
+	                arrangementPreviewContext.instrumentList,
+	                arrangementPreviewContext.bpm ?? 120,
+	                {
+	                    keepPosition: false,
+	                    mixSettings: arrangementPreviewContext.mixSettings,
+	                    startRowIndex,
+	                }
+	            );
+	            if (!started) {
+	                setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
+	                arrangementPreviewPlayingFilename = null;
+	            }
+	            document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: started } }));
+	            return;
+	        }
+
+	        console.log('[Arranger] preview listener received:', {
+	            startRowIndex,
+	            receivedRowLoops: (arrangementState?.rows || []).map((r, i) => ({ i, loop: Boolean(r?.loop) })),
+	        });
+
 	        try {
 	            console.log('[Arranger] Preview start:', arrangementState);
 		            const instrumentList = await getArrangementInstrumentList();
@@ -7463,8 +7619,16 @@ function setupBlocksEventListeners() {
 	                const bpm = arrangementState.bpm || 120;
 	                const mixSettings = getPlaybackMixSettings();
 	                console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
+	                // Use fresh payload from current draft when still on same arrangement so loop (and other) flags are never stale
+	                const stateToPlay = (currentArrangementFilename === previewFilename)
+	                    ? buildArrangementStatePayload()
+	                    : arrangementState;
+	                console.log('[Arranger] startPreviewWithCurrentStates passing to tracker:', {
+	                    arrangementStateRowLoops: (stateToPlay?.rows || []).map((r, i) => ({ i, loop: Boolean(r?.loop) })),
+	                    startRowIndex,
+	                });
 	                arrangementPreviewContext = {
-	                    arrangementState,
+	                    arrangementState: stateToPlay,
 	                    trackerStateByFilename: { ...trackerStateByFilename },
 	                    instrumentList,
 	                    bpm,
@@ -7474,15 +7638,18 @@ function setupBlocksEventListeners() {
 	                if (previewBlocks.length) {
 	                    document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
 	                }
-	                const started = startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm, {
+	                // Set playing filename before start so synchronous playhead emit (e.g. start-from-row) is applied
+	                arrangementPreviewPlayingFilename = previewFilename ?? null;
+	                stopArrangementPreview();
+	                const started = startArrangementPreview(stateToPlay, trackerStateByFilename, instrumentList, bpm, {
 	                    keepPosition: false,
 	                    mixSettings,
 	                    startRowIndex: Number.isInteger(startRowIndex) ? startRowIndex : undefined,
 	                });
 	                if (!started) {
 	                    setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
+	                    arrangementPreviewPlayingFilename = null;
 	                }
-	                arrangementPreviewPlayingFilename = started ? (previewFilename ?? null) : null;
 	                document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: started } }));
 	                return started;
 	            };
@@ -7562,6 +7729,20 @@ function setupBlocksEventListeners() {
 		                keepPosition: true,
 				            });
                 updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
+        });
+
+        document.addEventListener('arrangements:previewLoopChanged', (e) => {
+            if (!isArrangementPreviewPlaying()) return;
+            const arrangementState = e?.detail?.arrangementState;
+            if (!arrangementState) return;
+            updateArrangementPreview({
+                arrangementState,
+                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
+                instrumentList: arrangementPreviewContext.instrumentList,
+                bpm: arrangementPreviewContext.bpm,
+                mixSettings: arrangementPreviewContext.mixSettings,
+                keepPosition: true,
+            });
         });
 
         document.addEventListener('arrangements:blocksLoaded', (e) => {

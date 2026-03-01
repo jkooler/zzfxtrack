@@ -242,6 +242,7 @@ function getArrangementDraftState() {
       rows: arrangementDraft.rows.map(r => ({
         repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
         blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+        loop: Boolean(r.loop),
       })),
     },
     name,
@@ -366,7 +367,7 @@ function setupEventListeners() {
   });
   elements.previewArrangementBtn?.addEventListener('click', previewArrangementDraft);
   elements.addArrangementRowBtn?.addEventListener('click', () => {
-    arrangementDraft.rows.push({ repeats: 1, blocks: [] });
+    arrangementDraft.rows.push({ repeats: 1, blocks: [], loop: false });
     renderArrangementRows();
     emitArrangementStateChanged();
   });
@@ -869,7 +870,7 @@ function confirmDeleteArrangementRow() {
   const rowIndex = arrangementRowToDeleteIndex;
   closeDeleteArrangementRowModal();
   if (arrangementDraft.rows.length === 1) {
-    arrangementDraft.rows[0] = { repeats: 1, blocks: [] };
+    arrangementDraft.rows[0] = { repeats: 1, blocks: [], loop: false };
   } else {
     arrangementDraft.rows.splice(rowIndex, 1);
   }
@@ -929,7 +930,7 @@ let arrangementDraft = {
   version: 1,
   name: '',
   bpm: 120,
-  rows: [{ repeats: 1, blocks: [] }],
+  rows: [{ repeats: 1, blocks: [], loop: false }],
 };
 
 /** Snapshot when arrangement editor was opened (for unsaved-changes detection) */
@@ -941,6 +942,7 @@ function getArrangementSnapshot() {
   const rows = arrangementDraft.rows.map((r) => ({
     repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
     blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+    loop: Boolean(r.loop),
   }));
   return JSON.stringify({ name, bpm, rows });
 }
@@ -973,11 +975,20 @@ async function openArrangementEditor(arrangement = null) {
     name: arrangement ? nameFromFilename : (state?.name || ''),
     bpm: state?.bpm ?? arrangement?.bpm ?? 120,
     rows: Array.isArray(state?.rows) && state.rows.length
-      ? state.rows.map(r => ({
-          repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
-          blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
-        }))
-      : [{ repeats: 1, blocks: [] }],
+      ? (() => {
+          const mapped = state.rows.map(r => ({
+            repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
+            blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+            loop: Boolean(r.loop),
+          }));
+          const loopIndices = mapped.map((r, i) => (r.loop ? i : -1)).filter(i => i >= 0);
+          if (loopIndices.length > 1) {
+            const keepIndex = loopIndices[loopIndices.length - 1];
+            mapped.forEach((r, i) => { r.loop = i === keepIndex; });
+          }
+          return mapped;
+        })()
+      : [{ repeats: 1, blocks: [], loop: false }],
   };
 
   if (elements.arrangementModalTitle) {
@@ -1195,6 +1206,47 @@ function renderArrangementRows() {
       <i data-lucide="play" class="arr-row-play-icon hidden w-2.5 h-2.5 fill-current"></i>
     `;
 
+    const rowNumberWrap = document.createElement('div');
+    rowNumberWrap.className = 'arr-row-number-wrap';
+    rowNumberWrap.appendChild(rowNumberEl);
+
+    const loopRowBtn = document.createElement('button');
+    loopRowBtn.type = 'button';
+    loopRowBtn.className = 'arr-loop-row-btn';
+    loopRowBtn.setAttribute('aria-label', row.loop ? 'Loop row (on)' : 'Loop row (off)');
+    loopRowBtn.title = row.loop ? 'Loop row (on)' : 'Loop row (off)';
+    loopRowBtn.dataset.loop = row.loop ? 'true' : 'false';
+    loopRowBtn.innerHTML = '<i data-lucide="repeat-1" class="w-4 h-4"></i>';
+    loopRowBtn.addEventListener('click', () => {
+      if (row.loop) {
+        row.loop = false;
+      } else {
+        arrangementDraft.rows.forEach((r) => { r.loop = false; });
+        row.loop = true;
+      }
+      loopRowBtn.dataset.loop = row.loop ? 'true' : 'false';
+      loopRowBtn.setAttribute('aria-label', row.loop ? 'Loop row (on)' : 'Loop row (off)');
+      loopRowBtn.title = loopRowBtn.getAttribute('aria-label');
+      elements.arrangementRows?.querySelectorAll('.arr-row').forEach((rowEl) => {
+        const i = parseInt(rowEl.dataset.row, 10);
+        const r = arrangementDraft.rows?.[i];
+        const btn = rowEl.querySelector('.arr-loop-row-btn');
+        if (btn && r != null) {
+          btn.dataset.loop = r.loop ? 'true' : 'false';
+          btn.setAttribute('aria-label', r.loop ? 'Loop row (on)' : 'Loop row (off)');
+          btn.title = btn.getAttribute('aria-label');
+        }
+      });
+      if (window.lucide?.createIcons) window.lucide.createIcons();
+      // Loop is runtime-only: notify tracker for loop-row switch without triggering save
+      const { arrangementState } = getArrangementDraftState();
+      if (arrangementState) {
+        document.dispatchEvent(new CustomEvent('arrangements:previewLoopChanged', { detail: { arrangementState } }));
+      }
+    });
+    rowNumberWrap.appendChild(loopRowBtn);
+    if (window.lucide?.createIcons) window.lucide.createIcons();
+
     const repeatsEl = document.createElement('input');
     repeatsEl.type = 'number';
     repeatsEl.min = '1';
@@ -1213,7 +1265,7 @@ function renderArrangementRows() {
     repeatsWrap.className = 'arr-repeats-wrap';
     repeatsWrap.appendChild(repeatsEl);
 
-		    const chipsEl = document.createElement('div');
+    const chipsEl = document.createElement('div');
 		    chipsEl.className = 'arr-chips';
 
         rowEl.addEventListener('dragover', (e) => {
@@ -1360,6 +1412,7 @@ function renderArrangementRows() {
       const duplicatedRow = {
         repeats: Number.isInteger(sourceRow.repeats) ? sourceRow.repeats : 1,
         blocks: Array.isArray(sourceRow.blocks) ? sourceRow.blocks.slice() : [],
+        loop: Boolean(sourceRow.loop),
       };
       arrangementDraft.rows.splice(rowIndex + 1, 0, duplicatedRow);
       renderArrangementRows();
@@ -1384,7 +1437,7 @@ function renderArrangementRows() {
 
 		    const rowMain = document.createElement('div');
 		    rowMain.className = 'arr-row-main';
-		    rowMain.appendChild(rowNumberEl);
+		    rowMain.appendChild(rowNumberWrap);
 		    rowMain.appendChild(repeatsWrap);
 		    rowMain.appendChild(chipsEl);
 
@@ -1454,6 +1507,7 @@ async function saveArrangementFromEditor() {
     rows: arrangementDraft.rows.map(r => ({
       repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
       blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
+      loop: false,
     })),
   };
   console.log('[Arranger] arrangementState payload:', arrangementState);

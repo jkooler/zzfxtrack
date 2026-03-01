@@ -1,4 +1,4 @@
-// Arrangement: 01-Introductione
+// Arrangement: 01-Introduction
 
 export const name = "01-Introduction";
 export const scope = "user";
@@ -13,7 +13,8 @@ export const arrangementState = {
       "blocks": [
         "bass.js",
         "chords.js"
-      ]
+      ],
+      "loop": false
     },
     {
       "repeats": 4,
@@ -21,16 +22,30 @@ export const arrangementState = {
         "chords.js",
         "bass.js",
         "drums.js"
-      ]
+      ],
+      "loop": false
     },
     {
-      "repeats": 16,
+      "repeats": 8,
       "blocks": [
         "drums.js",
         "chords.js",
         "synths.js",
-        "bass.js"
-      ]
+        "bass.js",
+        "untitled-1.js"
+      ],
+      "loop": false
+    },
+    {
+      "repeats": 8,
+      "blocks": [
+        "drums.js",
+        "chords.js",
+        "synths.js",
+        "bass.js",
+        "untitled-1.js"
+      ],
+      "loop": false
     }
   ]
 };

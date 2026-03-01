@@ -1129,7 +1129,7 @@ strudel-editor {
   border-color: var(--quaternary);
 }
 .arr-repeats-wrap {
-  @apply relative h-8 min-w-[2.5rem] rounded-md border border-input flex items-stretch;
+  @apply relative min-w-[2.5rem] rounded-md border border-input flex items-center;
   width: fit-content;
   background-color: var(--input-bg);
   background-image: linear-gradient(
@@ -1142,6 +1142,25 @@ strudel-editor {
   background-size: 100% 100%;
   background-repeat: no-repeat;
   background-position: left top;
+}
+
+.arr-repeats-wrap .arr-repeats {
+  @apply h-8 shrink-0;
+}
+
+.arr-row-number-wrap {
+  @apply flex flex-col items-center gap-0.5 shrink-0;
+}
+
+.arr-loop-row-btn {
+  @apply inline-flex items-center justify-center p-0.5 rounded cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  color: var(--muted-foreground);
+}
+.arr-loop-row-btn:hover {
+  color: var(--foreground);
+}
+.arr-loop-row-btn[data-loop="true"] {
+  color: var(--foreground);
 }
 
 .arr-repeats {

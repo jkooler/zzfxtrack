@@ -148,7 +148,23 @@ const arrangementPreviewState = {
   overridesByFilename: new Map(),
   overridesByRowIndex: new Map(),
   pendingUpdate: null,
+  loopRowIndex: null,
+  pendingLoopDisableUpdate: null,
+  pendingLoopEnable: null,
+  /** Cache last arrangement render by signature so prime + play hit the same cache */
+  _renderCacheKey: null,
+  _renderCache: null,
+  /** Same for full arrangement (no loop segment) when arrangement has a loop row — so "start from row after loop" is instant */
+  _renderCacheKeyFull: null,
+  _renderCacheFull: null,
 };
+
+function getArrangementRenderCacheKey(arrangementState, needFullBuffer, trackerStateByFilename) {
+  const rows = Array.isArray(arrangementState?.rows) ? arrangementState.rows : [];
+  const structure = { r: rows.map((row) => ({ blocks: Array.isArray(row?.blocks) ? row.blocks.slice().sort() : [], repeats: row?.repeats, loop: Boolean(row?.loop) })), bpm: arrangementState?.bpm, nfb: needFullBuffer };
+  const files = typeof trackerStateByFilename === 'object' && trackerStateByFilename !== null ? Object.keys(trackerStateByFilename).sort() : [];
+  return JSON.stringify(structure) + '\n' + files.join(',');
+}
 
 function ensureArrangementAudioContext() {
   if (!arrangementPreviewState.audioContext) {
@@ -1299,7 +1315,12 @@ function handleKeyDown(e) {
     const timeTrackScrollEl = elements.grid?.querySelector('.tracker-timetrack-scroll');
     const savedScrollTop = bodyScroll ? bodyScroll.scrollTop : 0;
     const savedTimeTrackScrollTop = timeTrackScrollEl ? timeTrackScrollEl.scrollTop : 0;
-    if (state.focusedStep === 0) {
+    const cell = state.grid?.[state.focusedChannel]?.[state.focusedStep];
+    const hasNote = cell && (cell.note != null && cell.note !== '');
+    if (hasNote) {
+      setNote(state.focusedChannel, state.focusedStep, null);
+      setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
+    } else if (state.focusedStep === 0) {
       setNote(state.focusedChannel, state.focusedStep, null);
       setFocus(state.focusedChannel, 0, { scroll: false });
     } else {
@@ -2421,10 +2442,16 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
       .map((f) => ({ filename: f, trackerState: overridesByFilename?.get(f) || trackerStateByFilename?.[f] }))
       .filter((entry) => Boolean(entry.trackerState));
     if (rowOverride) sources.push({ filename: null, trackerState: rowOverride });
-    return { cycles, files, sources };
+    return { cycles, files, sources, loop: Boolean(r?.loop) };
   });
 
-  const totalCycles = rowDescriptors.reduce((sum, r) => sum + r.cycles, 0);
+  let lastLoopIndex = -1;
+  for (let i = 0; i < rowDescriptors.length; i++) {
+    if (rowDescriptors[i].loop) lastLoopIndex = i;
+  }
+  const effectiveDescriptors = lastLoopIndex >= 0 ? rowDescriptors.slice(0, lastLoopIndex + 1) : rowDescriptors;
+
+  const totalCycles = effectiveDescriptors.reduce((sum, r) => sum + r.cycles, 0);
   if (!totalCycles) return null;
 
   // Render an exact-length musical loop + a post-loop tail region.
@@ -2465,7 +2492,10 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
 
   let writeOffset = 0;
   let anyMixed = false;
-  for (const row of rowDescriptors) {
+  const numRows = effectiveDescriptors.length;
+  const targetPeakPerRow = numRows > 0 ? targetPeak / numRows : targetPeak;
+
+  for (const row of effectiveDescriptors) {
     const rowMainSamples = row.cycles * 16 * samplesPerStep;
     const rowMix = new Float32Array(rowMainSamples + tailSamples);
 
@@ -2497,6 +2527,14 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
       }
 
       anyMixed = true;
+    }
+
+    // Normalize this row to a fixed per-row peak so 1-block and 5-block rows have similar loudness
+    let rowMax = 0;
+    for (let i = 0; i < rowMix.length; i++) rowMax = Math.max(rowMax, Math.abs(rowMix[i]));
+    if (rowMax > 0) {
+      const scale = targetPeakPerRow / rowMax;
+      for (let i = 0; i < rowMix.length; i++) rowMix[i] *= scale;
     }
 
     // Overlap-add into the global buffer so the tail can ring over into the next row.
@@ -2532,6 +2570,8 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
     sampleRate,
     secondsPerStep: secondsPerStepExact,
     totalSteps: totalCycles * 16,
+    loopSegment: lastLoopIndex >= 0,
+    loopRowIndex: lastLoopIndex >= 0 ? lastLoopIndex : undefined,
   };
 }
 
@@ -2544,7 +2584,7 @@ function computeArrangementRowBounds(arrangementState) {
     const start = cursor;
     const end = start + steps;
     cursor = end;
-    return { index, start, end, steps };
+    return { index, start, end, steps, loop: Boolean(row?.loop) };
   });
 }
 
@@ -2612,25 +2652,151 @@ function startArrangementPlayhead() {
     const secondsPerStep = arrangementPreviewState.secondsPerStep;
     const totalSteps = arrangementPreviewState.totalSteps;
     const rowBounds = arrangementPreviewState.rowBounds || [];
+    const loopRowIndex = arrangementPreviewState.loopRowIndex;
     if (!secondsPerStep || !totalSteps || rowBounds.length === 0) {
       arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
       return;
     }
 
     const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
-    const elapsedSteps = ((elapsed / secondsPerStep) % totalSteps + totalSteps) % totalSteps;
+    const elapsedSteps = elapsed / secondsPerStep;
+
+    // When looping only a single row (loopRowIndex set), use loop-row playhead only after we've reached that row
+    const loopRow = Number.isInteger(loopRowIndex) && loopRowIndex >= 0 ? rowBounds[loopRowIndex] : null;
+    const inLoopRowSegment = loopRow && loopRow.loop && elapsedSteps >= loopRow.start;
+    if (inLoopRowSegment) {
+      const stepsInRow = ((elapsedSteps - loopRow.start) % loopRow.steps + loopRow.steps) % loopRow.steps;
+      const progress = loopRow.steps > 0 ? stepsInRow / loopRow.steps : 0;
+      const clamped = Math.min(Math.max(progress, 0), 1);
+      const prevIndex = arrangementPreviewState.playingRowIndex;
+      const prevProgress = arrangementPreviewState.playingRowProgress;
+      const justWrapped = prevProgress != null && prevProgress > 0.9 && clamped < 0.1;
+      if (arrangementPreviewState.pendingLoopDisableUpdate && (clamped >= 0.999 || justWrapped)) {
+        const pending = arrangementPreviewState.pendingLoopDisableUpdate;
+        arrangementPreviewState.pendingLoopDisableUpdate = null;
+        arrangementPreviewState.arrangementState = pending.arrangementState;
+        arrangementPreviewState.trackerStateByFilename = pending.trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename;
+        arrangementPreviewState.instrumentList = pending.instrumentList ?? arrangementPreviewState.instrumentList;
+        arrangementPreviewState.bpm = pending.bpm ?? arrangementPreviewState.bpm;
+        arrangementPreviewState.mixSettings = pending.mixSettings ?? arrangementPreviewState.mixSettings;
+        const rendered = pending.rendered;
+        if (rendered?.mixBuffer) {
+          arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
+          arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
+          arrangementPreviewState.rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+          arrangementPreviewState.loopRowIndex = null;
+          const fullBounds = arrangementPreviewState.rowBounds;
+          const nextRowIndex = loopRowIndex + 1;
+          const nextBound = fullBounds[nextRowIndex];
+          const startOffsetSeconds = nextBound ? nextBound.start * arrangementPreviewState.secondsPerStep : 0;
+          playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, {
+            keepPosition: true,
+            startOffsetSeconds: nextBound ? startOffsetSeconds : 0,
+            loopSegment: false,
+            loopRowIndex: undefined,
+          });
+        }
+      } else if (prevIndex !== loopRow.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
+        const rowData = arrangementPreviewState.arrangementState?.rows?.[loopRow.index];
+        arrangementPreviewState.playingRowIndex = loopRow.index;
+        arrangementPreviewState.playingRowProgress = clamped;
+        emitArrangementPlayhead(
+          loopRow.index,
+          clamped,
+          loopRow.steps,
+          Array.isArray(rowData?.blocks) ? rowData.blocks : []
+        );
+      }
+      arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+      return;
+    }
+
+    const elapsedStepsWrapped = ((elapsedSteps % totalSteps) + totalSteps) % totalSteps;
     let current = rowBounds[rowBounds.length - 1];
+    // Only prefer a loop row for playhead when we're in a loop segment (loopRowIndex set). When playing full arrangement (loopRowIndex null), use position only.
+    if (Number.isInteger(loopRowIndex) && loopRowIndex >= 0) {
+      for (let i = rowBounds.length - 1; i >= 0; i--) {
+        const row = rowBounds[i];
+        if (row.loop && elapsedStepsWrapped >= row.start) {
+          current = row;
+          const stepsInRow = ((elapsedStepsWrapped - row.start) % row.steps + row.steps) % row.steps;
+          const progress = row.steps > 0 ? stepsInRow / row.steps : 0;
+          const clamped = Math.min(Math.max(progress, 0), 1);
+          const prevIndex = arrangementPreviewState.playingRowIndex;
+          const prevProgress = arrangementPreviewState.playingRowProgress;
+          if (prevIndex !== current.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
+            const rowData = arrangementPreviewState.arrangementState?.rows?.[current.index];
+            arrangementPreviewState.playingRowIndex = current.index;
+            arrangementPreviewState.playingRowProgress = clamped;
+            emitArrangementPlayhead(
+              current.index,
+              clamped,
+              current.steps,
+              Array.isArray(rowData?.blocks) ? rowData.blocks : []
+            );
+          }
+          arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+          return;
+        }
+      }
+    }
     for (const row of rowBounds) {
-      if (elapsedSteps < row.end) {
+      if (elapsedStepsWrapped < row.end) {
         current = row;
         break;
       }
     }
-    const progress = current.steps > 0 ? (elapsedSteps - current.start) / current.steps : 0;
+    const progress = current.steps > 0 ? (elapsedStepsWrapped - current.start) / current.steps : 0;
     const clamped = Math.min(Math.max(progress, 0), 1);
     const prevIndex = arrangementPreviewState.playingRowIndex;
     const prevProgress = arrangementPreviewState.playingRowProgress;
-    if (prevIndex !== current.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
+
+    const pendingLoop = arrangementPreviewState.pendingLoopEnable;
+    const isLoopRow = pendingLoop && current.index === pendingLoop.loopRowIndex;
+    const isRowBeforeLoopRow = pendingLoop && current.index === pendingLoop.loopRowIndex - 1 && clamped >= 0.98;
+    if (pendingLoop && (isLoopRow && clamped < 0.05 || isRowBeforeLoopRow)) {
+      const pending = arrangementPreviewState.pendingLoopEnable;
+      arrangementPreviewState.pendingLoopEnable = null;
+      arrangementPreviewState.arrangementState = pending.arrangementState;
+      arrangementPreviewState.trackerStateByFilename = pending.trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename;
+      arrangementPreviewState.instrumentList = pending.instrumentList ?? arrangementPreviewState.instrumentList;
+      arrangementPreviewState.bpm = pending.bpm ?? arrangementPreviewState.bpm;
+      arrangementPreviewState.mixSettings = pending.mixSettings ?? arrangementPreviewState.mixSettings;
+      const rendered = renderArrangementStateToMixBuffer(
+        arrangementPreviewState.arrangementState,
+        arrangementPreviewState.trackerStateByFilename,
+        arrangementPreviewState.instrumentList,
+        arrangementPreviewState.bpm,
+        { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
+        arrangementPreviewState.mixSettings
+      );
+      if (rendered?.mixBuffer && rendered.loopSegment && Number.isInteger(rendered.loopRowIndex)) {
+        arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
+        arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
+        let newRowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+        newRowBounds = newRowBounds.slice(0, rendered.loopRowIndex + 1);
+        arrangementPreviewState.rowBounds = newRowBounds;
+        arrangementPreviewState.loopRowIndex = rendered.loopRowIndex;
+        const bound = newRowBounds[rendered.loopRowIndex];
+        const rowStartSeconds = bound ? bound.start * arrangementPreviewState.secondsPerStep : 0;
+        const loopSegmentDuration = arrangementPreviewState.totalSteps * arrangementPreviewState.secondsPerStep;
+        let startOffsetSeconds;
+        if (isRowBeforeLoopRow) {
+          startOffsetSeconds = rowStartSeconds;
+        } else {
+          const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
+          startOffsetSeconds = loopSegmentDuration > 0
+            ? (elapsed % loopSegmentDuration)
+            : (bound ? rowStartSeconds + clamped * bound.steps * arrangementPreviewState.secondsPerStep : rowStartSeconds);
+        }
+        playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, {
+          keepPosition: true,
+          startOffsetSeconds,
+          loopSegment: true,
+          loopRowIndex: rendered.loopRowIndex,
+        });
+      }
+    } else if (prevIndex !== current.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
       const row = arrangementPreviewState.arrangementState?.rows?.[current.index];
       arrangementPreviewState.playingRowIndex = current.index;
       arrangementPreviewState.playingRowProgress = clamped;
@@ -2729,7 +2895,7 @@ function scheduleArrangementLoopStarts() {
   arrangementPreviewState.schedulerId = setTimeout(scheduleArrangementLoopStarts, pollMs);
 }
 
-function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false, startOffsetSeconds } = {}) {
+function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false, startOffsetSeconds, loopSegment = false, loopRowIndex } = {}) {
   if (!mixBuffer || mixBuffer.length === 0) return false;
 
   const ctx = ensureArrangementAudioContext();
@@ -2743,11 +2909,26 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false,
   if (Number.isFinite(startOffsetSeconds) && startOffsetSeconds >= 0 && loopDuration > 0) {
     phase = startOffsetSeconds % loopDuration;
   } else if (keepPosition && arrangementPreviewState.isPlaying && arrangementPreviewState.startTime != null && loopDuration > 0) {
-    const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
-    phase = ((elapsed % loopDuration) + loopDuration) % loopDuration;
+    const loopIdx = arrangementPreviewState.loopRowIndex;
+    const rowBounds = arrangementPreviewState.rowBounds;
+    if (Number.isInteger(loopIdx) && loopIdx >= 0 && rowBounds?.[loopIdx] != null) {
+      const bound = rowBounds[loopIdx];
+      const progress = arrangementPreviewState.playingRowProgress;
+      if (typeof progress === 'number' && progress >= 0 && progress <= 1 && arrangementPreviewState.secondsPerStep) {
+        phase = bound.start * arrangementPreviewState.secondsPerStep + progress * bound.steps * arrangementPreviewState.secondsPerStep;
+        phase = phase % loopDuration;
+      } else {
+        const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
+        phase = ((elapsed % loopDuration) + loopDuration) % loopDuration;
+      }
+    } else {
+      const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
+      phase = ((elapsed % loopDuration) + loopDuration) % loopDuration;
+    }
   }
 
-  // Restart playback with the new buffer at the current musical phase.
+  const offsetSeconds = loopDuration > 0 ? (phase % loopDuration) : 0;
+
   stopArrangementPlaybackSources();
 
   const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
@@ -2759,7 +2940,15 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false,
 
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
-  source.loop = false;
+  source.loop = loopSegment;
+  if (loopSegment && Number.isInteger(loopRowIndex) && loopRowIndex >= 0 && arrangementPreviewState.rowBounds?.[loopRowIndex] && arrangementPreviewState.secondsPerStep) {
+    const bound = arrangementPreviewState.rowBounds[loopRowIndex];
+    source.loopStart = bound.start * arrangementPreviewState.secondsPerStep;
+    source.loopEnd = bound.end * arrangementPreviewState.secondsPerStep;
+  } else if (loopSegment && loopDuration > 0) {
+    source.loopStart = 0;
+    source.loopEnd = loopDuration;
+  }
   connectPreviewSource(ctx, source);
   source.onended = () => {
     arrangementPreviewState.playingSources = arrangementPreviewState.playingSources.filter(s => s !== source);
@@ -2769,7 +2958,6 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false,
   };
 
   const startAt = ctx.currentTime;
-  const offsetSeconds = loopDuration > 0 ? (phase % loopDuration) : 0;
   try {
     source.start(startAt, offsetSeconds);
   } catch (err) {
@@ -2783,7 +2971,7 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false,
   arrangementPreviewState.startTime = startAt - offsetSeconds;
   arrangementPreviewState.nextStartTime = arrangementPreviewState.startTime + loopDuration;
 
-  scheduleArrangementLoopStarts();
+  if (!loopSegment) scheduleArrangementLoopStarts();
   return true;
 }
 
@@ -2796,33 +2984,95 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
   arrangementPreviewState.bpm = bpm || 120;
   arrangementPreviewState.mixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
 
-  const rendered = renderArrangementStateToMixBuffer(
-    arrangementPreviewState.arrangementState,
-    arrangementPreviewState.trackerStateByFilename,
-    arrangementPreviewState.instrumentList,
-    arrangementPreviewState.bpm,
-    { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-    arrangementPreviewState.mixSettings
-  );
+  const rows = arrangementPreviewState.arrangementState?.rows || [];
+  const loopRowIndexInState = rows.findIndex((r) => Boolean(r?.loop));
+  const needFullBuffer = Number.isInteger(startRowIndex) && startRowIndex >= 0 && loopRowIndexInState >= 0 && startRowIndex > loopRowIndexInState;
+  const stateToRender = needFullBuffer
+    ? { ...arrangementPreviewState.arrangementState, rows: rows.map((r) => ({ ...r, loop: false })) }
+    : arrangementPreviewState.arrangementState;
+
+  const cache = arrangementPreviewState;
+  const cacheKey = getArrangementRenderCacheKey(arrangementPreviewState.arrangementState, needFullBuffer, arrangementPreviewState.trackerStateByFilename);
+  const cacheSlot = needFullBuffer ? { key: '_renderCacheKeyFull', value: '_renderCacheFull' } : { key: '_renderCacheKey', value: '_renderCache' };
+  const cacheHit = cache[cacheSlot.key] === cacheKey && cache[cacheSlot.value]?.mixBuffer;
+
+  let rendered;
+  if (cacheHit) {
+    rendered = cache[cacheSlot.value];
+  } else {
+    rendered = renderArrangementStateToMixBuffer(
+      stateToRender,
+      arrangementPreviewState.trackerStateByFilename,
+      arrangementPreviewState.instrumentList,
+      arrangementPreviewState.bpm,
+      { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
+      arrangementPreviewState.mixSettings
+    );
+    if (rendered?.mixBuffer) {
+      cache[cacheSlot.key] = cacheKey;
+      cache[cacheSlot.value] = rendered;
+    }
+  }
 
   if (!rendered?.mixBuffer) return false;
-  arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
-  arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
-  arrangementPreviewState.rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+
+  let effectiveRendered = rendered;
+  let useLoopSegment = needFullBuffer ? false : rendered.loopSegment;
+  let useLoopRowIndex = needFullBuffer ? undefined : rendered.loopRowIndex;
+
+  if (needFullBuffer && loopRowIndexInState >= 0) {
+    arrangementPreviewState.pendingLoopEnable = {
+      loopRowIndex: loopRowIndexInState,
+      arrangementState: arrangementPreviewState.arrangementState,
+      trackerStateByFilename: arrangementPreviewState.trackerStateByFilename,
+      instrumentList: arrangementPreviewState.instrumentList,
+      bpm: arrangementPreviewState.bpm,
+      mixSettings: arrangementPreviewState.mixSettings,
+    };
+  }
+
+  arrangementPreviewState.secondsPerStep = effectiveRendered.secondsPerStep || 0;
+  arrangementPreviewState.totalSteps = effectiveRendered.totalSteps || 0;
+  let rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+  if (useLoopSegment && Number.isInteger(useLoopRowIndex) && useLoopRowIndex >= 0) {
+    rowBounds = rowBounds.slice(0, useLoopRowIndex + 1);
+  }
+  arrangementPreviewState.rowBounds = rowBounds;
+  arrangementPreviewState.loopRowIndex = (useLoopSegment && Number.isInteger(useLoopRowIndex) && useLoopRowIndex >= 0)
+    ? useLoopRowIndex
+    : null;
 
   let startOffsetSeconds;
   if (Number.isInteger(startRowIndex) && startRowIndex >= 0) {
-    const rowBounds = arrangementPreviewState.rowBounds || [];
-    const bound = rowBounds[startRowIndex];
+    const bounds = arrangementPreviewState.rowBounds || [];
+    const bound = bounds[startRowIndex];
     const secondsPerStep = arrangementPreviewState.secondsPerStep || 0;
     if (bound && secondsPerStep > 0) {
       startOffsetSeconds = bound.start * secondsPerStep;
     }
   }
 
-  const started = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, { keepPosition, startOffsetSeconds });
+  const started = playArrangementMixBuffer(effectiveRendered.mixBuffer, effectiveRendered.sampleRate, {
+    keepPosition,
+    startOffsetSeconds,
+    loopSegment: useLoopSegment,
+    loopRowIndex: useLoopRowIndex,
+  });
   if (started) {
     startArrangementPlayhead();
+    if (Number.isInteger(startRowIndex) && startRowIndex >= 0) {
+      const bounds = arrangementPreviewState.rowBounds || [];
+      const bound = bounds[startRowIndex];
+      const rowData = arrangementPreviewState.arrangementState?.rows?.[startRowIndex];
+      arrangementPreviewState.playingRowIndex = startRowIndex;
+      arrangementPreviewState.playingRowProgress = 0;
+      emitArrangementPlayhead(
+        startRowIndex,
+        0,
+        bound?.steps ?? 16,
+        Array.isArray(rowData?.blocks) ? rowData.blocks : []
+      );
+    }
   }
   return started;
 }
@@ -2836,6 +3086,96 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
 
   if (!arrangementPreviewState.isPlaying) return false;
 
+  arrangementPreviewState.pendingLoopDisableUpdate = null;
+
+  const stateForLoopCheck = arrangementState ?? arrangementPreviewState.arrangementState;
+  const hasLoopRowInNewState = Array.isArray(stateForLoopCheck?.rows) && stateForLoopCheck.rows.some((r) => Boolean(r?.loop));
+  const currentlyLooping = Number.isInteger(arrangementPreviewState.loopRowIndex) && arrangementPreviewState.loopRowIndex >= 0;
+
+  if (currentlyLooping && !hasLoopRowInNewState) {
+    const stateToUse = arrangementState || arrangementPreviewState.arrangementState;
+    const rendered = renderArrangementStateToMixBuffer(
+      stateToUse,
+      trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
+      instrumentList ?? arrangementPreviewState.instrumentList,
+      Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
+      { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
+      mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings
+    );
+    arrangementPreviewState.pendingLoopDisableUpdate = {
+      arrangementState: stateToUse,
+      trackerStateByFilename: trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
+      instrumentList: instrumentList ?? arrangementPreviewState.instrumentList,
+      bpm: Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
+      mixSettings: mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings,
+      keepPosition,
+      rendered,
+    };
+    return true;
+  }
+
+  arrangementPreviewState.pendingLoopDisableUpdate = null;
+
+  if (!currentlyLooping && hasLoopRowInNewState) {
+    let newLoopRowIndex = -1;
+    (stateForLoopCheck?.rows || []).forEach((r, i) => { if (r?.loop) newLoopRowIndex = i; });
+    if (newLoopRowIndex >= 0) {
+      const alreadyOnLoopRow = arrangementPreviewState.playingRowIndex === newLoopRowIndex;
+      if (!alreadyOnLoopRow) {
+        arrangementPreviewState.pendingLoopEnable = {
+          loopRowIndex: newLoopRowIndex,
+          arrangementState: arrangementState || arrangementPreviewState.arrangementState,
+          trackerStateByFilename: trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
+          instrumentList: instrumentList ?? arrangementPreviewState.instrumentList,
+          bpm: Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
+          mixSettings: mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings,
+        };
+        return true;
+      }
+    }
+  }
+
+  if (currentlyLooping && hasLoopRowInNewState) {
+    let newLoopRowIndex = -1;
+    (stateForLoopCheck?.rows || []).forEach((r, i) => { if (r?.loop) newLoopRowIndex = i; });
+    if (newLoopRowIndex >= 0 && newLoopRowIndex !== arrangementPreviewState.loopRowIndex) {
+      arrangementPreviewState.pendingLoopEnable = {
+        loopRowIndex: newLoopRowIndex,
+        arrangementState: arrangementState || arrangementPreviewState.arrangementState,
+        trackerStateByFilename: trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
+        instrumentList: instrumentList ?? arrangementPreviewState.instrumentList,
+        bpm: Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
+        mixSettings: mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings,
+      };
+      const stateNoLoop = (arrangementState || arrangementPreviewState.arrangementState);
+      const rowsNoLoop = Array.isArray(stateNoLoop?.rows) ? stateNoLoop.rows.map((r) => ({ ...r, loop: false })) : [];
+      const stateForDisable = { ...stateNoLoop, rows: rowsNoLoop };
+      const renderedNoLoop = renderArrangementStateToMixBuffer(
+        stateForDisable,
+        trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
+        instrumentList ?? arrangementPreviewState.instrumentList,
+        Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
+        { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
+        mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings
+      );
+      if (renderedNoLoop?.mixBuffer) {
+        arrangementPreviewState.pendingLoopDisableUpdate = {
+          arrangementState: stateForDisable,
+          trackerStateByFilename: trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
+          instrumentList: instrumentList ?? arrangementPreviewState.instrumentList,
+          bpm: Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
+          mixSettings: mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings,
+          keepPosition: true,
+          rendered: renderedNoLoop,
+        };
+      }
+      return true;
+    }
+  }
+
+  arrangementPreviewState.pendingLoopEnable = null;
+
+  // Live override updates: full re-render + buffer swap. When looping this can cause a brief stutter (main-thread render + stop/start source).
   const rendered = renderArrangementStateToMixBuffer(
     arrangementPreviewState.arrangementState,
     arrangementPreviewState.trackerStateByFilename,
@@ -2847,8 +3187,19 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
   if (!rendered?.mixBuffer) return false;
   arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
   arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
-  arrangementPreviewState.rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
-  const updated = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, { keepPosition });
+  let rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+  if (rendered.loopSegment && Number.isInteger(rendered.loopRowIndex) && rendered.loopRowIndex >= 0) {
+    rowBounds = rowBounds.slice(0, rendered.loopRowIndex + 1);
+  }
+  arrangementPreviewState.rowBounds = rowBounds;
+  arrangementPreviewState.loopRowIndex = (rendered.loopSegment && Number.isInteger(rendered.loopRowIndex) && rendered.loopRowIndex >= 0)
+    ? rendered.loopRowIndex
+    : null;
+  const updated = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, {
+    keepPosition,
+    loopSegment: rendered.loopSegment,
+    loopRowIndex: rendered.loopRowIndex,
+  });
   if (updated) {
     startArrangementPlayhead();
   }
@@ -2899,6 +3250,34 @@ export function clearArrangementLiveOverrides({ scheduleUpdate = true } = {}) {
   }
 }
 
+/**
+ * Pre-render arrangement to the preview cache so the next play is instant.
+ * Call when arrangement is loaded and block states are available (e.g. after loadArrangement + refreshBlocksLibrary).
+ * @param needFullBuffer - If true, render full arrangement (no loop segment); use when arrangement has a loop row so "start from row after loop" can hit cache.
+ */
+export function primeArrangementPreviewBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, mixSettings = null, needFullBuffer = false) {
+  if (!arrangementState || !trackerStateByFilename || !instrumentList) return false;
+  const rows = Array.isArray(arrangementState.rows) ? arrangementState.rows : [];
+  const stateToRender = needFullBuffer
+    ? { ...arrangementState, rows: rows.map((r) => ({ ...r, loop: false })) }
+    : arrangementState;
+  const resolvedMixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
+  const rendered = renderArrangementStateToMixBuffer(
+    stateToRender,
+    trackerStateByFilename,
+    instrumentList,
+    bpm,
+    {},
+    resolvedMixSettings
+  );
+  if (!rendered?.mixBuffer) return false;
+  const cacheKey = getArrangementRenderCacheKey(arrangementState, needFullBuffer, trackerStateByFilename);
+  const cacheSlot = needFullBuffer ? { key: '_renderCacheKeyFull', value: '_renderCacheFull' } : { key: '_renderCacheKey', value: '_renderCache' };
+  arrangementPreviewState[cacheSlot.key] = cacheKey;
+  arrangementPreviewState[cacheSlot.value] = rendered;
+  return true;
+}
+
 export function stopArrangementPreview() {
   stopArrangementPlaybackSources();
   stopArrangementPlayhead();
@@ -2917,6 +3296,9 @@ export function stopArrangementPreview() {
   arrangementPreviewState.secondsPerStep = 0;
   arrangementPreviewState.totalSteps = 0;
   arrangementPreviewState.rowBounds = [];
+  arrangementPreviewState.loopRowIndex = null;
+  arrangementPreviewState.pendingLoopDisableUpdate = null;
+  arrangementPreviewState.pendingLoopEnable = null;
 }
 
 export function isArrangementPreviewPlaying() {
