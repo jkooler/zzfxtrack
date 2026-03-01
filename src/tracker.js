@@ -108,8 +108,10 @@ let editMode = {
 
 /** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
 let lastSavedSnapshot = '';
-/** When user reduces step count, we keep the previous grid here so restoring the count is non-destructive. */
-let gridBackupBeforeStepsReduce = null; // { steps: number, grid: grid }
+/** When user reduces step count, we keep previous grids keyed by step count so restoring any count is non-destructive (preset or custom). */
+const gridBackupsBySteps = new Map(); // stepCount -> grid (deep copy)
+/** Per-block scroll position and focused cell (filename -> { scrollTop, channel, step }). */
+const blockScrollPositions = new Map();
 
 // Preview playback state
 let previewState = {
@@ -243,7 +245,7 @@ function deepCopyGrid(grid) {
   });
 }
 
-function setSteps(nextSteps) {
+function setSteps(nextSteps, options = {}) {
   const desired = parseInt(nextSteps, 10);
   if (Number.isNaN(desired)) return;
   const clamped = Math.min(Math.max(desired, 1), 256);
@@ -254,13 +256,14 @@ function setSteps(nextSteps) {
   const isIncreasing = clamped > state.steps;
 
   if (isReducing) {
-    gridBackupBeforeStepsReduce = { steps: state.steps, grid: deepCopyGrid(state.grid) };
+    gridBackupsBySteps.set(state.steps, deepCopyGrid(state.grid));
   }
 
-  if (isIncreasing && gridBackupBeforeStepsReduce && gridBackupBeforeStepsReduce.steps === clamped) {
+  const backupGrid = gridBackupsBySteps.get(clamped);
+  if (isIncreasing && backupGrid) {
     state.steps = clamped;
-    state.grid = deepCopyGrid(gridBackupBeforeStepsReduce.grid);
-    gridBackupBeforeStepsReduce = null;
+    state.grid = deepCopyGrid(backupGrid);
+    gridBackupsBySteps.delete(clamped);
 
     state.focusedStep = Math.min(Math.max(state.focusedStep, 0), state.steps - 1);
     renderGrid();
@@ -273,7 +276,7 @@ function setSteps(nextSteps) {
       const currentOffset = elapsed > 0 ? elapsed % duration : 0;
       playPreview(currentOffset);
     }
-    focusNoteCell(state.focusedChannel, state.focusedStep);
+    if (!options.skipFocus) focusNoteCell(state.focusedChannel, state.focusedStep);
     return;
   }
 
@@ -308,7 +311,7 @@ function setSteps(nextSteps) {
     playPreview(currentOffset);
   }
 
-  focusNoteCell(state.focusedChannel, state.focusedStep);
+  if (!options.skipFocus) focusNoteCell(state.focusedChannel, state.focusedStep);
 }
 
 /**
@@ -412,6 +415,23 @@ function setupNotationSection() {
 }
 
 /**
+ * Measure horizontal scrollbar height in pixels for the current OS/browser (so time track viewport can match channels body).
+ * @returns {number}
+ */
+function getHorizontalScrollbarHeightPx() {
+  const outer = document.createElement('div');
+  outer.style.cssText = 'position:absolute;left:-9999px;overflow-x:scroll;overflow-y:hidden;width:100px;height:100px;visibility:hidden';
+  const inner = document.createElement('div');
+  inner.style.width = '200px';
+  inner.style.height = '100px';
+  outer.appendChild(inner);
+  document.body.appendChild(outer);
+  const height = outer.offsetHeight - outer.clientHeight;
+  document.body.removeChild(outer);
+  return Math.max(0, height);
+}
+
+/**
  * Render the tracker grid
  */
 function renderGrid() {
@@ -420,7 +440,7 @@ function renderGrid() {
   elements.grid.dataset.channels = String(state.channels);
   elements.grid.innerHTML = '';
 
-  // ---- Headers row (stays fixed when scrolling vertically) ----
+  // ---- Headers row: time track (fixed) + channel headers in their own horizontal scroll ----
   const headersRow = document.createElement('div');
   headersRow.className = 'tracker-headers';
 
@@ -432,6 +452,12 @@ function renderGrid() {
 
   timeTrackHeaderEl.appendChild(timeTrackSelectSpacer);
   headersRow.appendChild(timeTrackHeaderEl);
+
+  const channelsHeaderScroll = document.createElement('div');
+  channelsHeaderScroll.className = 'tracker-channels-header-scroll';
+
+  const channelsHeaderInner = document.createElement('div');
+  channelsHeaderInner.className = 'tracker-headers tracker-channels-header-inner';
 
   for (let ch = 0; ch < state.channels; ch++) {
     const headerEl = document.createElement('div');
@@ -474,19 +500,25 @@ function renderGrid() {
     headerRowEl.appendChild(ndLabelEl);
 
     headerEl.appendChild(headerRowEl);
-    headersRow.appendChild(headerEl);
+    channelsHeaderInner.appendChild(headerEl);
   }
+
+  channelsHeaderScroll.appendChild(channelsHeaderInner);
+  headersRow.appendChild(channelsHeaderScroll);
 
   elements.grid.appendChild(headersRow);
 
-  // ---- Scrollable body (only this part scrolls vertically) ----
-  const bodyScroll = document.createElement('div');
-  bodyScroll.className = 'tracker-body-scroll';
+  // ---- Body row: time track column (fixed) + channels body (horizontal + vertical scroll) ----
+  const bodyRow = document.createElement('div');
+  bodyRow.className = 'tracker-body-row';
 
-  const gridBody = document.createElement('div');
-  gridBody.className = 'tracker-grid-body';
+  const timeTrackCol = document.createElement('div');
+  timeTrackCol.className = 'tracker-timetrack-col';
 
-  // Time track column (rows only)
+  const timeTrackScroll = document.createElement('div');
+  timeTrackScroll.className = 'tracker-timetrack-scroll';
+
+  // Time track column (row numbers)
   const timeTrackEl = document.createElement('div');
   timeTrackEl.className = 'tracker-timetrack';
 
@@ -501,9 +533,15 @@ function renderGrid() {
     timeTrackEl.appendChild(stepEl);
   }
 
-  gridBody.appendChild(timeTrackEl);
+  timeTrackScroll.appendChild(timeTrackEl);
+  timeTrackCol.appendChild(timeTrackScroll);
+  bodyRow.appendChild(timeTrackCol);
 
-  // Channel columns (rows only)
+  const channelsScroll = document.createElement('div');
+  channelsScroll.className = 'tracker-channels-scroll tracker-body-scroll';
+
+  const gridBody = document.createElement('div');
+  gridBody.className = 'tracker-grid-body';
   for (let ch = 0; ch < state.channels; ch++) {
     const channelEl = document.createElement('div');
     channelEl.className = 'tracker-channel';
@@ -682,14 +720,72 @@ function renderGrid() {
     gridBody.appendChild(channelEl);
   }
 
-  bodyScroll.appendChild(gridBody);
-  elements.grid.appendChild(bodyScroll);
+  channelsScroll.appendChild(gridBody);
+  bodyRow.appendChild(channelsScroll);
+  elements.grid.appendChild(bodyRow);
+
+  // Sync vertical scroll: time track column <-> channels body
+  let scrollSyncLock = false;
+  timeTrackScroll.addEventListener('scroll', () => {
+    if (scrollSyncLock) return;
+    scrollSyncLock = true;
+    channelsScroll.scrollTop = timeTrackScroll.scrollTop;
+    scrollSyncLock = false;
+  });
+  channelsScroll.addEventListener('scroll', () => {
+    if (scrollSyncLock) return;
+    scrollSyncLock = true;
+    timeTrackScroll.scrollTop = channelsScroll.scrollTop;
+    scrollSyncLock = false;
+  });
+
+  // Sync horizontal scroll: channel headers <-> channels body (so headers scroll when user scrolls tracker)
+  let hScrollSyncLock = false;
+  channelsHeaderScroll.addEventListener('scroll', () => {
+    if (hScrollSyncLock) return;
+    hScrollSyncLock = true;
+    channelsScroll.scrollLeft = channelsHeaderScroll.scrollLeft;
+    hScrollSyncLock = false;
+  });
+  channelsScroll.addEventListener('scroll', () => {
+    if (hScrollSyncLock) return;
+    hScrollSyncLock = true;
+    channelsHeaderScroll.scrollLeft = channelsScroll.scrollLeft;
+    hScrollSyncLock = false;
+  });
+
+  // Align header column widths to body columns (for 5+ channels with flex width)
+  function syncHeaderWidths() {
+    const bodyChannels = elements.grid?.querySelectorAll('.tracker-grid-body .tracker-channel');
+    const headerCells = elements.grid?.querySelectorAll('.tracker-channels-header-inner .tracker-channel-header');
+    if (!bodyChannels?.length || bodyChannels.length !== headerCells?.length) return;
+    bodyChannels.forEach((col, i) => {
+      const w = col.getBoundingClientRect().width;
+      if (headerCells[i] && w > 0) headerCells[i].style.width = `${w}px`;
+    });
+  }
+  requestAnimationFrame(() => syncHeaderWidths());
+  const resizeObs = new ResizeObserver(() => syncHeaderWidths());
+  if (gridBody) resizeObs.observe(gridBody);
+
+  // Measure horizontal scrollbar height for this OS/browser and align time track viewport (so row numbers stay in sync)
+  function applyHorizontalScrollbarHeight() {
+    const grid = elements.grid;
+    if (!grid) return;
+    const h = getHorizontalScrollbarHeightPx();
+    grid.style.setProperty('--tracker-h-scrollbar-height', `${h}px`);
+  }
+  requestAnimationFrame(() => applyHorizontalScrollbarHeight());
+  const scrollbarResizeObs = new ResizeObserver(() => applyHorizontalScrollbarHeight());
+  if (elements.grid) scrollbarResizeObs.observe(elements.grid);
 }
 
 /**
  * Set focus to a specific cell
+ * @param {object} [options] - { scroll: false } to update focus/active without scrolling the view
  */
-function setFocus(channel, step) {
+function setFocus(channel, step, options = {}) {
+  const shouldScroll = options.scroll !== false;
   const clampedChannel = Math.max(0, Math.min(channel, state.channels - 1));
   const clampedStep = Math.max(0, Math.min(step, state.steps - 1));
 
@@ -714,18 +810,26 @@ function setFocus(channel, step) {
   );
   if (newCell) {
     newCell.classList.add('active');
-    const bodyScroll = newCell.closest('.tracker-body-scroll');
-    if (bodyScroll) {
-      const bodyRect = bodyScroll.getBoundingClientRect();
-      const cellRect = newCell.getBoundingClientRect();
-      if (cellRect.top < bodyRect.top || cellRect.bottom > bodyRect.bottom) {
-        const targetTop = bodyScroll.scrollTop + (cellRect.top - bodyRect.top);
-        const maxTop = Math.max(bodyScroll.scrollHeight - bodyScroll.clientHeight, 0);
-        const clampedTop = Math.min(Math.max(targetTop, 0), maxTop);
-        bodyScroll.scrollTo({ top: clampedTop, behavior: 'smooth' });
+    if (shouldScroll) {
+      const bodyScroll = newCell.closest('.tracker-body-scroll');
+      const timeTrackScroll = bodyScroll?.closest('.tracker-grid')?.querySelector('.tracker-timetrack-scroll');
+      if (bodyScroll) {
+        const bodyRect = bodyScroll.getBoundingClientRect();
+        const cellRect = newCell.getBoundingClientRect();
+        const cellAbove = cellRect.top < bodyRect.top;
+        const cellBelow = cellRect.bottom > bodyRect.bottom;
+        if (cellAbove || cellBelow) {
+          const targetTop = cellBelow
+            ? bodyScroll.scrollTop + (cellRect.bottom - bodyRect.bottom)
+            : bodyScroll.scrollTop + (cellRect.top - bodyRect.top);
+          const maxTop = Math.max(bodyScroll.scrollHeight - bodyScroll.clientHeight, 0);
+          const clampedTop = Math.min(Math.max(targetTop, 0), maxTop);
+          bodyScroll.scrollTop = clampedTop;
+          if (timeTrackScroll) timeTrackScroll.scrollTop = clampedTop;
+        }
+      } else {
+        newCell.scrollIntoView({ block: 'nearest', behavior: 'auto' });
       }
-    } else {
-      newCell.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   }
 
@@ -884,7 +988,7 @@ function setupEventListeners() {
       const val = e.target.value;
       if (val === 'custom') {
         elements.blockRowsCustom.classList.remove('hidden');
-        setSteps(elements.blockRowsCustom.value);
+        elements.blockRowsCustom.value = String(state.steps);
         elements.blockRowsCustom.focus();
       } else {
         elements.blockRowsCustom.classList.add('hidden');
@@ -892,18 +996,33 @@ function setupEventListeners() {
       }
     });
 
-    elements.blockRowsCustom.addEventListener('input', (e) => {
-      if (elements.blockRowsPreset.value !== 'custom') return;
-      const raw = e.target.value.trim();
-      if (!raw) return;
-      setSteps(raw);
-    });
-
+    // Commit custom row count only on blur or Enter — not on every keypress (avoids applying "1" while typing "16" and stealing focus)
     elements.blockRowsCustom.addEventListener('blur', (e) => {
       if (elements.blockRowsPreset.value !== 'custom') return;
-      if (!e.target.value.trim()) {
+      const raw = e.target.value.trim();
+      if (!raw) {
+        e.target.value = String(state.steps);
+        return;
+      }
+      const parsed = parseInt(raw, 10);
+      if (!Number.isNaN(parsed)) {
+        const clamped = Math.min(Math.max(parsed, 1), 256);
+        if (clamped !== state.steps) setSteps(String(clamped), { skipFocus: true });
         e.target.value = String(state.steps);
       }
+    });
+
+    elements.blockRowsCustom.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || elements.blockRowsPreset.value !== 'custom') return;
+      e.preventDefault();
+      const raw = elements.blockRowsCustom.value.trim();
+      if (!raw) return;
+      const parsed = parseInt(raw, 10);
+      if (Number.isNaN(parsed)) return;
+      const clamped = Math.min(Math.max(parsed, 1), 256);
+      elements.blockRowsCustom.value = String(clamped);
+      setSteps(String(clamped));
+      focusNoteCell(state.focusedChannel, state.focusedStep);
     });
   }
 
@@ -1134,9 +1253,18 @@ function handleKeyDown(e) {
     || e.which === 45;
   if (isInsertKey) {
     e.preventDefault();
+    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    const timeTrackScrollEl = elements.grid?.querySelector('.tracker-timetrack-scroll');
+    const savedScrollTop = bodyScroll ? bodyScroll.scrollTop : 0;
+    const savedTimeTrackScrollTop = timeTrackScrollEl ? timeTrackScrollEl.scrollTop : 0;
     insertBlankRowAtStep(state.focusedChannel, state.focusedStep);
-    const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
-    setFocus(state.focusedChannel, newStep);
+    setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
+    requestAnimationFrame(() => {
+      const body = elements.grid?.querySelector('.tracker-body-scroll');
+      const timeTrack = elements.grid?.querySelector('.tracker-timetrack-scroll');
+      if (body) body.scrollTop = savedScrollTop;
+      if (timeTrack) timeTrack.scrollTop = savedTimeTrackScrollTop;
+    });
     return;
   }
 
@@ -1150,13 +1278,23 @@ function handleKeyDown(e) {
 
   if (key === 'delete') {
     e.preventDefault();
+    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    const timeTrackScrollEl = elements.grid?.querySelector('.tracker-timetrack-scroll');
+    const savedScrollTop = bodyScroll ? bodyScroll.scrollTop : 0;
+    const savedTimeTrackScrollTop = timeTrackScrollEl ? timeTrackScrollEl.scrollTop : 0;
     if (state.focusedStep === 0) {
       setNote(state.focusedChannel, state.focusedStep, null);
-      setFocus(state.focusedChannel, 0);
+      setFocus(state.focusedChannel, 0, { scroll: false });
     } else {
       shiftColumnUpFromStep(state.focusedChannel, state.focusedStep - 1);
-      setFocus(state.focusedChannel, state.focusedStep - 1);
+      setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
     }
+    requestAnimationFrame(() => {
+      const body = elements.grid?.querySelector('.tracker-body-scroll');
+      const timeTrack = elements.grid?.querySelector('.tracker-timetrack-scroll');
+      if (body) body.scrollTop = savedScrollTop;
+      if (timeTrack) timeTrack.scrollTop = savedTimeTrackScrollTop;
+    });
     return;
   }
 
@@ -1311,12 +1449,30 @@ function setupNoteCellScrub(cellEl, ch, step) {
 }
 
 /**
+ * Update a single note cell in the DOM without re-rendering the whole grid (avoids scroll jump).
+ */
+function updateNoteCellInDOM(channel, step) {
+  const cellEl = document.querySelector(
+    `.tracker-cell[data-channel="${channel}"][data-step="${step}"]`
+  );
+  if (!cellEl) return false;
+  const cellData = state.grid[channel][step];
+  const note = cellData?.note;
+  cellEl.textContent = note == null ? '·' : note === '-' ? '-' : note;
+  cellEl.classList.toggle('has-note', !!note && note !== '-');
+  cellEl.classList.toggle('rest', note === '-');
+  return true;
+}
+
+/**
  * Set a note in the grid.
  * @param {object} [options] - { skipRender: true } to only update state (e.g. during note-cell scrub); caller must update UI and call renderGrid() when done.
  */
 function setNote(channel, step, note, options = {}) {
   state.grid[channel][step].note = note;
-  if (!options.skipRender) renderGrid();
+  if (!options.skipRender) {
+    if (!updateNoteCellInDOM(channel, step)) renderGrid();
+  }
   updateOutput();
   if (options.skipRender) return;
 
@@ -2756,7 +2912,7 @@ export function isArrangementPreviewPlaying() {
 export function openTracker(instrumentList, options = {}) {
   // Reset edit mode
   resetEditMode();
-  gridBackupBeforeStepsReduce = null;
+  gridBackupsBySteps.clear();
 
   // Enable editing for new blocks so we can save them
   editMode.isEditing = true;
@@ -2797,6 +2953,18 @@ export function openTracker(instrumentList, options = {}) {
  * Open the tracker modal in edit mode for an existing block
  */
 export function openTrackerForEdit(instrumentList, blockData) {
+  // Save scroll and focus for the block we're leaving (if any)
+  if (editMode.blockFilename) {
+    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    if (bodyScroll) {
+      blockScrollPositions.set(editMode.blockFilename, {
+        scrollTop: bodyScroll.scrollTop,
+        channel: state.focusedChannel,
+        step: state.focusedStep,
+      });
+    }
+  }
+
   // Set edit mode
   editMode.isEditing = true;
   editMode.isNewBlock = false;
@@ -2837,7 +3005,15 @@ export function openTrackerForEdit(instrumentList, blockData) {
     cancelEffectPreview();
     elements.modal?.classList.add('open');
     trackerModalOpenedAt = Date.now();
-    setFocus(0, 0);
+    const saved = blockData.filename ? blockScrollPositions.get(blockData.filename) : undefined;
+    const channel = saved && Number.isInteger(saved.channel) ? Math.max(0, Math.min(saved.channel, state.channels - 1)) : 0;
+    const step = saved && Number.isInteger(saved.step) ? Math.max(0, Math.min(saved.step, state.steps - 1)) : 0;
+    setFocus(channel, step);
+    // Restore scroll after setFocus so it isn't overwritten by setFocus's scroll-into-view
+    if (saved != null && saved.scrollTop != null) {
+      const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+      if (bodyScroll) bodyScroll.scrollTop = saved.scrollTop;
+    }
   });
 }
 
@@ -3024,6 +3200,17 @@ function requestCloseTracker() {
 export function closeTracker() {
   const shouldReturnToBlocks = !!editMode.returnToBlocksOnClose;
   const shouldReturnToArrangements = !!editMode.returnToArrangementsOnClose;
+  // Save scroll and focus for current block so we can restore when reopening
+  if (editMode.blockFilename) {
+    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    if (bodyScroll) {
+      blockScrollPositions.set(editMode.blockFilename, {
+        scrollTop: bodyScroll.scrollTop,
+        channel: state.focusedChannel,
+        step: state.focusedStep,
+      });
+    }
+  }
   // Stop any playing preview
   stopPreview();
 
@@ -3104,7 +3291,7 @@ export function deserializeTrackerState(data) {
   }
 
   try {
-    gridBackupBeforeStepsReduce = null;
+    gridBackupsBySteps.clear();
 
     const nextSteps = Number.isInteger(data.steps) ? Math.min(Math.max(data.steps, 1), 256) : state.steps;
     state.steps = nextSteps;

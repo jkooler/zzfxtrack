@@ -741,76 +741,125 @@ strudel-editor {
   @apply block text-sm font-medium leading-none text-foreground mb-1.5;
 }
 
-/* Tracker Styles: headers fixed; only body scrolls vertically; container scrolls horizontally */
+/* Tracker Styles: time track fixed left; only channels scroll horizontally; vertical scroll synced */
 .tracker-container {
-  @apply overflow-x-auto min-w-0 flex flex-col;
-  overflow-y: hidden;
+  @apply min-w-0 flex flex-col;
+  overflow: hidden;
   scrollbar-gutter: stable;
 }
 
 .tracker-grid {
-  @apply flex flex-col gap-0 p-2 min-h-0 flex-1;
-  width: max(100%, 960px);
-  min-width: 960px;
+  @apply flex flex-col gap-0 p-2 min-h-0 flex-1 w-full;
+  /* --tracker-h-scrollbar-height set by JS (getHorizontalScrollbarHeightPx) so time track viewport matches channels body */
+  --tracker-scrollbar-gap: 0.5rem; /* space between last row and horizontal scrollbar */
 }
 
-/* Headers row: stays fixed when scrolling vertically; scrolls with container horizontally */
+/* Headers row: time track (fixed) + channel headers (horizontal scroll, synced with body) */
 .tracker-headers {
   @apply flex gap-1 flex-nowrap shrink-0;
 }
 
-.tracker-headers .tracker-timetrack-header {
-  @apply shrink-0;
-  width: 2ch;
-  min-width: 2ch;
+.tracker-channels-header-scroll {
+  @apply overflow-x-auto overflow-y-hidden min-w-0 flex-1;
+  scrollbar-width: none; /* Firefox: hide scrollbar */
+  -ms-overflow-style: none; /* IE/Edge: hide scrollbar */
+}
+.tracker-channels-header-scroll::-webkit-scrollbar {
+  display: none; /* Chrome/Safari: hide scrollbar */
 }
 
-.tracker-headers .tracker-channel-header {
-  @apply flex-1 min-w-[72px];
+.tracker-channels-header-inner {
+  @apply flex gap-1 flex-nowrap;
+  width: max-content;
+  min-width: 100%;
 }
 
-.tracker-grid[data-channels="1"] .tracker-headers .tracker-channel-header,
-.tracker-grid[data-channels="2"] .tracker-headers .tracker-channel-header,
-.tracker-grid[data-channels="3"] .tracker-headers .tracker-channel-header,
-.tracker-grid[data-channels="4"] .tracker-headers .tracker-channel-header {
-  flex: none;
-  width: 192px;
-  min-width: 192px;
+.tracker-body-row {
+  @apply flex flex-row flex-1 min-h-0 mt-2 gap-0;
 }
 
-/* Body: only this part scrolls vertically */
+.tracker-timetrack-col {
+  @apply flex flex-col shrink-0 bg-background;
+  width: 3ch;
+  min-width: 3ch;
+}
+
+.tracker-timetrack-scroll {
+  @apply overflow-y-auto overflow-x-hidden flex-1 min-h-0;
+  scrollbar-width: none; /* Firefox: hide scrollbar */
+  -ms-overflow-style: none; /* IE/Edge: hide scrollbar */
+  padding-bottom: calc(var(--tracker-h-scrollbar-height, 0) + var(--tracker-scrollbar-gap, 0.5rem)); /* scrollbar height + gap above scrollbar */
+}
+.tracker-timetrack-scroll::-webkit-scrollbar {
+  display: none; /* Chrome/Safari: hide scrollbar */
+}
+
+.tracker-channels-scroll {
+  @apply overflow-x-auto overflow-y-auto flex-1 min-h-0;
+  scrollbar-gutter: stable;
+}
+
 .tracker-body-scroll {
-  @apply overflow-y-auto overflow-x-hidden flex-1 min-h-0 mt-2;
+  @apply overflow-y-auto overflow-x-auto flex-1 min-h-0;
+  scrollbar-gutter: stable;
 }
 
 .tracker-grid-body {
   @apply flex gap-1 flex-nowrap;
-  width: max(100%, 960px);
-  min-width: 960px;
+  width: max-content;
+  min-width: 100%;
+  padding-bottom: var(--tracker-scrollbar-gap, 0.5rem); /* space between last row and horizontal scrollbar */
 }
 
 .tracker-timetrack {
   @apply flex flex-col gap-1 shrink-0 bg-background;
-  min-width: 2ch;
-  width: 2ch;
+  min-width: 3ch;
+  width: 3ch;
   overflow: hidden;
+  padding-bottom: var(--tracker-scrollbar-gap, 0.5rem); /* match .tracker-grid-body so alignment stays 1:1 */
 }
 
 .tracker-timetrack-header {
   @apply flex flex-col gap-1 pb-2 bg-background;
 }
 
+.tracker-headers .tracker-timetrack-header {
+  @apply shrink-0;
+  width: 3ch;
+  min-width: 3ch;
+}
+
+.tracker-headers .tracker-channel-header,
+.tracker-channels-header-inner .tracker-channel-header {
+  @apply flex-1 min-w-[72px];
+}
+
+.tracker-grid[data-channels="1"] .tracker-headers .tracker-channel-header,
+.tracker-grid[data-channels="2"] .tracker-headers .tracker-channel-header,
+.tracker-grid[data-channels="3"] .tracker-headers .tracker-channel-header,
+.tracker-grid[data-channels="4"] .tracker-headers .tracker-channel-header,
+.tracker-grid[data-channels="1"] .tracker-channels-header-inner .tracker-channel-header,
+.tracker-grid[data-channels="2"] .tracker-channels-header-inner .tracker-channel-header,
+.tracker-grid[data-channels="3"] .tracker-channels-header-inner .tracker-channel-header,
+.tracker-grid[data-channels="4"] .tracker-channels-header-inner .tracker-channel-header {
+  flex: none;
+  width: 192px;
+  min-width: 192px;
+}
+
 .tracker-timetrack-select-spacer {
   @apply h-8 shrink-0;
-  width: 2ch;
+  width: 3ch;
 }
 
 .tracker-timetrack-row {
-  @apply text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-0.5 select-none cursor-pointer;
+  @apply text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-0.5 select-none cursor-pointer flex-shrink-0;
   min-height: 1.75rem;
   height: 1.75rem;
-  width: 2ch;
-  min-width: 2ch;
+  width: 3ch;
+  min-width: 3ch;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 .tracker-timetrack-row.beat {
@@ -836,7 +885,7 @@ strudel-editor {
 }
 
 .tracker-channel-header {
-  @apply flex flex-col gap-1 pb-2 border-b border-border bg-background;
+  @apply flex flex-col gap-1 pb-2 bg-background;
 }
 
 .tracker-channel-header-row {
@@ -861,14 +910,21 @@ strudel-editor {
 }
 
 .tracker-row {
-  @apply grid items-center gap-1;
+  @apply grid items-center gap-1 flex-shrink-0;
   grid-template-columns: minmax(0, 1fr) 24px 24px 24px;
   min-height: 1.75rem;
   height: 1.75rem;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 .tracker-cell {
   @apply flex-1 h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all hover:border-primary/50;
+}
+
+/* When 5+ channels use dynamic width, keep the note cell readable (e.g. "C#4") */
+.tracker-grid:not([data-channels="1"]):not([data-channels="2"]):not([data-channels="3"]):not([data-channels="4"]) .tracker-cell {
+  min-width: 3.5rem;
 }
 
 .tracker-cell:focus-visible {
