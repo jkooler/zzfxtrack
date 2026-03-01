@@ -432,6 +432,23 @@ function getHorizontalScrollbarHeightPx() {
 }
 
 /**
+ * Measure vertical scrollbar width in pixels for the current OS/browser (so channel headers viewport can match channels body).
+ * @returns {number}
+ */
+function getVerticalScrollbarWidthPx() {
+  const outer = document.createElement('div');
+  outer.style.cssText = 'position:absolute;left:-9999px;overflow-x:hidden;overflow-y:scroll;width:100px;height:100px;visibility:hidden';
+  const inner = document.createElement('div');
+  inner.style.width = '100px';
+  inner.style.height = '200px';
+  outer.appendChild(inner);
+  document.body.appendChild(outer);
+  const width = outer.offsetWidth - outer.clientWidth;
+  document.body.removeChild(outer);
+  return Math.max(0, width);
+}
+
+/**
  * Render the tracker grid
  */
 function renderGrid() {
@@ -768,15 +785,15 @@ function renderGrid() {
   const resizeObs = new ResizeObserver(() => syncHeaderWidths());
   if (gridBody) resizeObs.observe(gridBody);
 
-  // Measure horizontal scrollbar height for this OS/browser and align time track viewport (so row numbers stay in sync)
-  function applyHorizontalScrollbarHeight() {
+  // Measure horizontal and vertical scrollbar sizes for this OS/browser and align viewports (row strip + channel headers)
+  function applyScrollbarGutter() {
     const grid = elements.grid;
     if (!grid) return;
-    const h = getHorizontalScrollbarHeightPx();
-    grid.style.setProperty('--tracker-h-scrollbar-height', `${h}px`);
+    grid.style.setProperty('--tracker-h-scrollbar-height', `${getHorizontalScrollbarHeightPx()}px`);
+    grid.style.setProperty('--tracker-v-scrollbar-width', `${getVerticalScrollbarWidthPx()}px`);
   }
-  requestAnimationFrame(() => applyHorizontalScrollbarHeight());
-  const scrollbarResizeObs = new ResizeObserver(() => applyHorizontalScrollbarHeight());
+  requestAnimationFrame(() => applyScrollbarGutter());
+  const scrollbarResizeObs = new ResizeObserver(() => applyScrollbarGutter());
   if (elements.grid) scrollbarResizeObs.observe(elements.grid);
 }
 
