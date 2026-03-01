@@ -9,7 +9,7 @@ import { zzfxG } from './zzfx-loader.js';
 import { playTestNote } from './instrument-preview.js';
 import { createIcons, icons } from 'lucide';
 import { setupScrubInteraction } from './instrument-ui.js';
-import { getAudioContext } from '@strudel/webaudio';
+import { connectToDestination, getAudioContext } from '@strudel/webaudio';
 import { getVisualizerAnalyser } from './visualizer.js';
 import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-settings.js';
 
@@ -2346,7 +2346,9 @@ function notifyVisualizerReady() {
 const arrangementSourceGainByNode = new WeakMap();
 
 function connectPreviewNode(ctx, node) {
-  node.connect(ctx.destination);
+  // Route preview audio through Strudel's output bus so channel layout stays
+  // consistent even after Strudel playback reconfigures destination channels.
+  connectToDestination(node);
   const vizAnalyser = getVisualizerAnalyser(ctx);
   if (vizAnalyser) {
     try {
