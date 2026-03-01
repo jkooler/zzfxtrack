@@ -90,7 +90,7 @@
       class="sidebar bg-card border-r border-border flex flex-col h-full overflow-hidden w-[215px] col-start-1"
     >
       <div
-        class="sidebar-header p-3 border-b border-border flex flex-col gap-2.5"
+        class="sidebar-header p-2 border-b border-border flex flex-col gap-2"
       >
         <h1
           id="sidebarTitle"
@@ -168,7 +168,7 @@
         </div>
       </div>
 
-      <div class="p-3 border-t border-border bg-card flex items-center gap-1">
+      <div class="px-2 pt-2.5 pb-2.5 border-t border-border bg-card flex items-center gap-1">
         <span class="text-xs text-muted-foreground font-medium">Data:</span>
         <button
           id="downloadProjectBtn"
@@ -193,7 +193,7 @@
       class="instrument-drawer hidden w-[240px] border-r border-border bg-card flex-col h-full overflow-y-auto [&.active]:flex shadow-xl absolute right-0 top-0 bottom-0 z-20 md:static md:z-auto col-start-2"
     >
       <div
-        class="instrument-drawer-header p-3 bg-card/50 border-b border-border sticky top-0 z-10 backdrop-blur"
+        class="instrument-drawer-header pt-1.5 pb-2 px-2 bg-card/50 border-b border-border sticky top-0 z-10 backdrop-blur"
       >
         <h3 id="drawerTitle" class="text-lg font-semibold text-primary mb-3">
           Edit Instrument
@@ -205,7 +205,7 @@
               id="instrumentNameLabel"
               class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground"
               >Instrument Name</label>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
               <input
                 type="text"
                 id="instStrudelAlias"
@@ -245,7 +245,7 @@
 
         </div>
 
-        <div class="instrument-drawer-actions flex gap-3 mt-3">
+        <div class="instrument-drawer-actions flex gap-2 mt-2">
           <button
             id="testInstrumentBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-accent text-accent-foreground hover:bg-primary/90 h-9 px-4 py-2 flex-1 shadow-sm flex items-center gap-3 justify-center"
@@ -528,7 +528,7 @@
       <!-- Toolbar -->
       <header
         id="mainHeader"
-        class="toolbar h-14 border-b border-border flex items-center px-3 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        class="toolbar h-14 border-b border-border flex items-center px-2 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
         <button
           id="playBtn"
@@ -669,7 +669,7 @@
             </div>
           </section>
           <aside id="blocksLibrarySidebar" class="blocks-library w-full min-w-0 lg:w-[280px] lg:min-w-[140px] lg:max-w-[140px] max-h-[25vh] lg:max-h-none bg-card/60 overflow-hidden flex flex-col" data-collapsed="true">
-            <div class="p-3 border-b border-border flex items-center justify-between gap-2">
+            <div class="h-12 p-3 border-b border-border flex items-center justify-between gap-2">
               <button
                 id="blocksLibraryToggle"
                 type="button"
@@ -696,7 +696,7 @@
         id="mainFooter"
         class="toolbar border-t border-border flex flex-col bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
-        <div class="flex gap-2 items-center w-full h-14 px-3 gap-4 shrink-0">
+        <div class="flex gap-2 items-center w-full h-fit p-2 gap-4 shrink-0">
           <div id="footerExportGroup" class="flex gap-2 items-center flex-1 min-w-0 footer-export-group">
           <button
             id="exportSettingsBtn"
@@ -2327,7 +2327,7 @@
       <div
         class="modal fixed z-50 flex flex-col w-[90vw] max-w-5xl max-h-[90vh] gap-0 border border-border bg-background p-0 shadow-lg sm:rounded-lg"
       >
-        <div class="flex flex-col gap-2 px-3 py-2">
+        <div class="flex flex-col gap-2 px-2 py-2">
           <div class="flex min-w-0 gap-2 items-center">
             <button
               id="previewTrackerBtn"

@@ -2185,7 +2185,7 @@ function renderArrangementWorkspace() {
 
     dom.arrangementWorkspacePane.innerHTML = `
         <div class="h-full flex flex-col p-0">
-            <div class="flex flex-col xl:flex-row xl:items-center gap-2 px-3 py-2">
+            <div class="flex flex-col xl:flex-row xl:items-center gap-2 px-2 py-2">
                 <div class="flex gap-2 items-center min-w-0 flex-1">
                     <button
                         id="arrangementWorkspacePreviewBtn"
@@ -2236,7 +2236,7 @@ function renderArrangementWorkspace() {
                 </div>
                 <div id="arrangementWorkspaceRows" class="flex flex-col"></div>
             </div>
-            <footer class="flex items-center justify-between border-t border-border p-3 shrink-0">
+            <footer class="flex items-center justify-between border-t border-border p-2 shrink-0 bg-card/30">
                 <button
                     id="arrangementWorkspaceAddRowBtn"
                     type="button"
@@ -2878,7 +2878,7 @@ function applyArrangementWorkspacePlayhead(detail = {}) {
     rowEl.style.setProperty('--arr-row-play-progress', `${pct.toFixed(2)}%`);
 
     const rowChanged = arrangementWorkspacePlayingRowIndex !== rowIndex;
-    if (rowChanged && window.matchMedia('(max-width: 767px)').matches) {
+    if (rowChanged && window.matchMedia('(max-width: 1023px)').matches) {
         rowEl.scrollIntoView({ block: 'center', behavior: 'smooth', inline: 'nearest' });
     }
 
