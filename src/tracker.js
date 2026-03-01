@@ -157,13 +157,65 @@ const arrangementPreviewState = {
   /** Same for full arrangement (no loop segment) when arrangement has a loop row — so "start from row after loop" is instant */
   _renderCacheKeyFull: null,
   _renderCacheFull: null,
+  /** Cross-render cache for per-block tracker renders to avoid regenerating unchanged blocks on every live update */
+  _sourceRenderCacheByFilename: new Map(),
+  _sourceRenderCacheByState: new WeakMap(),
+  _instrumentSignatureByListRef: new WeakMap(),
+  _renderWorker: null,
+  _renderWorkerAvailable: true,
+  _renderWorkerRequestSeq: 0,
+  _renderWorkerLatestSeq: 0,
+  _renderWorkerPendingJobs: new Map(),
+  _playbackToken: 0,
+  _pendingLiveSwapRendered: null,
+  _pendingLiveSwapKeepPosition: true,
+  _pendingLiveSwapMode: 'row',
+  _lastLiveSwapStep: null,
+  _lastLiveSwapTime: null,
+  _renderStats: {
+    workerRequested: 0,
+    workerApplied: 0,
+    workerQueued: 0,
+    workerFallback: 0,
+    mainApplied: 0,
+    mainQueued: 0,
+    workerErrors: 0,
+    lastPath: null,
+    lastError: null,
+  },
 };
 
-function getArrangementRenderCacheKey(arrangementState, needFullBuffer, trackerStateByFilename) {
+function getMixSettingsSignature(mixSettings) {
+  const settings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
+  return `${settings.targetPeak}|${settings.masterGainDb}|${settings.softClipDrive}`;
+}
+
+function getInstrumentListSignature(instrumentList) {
+  if (!Array.isArray(instrumentList) || instrumentList.length === 0) return 'none';
+  const refCache = arrangementPreviewState._instrumentSignatureByListRef;
+  if (refCache?.has(instrumentList)) return refCache.get(instrumentList);
+  const signature = instrumentList
+    .map((inst) => {
+      const id = String(inst?.id || '');
+      const params = Array.isArray(inst?.params) ? inst.params.join(',') : '';
+      return `${id}:${params}`;
+    })
+    .join('|');
+  refCache?.set(instrumentList, signature);
+  return signature;
+}
+
+function getArrangementRenderCacheKey(
+  arrangementState,
+  needFullBuffer,
+  trackerStateByFilename,
+  instrumentList = null,
+  mixSettings = null
+) {
   const rows = Array.isArray(arrangementState?.rows) ? arrangementState.rows : [];
   const structure = { r: rows.map((row) => ({ blocks: Array.isArray(row?.blocks) ? row.blocks.slice().sort() : [], repeats: row?.repeats, loop: Boolean(row?.loop) })), bpm: arrangementState?.bpm, nfb: needFullBuffer };
   const files = typeof trackerStateByFilename === 'object' && trackerStateByFilename !== null ? Object.keys(trackerStateByFilename).sort() : [];
-  return JSON.stringify(structure) + '\n' + files.join(',');
+  return `${JSON.stringify(structure)}\n${files.join(',')}\n${getInstrumentListSignature(instrumentList)}\n${getMixSettingsSignature(mixSettings)}`;
 }
 
 function ensureArrangementAudioContext() {
@@ -175,6 +227,116 @@ function ensureArrangementAudioContext() {
     ctx.resume().catch(() => {});
   }
   return ctx;
+}
+
+function recordArrangementRenderPath(path, error = null) {
+  const stats = arrangementPreviewState._renderStats;
+  if (!stats || typeof stats !== 'object') return;
+  if (Object.prototype.hasOwnProperty.call(stats, path) && typeof stats[path] === 'number') {
+    stats[path] += 1;
+  }
+  stats.lastPath = path;
+  stats.lastError = error ? String(error) : null;
+  if (typeof window !== 'undefined') {
+    window.__arrangementRenderStats = {
+      ...stats,
+      lastUpdateMs: Date.now(),
+    };
+  }
+}
+
+export function getArrangementRenderStats() {
+  return {
+    ...arrangementPreviewState._renderStats,
+  };
+}
+
+function pruneOldestMapEntries(map, maxSize) {
+  while (map.size > maxSize) {
+    const oldestKey = map.keys().next().value;
+    map.delete(oldestKey);
+  }
+}
+
+function getArrangementSourceRenderSignature(instrumentList, bpm, mixSettings) {
+  return `${bpm}|${getMixSettingsSignature(mixSettings)}|${getInstrumentListSignature(instrumentList)}`;
+}
+
+function rejectArrangementWorkerJobs(reason = 'cancelled') {
+  arrangementPreviewState._renderWorkerPendingJobs.forEach((job) => {
+    try {
+      job.reject(new Error(reason));
+    } catch (_err) {
+      // ignore
+    }
+  });
+  arrangementPreviewState._renderWorkerPendingJobs.clear();
+}
+
+function ensureArrangementRenderWorker() {
+  if (!arrangementPreviewState._renderWorkerAvailable) return null;
+  if (arrangementPreviewState._renderWorker) return arrangementPreviewState._renderWorker;
+  if (typeof Worker === 'undefined') {
+    arrangementPreviewState._renderWorkerAvailable = false;
+    return null;
+  }
+
+  try {
+    const worker = new Worker(new URL('./arrangement-render.worker.js', import.meta.url), { type: 'module' });
+    worker.addEventListener('message', (event) => {
+      const { id, ok, rendered, error } = event.data || {};
+      const job = arrangementPreviewState._renderWorkerPendingJobs.get(id);
+      if (!job) return;
+      arrangementPreviewState._renderWorkerPendingJobs.delete(id);
+      if (!ok) {
+        job.reject(new Error(error || 'Worker render failed'));
+        return;
+      }
+      if (!rendered?.mixBuffer) {
+        job.resolve(null);
+        return;
+      }
+      const mixBuffer = new Float32Array(rendered.mixBuffer);
+      job.resolve({ ...rendered, mixBuffer });
+    });
+    worker.addEventListener('error', (event) => {
+      console.warn('[Arranger] Render worker disabled due to error:', event?.message || event);
+      arrangementPreviewState._renderWorkerAvailable = false;
+      arrangementPreviewState._renderStats.workerErrors += 1;
+      recordArrangementRenderPath('workerError', event?.message || 'worker event error');
+      rejectArrangementWorkerJobs('worker failed');
+      try {
+        worker.terminate();
+      } catch (_err) {
+        // ignore
+      }
+      arrangementPreviewState._renderWorker = null;
+    });
+    arrangementPreviewState._renderWorker = worker;
+    return worker;
+  } catch (err) {
+    console.warn('[Arranger] Failed to initialize render worker:', err);
+    arrangementPreviewState._renderWorkerAvailable = false;
+    arrangementPreviewState._renderStats.workerErrors += 1;
+    recordArrangementRenderPath('workerError', err?.message || err);
+    return null;
+  }
+}
+
+function requestArrangementRenderInWorker(payload) {
+  const worker = ensureArrangementRenderWorker();
+  if (!worker) return Promise.reject(new Error('worker unavailable'));
+
+  rejectArrangementWorkerJobs('superseded');
+  arrangementPreviewState._renderStats.workerRequested += 1;
+  recordArrangementRenderPath('workerRequested');
+  const id = ++arrangementPreviewState._renderWorkerRequestSeq;
+  arrangementPreviewState._renderWorkerLatestSeq = id;
+
+  return new Promise((resolve, reject) => {
+    arrangementPreviewState._renderWorkerPendingJobs.set(id, { resolve, reject });
+    worker.postMessage({ id, payload });
+  });
 }
 
 export function primePreviewAudioContext() {
@@ -206,6 +368,13 @@ const NOTE_SCRUB_PREVIEW_DEBOUNCE_MS = 80;
 const TRACKER_NOTE_PREVIEW_GAIN = 0.8;
 const TRACKER_NOTE_PREVIEW_DUCKED_GAIN = 0.35;
 let liveArrangementUpdateTimeout = null;
+const ARRANGEMENT_SWAP_CROSSFADE_SECONDS = 0.04;
+const ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_MS = 180;
+const ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_LOOP_MS = 260;
+const ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_WORKER_MS = 150;
+const ARRANGEMENT_RENDER_MAX_SOURCE_CACHE = 256;
+const ARRANGEMENT_LIVE_SWAP_CROSSFADE_SECONDS = 0;
+const ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS = 0.008;
 
 // DOM Elements
 let elements = {};
@@ -2171,17 +2340,28 @@ function notifyVisualizerReady() {
   document.dispatchEvent(new CustomEvent('visualizer:ready'));
 }
 
-function connectPreviewSource(ctx, source) {
-  source.connect(ctx.destination);
+const arrangementSourceGainByNode = new WeakMap();
+
+function connectPreviewNode(ctx, node) {
+  node.connect(ctx.destination);
   const vizAnalyser = getVisualizerAnalyser(ctx);
   if (vizAnalyser) {
     try {
-      source.connect(vizAnalyser);
+      node.connect(vizAnalyser);
     } catch (_e) {
       // ignore
     }
   }
   notifyVisualizerReady();
+}
+
+function connectPreviewSource(ctx, source, initialGain = 1) {
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = Math.max(0, initialGain);
+  source.connect(gainNode);
+  connectPreviewNode(ctx, gainNode);
+  arrangementSourceGainByNode.set(source, gainNode);
+  return gainNode;
 }
 
 function playMixBuffer(mixBuffer, sampleRate) {
@@ -2464,6 +2644,9 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
   const mixBuffer = new Float32Array(totalSamples);
   const renderedByFilename = new Map();
   const renderedByState = new WeakMap();
+  const sourceSignature = getArrangementSourceRenderSignature(instrumentList, bpm, resolvedMixSettings);
+  const persistentFilenameCache = arrangementPreviewState._sourceRenderCacheByFilename;
+  const persistentStateCache = arrangementPreviewState._sourceRenderCacheByState;
 
   const getRenderedSource = (filename, trackerState) => {
     if (!trackerState) return null;
@@ -2478,6 +2661,29 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
       return cached;
     }
 
+    if (filename && persistentFilenameCache.has(filename)) {
+      const persistentEntry = persistentFilenameCache.get(filename);
+      if (persistentEntry?.signature === sourceSignature && persistentEntry?.trackerState === trackerState && persistentEntry?.rendered?.mixBuffer) {
+        renderedByFilename.set(filename, persistentEntry.rendered);
+        renderedByState.set(trackerState, persistentEntry.rendered);
+        return persistentEntry.rendered;
+      }
+    }
+    const persistentByState = persistentStateCache.get(trackerState);
+    if (persistentByState?.signature === sourceSignature && persistentByState?.rendered?.mixBuffer) {
+      renderedByState.set(trackerState, persistentByState.rendered);
+      if (filename) {
+        renderedByFilename.set(filename, persistentByState.rendered);
+        persistentFilenameCache.set(filename, {
+          signature: sourceSignature,
+          trackerState,
+          rendered: persistentByState.rendered,
+        });
+        pruneOldestMapEntries(persistentFilenameCache, ARRANGEMENT_RENDER_MAX_SOURCE_CACHE);
+      }
+      return persistentByState.rendered;
+    }
+
     const rendered = renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, {
       tailSeconds: 1,
       normalizeMaster: false,
@@ -2486,7 +2692,12 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
     });
     if (!rendered?.mixBuffer) return null;
     renderedByState.set(trackerState, rendered);
-    if (filename) renderedByFilename.set(filename, rendered);
+    persistentStateCache.set(trackerState, { signature: sourceSignature, rendered });
+    if (filename) {
+      renderedByFilename.set(filename, rendered);
+      persistentFilenameCache.set(filename, { signature: sourceSignature, trackerState, rendered });
+      pruneOldestMapEntries(persistentFilenameCache, ARRANGEMENT_RENDER_MAX_SOURCE_CACHE);
+    }
     return rendered;
   };
 
@@ -2660,17 +2871,37 @@ function startArrangementPlayhead() {
 
     const elapsed = ctx.currentTime - arrangementPreviewState.startTime;
     const elapsedSteps = elapsed / secondsPerStep;
+    const elapsedStepsWrapped = ((elapsedSteps % totalSteps) + totalSteps) % totalSteps;
+    const currentStep = Math.floor(elapsedStepsWrapped);
+    const pendingSwapMode = arrangementPreviewState._pendingLiveSwapMode;
 
     // When looping only a single row (loopRowIndex set), use loop-row playhead only after we've reached that row
     const loopRow = Number.isInteger(loopRowIndex) && loopRowIndex >= 0 ? rowBounds[loopRowIndex] : null;
     const inLoopRowSegment = loopRow && loopRow.loop && elapsedSteps >= loopRow.start;
     if (inLoopRowSegment) {
       const stepsInRow = ((elapsedSteps - loopRow.start) % loopRow.steps + loopRow.steps) % loopRow.steps;
+      const stepInRow = Math.floor(stepsInRow);
+      const stepProgressInRow = stepsInRow - stepInRow;
       const progress = loopRow.steps > 0 ? stepsInRow / loopRow.steps : 0;
       const clamped = Math.min(Math.max(progress, 0), 1);
       const prevIndex = arrangementPreviewState.playingRowIndex;
       const prevProgress = arrangementPreviewState.playingRowProgress;
       const justWrapped = prevProgress != null && prevProgress > 0.9 && clamped < 0.1;
+      if (arrangementPreviewState._pendingLiveSwapRendered && pendingSwapMode === 'step' && stepProgressInRow < 0.08) {
+        const stepKey = loopRow.start + stepInRow;
+        const stepStartSeconds = (loopRow.start + stepInRow) * secondsPerStep;
+        if (flushQueuedArrangementLiveSwap({ currentStep: stepKey, startOffsetSeconds: stepStartSeconds })) {
+          arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+          return;
+        }
+      }
+      if (arrangementPreviewState._pendingLiveSwapRendered && pendingSwapMode !== 'step' && (clamped < 0.01 || justWrapped)) {
+        const rowStartSeconds = loopRow.start * secondsPerStep;
+        if (flushQueuedArrangementLiveSwap({ currentStep, force: true, startOffsetSeconds: rowStartSeconds })) {
+          arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+          return;
+        }
+      }
       if (arrangementPreviewState.pendingLoopDisableUpdate && (clamped >= 0.999 || justWrapped)) {
         const pending = arrangementPreviewState.pendingLoopDisableUpdate;
         arrangementPreviewState.pendingLoopDisableUpdate = null;
@@ -2694,6 +2925,7 @@ function startArrangementPlayhead() {
             startOffsetSeconds: nextBound ? startOffsetSeconds : 0,
             loopSegment: false,
             loopRowIndex: undefined,
+            crossfadeSeconds: ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS,
           });
         }
       } else if (prevIndex !== loopRow.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
@@ -2711,7 +2943,6 @@ function startArrangementPlayhead() {
       return;
     }
 
-    const elapsedStepsWrapped = ((elapsedSteps % totalSteps) + totalSteps) % totalSteps;
     let current = rowBounds[rowBounds.length - 1];
     // Only prefer a loop row for playhead when we're in a loop segment (loopRowIndex set). When playing full arrangement (loopRowIndex null), use position only.
     if (Number.isInteger(loopRowIndex) && loopRowIndex >= 0) {
@@ -2750,6 +2981,26 @@ function startArrangementPlayhead() {
     const clamped = Math.min(Math.max(progress, 0), 1);
     const prevIndex = arrangementPreviewState.playingRowIndex;
     const prevProgress = arrangementPreviewState.playingRowProgress;
+    if (arrangementPreviewState._pendingLiveSwapRendered && pendingSwapMode === 'step') {
+      const stepsInCurrentRow = Math.max(0, elapsedStepsWrapped - current.start);
+      const stepInCurrentRow = Math.floor(stepsInCurrentRow);
+      const stepProgressInCurrentRow = stepsInCurrentRow - stepInCurrentRow;
+      if (stepProgressInCurrentRow < 0.08) {
+        const stepKey = current.start + stepInCurrentRow;
+        const stepStartSeconds = stepKey * secondsPerStep;
+        if (flushQueuedArrangementLiveSwap({ currentStep: stepKey, startOffsetSeconds: stepStartSeconds })) {
+          arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+          return;
+        }
+      }
+    }
+    if (arrangementPreviewState._pendingLiveSwapRendered && pendingSwapMode !== 'step' && clamped < 0.01) {
+      const rowStartSeconds = current.start * secondsPerStep;
+      if (flushQueuedArrangementLiveSwap({ currentStep, force: true, startOffsetSeconds: rowStartSeconds })) {
+        arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
+        return;
+      }
+    }
 
     const pendingLoop = arrangementPreviewState.pendingLoopEnable;
     const isLoopRow = pendingLoop && current.index === pendingLoop.loopRowIndex;
@@ -2794,6 +3045,7 @@ function startArrangementPlayhead() {
           startOffsetSeconds,
           loopSegment: true,
           loopRowIndex: rendered.loopRowIndex,
+          crossfadeSeconds: ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS,
         });
       }
     } else if (prevIndex !== current.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
@@ -2814,7 +3066,7 @@ function startArrangementPlayhead() {
   arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
 }
 
-function stopArrangementPlaybackSources() {
+function stopArrangementPlaybackSources({ preserveSource = null } = {}) {
   if (arrangementPreviewState.schedulerId) {
     clearTimeout(arrangementPreviewState.schedulerId);
     arrangementPreviewState.schedulerId = null;
@@ -2825,22 +3077,23 @@ function stopArrangementPlaybackSources() {
     ? arrangementPreviewState.playingSources
     : [];
   for (const src of sources) {
+    if (preserveSource && src === preserveSource) continue;
     try {
       src.stop();
     } catch (_e) {
       // ignore
     }
   }
-  arrangementPreviewState.playingSources = [];
+  arrangementPreviewState.playingSources = preserveSource ? [preserveSource] : [];
 
-  if (arrangementPreviewState.playingSource) {
+  if (arrangementPreviewState.playingSource && arrangementPreviewState.playingSource !== preserveSource) {
     try {
       arrangementPreviewState.playingSource.stop();
     } catch (_e) {
       // ignore
     }
   }
-  arrangementPreviewState.playingSource = null;
+  arrangementPreviewState.playingSource = preserveSource || null;
   arrangementPreviewState.audioBuffer = null;
 }
 
@@ -2895,7 +3148,11 @@ function scheduleArrangementLoopStarts() {
   arrangementPreviewState.schedulerId = setTimeout(scheduleArrangementLoopStarts, pollMs);
 }
 
-function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false, startOffsetSeconds, loopSegment = false, loopRowIndex } = {}) {
+function playArrangementMixBuffer(
+  mixBuffer,
+  sampleRate,
+  { keepPosition = false, startOffsetSeconds, loopSegment = false, loopRowIndex, crossfadeSeconds = 0 } = {}
+) {
   if (!mixBuffer || mixBuffer.length === 0) return false;
 
   const ctx = ensureArrangementAudioContext();
@@ -2929,7 +3186,12 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false,
 
   const offsetSeconds = loopDuration > 0 ? (phase % loopDuration) : 0;
 
-  stopArrangementPlaybackSources();
+  const shouldCrossfade = crossfadeSeconds > 0
+    && arrangementPreviewState.isPlaying
+    && arrangementPreviewState.playingSource != null;
+  const previousSource = shouldCrossfade ? arrangementPreviewState.playingSource : null;
+  const previousGainNode = previousSource ? arrangementSourceGainByNode.get(previousSource) : null;
+  stopArrangementPlaybackSources({ preserveSource: previousSource });
 
   const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
   audioBuffer.getChannelData(0).set(mixBuffer);
@@ -2949,7 +3211,8 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false,
     source.loopStart = 0;
     source.loopEnd = loopDuration;
   }
-  connectPreviewSource(ctx, source);
+  const effectiveCrossfade = shouldCrossfade && previousGainNode ? crossfadeSeconds : 0;
+  const sourceGainNode = connectPreviewSource(ctx, source, effectiveCrossfade > 0 ? 0 : 1);
   source.onended = () => {
     arrangementPreviewState.playingSources = arrangementPreviewState.playingSources.filter(s => s !== source);
     if (arrangementPreviewState.playingSource === source) {
@@ -2960,6 +3223,20 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false,
   const startAt = ctx.currentTime;
   try {
     source.start(startAt, offsetSeconds);
+    if (effectiveCrossfade > 0) {
+      const fadeEnd = startAt + effectiveCrossfade;
+      sourceGainNode.gain.cancelScheduledValues(startAt);
+      sourceGainNode.gain.setValueAtTime(0, startAt);
+      sourceGainNode.gain.linearRampToValueAtTime(1, fadeEnd);
+      previousGainNode.gain.cancelScheduledValues(startAt);
+      previousGainNode.gain.setValueAtTime(previousGainNode.gain.value, startAt);
+      previousGainNode.gain.linearRampToValueAtTime(0, fadeEnd);
+      try {
+        previousSource.stop(fadeEnd + 0.01);
+      } catch (_err) {
+        // ignore
+      }
+    }
   } catch (err) {
     console.warn('[Arranger] Failed to start arrangement preview:', err);
     return false;
@@ -2975,6 +3252,92 @@ function playArrangementMixBuffer(mixBuffer, sampleRate, { keepPosition = false,
   return true;
 }
 
+function applyRenderedArrangementPreview(
+  rendered,
+  { keepPosition = true, startOffsetSeconds, loopSegment = rendered?.loopSegment, loopRowIndex = rendered?.loopRowIndex, crossfadeSeconds = 0 } = {}
+) {
+  if (!rendered?.mixBuffer) return false;
+  arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
+  arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
+  let rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+  if (loopSegment && Number.isInteger(loopRowIndex) && loopRowIndex >= 0) {
+    rowBounds = rowBounds.slice(0, loopRowIndex + 1);
+  }
+  arrangementPreviewState.rowBounds = rowBounds;
+  arrangementPreviewState.loopRowIndex = (loopSegment && Number.isInteger(loopRowIndex) && loopRowIndex >= 0)
+    ? loopRowIndex
+    : null;
+
+  const updated = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, {
+    keepPosition,
+    startOffsetSeconds,
+    loopSegment,
+    loopRowIndex,
+    crossfadeSeconds,
+  });
+  if (updated) {
+    startArrangementPlayhead();
+  }
+  return updated;
+}
+
+function hasLiveArrangementOverrides() {
+  return arrangementPreviewState.overridesByFilename.size > 0
+    || arrangementPreviewState.overridesByRowIndex.size > 0;
+}
+
+function queueArrangementLiveSwap(rendered, { keepPosition = true, mode = 'row' } = {}) {
+  if (!rendered?.mixBuffer) return false;
+  arrangementPreviewState._pendingLiveSwapRendered = rendered;
+  arrangementPreviewState._pendingLiveSwapKeepPosition = keepPosition;
+  arrangementPreviewState._pendingLiveSwapMode = mode === 'step' ? 'step' : 'row';
+  return true;
+}
+
+function flushQueuedArrangementLiveSwap({ currentStep = null, force = false, startOffsetSeconds } = {}) {
+  const rendered = arrangementPreviewState._pendingLiveSwapRendered;
+  if (!rendered?.mixBuffer) return false;
+  if (!arrangementPreviewState.isPlaying) {
+    arrangementPreviewState._pendingLiveSwapRendered = null;
+    arrangementPreviewState._pendingLiveSwapMode = 'row';
+    return false;
+  }
+  const ctx = arrangementPreviewState.audioContext;
+  if (!ctx) return false;
+
+  const now = ctx.currentTime;
+  const stepDuration = arrangementPreviewState.secondsPerStep || ((60 / Math.max(1, arrangementPreviewState.bpm || 120)) / 4);
+  const mode = arrangementPreviewState._pendingLiveSwapMode === 'step' ? 'step' : 'row';
+  const minInterval = mode === 'step'
+    ? Math.max(0.24, stepDuration * 2.2)
+    : Math.max(0.06, stepDuration * 0.85);
+  if (!force) {
+    if (!Number.isInteger(currentStep) || currentStep < 0) return false;
+    if (arrangementPreviewState._lastLiveSwapStep === currentStep) return false;
+    if (
+      typeof arrangementPreviewState._lastLiveSwapTime === 'number'
+      && now - arrangementPreviewState._lastLiveSwapTime < minInterval
+    ) {
+      return false;
+    }
+  }
+
+  arrangementPreviewState._pendingLiveSwapRendered = null;
+  arrangementPreviewState._pendingLiveSwapMode = 'row';
+  const keepPosition = arrangementPreviewState._pendingLiveSwapKeepPosition;
+  const useBoundaryStart = Number.isFinite(startOffsetSeconds) && startOffsetSeconds >= 0;
+  const updated = applyRenderedArrangementPreview(rendered, {
+    keepPosition: useBoundaryStart ? false : keepPosition,
+    startOffsetSeconds: useBoundaryStart ? startOffsetSeconds : undefined,
+    crossfadeSeconds: useBoundaryStart ? ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS : ARRANGEMENT_LIVE_SWAP_CROSSFADE_SECONDS,
+  });
+  if (updated) {
+    arrangementPreviewState._lastLiveSwapStep = Number.isInteger(currentStep) ? currentStep : arrangementPreviewState._lastLiveSwapStep;
+    arrangementPreviewState._lastLiveSwapTime = arrangementPreviewState.audioContext?.currentTime ?? now;
+  }
+  return updated;
+}
+
 export function startArrangementPreview(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, { keepPosition = false, mixSettings = null, startRowIndex } = {}) {
   stopPreview();
 
@@ -2983,6 +3346,13 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
   arrangementPreviewState.instrumentList = instrumentList || null;
   arrangementPreviewState.bpm = bpm || 120;
   arrangementPreviewState.mixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
+  arrangementPreviewState._playbackToken += 1;
+  rejectArrangementWorkerJobs('superseded');
+  arrangementPreviewState._pendingLiveSwapRendered = null;
+  arrangementPreviewState._pendingLiveSwapKeepPosition = true;
+  arrangementPreviewState._pendingLiveSwapMode = 'row';
+  arrangementPreviewState._lastLiveSwapStep = null;
+  arrangementPreviewState._lastLiveSwapTime = null;
 
   const rows = arrangementPreviewState.arrangementState?.rows || [];
   const loopRowIndexInState = rows.findIndex((r) => Boolean(r?.loop));
@@ -2992,7 +3362,13 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
     : arrangementPreviewState.arrangementState;
 
   const cache = arrangementPreviewState;
-  const cacheKey = getArrangementRenderCacheKey(arrangementPreviewState.arrangementState, needFullBuffer, arrangementPreviewState.trackerStateByFilename);
+  const cacheKey = getArrangementRenderCacheKey(
+    arrangementPreviewState.arrangementState,
+    needFullBuffer,
+    arrangementPreviewState.trackerStateByFilename,
+    arrangementPreviewState.instrumentList,
+    arrangementPreviewState.mixSettings
+  );
   const cacheSlot = needFullBuffer ? { key: '_renderCacheKeyFull', value: '_renderCacheFull' } : { key: '_renderCacheKey', value: '_renderCache' };
   const cacheHit = cache[cacheSlot.key] === cacheKey && cache[cacheSlot.value]?.mixBuffer;
 
@@ -3016,7 +3392,6 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
 
   if (!rendered?.mixBuffer) return false;
 
-  let effectiveRendered = rendered;
   let useLoopSegment = needFullBuffer ? false : rendered.loopSegment;
   let useLoopRowIndex = needFullBuffer ? undefined : rendered.loopRowIndex;
 
@@ -3031,35 +3406,26 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
     };
   }
 
-  arrangementPreviewState.secondsPerStep = effectiveRendered.secondsPerStep || 0;
-  arrangementPreviewState.totalSteps = effectiveRendered.totalSteps || 0;
-  let rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
-  if (useLoopSegment && Number.isInteger(useLoopRowIndex) && useLoopRowIndex >= 0) {
-    rowBounds = rowBounds.slice(0, useLoopRowIndex + 1);
-  }
-  arrangementPreviewState.rowBounds = rowBounds;
-  arrangementPreviewState.loopRowIndex = (useLoopSegment && Number.isInteger(useLoopRowIndex) && useLoopRowIndex >= 0)
-    ? useLoopRowIndex
-    : null;
-
   let startOffsetSeconds;
   if (Number.isInteger(startRowIndex) && startRowIndex >= 0) {
-    const bounds = arrangementPreviewState.rowBounds || [];
+    const allBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
+    const bounds = (useLoopSegment && Number.isInteger(useLoopRowIndex) && useLoopRowIndex >= 0)
+      ? allBounds.slice(0, useLoopRowIndex + 1)
+      : allBounds;
     const bound = bounds[startRowIndex];
-    const secondsPerStep = arrangementPreviewState.secondsPerStep || 0;
+    const secondsPerStep = rendered.secondsPerStep || 0;
     if (bound && secondsPerStep > 0) {
       startOffsetSeconds = bound.start * secondsPerStep;
     }
   }
 
-  const started = playArrangementMixBuffer(effectiveRendered.mixBuffer, effectiveRendered.sampleRate, {
+  const started = applyRenderedArrangementPreview(rendered, {
     keepPosition,
     startOffsetSeconds,
-    loopSegment: useLoopSegment,
-    loopRowIndex: useLoopRowIndex,
+    loopSegment: useLoopSegment ? rendered.loopSegment : false,
+    loopRowIndex: useLoopSegment ? useLoopRowIndex : undefined,
   });
   if (started) {
-    startArrangementPlayhead();
     if (Number.isInteger(startRowIndex) && startRowIndex >= 0) {
       const bounds = arrangementPreviewState.rowBounds || [];
       const bound = bounds[startRowIndex];
@@ -3083,6 +3449,7 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
   if (instrumentList) arrangementPreviewState.instrumentList = instrumentList;
   if (Number.isFinite(bpm)) arrangementPreviewState.bpm = bpm;
   if (mixSettings) arrangementPreviewState.mixSettings = sanitizePlaybackMixSettings(mixSettings);
+  const resolvedMixSettings = arrangementPreviewState.mixSettings;
 
   if (!arrangementPreviewState.isPlaying) return false;
 
@@ -3100,14 +3467,14 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
       instrumentList ?? arrangementPreviewState.instrumentList,
       Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
       { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-      mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings
+      resolvedMixSettings
     );
     arrangementPreviewState.pendingLoopDisableUpdate = {
       arrangementState: stateToUse,
       trackerStateByFilename: trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
       instrumentList: instrumentList ?? arrangementPreviewState.instrumentList,
       bpm: Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
-      mixSettings: mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings,
+      mixSettings: resolvedMixSettings,
       keepPosition,
       rendered,
     };
@@ -3128,7 +3495,7 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
           trackerStateByFilename: trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
           instrumentList: instrumentList ?? arrangementPreviewState.instrumentList,
           bpm: Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
-          mixSettings: mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings,
+          mixSettings: resolvedMixSettings,
         };
         return true;
       }
@@ -3145,7 +3512,7 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
         trackerStateByFilename: trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
         instrumentList: instrumentList ?? arrangementPreviewState.instrumentList,
         bpm: Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
-        mixSettings: mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings,
+        mixSettings: resolvedMixSettings,
       };
       const stateNoLoop = (arrangementState || arrangementPreviewState.arrangementState);
       const rowsNoLoop = Array.isArray(stateNoLoop?.rows) ? stateNoLoop.rows.map((r) => ({ ...r, loop: false })) : [];
@@ -3156,7 +3523,7 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
         instrumentList ?? arrangementPreviewState.instrumentList,
         Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
         { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-        mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings
+        resolvedMixSettings
       );
       if (renderedNoLoop?.mixBuffer) {
         arrangementPreviewState.pendingLoopDisableUpdate = {
@@ -3164,7 +3531,7 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
           trackerStateByFilename: trackerStateByFilename ?? arrangementPreviewState.trackerStateByFilename,
           instrumentList: instrumentList ?? arrangementPreviewState.instrumentList,
           bpm: Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
-          mixSettings: mixSettings ? sanitizePlaybackMixSettings(mixSettings) : arrangementPreviewState.mixSettings,
+          mixSettings: resolvedMixSettings,
           keepPosition: true,
           rendered: renderedNoLoop,
         };
@@ -3175,6 +3542,70 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
 
   arrangementPreviewState.pendingLoopEnable = null;
 
+  const workerPayload = {
+    arrangementState: arrangementPreviewState.arrangementState,
+    trackerStateByFilename: arrangementPreviewState.trackerStateByFilename,
+    instrumentList: arrangementPreviewState.instrumentList,
+    bpm: arrangementPreviewState.bpm,
+    mixSettings: resolvedMixSettings,
+    overridesByFilenameEntries: Array.from(arrangementPreviewState.overridesByFilename.entries()),
+    overridesByRowIndexEntries: Array.from(arrangementPreviewState.overridesByRowIndex.entries()),
+  };
+  const hasLiveOverrides = hasLiveArrangementOverrides();
+  const deferredSwapMode = hasLiveOverrides ? 'step' : 'row';
+  const shouldDeferLiveSwap = keepPosition;
+  if (keepPosition && arrangementPreviewState._renderWorkerAvailable) {
+    const playbackTokenAtRequest = arrangementPreviewState._playbackToken;
+    const workerPromise = requestArrangementRenderInWorker(workerPayload);
+    const requestSeq = arrangementPreviewState._renderWorkerLatestSeq;
+    workerPromise
+      .then((rendered) => {
+        if (!rendered?.mixBuffer) return;
+        if (!arrangementPreviewState.isPlaying) return;
+        if (requestSeq !== arrangementPreviewState._renderWorkerLatestSeq) return;
+        if (playbackTokenAtRequest !== arrangementPreviewState._playbackToken) return;
+        if (shouldDeferLiveSwap) {
+          arrangementPreviewState._renderStats.workerQueued += 1;
+          recordArrangementRenderPath('workerQueued');
+          queueArrangementLiveSwap(rendered, { keepPosition, mode: deferredSwapMode });
+          return;
+        }
+        arrangementPreviewState._renderStats.workerApplied += 1;
+        recordArrangementRenderPath('workerApplied');
+        applyRenderedArrangementPreview(rendered, {
+          keepPosition,
+          crossfadeSeconds: ARRANGEMENT_LIVE_SWAP_CROSSFADE_SECONDS,
+        });
+      })
+      .catch((err) => {
+        if (err?.message === 'superseded' || err?.message === 'cancelled') return;
+        arrangementPreviewState._renderStats.workerFallback += 1;
+        recordArrangementRenderPath('workerFallback', err?.message || err);
+        const fallbackRendered = renderArrangementStateToMixBuffer(
+          arrangementPreviewState.arrangementState,
+          arrangementPreviewState.trackerStateByFilename,
+          arrangementPreviewState.instrumentList,
+          arrangementPreviewState.bpm,
+          { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
+          resolvedMixSettings
+        );
+        if (!fallbackRendered?.mixBuffer || !arrangementPreviewState.isPlaying) return;
+        if (shouldDeferLiveSwap) {
+          arrangementPreviewState._renderStats.mainQueued += 1;
+          recordArrangementRenderPath('mainQueued');
+          queueArrangementLiveSwap(fallbackRendered, { keepPosition, mode: deferredSwapMode });
+          return;
+        }
+        arrangementPreviewState._renderStats.mainApplied += 1;
+        recordArrangementRenderPath('mainApplied');
+        applyRenderedArrangementPreview(fallbackRendered, {
+          keepPosition,
+          crossfadeSeconds: ARRANGEMENT_LIVE_SWAP_CROSSFADE_SECONDS,
+        });
+      });
+    return true;
+  }
+
   // Live override updates: full re-render + buffer swap. When looping this can cause a brief stutter (main-thread render + stop/start source).
   const rendered = renderArrangementStateToMixBuffer(
     arrangementPreviewState.arrangementState,
@@ -3182,27 +3613,19 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
     arrangementPreviewState.instrumentList,
     arrangementPreviewState.bpm,
     { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-    arrangementPreviewState.mixSettings
+    resolvedMixSettings
   );
-  if (!rendered?.mixBuffer) return false;
-  arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
-  arrangementPreviewState.totalSteps = rendered.totalSteps || 0;
-  let rowBounds = computeArrangementRowBounds(arrangementPreviewState.arrangementState);
-  if (rendered.loopSegment && Number.isInteger(rendered.loopRowIndex) && rendered.loopRowIndex >= 0) {
-    rowBounds = rowBounds.slice(0, rendered.loopRowIndex + 1);
+  if (shouldDeferLiveSwap) {
+    arrangementPreviewState._renderStats.mainQueued += 1;
+    recordArrangementRenderPath('mainQueued');
+    return queueArrangementLiveSwap(rendered, { keepPosition, mode: deferredSwapMode });
   }
-  arrangementPreviewState.rowBounds = rowBounds;
-  arrangementPreviewState.loopRowIndex = (rendered.loopSegment && Number.isInteger(rendered.loopRowIndex) && rendered.loopRowIndex >= 0)
-    ? rendered.loopRowIndex
-    : null;
-  const updated = playArrangementMixBuffer(rendered.mixBuffer, rendered.sampleRate, {
+  arrangementPreviewState._renderStats.mainApplied += 1;
+  recordArrangementRenderPath('mainApplied');
+  const updated = applyRenderedArrangementPreview(rendered, {
     keepPosition,
-    loopSegment: rendered.loopSegment,
-    loopRowIndex: rendered.loopRowIndex,
+    crossfadeSeconds: ARRANGEMENT_LIVE_SWAP_CROSSFADE_SECONDS,
   });
-  if (updated) {
-    startArrangementPlayhead();
-  }
   return updated;
 }
 
@@ -3211,10 +3634,21 @@ function scheduleArrangementPreviewUpdate() {
   if (arrangementPreviewState.pendingUpdate) {
     clearTimeout(arrangementPreviewState.pendingUpdate);
   }
+  const isLoopingRow = Number.isInteger(arrangementPreviewState.loopRowIndex) && arrangementPreviewState.loopRowIndex >= 0;
+  const hasWorker = arrangementPreviewState._renderWorkerAvailable && typeof Worker !== 'undefined';
+  const stepMs = arrangementPreviewState.secondsPerStep > 0
+    ? arrangementPreviewState.secondsPerStep * 1000
+    : ((60 / Math.max(1, arrangementPreviewState.bpm || 120)) / 4) * 1000;
+  const debounceMs = hasWorker
+    ? Math.max(ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_WORKER_MS, Math.round(stepMs * 1.1))
+    : Math.max(
+      isLoopingRow ? ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_LOOP_MS : ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_MS,
+      Math.round(stepMs * (isLoopingRow ? 1.8 : 1.2))
+    );
   arrangementPreviewState.pendingUpdate = setTimeout(() => {
     arrangementPreviewState.pendingUpdate = null;
     updateArrangementPreview({ keepPosition: true });
-  }, 120);
+  }, debounceMs);
 }
 
 export function setArrangementLiveOverride({ filename, rowIndex, trackerState }) {
@@ -3271,7 +3705,13 @@ export function primeArrangementPreviewBuffer(arrangementState, trackerStateByFi
     resolvedMixSettings
   );
   if (!rendered?.mixBuffer) return false;
-  const cacheKey = getArrangementRenderCacheKey(arrangementState, needFullBuffer, trackerStateByFilename);
+  const cacheKey = getArrangementRenderCacheKey(
+    arrangementState,
+    needFullBuffer,
+    trackerStateByFilename,
+    instrumentList,
+    resolvedMixSettings
+  );
   const cacheSlot = needFullBuffer ? { key: '_renderCacheKeyFull', value: '_renderCacheFull' } : { key: '_renderCacheKey', value: '_renderCache' };
   arrangementPreviewState[cacheSlot.key] = cacheKey;
   arrangementPreviewState[cacheSlot.value] = rendered;
@@ -3281,6 +3721,8 @@ export function primeArrangementPreviewBuffer(arrangementState, trackerStateByFi
 export function stopArrangementPreview() {
   stopArrangementPlaybackSources();
   stopArrangementPlayhead();
+  arrangementPreviewState._playbackToken += 1;
+  rejectArrangementWorkerJobs('cancelled');
   if (arrangementPreviewState.pendingUpdate) {
     clearTimeout(arrangementPreviewState.pendingUpdate);
     arrangementPreviewState.pendingUpdate = null;
@@ -3299,6 +3741,11 @@ export function stopArrangementPreview() {
   arrangementPreviewState.loopRowIndex = null;
   arrangementPreviewState.pendingLoopDisableUpdate = null;
   arrangementPreviewState.pendingLoopEnable = null;
+  arrangementPreviewState._pendingLiveSwapRendered = null;
+  arrangementPreviewState._pendingLiveSwapKeepPosition = true;
+  arrangementPreviewState._pendingLiveSwapMode = 'row';
+  arrangementPreviewState._lastLiveSwapStep = null;
+  arrangementPreviewState._lastLiveSwapTime = null;
 }
 
 export function isArrangementPreviewPlaying() {

@@ -5,7 +5,7 @@ export const name = "Cowbell";
 export const description = "Created from arrangement workspace";
 export const scope = "user";
 
-export const pattern = `note("~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ c4 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ c4 ~ c4 ~ ~ ~").s("cowbell")`;
+export const pattern = `note("~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ c4 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~").s("cowbell")`;
 
 // Optional: Tracker state for re-editing
 export const trackerState = {
@@ -73,9 +73,9 @@ export const trackerState = {
       null,
       null,
       null,
-      "c4",
       null,
-      "c4",
+      null,
+      null,
       null,
       null,
       null
