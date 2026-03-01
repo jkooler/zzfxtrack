@@ -4,6 +4,8 @@ import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-set
 const workerSourceRenderCacheByFilename = new Map();
 const workerSourceRenderCacheByStateKey = new Map();
 const MAX_SOURCE_CACHE_ENTRIES = 256;
+const ARRANGEMENT_RENDER_PROFILE_EXPORT = 'export';
+const ARRANGEMENT_RENDER_PROFILE_LIVE = 'live_export_match';
 
 function pruneMap(map, maxEntries) {
   while (map.size > maxEntries) {
@@ -220,7 +222,27 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
   return { mixBuffer, sampleRate, samplesPerStep, mainSamples };
 }
 
-function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, overrides = {}, mixSettings = null) {
+function getArrangementRowScale(rowMix, targetPeakPerRow, renderProfile) {
+  let rowMax = 0;
+  for (let i = 0; i < rowMix.length; i++) {
+    rowMax = Math.max(rowMax, Math.abs(rowMix[i]));
+  }
+  if (rowMax <= 0) return 1;
+  if (renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE) {
+    return 1;
+  }
+  return targetPeakPerRow / rowMax;
+}
+
+function renderArrangementStateToMixBuffer(
+  arrangementState,
+  trackerStateByFilename,
+  instrumentList,
+  bpm = 120,
+  overrides = {},
+  mixSettings = null,
+  renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT
+) {
   if (!arrangementState || !instrumentList) return null;
   const resolvedMixSettings = sanitizePlaybackMixSettings(mixSettings || {});
   const targetPeak = resolvedMixSettings.targetPeak;
@@ -265,7 +287,7 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
   const totalSamples = loopSamples + tailSamples;
   const mixBuffer = new Float32Array(totalSamples);
 
-  const sourceSignature = `${bpm}|${getMixSettingsSignature(resolvedMixSettings)}|${getInstrumentListSignature(instrumentList)}`;
+  const sourceSignature = `${renderProfile}|${bpm}|${getMixSettingsSignature(resolvedMixSettings)}|${getInstrumentListSignature(instrumentList)}`;
   const getRenderedSource = (filename, trackerState) => {
     if (!trackerState) return null;
 
@@ -365,11 +387,13 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
       anyMixed = true;
     }
 
-    let rowMax = 0;
-    for (let i = 0; i < rowMix.length; i++) rowMax = Math.max(rowMax, Math.abs(rowMix[i]));
-    if (rowMax > 0) {
-      const scale = targetPeakPerRow / rowMax;
-      for (let i = 0; i < rowMix.length; i++) rowMix[i] *= scale;
+    const rowScale = getArrangementRowScale(
+      rowMix,
+      targetPeakPerRow,
+      renderProfile
+    );
+    if (rowScale !== 1) {
+      for (let i = 0; i < rowMix.length; i++) rowMix[i] *= rowScale;
     }
 
     for (let i = 0; i < rowMix.length; i++) {
@@ -418,6 +442,7 @@ self.onmessage = (event) => {
       instrumentList,
       bpm,
       mixSettings,
+      renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT,
       overridesByFilenameEntries,
       overridesByRowIndexEntries,
     } = payload;
@@ -433,7 +458,8 @@ self.onmessage = (event) => {
       instrumentList,
       bpm,
       overrides,
-      mixSettings
+      mixSettings,
+      renderProfile
     );
 
     if (!rendered?.mixBuffer) {

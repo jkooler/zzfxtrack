@@ -7654,37 +7654,18 @@ function setupBlocksEventListeners() {
 	                return started;
 	            };
 
-	            // Start immediately when cached tracker states are available, then hydrate missing blocks in background.
-	            if (playable > 0 || missingBlocks.length === 0) {
-	                const started = startPreviewWithCurrentStates();
-	                if (started && missingBlocks.length) {
-	                    fetchMissingBlocks(missingBlocks).then((fetchedBlocks) => {
-	                        mergeFetchedBlocks(fetchedBlocks);
-	                        if (!isArrangementPreviewPlaying()) return;
-	                        if (!fetchedBlocks.length) return;
-	                        arrangementPreviewContext = {
-	                            ...arrangementPreviewContext,
-	                            trackerStateByFilename: { ...trackerStateByFilename },
-	                            mixSettings: getPlaybackMixSettings(),
-	                        };
-	                        if (previewBlocks.length) {
-	                            document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
-	                        }
-	                        updateArrangementPreview({
-	                            trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
-	                            mixSettings: arrangementPreviewContext.mixSettings,
-	                            keepPosition: true,
-	                        });
-	                    }).catch((err) => {
-	                        console.warn('[Arranger] Background block hydration failed:', err);
-	                    });
-	                }
-	                return;
-	            }
-
+	            // Ensure all referenced blocks are loaded before first playback so loudness/render
+	            // matches export behavior (full arrangement pass, no partial early start).
 	            if (missingBlocks.length) {
+	                setStatus('Preparing arrangement preview...', 'normal');
 	                const fetchedBlocks = await fetchMissingBlocks(missingBlocks);
 	                mergeFetchedBlocks(fetchedBlocks);
+	            }
+
+	            const unresolvedBlocks = wantedBlockFiles.filter((filename) => !trackerStateByFilename[filename]);
+	            if (unresolvedBlocks.length > 0) {
+	                setStatus(`Arrangement preview failed: missing blocks (${unresolvedBlocks.length}).`, 'error');
+	                return;
 	            }
 
 		            if (wantedBlockFiles.length > 0 && resolvedFilenames.size === 0) {

@@ -210,10 +210,11 @@ function getArrangementRenderCacheKey(
   needFullBuffer,
   trackerStateByFilename,
   instrumentList = null,
-  mixSettings = null
+  mixSettings = null,
+  renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT
 ) {
   const rows = Array.isArray(arrangementState?.rows) ? arrangementState.rows : [];
-  const structure = { r: rows.map((row) => ({ blocks: Array.isArray(row?.blocks) ? row.blocks.slice().sort() : [], repeats: row?.repeats, loop: Boolean(row?.loop) })), bpm: arrangementState?.bpm, nfb: needFullBuffer };
+  const structure = { r: rows.map((row) => ({ blocks: Array.isArray(row?.blocks) ? row.blocks.slice().sort() : [], repeats: row?.repeats, loop: Boolean(row?.loop) })), bpm: arrangementState?.bpm, nfb: needFullBuffer, rp: renderProfile };
   const files = typeof trackerStateByFilename === 'object' && trackerStateByFilename !== null ? Object.keys(trackerStateByFilename).sort() : [];
   return `${JSON.stringify(structure)}\n${files.join(',')}\n${getInstrumentListSignature(instrumentList)}\n${getMixSettingsSignature(mixSettings)}`;
 }
@@ -258,8 +259,8 @@ function pruneOldestMapEntries(map, maxSize) {
   }
 }
 
-function getArrangementSourceRenderSignature(instrumentList, bpm, mixSettings) {
-  return `${bpm}|${getMixSettingsSignature(mixSettings)}|${getInstrumentListSignature(instrumentList)}`;
+function getArrangementSourceRenderSignature(instrumentList, bpm, mixSettings, renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT) {
+  return `${renderProfile}|${bpm}|${getMixSettingsSignature(mixSettings)}|${getInstrumentListSignature(instrumentList)}`;
 }
 
 function rejectArrangementWorkerJobs(reason = 'cancelled') {
@@ -375,6 +376,8 @@ const ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_WORKER_MS = 150;
 const ARRANGEMENT_RENDER_MAX_SOURCE_CACHE = 256;
 const ARRANGEMENT_LIVE_SWAP_CROSSFADE_SECONDS = 0;
 const ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS = 0.008;
+const ARRANGEMENT_RENDER_PROFILE_EXPORT = 'export';
+const ARRANGEMENT_RENDER_PROFILE_LIVE = 'live_export_match';
 
 // DOM Elements
 let elements = {};
@@ -2583,17 +2586,53 @@ export function previewArrangementStateOnce(arrangementState, trackerStateByFile
 
   stopPreview();
 
-  const rendered = renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm);
+  const rendered = renderArrangementStateToMixBuffer(
+    arrangementState,
+    trackerStateByFilename,
+    instrumentList,
+    bpm,
+    {},
+    null,
+    ARRANGEMENT_RENDER_PROFILE_LIVE
+  );
   if (!rendered?.mixBuffer) return;
   playMixBuffer(rendered.mixBuffer, rendered.sampleRate);
 }
 
 export function renderArrangementStateForExport(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, { mixSettings = null } = {}) {
   if (!arrangementState || !instrumentList) return null;
-  return renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm, {}, mixSettings);
+  return renderArrangementStateToMixBuffer(
+    arrangementState,
+    trackerStateByFilename,
+    instrumentList,
+    bpm,
+    {},
+    mixSettings,
+    ARRANGEMENT_RENDER_PROFILE_EXPORT
+  );
 }
 
-function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilename, instrumentList, bpm = 120, overrides = {}, mixSettings = null) {
+function getArrangementRowScale(rowMix, targetPeakPerRow, renderProfile) {
+  let rowMax = 0;
+  for (let i = 0; i < rowMix.length; i++) {
+    rowMax = Math.max(rowMax, Math.abs(rowMix[i]));
+  }
+  if (rowMax <= 0) return 1;
+  if (renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE) {
+    return 1;
+  }
+  return targetPeakPerRow / rowMax;
+}
+
+function renderArrangementStateToMixBuffer(
+  arrangementState,
+  trackerStateByFilename,
+  instrumentList,
+  bpm = 120,
+  overrides = {},
+  mixSettings = null,
+  renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT
+) {
   if (!arrangementState || !instrumentList) return null;
   const resolvedMixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
   const targetPeak = resolvedMixSettings.targetPeak;
@@ -2644,7 +2683,7 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
   const mixBuffer = new Float32Array(totalSamples);
   const renderedByFilename = new Map();
   const renderedByState = new WeakMap();
-  const sourceSignature = getArrangementSourceRenderSignature(instrumentList, bpm, resolvedMixSettings);
+  const sourceSignature = getArrangementSourceRenderSignature(instrumentList, bpm, resolvedMixSettings, renderProfile);
   const persistentFilenameCache = arrangementPreviewState._sourceRenderCacheByFilename;
   const persistentStateCache = arrangementPreviewState._sourceRenderCacheByState;
 
@@ -2740,12 +2779,13 @@ function renderArrangementStateToMixBuffer(arrangementState, trackerStateByFilen
       anyMixed = true;
     }
 
-    // Normalize this row to a fixed per-row peak so 1-block and 5-block rows have similar loudness
-    let rowMax = 0;
-    for (let i = 0; i < rowMix.length; i++) rowMax = Math.max(rowMax, Math.abs(rowMix[i]));
-    if (rowMax > 0) {
-      const scale = targetPeakPerRow / rowMax;
-      for (let i = 0; i < rowMix.length; i++) rowMix[i] *= scale;
+    const rowScale = getArrangementRowScale(
+      rowMix,
+      targetPeakPerRow,
+      renderProfile
+    );
+    if (rowScale !== 1) {
+      for (let i = 0; i < rowMix.length; i++) rowMix[i] *= rowScale;
     }
 
     // Overlap-add into the global buffer so the tail can ring over into the next row.
@@ -3019,7 +3059,8 @@ function startArrangementPlayhead() {
         arrangementPreviewState.instrumentList,
         arrangementPreviewState.bpm,
         { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-        arrangementPreviewState.mixSettings
+        arrangementPreviewState.mixSettings,
+        ARRANGEMENT_RENDER_PROFILE_LIVE
       );
       if (rendered?.mixBuffer && rendered.loopSegment && Number.isInteger(rendered.loopRowIndex)) {
         arrangementPreviewState.secondsPerStep = rendered.secondsPerStep || 0;
@@ -3367,7 +3408,8 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
     needFullBuffer,
     arrangementPreviewState.trackerStateByFilename,
     arrangementPreviewState.instrumentList,
-    arrangementPreviewState.mixSettings
+    arrangementPreviewState.mixSettings,
+    ARRANGEMENT_RENDER_PROFILE_LIVE
   );
   const cacheSlot = needFullBuffer ? { key: '_renderCacheKeyFull', value: '_renderCacheFull' } : { key: '_renderCacheKey', value: '_renderCache' };
   const cacheHit = cache[cacheSlot.key] === cacheKey && cache[cacheSlot.value]?.mixBuffer;
@@ -3382,7 +3424,8 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
       arrangementPreviewState.instrumentList,
       arrangementPreviewState.bpm,
       { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-      arrangementPreviewState.mixSettings
+      arrangementPreviewState.mixSettings,
+      ARRANGEMENT_RENDER_PROFILE_LIVE
     );
     if (rendered?.mixBuffer) {
       cache[cacheSlot.key] = cacheKey;
@@ -3467,7 +3510,8 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
       instrumentList ?? arrangementPreviewState.instrumentList,
       Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
       { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-      resolvedMixSettings
+      resolvedMixSettings,
+      ARRANGEMENT_RENDER_PROFILE_LIVE
     );
     arrangementPreviewState.pendingLoopDisableUpdate = {
       arrangementState: stateToUse,
@@ -3523,7 +3567,8 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
         instrumentList ?? arrangementPreviewState.instrumentList,
         Number.isFinite(bpm) ? bpm : arrangementPreviewState.bpm,
         { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-        resolvedMixSettings
+        resolvedMixSettings,
+        ARRANGEMENT_RENDER_PROFILE_LIVE
       );
       if (renderedNoLoop?.mixBuffer) {
         arrangementPreviewState.pendingLoopDisableUpdate = {
@@ -3548,6 +3593,7 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
     instrumentList: arrangementPreviewState.instrumentList,
     bpm: arrangementPreviewState.bpm,
     mixSettings: resolvedMixSettings,
+    renderProfile: ARRANGEMENT_RENDER_PROFILE_LIVE,
     overridesByFilenameEntries: Array.from(arrangementPreviewState.overridesByFilename.entries()),
     overridesByRowIndexEntries: Array.from(arrangementPreviewState.overridesByRowIndex.entries()),
   };
@@ -3587,7 +3633,8 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
           arrangementPreviewState.instrumentList,
           arrangementPreviewState.bpm,
           { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-          resolvedMixSettings
+          resolvedMixSettings,
+          ARRANGEMENT_RENDER_PROFILE_LIVE
         );
         if (!fallbackRendered?.mixBuffer || !arrangementPreviewState.isPlaying) return;
         if (shouldDeferLiveSwap) {
@@ -3613,7 +3660,8 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
     arrangementPreviewState.instrumentList,
     arrangementPreviewState.bpm,
     { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex },
-    resolvedMixSettings
+    resolvedMixSettings,
+    ARRANGEMENT_RENDER_PROFILE_LIVE
   );
   if (shouldDeferLiveSwap) {
     arrangementPreviewState._renderStats.mainQueued += 1;
@@ -3702,7 +3750,8 @@ export function primeArrangementPreviewBuffer(arrangementState, trackerStateByFi
     instrumentList,
     bpm,
     {},
-    resolvedMixSettings
+    resolvedMixSettings,
+    ARRANGEMENT_RENDER_PROFILE_LIVE
   );
   if (!rendered?.mixBuffer) return false;
   const cacheKey = getArrangementRenderCacheKey(
@@ -3710,7 +3759,8 @@ export function primeArrangementPreviewBuffer(arrangementState, trackerStateByFi
     needFullBuffer,
     trackerStateByFilename,
     instrumentList,
-    resolvedMixSettings
+    resolvedMixSettings,
+    ARRANGEMENT_RENDER_PROFILE_LIVE
   );
   const cacheSlot = needFullBuffer ? { key: '_renderCacheKeyFull', value: '_renderCacheFull' } : { key: '_renderCacheKey', value: '_renderCache' };
   arrangementPreviewState[cacheSlot.key] = cacheKey;
