@@ -293,6 +293,38 @@ const apiPlugin = () => ({
         next();
      });
      
+    // API: Save Exported JS (canonical ZzFXM module)
+    // POST /api/save-exported-js/:filename
+    server.middlewares.use((req, res, next) => {
+        if (!req.url.startsWith('/api/save-exported-js/')) {
+            return next();
+        }
+        const fileName = req.url.replace('/api/save-exported-js/', '');
+        
+        if (fileName.includes('..') || !fileName.endsWith('.js')) {
+             res.statusCode = 400;
+             res.end('Invalid filename (must be .js)');
+             return;
+        }
+
+        const filePath = path.join(OUTPUT_DIR, fileName);
+        
+        if (req.method === 'POST') {
+             let body = '';
+             req.on('data', chunk => body += chunk);
+             req.on('end', () => {
+                 if (!fs.existsSync(path.dirname(filePath))) {
+                     fs.mkdirSync(path.dirname(filePath), { recursive: true });
+                 }
+                 fs.writeFileSync(filePath, body);
+                 res.end('Exported JS file saved');
+             });
+             return;
+        }
+        
+        next();
+     });
+     
      // API: Rename Pattern
      // POST /api/rename-pattern
 	     server.middlewares.use('/api/rename-pattern', (req, res, next) => {
