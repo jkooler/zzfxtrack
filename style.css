@@ -516,7 +516,7 @@ input[readonly]:focus-visible {
 }
 
 #instrumentControls {
-  @apply bg-card/60 backdrop-blur-md sticky top-0 z-20 border-b border-border/20 py-1.5 px-3 flex justify-end;
+  @apply bg-card/60 backdrop-blur-md sticky top-0 z-20 border-b border-border py-1.5 px-3 flex justify-end;
 
   &.hidden {
     display: none !important;
