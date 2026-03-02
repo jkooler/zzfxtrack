@@ -9,8 +9,9 @@
         var key = 'zzfxm-color-theme';
         try {
           var saved = localStorage.getItem(key);
-          if (saved === 'legacy') { saved = 'crusader'; localStorage.setItem(key, 'crusader'); }
-          if (saved === 'gotham') { saved = 'crusader'; localStorage.setItem(key, 'crusader'); }
+          if (saved === 'legacy') { saved = 'jester'; localStorage.setItem(key, 'jester'); }
+          if (saved === 'gotham') { saved = 'jester'; localStorage.setItem(key, 'jester'); }
+          if (saved === 'crusader') { saved = 'jester'; localStorage.setItem(key, 'jester'); }
           if (saved === 'romulan') { saved = 'phantom'; localStorage.setItem(key, 'phantom'); }
           if (saved === null) {
             document.documentElement.setAttribute('data-theme', 'phantom');
@@ -102,30 +103,30 @@
         <!-- Tabs -->
         <div class="sidebar-tabs grid grid-cols-2 rounded-md gap-x-0 gap-y-1">
           <button
-            id="strudelTab"
+            id="blocksTab"
             class="sidebar-tab active inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
-            Strudel
+            Arranger
           </button>
           <button
-            id="blocksTab"
+            id="strudelTab"
             class="sidebar-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&.active]:bg-secondary [&.active]:text-secondary-foreground [&.active]:shadow-sm text-muted-foreground hover:text-foreground"
           >
-            Arranger
+            Strudel
           </button>
         </div>
 
         <!-- Buttons -->
         <button
           id="newPatternBtn"
-          class="inline-flex items-center justify-between whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-2 py-2 w-full shadow-sm flex items-center gap-3"
+          class="hidden items-center justify-between whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-2 py-2 w-full shadow-sm flex items-center gap-3"
         >
           <span>New pattern</span>
           <i data-lucide="plus" class="w-4 h-4 shrink-0"></i>
         </button>
         <button
           id="newArrangementBtn"
-          class="hidden items-center justify-between whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 h-9 px-2 py-2 w-full flex items-center gap-3"
+          class="inline-flex items-center justify-between whitespace-nowrap rounded-md text-sm font-bold ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 h-9 px-2 py-2 w-full flex items-center gap-3"
         >
           <span>New arrangement</span>
           <i data-lucide="plus" class="w-4 h-4 shrink-0"></i>
@@ -134,8 +135,8 @@
 
       <!-- Strudel patterns / Arrangement lists (tabbed) -->
       <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
-        <ul id="patternList" class="pattern-list flex-1 min-h-0 overflow-y-auto space-y-1"></ul>
-        <ul id="arrangementList" class="pattern-list hidden flex-1 min-h-0 overflow-y-auto space-y-1"></ul>
+        <ul id="patternList" class="pattern-list hidden flex-1 min-h-0 overflow-y-auto space-y-1"></ul>
+        <ul id="arrangementList" class="pattern-list flex-1 min-h-0 overflow-y-auto space-y-1"></ul>
       </div>
 
       <!-- Instruments (persistent, 50vh) -->
@@ -601,7 +602,7 @@
               target="_blank"
               class="font-medium text-primary underline underline-offset-4 hover:no-underline"
               >Strudel REPL</a
-            > interface or Visual Arranger.
+            > interface or Arranger.
           </p>
           <p class="text-base text-muted-foreground">
             After creating your musical content, export it to JSON format and use it in
@@ -711,7 +712,6 @@
             id="exportBtn"
             class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-3 uppercase"
           >
-            <i data-lucide="file-music" class="w-4 h-4"></i>
             <span id="exportBtnLabel">Pattern to ZzFXM</span>
           </button>
           <button
@@ -851,16 +851,17 @@
 
         <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
           <p class="text-foreground/90 leading-relaxed">
-            This is an authoring/export tool for <strong>ZzFXM</strong> that embeds <strong>Strudel</strong> for its REPL workflow and <strong>Visual Arranger</strong>. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
+            This is an authoring/export tool for <strong>ZzFXM</strong> that embeds <strong>Strudel</strong> for its REPL workflow and <strong>Arranger</strong>. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
           </p>
 
           <div class="space-y-2">
-            <h3 class="text-foreground font-semibold">30-second workflow</h3>
+            <h3 class="text-foreground font-semibold">Quick start</h3>
             <ol class="list-decimal pl-5 space-y-1">
-              <li>Load an example pattern.</li>
-              <li>Tweak a sound in the instrument editor (ZzFXMicro-style parameters).</li>
-              <li>(Optional) Use <strong>Blocks</strong> to sketch parts in a tracker-style grid and preview an arrangement.</li>
-              <li>Click <strong>Pattern to ZzFXM</strong> and preview playback.</li>
+              <li>Select <strong>Arrangement</strong> or <strong>Strudel</strong> pattern from the left sidebar and hit play.</li>
+              <li>Choose <strong>instrument</strong> that is playing and change it's parameters.</li>
+              <li>Try to make changes to the Arrangement/Blocks or Strudel pattern.</li>
+              <li>Note: Arrangements/Blocks and Strudel patterns aren't integrated, they are separate resources</li>
+              <li>Click either <strong>Arrangement to ZzFXM</strong> or <strong>Pattern to ZzFXM</strong> and preview playback.</li>
               <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Export WAV</strong> to share/test.</li>
             </ol>
           </div>
@@ -868,6 +869,7 @@
           <div class="space-y-2">
             <h3 class="text-foreground font-semibold">How it fits together</h3>
             <ul class="list-disc pl-5 space-y-1">
+              <li><strong>Arranger</strong>: tracker-style workflow for composing loops with blocks.</li>
               <li><strong>Strudel</strong>: pattern notation and event scheduling.</li>
               <li><strong>ZzFXMicro</strong>: instrument parameter model and sound generation (registered as Strudel sounds for playback).</li>
               <li><strong>ZzFXM</strong>: the export target format for games/apps.</li>
@@ -1868,7 +1870,7 @@
           <span class="text-sm text-foreground leading-snug">Color theme</span>
           <div class="flex gap-1 rounded-md p-0.5 border border-input bg-background [&>button]:flex-1">
             <button type="button" id="systemSettingsThemeDefaultBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="">Cigar</button>
-            <button type="button" id="systemSettingsThemeLegacyBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="crusader">Crusader</button>
+            <button type="button" id="systemSettingsThemeLegacyBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="jester">Jester</button>
             <button type="button" id="systemSettingsThemeRomulanBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="phantom">Phantom</button>
             <button type="button" id="systemSettingsThemeMonoBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="mono">Mono</button>
             <button type="button" id="systemSettingsThemeMilkBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="milk">Milk</button>
@@ -2340,7 +2342,7 @@
               <i data-lucide="play" class="w-[18px] h-5 fill-current text-secondary-foreground"></i>
             </button>
             <div id="trackerBlockPropsRow1" class="hidden flex gap-2 items-center min-w-0 flex-1">
-              <label for="trackerBlockName" class="hidden lg:inline text-xs font-bold text-muted-foreground uppercase shrink-0">Name</label>
+              <label for="trackerBlockName" id="trackerBlockNameLabel" class="hidden lg:inline text-xs font-bold text-muted-foreground uppercase shrink-0 cursor-grab" title="Drag to add this block to an arrangement row">Block</label>
               <input
                 type="text"
                 id="trackerBlockName"

@@ -26,7 +26,7 @@ const DEMO_MODE = import.meta.env.MODE === 'demo';
 
 // State
 let currentInstrumentId = null;
-let currentView = 'strudel'; // 'strudel' | 'blocks'
+let currentView = 'blocks'; // 'strudel' | 'blocks' — Arranger is default
 let hasSelectedPattern = false;
 let hasSelectedArrangement = false;
 const playbackAliasesBySource = new Map();
@@ -237,8 +237,8 @@ export async function initInstrumentUI() {
     // Setup event listeners
     setupEventListeners();
 
-    // Set initial view state
-    switchView('strudel');
+    // Set initial view state (Arranger is default; currentView is 'blocks')
+    switchView(currentView);
 
     // Resolve initial sync (local vs file)
     await syncInstrumentSources();

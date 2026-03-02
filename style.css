@@ -97,8 +97,8 @@
   --radius: 0.5rem;
   }
 
-  /* Crusader theme: snapshot of the original Stone & Amber (safe to switch back from default) */
-  html[data-theme="crusader"] {
+  /* Jester theme: snapshot of the original Stone & Amber (safe to switch back from default) */
+  html[data-theme="jester"] {
     --background: hsl(245, 39%, 7%);
     --foreground: hsl(60 9.1% 80%);
     --card: hsl(209, 39%, 5%);
@@ -367,6 +367,15 @@ input[readonly]:focus-visible {
   background-color: color-mix(in srgb, var(--quaternary) 80%, transparent);
 }
 
+/* ZzFXM preview: when playing, stop button border pulses between primary and border */
+@keyframes preview-stop-border-pulse {
+  0%, 100% { border-color: var(--primary); }
+  50% { border-color: var(--border); }
+}
+#previewPlayBtn[data-preview-playing="true"] {
+  animation: preview-stop-border-pulse 2.5s ease-in-out infinite;
+}
+
 /* Dynamic Classes used by JS */
 .pattern-list {
   @apply list-none m-0 px-2 py-0 space-y-1;
@@ -525,6 +534,12 @@ input[readonly]:focus-visible {
 
 #instrumentControls label {
   @apply select-none;
+}
+
+/* Cursor when dragging the Block label onto arrangement rows */
+body.tracker-block-label-dragging,
+body.tracker-block-label-dragging * {
+  cursor: grabbing !important;
 }
 
 #trackerModal.workspace-docked {
@@ -1083,6 +1098,8 @@ strudel-editor {
   border-style: solid none none none;
   border-color: var(--border);
   border-image: none;
+  box-shadow: none;
+  transition: border-color 0.2s ease, border-width 0.2s ease, box-shadow 0.2s ease;
 }
 @media (max-width: 639px) {
   .arr-row {
@@ -1155,12 +1172,15 @@ strudel-editor {
 .arr-loop-row-btn {
   @apply inline-flex items-center justify-center p-0.5 rounded cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
   color: var(--muted-foreground);
+  opacity: 0.6;
+  transition: opacity 0.15s ease, color 0.15s ease;
 }
 .arr-loop-row-btn:hover {
   color: var(--foreground);
 }
 .arr-loop-row-btn[data-loop="true"] {
   color: var(--foreground);
+  opacity: 1;
 }
 
 .arr-repeats {
@@ -1211,10 +1231,35 @@ strudel-editor {
 }
 
 .arr-row.arr-row-drop-target-above {
-  border-top: 2px solid color-mix(in srgb, var(--primary), transparent 40%);
+  border-top: 4px solid color-mix(in srgb, var(--quaternary), transparent 40%);
 }
 .arr-row.arr-row-drop-target-below {
-  border-bottom: 2px solid color-mix(in srgb, var(--primary), transparent 40%);
+  border-bottom: 4px solid color-mix(in srgb, var(--quaternary), transparent 40%);
+}
+.arr-row.arr-row-block-drop-target {
+  box-shadow: inset 0 0 12px 2px color-mix(in srgb, var(--quaternary) 70%, transparent);
+}
+
+@keyframes arr-row-exit-block {
+  from { box-shadow: inset 0 0 12px 2px color-mix(in srgb, var(--quaternary) 70%, transparent); }
+  to { box-shadow: none; }
+}
+@keyframes arr-row-exit-above {
+  from { border-top: 4px solid color-mix(in srgb, var(--quaternary), transparent 40%); }
+  to { border-top-width: 0; border-top-color: transparent; }
+}
+@keyframes arr-row-exit-below {
+  from { border-bottom: 4px solid color-mix(in srgb, var(--quaternary), transparent 40%); }
+  to { border-bottom-width: 0; border-bottom-color: transparent; }
+}
+.arr-row.arr-row-drop-target-exit-block {
+  animation: arr-row-exit-block 0.2s ease forwards;
+}
+.arr-row.arr-row-drop-target-exit-above {
+  animation: arr-row-exit-above 0.2s ease forwards;
+}
+.arr-row.arr-row-drop-target-exit-below {
+  animation: arr-row-exit-below 0.2s ease forwards;
 }
 .arr-chip-del {
   @apply hover:text-destructive transition-colors p-0.5 rounded-md;

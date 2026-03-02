@@ -13,13 +13,13 @@ Under the hood, Strudel is used for **pattern notation + event scheduling**, and
 - Anyone who wants fast iteration: write a pattern, preview, export song data.
 - Anyone who prefers tracker/step-sequencer style composition but still wants Strudel’s flexibility.
 
-## 30-Second Demo Flow (In the App)
+## Quickstart
 
-1. Open an pattern or arrangement from the "Your" folder.
-1. Open the instrument editor and tweak a sound (ZzFXMicro-style params).
-1. Try to modify either Strudel patterns or Arrangement.
-1. Note that they are separate things currently, because they aren't integrated into each other yet.
-1. Click `Pattern to ZzFXM` or `ARR. to ZzFXM` if you tried the Visual Arranger.
+1. Open an arrangement or pattern from the "Your" folder and hit play
+1. Select instrument and try to make changes to the parameters
+1. Try to modify blocks, arrangements or Strudel pattern
+1. Note: Arrangements/Blocks and Strudel patterns aren't integrated, they are separate resources
+1. Click `Pattern to ZzFXM` or `ARR. to ZzFXM` if you're using the Arranger.
 1. After this, click the play button to preview ZzFXM playback.
 1. Open `Song Data` to inspect/download the exported JSON.
 1. Click `Export WAV` if you want a quick audio file to share/test.
@@ -69,21 +69,6 @@ npm run export -- --all --combined
 
 This app is optimized for creating ZzFXM-ready music with Strudel patterns. Strudel itself can do much more than what is practical to export 1:1, so it helps to stay within an "export-safe" subset.
 
-### Minimal Loop Template
-
-Use `stack(...)` for layers and `arrange([...])` for repeatable sections:
-
-```js
-const groove = stack(
-  sound("bd*4, [~ sd]*2, hh*8"),
-  note("c2 ~ c2 ~").s("bass"),
-  note("<c4 eb4 g4> ~ <bb3 d4 g4> ~").s("demo-elpiano")
-);
-
-// 4 bars (repeat) - prefer arrange for exported repetition
-arrange([4, groove]);
-```
-
 ### Loudness (Preview + WAV)
 
 - Use the `Balanced` playback loudness preset as a good default starting point.
@@ -116,23 +101,9 @@ This project also depends on and/or includes adapted code from:
 
 See `THIRD_PARTY_NOTICES.md` for attribution details and upstream links.
 
-## In-App Attribution
-
-The welcome screen includes:
-
-- `See Licensing And Attribution Notes` button that opens a modal with attribution and license links.
-- `Change Log` button that opens a modal with release notes.
-
-## Releases
-
-- Release process guide: `RELEASING.md`
-- Published versions: GitHub Releases (`vX.Y.Z` tags)
-- Support policy: latest release is supported; older releases remain available as-is.
-
 ## Authors
 
 #### Jarno Koole
 
-My background is in 90s demoscene and especially tracker scene.
-I'm fond of anything audio related and digital music production.
-I play different kinds of instruments too, but just for laughs.
+Background in 90s demoscene and especially tracker scene.
+Interested by anything related to digital music production.

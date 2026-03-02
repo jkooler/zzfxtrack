@@ -336,8 +336,12 @@ const COLOR_THEME_KEY = 'zzfxm-color-theme';
     try {
         let saved = localStorage.getItem(COLOR_THEME_KEY);
         if (saved === 'legacy' || saved === 'gotham') {
-            saved = 'crusader';
-            localStorage.setItem(COLOR_THEME_KEY, 'crusader');
+            saved = 'jester';
+            localStorage.setItem(COLOR_THEME_KEY, 'jester');
+        }
+        if (saved === 'crusader') {
+            saved = 'jester';
+            localStorage.setItem(COLOR_THEME_KEY, 'jester');
         }
         if (saved === 'romulan') {
             saved = 'phantom';
@@ -2162,7 +2166,7 @@ function renderArrangementWorkspace() {
         chip.classList.add('shake');
         chip.addEventListener('animationend', () => chip.classList.remove('shake'), { once: true });
     };
-    const handleBlockDrop = ({ filename, fromRowIndex, toRowIndex, copy }, targetRowEl) => {
+    const handleBlockDrop = ({ filename, fromRowIndex, toRowIndex, copy }, targetRowEl, exitTransitionMs = 0) => {
         if (!filename || !Number.isInteger(toRowIndex)) return;
         const targetRow = arrangementDraftState.rows?.[toRowIndex];
         if (!targetRow) return;
@@ -2194,9 +2198,16 @@ function renderArrangementWorkspace() {
 
         targetRow.blocks.push(filename);
         activeArrangementBlockFilename = filename;
-        renderArrangementWorkspace();
-        scheduleArrangementAutoSave();
-        emitArrangementStateChanged({ addedRowIndex: normalizedTo, addedFilename: filename });
+        const doRender = () => {
+            renderArrangementWorkspace();
+            scheduleArrangementAutoSave();
+            emitArrangementStateChanged({ addedRowIndex: normalizedTo, addedFilename: filename });
+        };
+        if (exitTransitionMs > 0) {
+            setTimeout(doRender, exitTransitionMs);
+        } else {
+            doRender();
+        }
     };
 
     dom.arrangementWorkspacePane.innerHTML = `
@@ -2211,7 +2222,7 @@ function renderArrangementWorkspace() {
                     >
                         <i data-lucide="${isPreviewPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>
                     </button>
-                    <label for="arrangementWorkspaceName" class="hidden lg:inline text-xs font-bold text-muted-foreground uppercase shrink-0">Name</label>
+                    <label for="arrangementWorkspaceName" class="hidden lg:inline text-xs font-bold text-muted-foreground uppercase shrink-0">Arrang.</label>
                     <input
                         type="text"
                         id="arrangementWorkspaceName"
@@ -2299,6 +2310,10 @@ function renderArrangementWorkspace() {
         });
     }
 
+    if (nameInput) {
+        nameInput.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; });
+        nameInput.addEventListener('drop', (e) => { e.preventDefault(); });
+    }
     nameInput?.addEventListener('input', () => {
         arrangementDraftState.name = String(nameInput.value || '').trim() || arrangementDraftState.name;
     });
@@ -2496,14 +2511,14 @@ function renderArrangementWorkspace() {
                 if (!event.dataTransfer || readonly) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = isCopyModifier(event) ? 'copy' : 'move';
-                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
+                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
                 const isRowDrag = event.dataTransfer.types.includes('application/x-zzfxm-arr-row');
                 const fromIndex = isRowDrag ? window.__arrRowDragFromIndex : undefined;
                 if (typeof fromIndex === 'number') {
                     if (fromIndex > rowIndex) rowEl.classList.add('arr-row-drop-target-above');
                     else if (fromIndex < rowIndex) rowEl.classList.add('arr-row-drop-target-below');
                 } else {
-                    rowEl.classList.add('arr-row-drop-target-below');
+                    rowEl.classList.add('arr-row-block-drop-target');
                 }
             };
             rowEl.addEventListener('dragenter', (event) => {
@@ -2515,12 +2530,36 @@ function renderArrangementWorkspace() {
             rowEl.addEventListener('dragleave', (event) => {
                 const related = event.relatedTarget;
                 if (related && related instanceof Node && rowEl.contains(related)) return;
-                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
+                const hadBlock = rowEl.classList.contains('arr-row-block-drop-target');
+                const hadAbove = rowEl.classList.contains('arr-row-drop-target-above');
+                const hadBelow = rowEl.classList.contains('arr-row-drop-target-below');
+                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
+                if (hadBlock) rowEl.classList.add('arr-row-drop-target-exit-block');
+                if (hadAbove) rowEl.classList.add('arr-row-drop-target-exit-above');
+                if (hadBelow) rowEl.classList.add('arr-row-drop-target-exit-below');
+                const exitDurationMs = 220;
+                setTimeout(() => {
+                    rowEl.classList.remove('arr-row-drop-target-exit-block', 'arr-row-drop-target-exit-above', 'arr-row-drop-target-exit-below');
+                }, exitDurationMs);
             });
+            const ARR_ROW_DROP_EXIT_MS = 200;
+            const removeDropTargetAndAfter = (afterMs, run) => {
+                const hadBlock = rowEl.classList.contains('arr-row-block-drop-target');
+                const hadAbove = rowEl.classList.contains('arr-row-drop-target-above');
+                const hadBelow = rowEl.classList.contains('arr-row-drop-target-below');
+                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
+                if (hadBlock) rowEl.classList.add('arr-row-drop-target-exit-block');
+                if (hadAbove) rowEl.classList.add('arr-row-drop-target-exit-above');
+                if (hadBelow) rowEl.classList.add('arr-row-drop-target-exit-below');
+                const exitDurationMs = afterMs + 20;
+                setTimeout(() => {
+                    rowEl.classList.remove('arr-row-drop-target-exit-block', 'arr-row-drop-target-exit-above', 'arr-row-drop-target-exit-below');
+                    run();
+                }, exitDurationMs);
+            };
             rowEl.addEventListener('drop', (event) => {
                 if (!event.dataTransfer || readonly) return;
                 event.preventDefault();
-                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
                 window.__arrRowDragFromIndex = undefined;
                 let rowPayload = null;
                 try {
@@ -2530,13 +2569,15 @@ function renderArrangementWorkspace() {
                 }
                 const fromRowIndex = Number.isInteger(rowPayload?.fromRowIndex) ? rowPayload.fromRowIndex : null;
                 if (fromRowIndex != null && fromRowIndex !== rowIndex) {
-                    const moved = arrangementDraftState.rows.splice(fromRowIndex, 1)[0];
-                    if (moved) {
-                        arrangementDraftState.rows.splice(rowIndex, 0, moved);
-                        renderArrangementWorkspace();
-                        scheduleArrangementAutoSave();
-                        emitArrangementStateChanged();
-                    }
+                    removeDropTargetAndAfter(ARR_ROW_DROP_EXIT_MS, () => {
+                        const moved = arrangementDraftState.rows.splice(fromRowIndex, 1)[0];
+                        if (moved) {
+                            arrangementDraftState.rows.splice(rowIndex, 0, moved);
+                            renderArrangementWorkspace();
+                            scheduleArrangementAutoSave();
+                            emitArrangementStateChanged();
+                        }
+                    });
                     return;
                 }
                 let payload = null;
@@ -2547,12 +2588,14 @@ function renderArrangementWorkspace() {
                 }
                 const filename = payload?.filename || event.dataTransfer.getData('text/plain') || '';
                 const fromRowIndexChip = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
-                handleBlockDrop({
-                    filename,
-                    fromRowIndex: fromRowIndexChip,
-                    toRowIndex: rowIndex,
-                    copy: isCopyModifier(event),
-                }, rowEl);
+                removeDropTargetAndAfter(ARR_ROW_DROP_EXIT_MS, () => {
+                    handleBlockDrop({
+                        filename,
+                        fromRowIndex: fromRowIndexChip,
+                        toRowIndex: rowIndex,
+                        copy: isCopyModifier(event),
+                    }, rowEl, 0);
+                });
             });
 
             const rowNumberEl = document.createElement('span');
@@ -2572,7 +2615,7 @@ function renderArrangementWorkspace() {
                     window.__arrRowDragJustEnded = true;
                     setTimeout(() => { window.__arrRowDragJustEnded = false; }, 100);
                     rowsRoot.querySelectorAll('.arr-row').forEach((el) => {
-                        el.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
+                        el.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
                     });
                 });
             }
@@ -2623,7 +2666,7 @@ function renderArrangementWorkspace() {
             loopRowBtn.setAttribute('aria-label', row.loop ? 'Loop row (on)' : 'Loop row (off)');
             loopRowBtn.title = row.loop ? 'Loop row (on)' : 'Loop row (off)';
             loopRowBtn.dataset.loop = row.loop ? 'true' : 'false';
-            loopRowBtn.innerHTML = '<i data-lucide="repeat-1" class="w-4 h-4"></i>';
+            loopRowBtn.innerHTML = '<i data-lucide="repeat-2" class="w-4 h-4"></i>';
             if (readonly) loopRowBtn.disabled = true;
             loopRowBtn.addEventListener('click', () => {
                 if (readonly) return;
@@ -5372,6 +5415,33 @@ if (dom.uploadProjectDropzone) {
         if (file) handleUploadSelection(file);
     });
 }
+const trackerBlockNameLabel = document.getElementById('trackerBlockNameLabel');
+if (trackerBlockNameLabel) {
+    trackerBlockNameLabel.draggable = true;
+    trackerBlockNameLabel.addEventListener('dragstart', (e) => {
+        const filename = activeArrangementBlockFilename;
+        if (!filename || !e.dataTransfer) return;
+        const fromRowIndex = (arrangementDraftState?.rows && typeof arrangementDraftState.rows.findIndex === 'function')
+            ? arrangementDraftState.rows.findIndex((r) => Array.isArray(r?.blocks) && r.blocks.includes(filename))
+            : -1;
+        e.dataTransfer.effectAllowed = 'copyMove';
+        e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({
+            filename,
+            fromRowIndex: fromRowIndex >= 0 ? fromRowIndex : null,
+        }));
+        e.dataTransfer.setData('text/plain', filename);
+        document.body.classList.add('tracker-block-label-dragging');
+    });
+    trackerBlockNameLabel.addEventListener('dragend', () => {
+        document.body.classList.remove('tracker-block-label-dragging');
+    });
+}
+const trackerBlockNameInput = document.getElementById('trackerBlockName');
+if (trackerBlockNameInput) {
+    trackerBlockNameInput.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; });
+    trackerBlockNameInput.addEventListener('drop', (e) => { e.preventDefault(); });
+}
+
 if (dom.closeUploadProjectModalBtn) dom.closeUploadProjectModalBtn.addEventListener('click', closeUploadProjectModal);
 if (dom.cancelUploadProjectBtn) dom.cancelUploadProjectBtn.addEventListener('click', closeUploadProjectModal);
 if (dom.confirmUploadProjectBtn) dom.confirmUploadProjectBtn.addEventListener('click', applyUploadProject);
@@ -5687,6 +5757,7 @@ dom.previewPlayBtn.addEventListener('click', () => {
 
 function updatePreviewPlayButton(playing) {
     isPreviewPlaying = playing;
+    dom.previewPlayBtn.dataset.previewPlaying = playing ? 'true' : 'false';
     dom.previewPlayBtn.innerHTML = playing ? '<i data-lucide="square" class="w-4 h-4 fill-current"></i>' : '<i data-lucide="play" class="w-4 h-4 fill-current"></i>';
     createIcons({ icons });
 }
@@ -6308,7 +6379,7 @@ if (dom.systemSettingsThemeDefaultBtn) {
     dom.systemSettingsThemeDefaultBtn.addEventListener('click', () => setColorTheme(''));
 }
 if (dom.systemSettingsThemeLegacyBtn) {
-    dom.systemSettingsThemeLegacyBtn.addEventListener('click', () => setColorTheme('crusader'));
+    dom.systemSettingsThemeLegacyBtn.addEventListener('click', () => setColorTheme('jester'));
 }
 if (dom.systemSettingsThemeRomulanBtn) {
     dom.systemSettingsThemeRomulanBtn.addEventListener('click', () => setColorTheme('phantom'));

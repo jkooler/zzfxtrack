@@ -1216,7 +1216,7 @@ function renderArrangementRows() {
     loopRowBtn.setAttribute('aria-label', row.loop ? 'Loop row (on)' : 'Loop row (off)');
     loopRowBtn.title = row.loop ? 'Loop row (on)' : 'Loop row (off)';
     loopRowBtn.dataset.loop = row.loop ? 'true' : 'false';
-    loopRowBtn.innerHTML = '<i data-lucide="repeat-1" class="w-4 h-4"></i>';
+    loopRowBtn.innerHTML = '<i data-lucide="repeat-2" class="w-4 h-4"></i>';
     loopRowBtn.addEventListener('click', () => {
       if (row.loop) {
         row.loop = false;
