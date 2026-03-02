@@ -432,7 +432,13 @@ function renderArrangementStateToMixBuffer(
 }
 
 self.onmessage = (event) => {
-  const { id, payload } = event.data || {};
+  const data = event.data || {};
+  if (data.type === 'clearSourceCache') {
+    workerSourceRenderCacheByFilename.clear();
+    workerSourceRenderCacheByStateKey.clear();
+    return;
+  }
+  const { id, payload } = data;
   if (!id || !payload) return;
 
   try {

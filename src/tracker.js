@@ -263,8 +263,24 @@ function getArrangementSourceRenderSignature(instrumentList, bpm, mixSettings, r
   return `${renderProfile}|${bpm}|${getMixSettingsSignature(mixSettings)}|${getInstrumentListSignature(instrumentList)}`;
 }
 
+/** Clear per-block and instrument caches so the next render uses fresh instrument/mix config. Call when instrument list or mix settings change. */
+export function invalidateArrangementSourceCaches() {
+  arrangementPreviewState._sourceRenderCacheByFilename.clear();
+  arrangementPreviewState._sourceRenderCacheByState = new WeakMap();
+  arrangementPreviewState._instrumentSignatureByListRef = new WeakMap();
+  const worker = arrangementPreviewState._renderWorker;
+  if (worker) {
+    try {
+      worker.postMessage({ type: 'clearSourceCache' });
+    } catch (_err) {
+      // ignore
+    }
+  }
+}
+
 function rejectArrangementWorkerJobs(reason = 'cancelled') {
   arrangementPreviewState._renderWorkerPendingJobs.forEach((job) => {
+    if (job.timeoutId != null) clearTimeout(job.timeoutId);
     try {
       job.reject(new Error(reason));
     } catch (_err) {
@@ -289,6 +305,10 @@ function ensureArrangementRenderWorker() {
       const job = arrangementPreviewState._renderWorkerPendingJobs.get(id);
       if (!job) return;
       arrangementPreviewState._renderWorkerPendingJobs.delete(id);
+      if (job.timeoutId != null) {
+        clearTimeout(job.timeoutId);
+        job.timeoutId = null;
+      }
       if (!ok) {
         job.reject(new Error(error || 'Worker render failed'));
         return;
@@ -334,8 +354,17 @@ function requestArrangementRenderInWorker(payload) {
   const id = ++arrangementPreviewState._renderWorkerRequestSeq;
   arrangementPreviewState._renderWorkerLatestSeq = id;
 
+  const ARRANGEMENT_WORKER_JOB_TIMEOUT_MS = 8000;
+
   return new Promise((resolve, reject) => {
-    arrangementPreviewState._renderWorkerPendingJobs.set(id, { resolve, reject });
+    const timeoutId = setTimeout(() => {
+      if (!arrangementPreviewState._renderWorkerPendingJobs.has(id)) return;
+      arrangementPreviewState._renderWorkerPendingJobs.delete(id);
+      arrangementPreviewState._renderStats.workerFallback += 1;
+      recordArrangementRenderPath('workerTimeout', 'worker job timeout');
+      reject(new Error('worker timeout'));
+    }, ARRANGEMENT_WORKER_JOB_TIMEOUT_MS);
+    arrangementPreviewState._renderWorkerPendingJobs.set(id, { resolve, reject, timeoutId });
     worker.postMessage({ id, payload });
   });
 }
@@ -369,12 +398,19 @@ const NOTE_SCRUB_PREVIEW_DEBOUNCE_MS = 80;
 const TRACKER_NOTE_PREVIEW_GAIN = 0.8;
 const TRACKER_NOTE_PREVIEW_DUCKED_GAIN = 0.35;
 let liveArrangementUpdateTimeout = null;
+/** Crossfade when swapping arrangement buffer (e.g. non-live path) to avoid clicks. */
 const ARRANGEMENT_SWAP_CROSSFADE_SECONDS = 0.04;
+/** Debounce (ms) before running a live arrangement update when not looping. Slightly above one step to avoid double render in same step. */
 const ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_MS = 180;
+/** Debounce (ms) when looping a row; longer to reduce update frequency while editing. */
 const ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_LOOP_MS = 260;
+/** Debounce (ms) when worker is available; worker can handle updates a bit more frequently. */
 const ARRANGEMENT_PREVIEW_UPDATE_DEBOUNCE_WORKER_MS = 150;
+/** Max per-block render cache entries (by filename); evict oldest when exceeded. */
 const ARRANGEMENT_RENDER_MAX_SOURCE_CACHE = 256;
+/** No crossfade when applying worker result immediately (avoid phase issues). */
 const ARRANGEMENT_LIVE_SWAP_CROSSFADE_SECONDS = 0;
+/** Short crossfade at step/row boundary when applying queued live swap to avoid clicks. */
 const ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS = 0.008;
 const ARRANGEMENT_RENDER_PROFILE_EXPORT = 'export';
 const ARRANGEMENT_RENDER_PROFILE_LIVE = 'live_export_match';
@@ -3397,6 +3433,9 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
   arrangementPreviewState._lastLiveSwapStep = null;
   arrangementPreviewState._lastLiveSwapTime = null;
 
+  // Allow worker to be retried after a previous failure (e.g. load error or termination).
+  arrangementPreviewState._renderWorkerAvailable = true;
+
   const rows = arrangementPreviewState.arrangementState?.rows || [];
   const loopRowIndexInState = rows.findIndex((r) => Boolean(r?.loop));
   const needFullBuffer = Number.isInteger(startRowIndex) && startRowIndex >= 0 && loopRowIndexInState >= 0 && startRowIndex > loopRowIndexInState;
@@ -3495,6 +3534,8 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
   if (Number.isFinite(bpm)) arrangementPreviewState.bpm = bpm;
   if (mixSettings) arrangementPreviewState.mixSettings = sanitizePlaybackMixSettings(mixSettings);
   const resolvedMixSettings = arrangementPreviewState.mixSettings;
+
+  if (instrumentList || mixSettings != null) invalidateArrangementSourceCaches();
 
   if (!arrangementPreviewState.isPlaying) return false;
 
@@ -3798,6 +3839,10 @@ export function stopArrangementPreview() {
   arrangementPreviewState._pendingLiveSwapMode = 'row';
   arrangementPreviewState._lastLiveSwapStep = null;
   arrangementPreviewState._lastLiveSwapTime = null;
+
+  if (isDeveloperModeEnabled()) {
+    console.log('[Arranger] Render stats:', getArrangementRenderStats());
+  }
 }
 
 export function isArrangementPreviewPlaying() {
