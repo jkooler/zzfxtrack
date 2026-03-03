@@ -367,7 +367,7 @@ input[readonly]:focus-visible {
   background-color: color-mix(in srgb, var(--quaternary) 80%, transparent);
 }
 
-/* ZzFXM preview: when playing, stop button border pulses between primary and border */
+/* ZzFXMicro Player preview: when playing, stop button border pulses between primary and border */
 @keyframes preview-stop-border-pulse {
   0%, 100% { border-color: var(--primary); }
   50% { border-color: var(--border); }
@@ -993,6 +993,10 @@ strudel-editor {
   appearance: textfield;
 }
 
+.tracker-cell.tracker-cell-selected:not(.active) {
+  @apply border-quaternary ring-1 ring-quaternary;
+}
+
 .tracker-cell.active {
   @apply border-primary bg-primary/10 text-primary;
 }
@@ -1297,11 +1301,11 @@ strudel-editor {
 }
 
 .arr-block-select {
-  @apply h-8 w-40 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply h-8 w-40 rounded-md border border-input bg-background px-2 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
 }
 
 .arr-block-select-wrap {
-  @apply relative inline-flex items-center justify-center h-8 rounded-md border border-input bg-background shadow-sm transition-colors;
+  @apply relative inline-flex items-center justify-center h-8 rounded-md border border-input bg-background transition-colors;
   width: calc(var(--spacing) * 8);
 }
 

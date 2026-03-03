@@ -89,7 +89,20 @@ const state = {
   channelInstruments: Array(MAX_CHANNELS).fill(''), // Selected instrument per channel
   focusedChannel: 0,
   focusedStep: 0,
+  /** Anchor for multi-selection (one corner of the selection rectangle). */
+  selectionAnchor: { channel: 0, step: 0 },
 };
+
+/** Copy buffer for tracker selection. */
+let copyBuffer = [];
+/** Metadata for last copy: selection bounds (min/max channel & step). */
+let copyMeta = null;
+
+/** Set to true to log multi-select/copy/paste flow to console (remove or set false for production). */
+const DEBUG_TRACKER_SELECTION = true;
+function selLog(...args) {
+  if (DEBUG_TRACKER_SELECTION) console.log('[TrackerSel]', ...args);
+}
 
 // Edit mode state
 let editMode = {
@@ -112,6 +125,305 @@ let lastSavedSnapshot = '';
 const gridBackupsBySteps = new Map(); // stepCount -> grid (deep copy)
 /** Per-block scroll position and focused cell (filename -> { scrollTop, channel, step }). */
 const blockScrollPositions = new Map();
+
+/** Returns true if (channel, step) is the same as focus (single cell). */
+function isMultiSelection() {
+  return state.selectionAnchor.channel !== state.focusedChannel || state.selectionAnchor.step !== state.focusedStep;
+}
+
+/** Set of "channel,step" keys for the current selection rectangle. */
+function getSelectionSet() {
+  const minCh = Math.min(state.selectionAnchor.channel, state.focusedChannel);
+  const maxCh = Math.max(state.selectionAnchor.channel, state.focusedChannel);
+  const minStep = Math.min(state.selectionAnchor.step, state.focusedStep);
+  const maxStep = Math.max(state.selectionAnchor.step, state.focusedStep);
+  const set = new Set();
+  for (let c = minCh; c <= maxCh; c++) {
+    for (let s = minStep; s <= maxStep; s++) {
+      set.add(`${c},${s}`);
+    }
+  }
+  return set;
+}
+
+/** Selection cells in channel-major order (ch 0 all steps, ch 1 all steps, ...) so paste fills channels correctly. */
+function getSelectionOrdered() {
+  const set = getSelectionSet();
+  const minCh = Math.min(state.selectionAnchor.channel, state.focusedChannel);
+  const maxCh = Math.max(state.selectionAnchor.channel, state.focusedChannel);
+  const minStep = Math.min(state.selectionAnchor.step, state.focusedStep);
+  const maxStep = Math.max(state.selectionAnchor.step, state.focusedStep);
+  const out = [];
+  for (let c = minCh; c <= maxCh; c++) {
+    for (let s = minStep; s <= maxStep; s++) {
+      if (set.has(`${c},${s}`)) out.push({ channel: c, step: s });
+    }
+  }
+  return out;
+}
+
+function updateSelectionHighlight() {
+  if (!elements.grid) {
+    selLog('updateSelectionHighlight: no elements.grid');
+    return;
+  }
+  const sel = getSelectionSet();
+  const cells = elements.grid.querySelectorAll('.tracker-cell');
+  let count = 0;
+  cells.forEach((cell) => {
+    const c = parseInt(cell.dataset.channel, 10);
+    const s = parseInt(cell.dataset.step, 10);
+    const selected = sel.has(`${c},${s}`);
+    cell.classList.toggle('tracker-cell-selected', selected);
+    if (selected) count++;
+  });
+  selLog('updateSelectionHighlight: selection size', sel.size, 'cells marked', count, 'total cells', cells.length);
+}
+
+function clearSelectionToFocus() {
+  state.selectionAnchor = { channel: state.focusedChannel, step: state.focusedStep };
+  updateSelectionHighlight();
+}
+
+/**
+ * Move focus to (channel, step) without changing selection anchor. Updates active cell and scroll.
+ */
+function moveFocusOnly(channel, step) {
+  const clampedCh = Math.max(0, Math.min(channel, state.channels - 1));
+  const clampedStep = Math.max(0, Math.min(step, state.steps - 1));
+  selLog('moveFocusOnly', state.focusedChannel, state.focusedStep, '->', clampedCh, clampedStep);
+  const oldCell = document.querySelector(
+    `.tracker-cell[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+  );
+  if (oldCell) oldCell.classList.remove('active');
+  document.querySelectorAll('.tracker-timetrack-row.active').forEach((r) => r.classList.remove('active'));
+
+  state.focusedChannel = clampedCh;
+  state.focusedStep = clampedStep;
+
+  const newCell = document.querySelector(
+    `.tracker-cell[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+  );
+  if (newCell) {
+    newCell.classList.add('active');
+    const bodyScroll = newCell.closest('.tracker-body-scroll');
+    const timeTrackScroll = bodyScroll?.closest('.tracker-grid')?.querySelector('.tracker-timetrack-scroll');
+    if (bodyScroll) {
+      const bodyRect = bodyScroll.getBoundingClientRect();
+      const cellRect = newCell.getBoundingClientRect();
+      const cellAbove = cellRect.top < bodyRect.top;
+      const cellBelow = cellRect.bottom > bodyRect.bottom;
+      if (cellAbove || cellBelow) {
+        const targetTop = cellBelow
+          ? bodyScroll.scrollTop + (cellRect.bottom - bodyRect.bottom)
+          : bodyScroll.scrollTop + (cellRect.top - bodyRect.top);
+        const maxTop = Math.max(bodyScroll.scrollHeight - bodyScroll.clientHeight, 0);
+        bodyScroll.scrollTop = Math.min(Math.max(targetTop, 0), maxTop);
+        if (timeTrackScroll) timeTrackScroll.scrollTop = bodyScroll.scrollTop;
+      }
+    }
+  }
+  const newTimeStep = document.querySelector(`.tracker-timetrack-row[data-step="${state.focusedStep}"]`);
+  if (newTimeStep) newTimeStep.classList.add('active');
+}
+
+function copySelection() {
+  const sel = getSelectionSet();
+  if (!sel.size) {
+    selLog('copySelection: empty selection, nothing copied');
+    copyBuffer = [];
+    copyMeta = null;
+    return;
+  }
+
+  const minCh = Math.min(state.selectionAnchor.channel, state.focusedChannel);
+  const maxCh = Math.max(state.selectionAnchor.channel, state.focusedChannel);
+  const minStep = Math.min(state.selectionAnchor.step, state.focusedStep);
+  const maxStep = Math.max(state.selectionAnchor.step, state.focusedStep);
+
+  copyMeta = { minCh, maxCh, minStep, maxStep };
+  copyBuffer = [];
+
+  for (let c = minCh; c <= maxCh; c++) {
+    for (let s = minStep; s <= maxStep; s++) {
+      if (!sel.has(`${c},${s}`)) continue;
+      const cell = state.grid[c]?.[s];
+      copyBuffer.push({
+        dCh: c - minCh,
+        dStep: s - minStep,
+        note: cell?.note ?? null,
+        vol: cell?.vol ?? null,
+        reps: cell?.reps ?? null,
+        nd: cell?.nd ?? null,
+      });
+    }
+  }
+
+  selLog(
+    'copySelection:',
+    'bounds',
+    { minCh, maxCh, minStep, maxStep },
+    'buffer length',
+    copyBuffer.length,
+    'anchor',
+    state.selectionAnchor,
+    'focus',
+    state.focusedChannel,
+    state.focusedStep
+  );
+}
+
+function updateCellEffectsInDOM(channel, step) {
+  const cell = state.grid[channel]?.[step];
+  if (!cell) return;
+  const volEl = document.querySelector(
+    `.tracker-vol-input[data-channel="${channel}"][data-step="${step}"]`
+  );
+  const repsEl = document.querySelector(
+    `.tracker-reps-input[data-channel="${channel}"][data-step="${step}"]`
+  );
+  const ndEl = document.querySelector(
+    `.tracker-nd-input[data-channel="${channel}"][data-step="${step}"]`
+  );
+  if (volEl) volEl.value = cell.vol != null ? String(cell.vol) : '';
+  if (repsEl) repsEl.value = cell.reps != null ? String(cell.reps) : '';
+  if (ndEl) ndEl.value = cell.nd != null ? String(cell.nd) : '';
+}
+
+function pasteFromBuffer() {
+  selLog(
+    'pasteFromBuffer: copyBuffer.length',
+    copyBuffer.length,
+    'copyMeta',
+    copyMeta,
+    'focus',
+    state.focusedChannel,
+    state.focusedStep
+  );
+  if (!copyBuffer.length || !copyMeta) return;
+
+  for (const entry of copyBuffer) {
+    const destCh = state.focusedChannel + entry.dCh;
+    const destStep = state.focusedStep + entry.dStep;
+    if (destCh < 0 || destCh >= state.channels) continue;
+    if (destStep < 0 || destStep >= state.steps) continue;
+
+    const cell = state.grid[destCh]?.[destStep];
+    if (!cell) continue;
+
+    cell.note = entry.note ?? null;
+    cell.vol = entry.vol ?? null;
+    cell.reps = entry.reps ?? null;
+    cell.nd = entry.nd ?? null;
+
+    if (!updateNoteCellInDOM(destCh, destStep)) renderGrid();
+    updateCellEffectsInDOM(destCh, destStep);
+  }
+
+  selLog('pasteFromBuffer: pasted', copyBuffer.length, 'cells (with relative offsets)');
+  updateOutput();
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    playPreview(currentOffset);
+  }
+  scheduleArrangementLiveEditUpdate();
+}
+
+function deleteSelectionWithShift() {
+  const sel = getSelectionSet();
+  if (!sel.size) {
+    selLog('deleteSelectionWithShift: empty selection, nothing to delete');
+    return;
+  }
+
+  const minCh = Math.min(state.selectionAnchor.channel, state.focusedChannel);
+  const maxCh = Math.max(state.selectionAnchor.channel, state.focusedChannel);
+  const minStep = Math.min(state.selectionAnchor.step, state.focusedStep);
+  const maxStep = Math.max(state.selectionAnchor.step, state.focusedStep);
+  const len = maxStep - minStep + 1;
+
+  selLog('deleteSelectionWithShift:', { minCh, maxCh, minStep, maxStep, len });
+
+  for (let c = minCh; c <= maxCh; c++) {
+    // Shift everything after the selection up by len steps
+    for (let s = minStep; s < state.steps - len; s++) {
+      const src = state.grid[c]?.[s + len];
+      const dest = state.grid[c]?.[s];
+      if (!dest) continue;
+      dest.note = src?.note ?? null;
+      dest.vol = src?.vol ?? null;
+      dest.reps = src?.reps ?? null;
+      dest.nd = src?.nd ?? null;
+    }
+    // Clear the tail region at the end
+    for (let s = Math.max(state.steps - len, minStep); s < state.steps; s++) {
+      const dest = state.grid[c]?.[s];
+      if (!dest) continue;
+      dest.note = null;
+      dest.vol = null;
+      dest.reps = null;
+      dest.nd = null;
+    }
+  }
+
+  renderGrid();
+  updateSelectionHighlight();
+  updateOutput();
+
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    playPreview(currentOffset);
+  }
+
+  scheduleArrangementLiveEditUpdate();
+}
+
+function clearSelectionNotes() {
+  const sel = getSelectionSet();
+  if (!sel.size) {
+    // Fallback: clear just the focused cell
+    const cell = state.grid?.[state.focusedChannel]?.[state.focusedStep];
+    if (!cell) return;
+    selLog('clearSelectionNotes: no multi-selection, clearing focused cell only');
+    cell.note = null;
+    cell.vol = null;
+    cell.reps = null;
+    cell.nd = null;
+    if (!updateNoteCellInDOM(state.focusedChannel, state.focusedStep)) renderGrid();
+    updateCellEffectsInDOM(state.focusedChannel, state.focusedStep);
+  } else {
+    selLog('clearSelectionNotes: clearing selection of size', sel.size);
+    sel.forEach((key) => {
+      const [cStr, sStr] = key.split(',');
+      const c = Number(cStr);
+      const s = Number(sStr);
+      const cell = state.grid?.[c]?.[s];
+      if (!cell) return;
+      cell.note = null;
+      cell.vol = null;
+      cell.reps = null;
+      cell.nd = null;
+      if (!updateNoteCellInDOM(c, s)) renderGrid();
+      updateCellEffectsInDOM(c, s);
+    });
+  }
+  updateSelectionHighlight();
+  updateOutput();
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    playPreview(currentOffset);
+  }
+  scheduleArrangementLiveEditUpdate();
+}
 
 // Preview playback state
 let previewState = {
@@ -594,6 +906,7 @@ function cacheElements() {
     notationContent: document.getElementById('trackerNotationContent'),
     closeBtn: document.getElementById('closeTrackerBtn'),
     clearBtn: document.getElementById('clearTrackerBtn'),
+    duplicateBlockBtn: document.getElementById('duplicateTrackerBlockBtn'),
     copyBtn: document.getElementById('copyTrackerBtn'),
     saveBtn: document.getElementById('saveTrackerBtn'),
     previewBtn: document.getElementById('previewTrackerBtn'),
@@ -1019,6 +1332,8 @@ function renderGrid() {
   requestAnimationFrame(() => applyScrollbarGutter());
   const scrollbarResizeObs = new ResizeObserver(() => applyScrollbarGutter());
   if (elements.grid) scrollbarResizeObs.observe(elements.grid);
+
+  updateSelectionHighlight();
 }
 
 /**
@@ -1027,6 +1342,7 @@ function renderGrid() {
  */
 function setFocus(channel, step, options = {}) {
   const shouldScroll = options.scroll !== false;
+  const extendSelection = options.extendSelection === true;
   const clampedChannel = Math.max(0, Math.min(channel, state.channels - 1));
   const clampedStep = Math.max(0, Math.min(step, state.steps - 1));
 
@@ -1044,6 +1360,9 @@ function setFocus(channel, step, options = {}) {
 
   state.focusedChannel = clampedChannel;
   state.focusedStep = clampedStep;
+  if (!extendSelection) {
+    state.selectionAnchor = { channel: clampedChannel, step: clampedStep };
+  }
 
   // Add active class to new cell
   const newCell = document.querySelector(
@@ -1078,6 +1397,8 @@ function setFocus(channel, step, options = {}) {
   if (newTimeStep) {
     newTimeStep.classList.add('active');
   }
+
+  updateSelectionHighlight();
 }
 
 function focusRepsInput(channel, step) {
@@ -1160,6 +1481,8 @@ function setupEventListeners() {
 
   // Save button (for edit mode)
   elements.saveBtn?.addEventListener('click', handleSaveBlock);
+
+  elements.duplicateBlockBtn?.addEventListener('click', handleDuplicateBlock);
 
   // Preview button
   elements.previewBtn?.addEventListener('click', togglePreview);
@@ -1291,8 +1614,8 @@ function setupEventListeners() {
     handleArrangementPlayheadForTracker(e?.detail || {});
   });
 
-  // Keyboard input
-  document.addEventListener('keydown', handleKeyDown);
+  // Keyboard input (capture phase so we get keys before Strudel/other handlers when tracker is open)
+  document.addEventListener('keydown', handleKeyDown, true);
 }
 
 /**
@@ -1302,12 +1625,41 @@ function handleKeyDown(e) {
   // Only process if tracker is open
   if (!elements.modal?.classList.contains('open')) return;
 
-  // Don't capture if typing in a select/textarea/input
+  selLog('keydown', e.key, { shift: e.shiftKey, ctrl: e.ctrlKey, meta: e.metaKey, target: e.target?.className || e.target?.tagName });
+
+  // Copy, paste, escape (work from any focused element in tracker)
+  if (e.key === 'Escape') {
+    selLog('Escape: clearSelectionToFocus');
+    clearSelectionToFocus();
+    focusNoteCell(state.focusedChannel, state.focusedStep);
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+    selLog('Ctrl+C: copySelection');
+    copySelection();
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+    selLog('Ctrl+V: pasteFromBuffer, buffer length=', copyBuffer.length);
+    pasteFromBuffer();
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // Don't capture if typing in a select/textarea/input (except vol/reps/nd)
   const isFormField = e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT';
   const isVolInput = e.target.classList?.contains('tracker-vol-input');
   const isRepsInput = e.target.classList?.contains('tracker-reps-input');
   const isNdInput = e.target.classList?.contains('tracker-nd-input');
-  if (isFormField && !isVolInput && !isRepsInput && !isNdInput) return;
+  if (isFormField && !isVolInput && !isRepsInput && !isNdInput) {
+    selLog('return: form field (not vol/reps/nd)', e.target.tagName, e.target.id || '');
+    return;
+  }
 
   if (isVolInput || isRepsInput || isNdInput) {
     const key = e.key.toLowerCase();
@@ -1315,6 +1667,22 @@ function handleKeyDown(e) {
     const step = parseInt(e.target.dataset.step, 10);
     const inVol = isVolInput;
     const inReps = isRepsInput;
+
+    if (e.shiftKey && (key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright')) {
+      e.preventDefault();
+      e.stopPropagation();
+      let newCh = channel;
+      let newStep = step;
+      if (key === 'arrowup') newStep = Math.max(step - 1, 0);
+      else if (key === 'arrowdown') newStep = Math.min(step + 1, state.steps - 1);
+      else if (key === 'arrowleft') newCh = Math.max(channel - 1, 0);
+      else if (key === 'arrowright') newCh = Math.min(channel + 1, state.channels - 1);
+      state.selectionAnchor = { channel, step };
+      selLog('vol/reps/nd Shift+Arrow: anchor', channel, step, '-> focus', newCh, newStep);
+      moveFocusOnly(newCh, newStep);
+      updateSelectionHighlight();
+      return;
+    }
 
     if (key === 'tab') {
       e.preventDefault();
@@ -1379,11 +1747,48 @@ function handleKeyDown(e) {
   }
 
   // Only handle editing when a cell is actively selected
-  if (!document.querySelector('.tracker-cell.active')) return;
+  const activeCell = document.querySelector('.tracker-cell.active');
+  if (!activeCell) {
+    selLog('return: no .tracker-cell.active in DOM');
+    return;
+  }
 
   const key = e.key.toLowerCase();
+  const multi = isMultiSelection();
+  const isArrow = key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright';
 
-  // Navigation
+  selLog('note-cell path', { key, multi, isArrow, shiftKey: e.shiftKey, focus: [state.focusedChannel, state.focusedStep], anchor: [state.selectionAnchor.channel, state.selectionAnchor.step] });
+
+  // Shift+Arrow: extend selection (from single cell or multi; anchor stays put)
+  if (isArrow && e.shiftKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    let newCh = state.focusedChannel;
+    let newStep = state.focusedStep;
+    if (key === 'arrowup') newStep = Math.max(state.focusedStep - 1, 0);
+    else if (key === 'arrowdown') newStep = Math.min(state.focusedStep + 1, state.steps - 1);
+    else if (key === 'arrowleft') newCh = Math.max(state.focusedChannel - 1, 0);
+    else if (key === 'arrowright') newCh = Math.min(state.focusedChannel + 1, state.channels - 1);
+    selLog('Shift+Arrow extend: anchor', state.selectionAnchor.channel, state.selectionAnchor.step, '-> focus', newCh, newStep);
+    moveFocusOnly(newCh, newStep);
+    updateSelectionHighlight();
+    return;
+  }
+
+  // Arrow without shift and we have multi-selection: clear to one cell and move
+  if (multi && isArrow) {
+    e.preventDefault();
+    e.stopPropagation();
+    clearSelectionToFocus();
+    if (key === 'arrowup') setFocus(state.focusedChannel, Math.max(state.focusedStep - 1, 0));
+    else if (key === 'arrowdown') setFocus(state.focusedChannel, Math.min(state.focusedStep + 1, state.steps - 1));
+    else if (key === 'arrowleft') setFocus(Math.max(state.focusedChannel - 1, 0), state.focusedStep);
+    else if (key === 'arrowright') setFocus(Math.min(state.focusedChannel + 1, state.channels - 1), state.focusedStep);
+    focusNoteCell(state.focusedChannel, state.focusedStep);
+    return;
+  }
+
+  // Navigation (single cell; can traverse into vol/reps/nd)
   if (key === 'arrowup') {
     e.preventDefault();
     const newStep = Math.max(state.focusedStep - 1, 0);
@@ -1494,23 +1899,69 @@ function handleKeyDown(e) {
     || e.which === 45;
   if (isInsertKey) {
     e.preventDefault();
+    e.stopPropagation();
     const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
     const timeTrackScrollEl = elements.grid?.querySelector('.tracker-timetrack-scroll');
     const savedScrollTop = bodyScroll ? bodyScroll.scrollTop : 0;
     const savedTimeTrackScrollTop = timeTrackScrollEl ? timeTrackScrollEl.scrollTop : 0;
-    insertBlankRowAtStep(state.focusedChannel, state.focusedStep);
-    setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
-    requestAnimationFrame(() => {
-      const body = elements.grid?.querySelector('.tracker-body-scroll');
-      const timeTrack = elements.grid?.querySelector('.tracker-timetrack-scroll');
-      if (body) body.scrollTop = savedScrollTop;
-      if (timeTrack) timeTrack.scrollTop = savedTimeTrackScrollTop;
-    });
+    if (isMultiSelection()) {
+      const minCh = Math.min(state.selectionAnchor.channel, state.focusedChannel);
+      const maxCh = Math.max(state.selectionAnchor.channel, state.focusedChannel);
+      const minStep = Math.min(state.selectionAnchor.step, state.focusedStep);
+      const maxStep = Math.max(state.selectionAnchor.step, state.focusedStep);
+      const len = maxStep - minStep + 1;
+      selLog('Insert: multi-channel/row', { minCh, maxCh, minStep, maxStep, len });
+
+      for (let c = minCh; c <= maxCh; c++) {
+        for (let step = state.steps - 1; step >= minStep + len; step--) {
+          const src = state.grid[c]?.[step - len];
+          const dest = state.grid[c]?.[step];
+          if (!dest) continue;
+          dest.note = src?.note ?? null;
+          dest.vol = src?.vol ?? null;
+          dest.reps = src?.reps ?? null;
+          dest.nd = src?.nd ?? null;
+        }
+        for (let step = minStep; step < minStep + len && step < state.steps; step++) {
+          const dest = state.grid[c]?.[step];
+          if (!dest) continue;
+          dest.note = null;
+          dest.vol = null;
+          dest.reps = null;
+          dest.nd = null;
+        }
+      }
+      renderGrid();
+      updateSelectionHighlight();
+      updateOutput();
+      if (previewState.isPlaying && previewState.audioContext) {
+        const ctx = previewState.audioContext;
+        const duration = previewState.bufferDuration || 2.0;
+        const elapsed = ctx.currentTime - previewState.startTime;
+        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+        playPreview(currentOffset);
+      }
+      scheduleArrangementLiveEditUpdate();
+    } else {
+      insertBlankRowAtStep(state.focusedChannel, state.focusedStep);
+      setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
+      requestAnimationFrame(() => {
+        const body = elements.grid?.querySelector('.tracker-body-scroll');
+        const timeTrack = elements.grid?.querySelector('.tracker-timetrack-scroll');
+        if (body) body.scrollTop = savedScrollTop;
+        if (timeTrack) timeTrack.scrollTop = savedTimeTrackScrollTop;
+      });
+    }
     return;
   }
 
   if (key === ' ') {
     e.preventDefault();
+    if (isMultiSelection()) {
+      selLog('Space: clearSelectionNotes (multi)');
+      clearSelectionNotes();
+      return;
+    }
     setNote(state.focusedChannel, state.focusedStep, null);
     const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
     setFocus(state.focusedChannel, newStep);
@@ -1519,6 +1970,12 @@ function handleKeyDown(e) {
 
   if (key === 'delete') {
     e.preventDefault();
+    e.stopPropagation();
+    if (isMultiSelection()) {
+      selLog('Delete: deleteSelectionWithShift (multi)');
+      deleteSelectionWithShift();
+      return;
+    }
     const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
     const timeTrackScrollEl = elements.grid?.querySelector('.tracker-timetrack-scroll');
     const savedScrollTop = bodyScroll ? bodyScroll.scrollTop : 0;
@@ -1532,7 +1989,8 @@ function handleKeyDown(e) {
       setNote(state.focusedChannel, state.focusedStep, null);
       setFocus(state.focusedChannel, 0, { scroll: false });
     } else {
-      shiftColumnUpFromStep(state.focusedChannel, state.focusedStep - 1);
+      // Remove current row: shift content from below up (don't touch the row above)
+      shiftColumnUpFromStep(state.focusedChannel, state.focusedStep);
       setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
     }
     requestAnimationFrame(() => {
@@ -1547,6 +2005,11 @@ function handleKeyDown(e) {
   // Clear note
   if (key === 'backspace') {
     e.preventDefault();
+    if (isMultiSelection()) {
+      selLog('Backspace: clearSelectionNotes (multi)');
+      clearSelectionNotes();
+      return;
+    }
     setNote(state.focusedChannel, state.focusedStep, null);
     setFocus(state.focusedChannel, state.focusedStep);
     return;
@@ -1740,9 +2203,20 @@ function setNote(channel, step, note, options = {}) {
 
 function shiftColumnUpFromStep(channel, startStep) {
   for (let step = startStep; step < state.steps - 1; step++) {
-    state.grid[channel][step].note = state.grid[channel][step + 1].note;
+    const src = state.grid[channel][step + 1];
+    const dest = state.grid[channel][step];
+    dest.note = src?.note ?? null;
+    dest.vol = src?.vol ?? null;
+    dest.reps = src?.reps ?? null;
+    dest.nd = src?.nd ?? null;
   }
-  state.grid[channel][state.steps - 1].note = null;
+  const tail = state.grid[channel][state.steps - 1];
+  if (tail) {
+    tail.note = null;
+    tail.vol = null;
+    tail.reps = null;
+    tail.nd = null;
+  }
   renderGrid();
   updateOutput();
 
@@ -1758,9 +2232,20 @@ function shiftColumnUpFromStep(channel, startStep) {
 
 function insertBlankRowAtStep(channel, startStep) {
   for (let step = state.steps - 1; step > startStep; step--) {
-    state.grid[channel][step].note = state.grid[channel][step - 1].note;
+    const src = state.grid[channel][step - 1];
+    const dest = state.grid[channel][step];
+    dest.note = src?.note ?? null;
+    dest.vol = src?.vol ?? null;
+    dest.reps = src?.reps ?? null;
+    dest.nd = src?.nd ?? null;
   }
-  state.grid[channel][startStep].note = null;
+  const head = state.grid[channel][startStep];
+  if (head) {
+    head.note = null;
+    head.vol = null;
+    head.reps = null;
+    head.nd = null;
+  }
   renderGrid();
   updateOutput();
 
@@ -4074,6 +4559,19 @@ function updateEditModeUI() {
       elements.saveBtn.title = '';
     }
   }
+  if (elements.duplicateBlockBtn) {
+    if (editMode.isEditing) {
+      elements.duplicateBlockBtn.classList.remove('hidden');
+      elements.duplicateBlockBtn.disabled = isReadonlyExample;
+      elements.duplicateBlockBtn.title = isReadonlyExample
+        ? 'Enable developer mode to duplicate example blocks'
+        : 'Duplicate this block (new name with suffix -2, -3, …)';
+    } else {
+      elements.duplicateBlockBtn.classList.add('hidden');
+      elements.duplicateBlockBtn.disabled = false;
+      elements.duplicateBlockBtn.title = '';
+    }
+  }
 }
 
 /**
@@ -4112,6 +4610,37 @@ function handleSaveBlock() {
     }
   });
   document.dispatchEvent(event);
+}
+
+/**
+ * Handle duplicate block button: dispatch event with current state; app creates new block with name suffix -n
+ */
+function handleDuplicateBlock() {
+  if (!editMode.isEditing) return;
+
+  let name = editMode.blockName;
+  if (elements.blockNameInput) {
+    name = elements.blockNameInput.value.trim();
+    if (!name) {
+      alert('Please enter a block name before duplicating.');
+      elements.blockNameInput.focus();
+      return;
+    }
+  }
+
+  const trackerState = serializeTrackerState();
+  const pattern = elements.output?.value || '';
+
+  document.dispatchEvent(new CustomEvent('tracker:duplicateBlock', {
+    detail: {
+      filename: editMode.blockFilename,
+      name,
+      description: editMode.blockDescription,
+      scope: editMode.blockScope,
+      pattern,
+      trackerState,
+    },
+  }));
 }
 
 function closeClearConfirmModal() {

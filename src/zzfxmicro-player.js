@@ -1,10 +1,10 @@
-import { zzfxG } from './zzfx-loader.js';
+import { zzfxG } from './zzfx-core.js';
 import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-settings.js';
 
 /**
- * ZzFX Music Renderer v2.0.3 by Frank Force 2019
+ * ZzFXMicro Player — ZzFX Music Renderer v2.0.3 by Frank Force 2019
  * Adapted from ZzFXM (Keith Clark and Frank Force, MIT License)
- * for ES Modules and Strudel Exporter format.
+ * for ES Modules and ZzFXMicro Player export format. Uses ZzFXMicro (21-param) engine.
  * Original project: https://keithclark.github.io/ZzFXM/
  */
 
@@ -23,7 +23,7 @@ export const buildSong = (song, options = {}) => {
     let secondsPerBeat = 60 / BPM;
     // Exporter uses 16 rows per beat? No, 16 rows per CYCLE usually.
     // In Exporter Logic: ROWS_PER_CYCLE = 16.
-    // Strudel cycle usually = 1 bar (4 beats).
+    // One cycle is typically 1 bar (4 beats).
     // So 16 rows = 4 beats. -> 4 rows per beat. -> 16th notes.
     // So 1 row = 1/16th note.
     
@@ -200,10 +200,10 @@ let playingSource = null;
 export function playZzfxmSong(songData, audioCtx, onEnded, options = {}) {
     stopZzfxmSong();
     
-    console.log("[ZzFXM] Building song...", songData);
+    console.log("[ZzFXMicro] Building song...", songData);
     const pcm = buildSong(songData, options);
     if (!pcm) {
-        console.error("[ZzFXM] Failed to build song");
+        console.error("[ZzFXMicro] Failed to build song");
         if (onEnded) onEnded();
         return;
     }
@@ -218,12 +218,12 @@ export function playZzfxmSong(songData, audioCtx, onEnded, options = {}) {
     
     playingSource = source;
     
-    console.log(`[ZzFXM] Playing ${pcm.length} samples.`);
+    console.log(`[ZzFXMicro] Playing ${pcm.length} samples.`);
     
     source.onended = () => {
         if (playingSource === source) {
             playingSource = null;
-            console.log("[ZzFXM] Ended.");
+            console.log("[ZzFXMicro] Ended.");
             if (onEnded) onEnded();
         }
     };
@@ -233,6 +233,6 @@ export function stopZzfxmSong() {
     if (playingSource) {
         try { playingSource.stop(); } catch(e){}
         playingSource = null;
-        console.log("[ZzFXM] Stopped.");
+        console.log("[ZzFXMicro] Stopped.");
     }
 }

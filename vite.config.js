@@ -293,7 +293,7 @@ const apiPlugin = () => ({
         next();
      });
      
-    // API: Save Exported JS (canonical ZzFXM module)
+    // API: Save Exported JS (ZzFXMicro Player-compatible module)
     // POST /api/save-exported-js/:filename
     server.middlewares.use((req, res, next) => {
         if (!req.url.startsWith('/api/save-exported-js/')) {

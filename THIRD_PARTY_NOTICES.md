@@ -1,5 +1,7 @@
 # Third-Party Notices
 
+**ZzFXMicro Music** is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
+
 This project uses third-party software. Attribution and license summary:
 
 ## Strudel
@@ -21,7 +23,7 @@ This project uses third-party software. Attribution and license summary:
 - Project: ZzFXM by Keith Clark and Frank Force
 - Upstream: https://keithclark.github.io/ZzFXM/
 - License: MIT
-- Usage in this repository: adapted music renderer/player in `src/zzfxm-player.js`
+- Usage in this repository: adapted as ZzFXMicro Player in `src/zzfxmicro-player.js`
 
 ## Notes
 

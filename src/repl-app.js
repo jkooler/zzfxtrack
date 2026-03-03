@@ -6,7 +6,7 @@ import { instruments as staticInstruments, instrumentMonophonic as staticMonopho
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
 import { exportPattern } from './export-logic.js';
-import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxm-player.js';
+import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxmicro-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
@@ -498,7 +498,7 @@ function setZzfxmPreviewData(songData, meta = null, { type, filename, reveal = t
     }
 }
 
-function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFXM data' } = {}) {
+function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFXMicro Player data' } = {}) {
     if (isPreviewPlaying) {
         stopZzfxmSong();
         updatePreviewPlayButton(false);
@@ -513,10 +513,10 @@ function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFX
 function updateFooterExportActionLabels() {
     const arrangementMode = isArrangementWorkspaceActive();
     if (dom.exportBtnLabel) {
-        dom.exportBtnLabel.textContent = arrangementMode ? 'Arr. to ZzFXM' : 'Pattern to ZzFXM';
+        dom.exportBtnLabel.textContent = 'EXPORT ZzFXMicro';
     }
     if (dom.exportBtn) {
-        dom.exportBtn.title = arrangementMode ? 'Export arrangement to ZzFXM JSON' : '';
+        dom.exportBtn.title = arrangementMode ? 'Export arrangement to ZzFXMicro JSON' : 'Export pattern to ZzFXMicro JSON';
         dom.exportBtn.classList.toggle('export-arrangement-mode', arrangementMode);
     }
     if (dom.exportWavBtnLabel) {
@@ -763,7 +763,7 @@ async function init() {
     
     // Disable default samples (TidalCycles/Dirt) to ensure only ZzFX instruments are used
     dom.repl.prelude = `
-// Strudel to ZzFXM Environment
+// ZzFXMicro Music
 // Default samples are disabled.
 // Only ZzFX instruments defined in instruments.js are available.
 `;
@@ -2498,7 +2498,7 @@ function renderArrangementWorkspace() {
             document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: false } }));
             return;
         }
-        // Stop any other playback (Strudel pattern, ZzFXM preview, tracker, or another arrangement) before starting this arrangement's preview.
+        // Stop any other playback (Strudel pattern, ZzFXMicro Player preview, tracker, or another arrangement) before starting this arrangement's preview.
         stopAllPlaybackForSelectionChange();
         document.dispatchEvent(new CustomEvent('arrangements:preview', {
             detail: { arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() }, filename: currentArrangementFilename }
@@ -3585,7 +3585,7 @@ async function loadPattern(filename) {
         
         dom.exportBtn.disabled = false;
         
-        // Clear ZzFXM export preview until this pattern/arrangement is exported again.
+        // Clear ZzFXMicro Player export preview until this pattern/arrangement is exported again.
         clearZzfxmPreviewData();
         setStatus('');
         
@@ -3928,7 +3928,7 @@ function shouldWarnExportLength(cycles, bpm) {
     return durationSec > EXPORT_LENGTH_WARNING_DURATION_SEC || cycles > EXPORT_LENGTH_WARNING_CYCLES;
 }
 
-/** Rough estimate of ZzFXM JSON size in bytes (instruments + pattern data). */
+/** Rough estimate of ZzFXMicro Player JSON size in bytes (instruments + pattern data). */
 function estimateExportSizeBytes(cycles, rowsPerCycle, instrumentCount, channelCount) {
     const totalRows = cycles * rowsPerCycle;
     const instrumentBytes = Math.max(0, instrumentCount) * 280;
@@ -3959,7 +3959,7 @@ async function exportCurrentPattern(options = {}) {
     if (dom.statusMsg.innerText.startsWith('⚠️')) {
         const confirmed = await confirmDialog({
             title: 'Export With Warnings?',
-            message: 'This code uses functions that ZzFXM ignores (for example reverb/delay). Export anyway?',
+            message: 'This code uses functions that ZzFXMicro Player format ignores (for example reverb/delay). Export anyway?',
             confirmLabel: 'Export',
             cancelLabel: 'Cancel',
             variant: 'danger',
@@ -4075,7 +4075,7 @@ async function exportCurrentPattern(options = {}) {
         const jsonFilename = currentPatternFilename.replace('.js', '.json');
         await saveExportedSongFiles(jsonFilename, songData);
         
-        // Show and enable ZzFXM preview buttons only for explicit ZzFXM export flow.
+        // Show and enable ZzFXMicro Player preview buttons only for explicit ZzFXMicro Player export flow.
         if (revealZzfxmPreview) {
             refreshZzfxmPreviewControlsVisibility();
         }
@@ -5733,11 +5733,11 @@ dom.previewPlayBtn.addEventListener('click', () => {
     }
 
     if (!lastExportedData) {
-        setStatus('Nothing to play. Export to ZzFXM first.', 'error');
+        setStatus('Nothing to play. Export ZzFXMicro first.', 'error');
         return;
     }
 
-    // Stop Strudel, arrangement preview, and tracker preview so only ZzFXM preview plays.
+    // Stop Strudel, arrangement preview, and tracker preview so only ZzFXMicro Player preview plays.
     stopAllPlaybackForSelectionChange();
 
     playZzfxmSong(lastExportedData, getAudioContext(), () => {
@@ -5795,7 +5795,7 @@ async function togglePlay(e) {
         return;
     }
 
-    // Stop any other playback (arrangement preview, ZzFXM, tracker) before starting Strudel.
+    // Stop any other playback (arrangement preview, ZzFXMicro Player, tracker) before starting Strudel.
     stopAllPlaybackForSelectionChange();
     isStrudelPaused = false;
 
@@ -5894,8 +5894,8 @@ document.addEventListener('keyup', (e) => {
 
 function buildZzfxmSongJsModule(songData) {
     const headerLines = [
-        '//! Generated by Strudel to ZzFXM',
-        '// ZzFXM song data: [instruments, patterns, sequence, BPM]',
+        '//! Generated by ZzFXMicro Music',
+        '// ZzFXMicro Player song data: [instruments, patterns, sequence, BPM]',
         ''
     ];
     const json = JSON.stringify(songData);
@@ -6713,7 +6713,7 @@ function setupTrackerEventListeners() {
         const detail = e?.detail || {};
         const aliases = Array.isArray(detail.aliases) ? detail.aliases : [];
         if (detail.playing) {
-            // Stop Strudel pattern and ZzFXM export preview so only tracker preview is heard
+            // Stop Strudel pattern and ZzFXMicro Player export preview so only tracker preview is heard
             try {
                 if (dom.repl.editor?.repl?.scheduler?.started) {
                     dom.repl.editor.stop();
@@ -8052,6 +8052,46 @@ document.addEventListener('tracker:saveBlock', async (e) => {
         } else {
             setStatus(`Failed to update block${updateResult?.error ? `: ${updateResult.error}` : ''}`, 'error');
         }
+    }
+});
+
+// Listen for tracker:duplicateBlock (create a new block with same content, name suffix -2, -3, …)
+document.addEventListener('tracker:duplicateBlock', async (e) => {
+    const { filename, name, description, pattern, trackerState, scope } = e.detail || {};
+    const baseName = String(name || '').trim() || 'block';
+
+    let existing = [];
+    try {
+        const res = await fetch('/api/blocks');
+        if (res.ok) existing = await res.json();
+    } catch (_) {}
+    const existingNames = new Set((existing || []).map((b) => String(b?.name ?? '').toLowerCase()));
+
+    let duplicateName = `${baseName}-2`;
+    let n = 2;
+    while (existingNames.has(duplicateName.toLowerCase())) {
+        n += 1;
+        duplicateName = `${baseName}-${n}`;
+    }
+
+    const result = await saveBlock(duplicateName, description || `Duplicate of ${baseName}`, pattern, trackerState, scope || 'user');
+    if (result && result.ok !== false && result.block) {
+        const createdBlock = result.block;
+        activeArrangementBlockFilename = createdBlock.filename;
+        if (currentArrangementFilename) arrangementSelectedBlockByArrangement[currentArrangementFilename] = createdBlock.filename;
+        trackerWorkspaceLoadedFilename = null;
+
+        setStatus(`Block "${duplicateName}" created`, 'success');
+        if (isArrangementWorkspaceActive()) {
+            await refreshBlocksLibrary();
+            renderArrangementWorkspace();
+            renderTrackerWorkspace();
+        } else {
+            await refreshBlocksLibrary();
+            openBlocksModal('blocks');
+        }
+    } else {
+        setStatus('Failed to duplicate block', 'error');
     }
 });
 

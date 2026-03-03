@@ -1,17 +1,12 @@
-# Strudel to ZzFXM
+# ZzFXMicro Music
 
-This is an authoring/export tool for ZzFXM that embeds Strudel for its REPL workflow and Visual Arranger. It’s not a Strudel fork and doesn’t aim to replace or extend Strudel; it focuses on ZzFXM export and related tooling, bridging these creative tools together.
+**ZzFXMicro Music** is an authoring/export tool for music made with ZzFXMicro that embeds Strudel for its REPL workflow and Visual Arranger. It’s not a Strudel fork and doesn’t aim to replace or extend Strudel; it focuses on the exporting funcationality and related tooling, bridging these creative tools together.
 
-In practice it's a browser-based tool to compose **game-music loops** with Strudel patterns (and **Blocks**, a tracker-style workflow), design sounds with a **ZzFXMicro-friendly instrument editor**, and export **ZzFXM-ready song data** (plus WAV downloads for quick preview/sharing).
+In practice it's a browser-based tool to compose **game-music loops** with Strudel patterns (and **Blocks**, a tracker-style workflow), design sounds with a **ZzFXMicro-friendly instrument editor**, and export **ZzFXMicro Player song data** (plus WAV downloads for quick preview/sharing).
 
-Under the hood, Strudel is used for **pattern notation + event scheduling**, and instruments are **ZzFXMicro-compatible** (registered as Strudel sounds for playback). The Visual Arranger uses Strudel under it's hood, which means a valid path for integration efforts. The export target is **ZzFXM**.
+Under the hood, Strudel is used for **pattern notation + event scheduling**, and instruments are **ZzFXMicro-compatible** (registered as Strudel sounds for playback). The Visual Arranger uses Strudel under it's hood, which means a valid path for integration efforts. The export target is JSON file that **ZzFXMicro Player** can play.
 
-## Who This Is For
-
-- Tiny web games and prototypes that use ZzFXM-style playback.
-- js13k-style size/perf constraints (optional voice limiting).
-- Anyone who wants fast iteration: write a pattern, preview, export song data.
-- Anyone who prefers tracker/step-sequencer style composition but still wants Strudel’s flexibility.
+ZzFXMicro Music is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
 
 ## Quickstart
 
@@ -19,8 +14,8 @@ Under the hood, Strudel is used for **pattern notation + event scheduling**, and
 1. Select instrument and try to make changes to the parameters
 1. Try to modify blocks, arrangements or Strudel pattern
 1. Note: Arrangements/Blocks and Strudel patterns aren't integrated, they are separate resources
-1. Click `Pattern to ZzFXM` or `ARR. to ZzFXM` if you're using the Arranger.
-1. After this, click the play button to preview ZzFXM playback.
+1. Click <strong>Export ZzFXMicro</strong> (pattern or arrangement).
+1. After this, click the play button to preview ZzFXMicro Player playback.
 1. Open `Song Data` to inspect/download the exported JSON.
 1. Click `Export WAV` if you want a quick audio file to share/test.
 
@@ -37,7 +32,7 @@ The **hosted** version is the quickest way to start (no install required), espec
 
 - Compose music using a Strudel REPL workflow (patterns + scheduling).
 - Design instruments using ZzFXMicro-style parameters (and use those same instruments during Strudel playback).
-- Export JSON song data for use in games/apps that use ZzFXM-style song playback.
+- Export JSON song data for use in games/apps that use ZzFXMicro Player song playback.
 
 Disclaimer: Currently this app is solely made for my specific needs, but I'm always happy to hear if you have found it useful.
 
@@ -67,7 +62,7 @@ npm run export -- --all --combined
 
 ## Export-Safe Tips (In-App Workflow)
 
-This app is optimized for creating ZzFXM-ready music with Strudel patterns. Strudel itself can do much more than what is practical to export 1:1, so it helps to stay within an "export-safe" subset.
+This app is optimized for creating ZzFXMicro Player-ready music with Strudel patterns. Strudel itself can do much more than what is practical to export 1:1, so it helps to stay within an "export-safe" subset.
 
 ### Loudness (Preview + WAV)
 
@@ -76,17 +71,33 @@ This app is optimized for creating ZzFXM-ready music with Strudel patterns. Stru
 
 ### Polyphony / Chords
 
-ZzFXM is effectively monophonic per channel. If you use chords, export may expand voices into more channels.
+The export format is effectively monophonic per channel. If you use chords, export may expand voices into more channels.
 
 - If you target tight constraints (js13k-style), consider enabling `Limit channel usage`.
 - If you use stacked unison notes, consider enabling `Normalize Layers`.
+
+## Using the ZzFXMicro Player in your project
+
+Exported JSON from this app is for the **ZzFXMicro Player** (ZzFXMicro 21-param format). It is not compatible with the canonical ZzFXM player. To play exported songs in your game or other project you need the standalone player.
+
+**Alpha:** There is no published npm package yet. Use the player by copying the standalone package from this repo:
+
+1. Copy the **`packages/zzfxmicro-player/`** folder into your project (the whole folder: `index.js`, `src/`, `package.json`, `README.md`).
+2. Import in your code, e.g.  
+   `import { playZzfxmSong, stopZzfxmSong, buildSong } from './zzfxmicro-player/index.js';`  
+   (adjust the path to where you placed the folder.)
+3. Pass your exported song data (the `[instruments, patterns, sequence, BPM]` array, e.g. from JSON) and an `AudioContext` to `playZzfxmSong(songData, audioCtx, onEnded?, options?)`.
+
+The package has no dependencies. See **`packages/zzfxmicro-player/README.md`** in this repo for the full API, song format, and a minimal example. A published package or separate repo may follow later.
 
 ## Project Structure
 
 - `patterns/`: pattern definitions (Strudel modules).
 - `instruments.js`: ZzFX instrument parameter definitions.
 - `export.js`: CLI exporter that writes JSON to `output/`.
-- `src/export-logic.js`: Strudel-to-ZzFXM export conversion logic.
+- `src/export-logic.js`: Strudel-to-ZzFXMicro Player export conversion logic.
+- `src/zzfxmicro-player.js`: ZzFXMicro Player (export preview and offline render).
+- `packages/zzfxmicro-player/`: Standalone player package (no dependencies). For games/projects that play exported JSON. After changing player code in `src/`, run `npm run sync-player` to copy into the package.
 - `output/`: generated export output.
 
 ## Licensing And Third-Party Notices

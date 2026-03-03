@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Strudel to ZzFXM</title>
+    <title>ZzFXMicro Music</title>
     <script>
       (function() {
         var key = 'zzfxm-color-theme';
@@ -98,7 +98,7 @@
           class="text-sm font-extrabold tracking-tight text-primary font-mono text-center pt-[5px] pb-[5px] mt-0 mb-0 cursor-pointer hover:text-primary/90 transition-colors"
           title="Show introduction (click again when viewing intro to return to pattern)"
         >
-          STRUDEL TO ZZFXM
+          ZzFXMicro Music
         </h1>
         <!-- Tabs -->
         <div class="sidebar-tabs grid grid-cols-2 rounded-md gap-x-0 gap-y-1">
@@ -213,7 +213,7 @@
                 type="text"
                 id="instStrudelAlias"
                 placeholder="my-bass"
-                class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               />
               <button
                 id="openInstrumentAdvancedSettingsBtn"
@@ -233,14 +233,14 @@
                   type="text"
                   id="instExportName"
                   readonly
-                  class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm opacity-70 cursor-not-allowed"
+                  class="flex h-8 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm opacity-70 cursor-not-allowed"
                 />
               </div>
               <input
                 type="number"
                 id="instChannel"
                 readonly
-                class="flex h-8 w-12 text-center rounded-md border border-input bg-input-bg px-1 py-1 text-sm shadow-sm opacity-70 cursor-not-allowed"
+                class="flex h-8 w-12 text-center rounded-md border border-input bg-input-bg px-1 py-1 text-sm opacity-70 cursor-not-allowed"
                 title="Channel"
               />
             </div>
@@ -504,7 +504,7 @@
               type="text"
               id="importZzFXInput"
               placeholder=".5,.05,140,0..."
-              class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              class="flex h-9 w-full rounded-md border border-input bg-input-bg px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <button
               id="importZzFXBtn"
@@ -546,7 +546,7 @@
             id="patternNameInput"
             placeholder="Select a pattern..."
             readonly
-            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 max-w-sm"
+            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 max-w-sm"
           />
           <button
             id="openPatternAdvancedSettingsBtn"
@@ -586,7 +586,7 @@
           <h1
             class="text-4xl font-black tracking-tight text-primary drop-shadow-sm font-mono"
           >
-            Welcome to<br />STRUDEL TO ZZFXM
+            ZzFXMicro Music
           </h1>
           <p class="text-base leading-relaxed text-foreground/80">
             With this app you can create musical content using
@@ -605,19 +605,14 @@
             > interface or Arranger.
           </p>
           <p class="text-base text-muted-foreground">
-            After creating your musical content, export it to JSON format and use it in
-            your games or other projects that use
-            <a
-              href="https://codeberg.org/uzu/zzfxm"
-              target="_blank"
-              class="text-primary hover:underline"
-              >ZzFXM</a
-            >.
+            Export your creations as JSON files and use them in
+            your games or other projects using the <strong>ZzFXMicro Player</strong>.
           </p>
           <div class="text-sm opacity-80">
-            <strong class="text-foreground">NOTE:</strong> Ensure your game or project
-            uses <strong>ZzFXMicro</strong> (standard for ZzFXM).<br />The
-            parameter mapping differs from the full ZzFX library.
+            <strong class="text-foreground">NOTE:</strong> The exported JSON is
+            <strong>not compatible</strong> with the canonical ZzFXM player. It targets
+            the <strong>ZzFXMicro Player</strong>, which uses the 21-parameter
+            <strong>ZzFXMicro</strong> format rather than the original ZzFM engine.
           </div>
           <div class="h-px bg-border"></div>
           <div class="flex items-center justify-center gap-2">
@@ -710,14 +705,14 @@
           </button>
           <button
             id="exportBtn"
-            class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-3 uppercase"
+            class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-3"
           >
-            <span id="exportBtnLabel">Pattern to ZzFXM</span>
+            <span id="exportBtnLabel">EXPORT ZzFXMicro</span>
           </button>
           <button
             id="previewPlayBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground text-foreground h-9 w-9 p-0 flex items-center justify-center"
-            title="Play ZzFXM"
+            title="Play ZzFXMicro"
             disabled
             style="display: none"
           >
@@ -865,7 +860,10 @@
 
         <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
           <p class="text-foreground/90 leading-relaxed">
-            This is an authoring/export tool for <strong>ZzFXM</strong> that embeds <strong>Strudel</strong> for its REPL workflow and <strong>Arranger</strong>. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
+            <strong>ZzFXMicro Music</strong> is an authoring/export tool for the bundled <strong>ZzFXMicro Player</strong> that embeds <strong>Strudel</strong> for its REPL workflow and <strong>Arranger</strong>. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
+          </p>
+          <p class="text-muted-foreground/90 text-xs leading-relaxed">
+            ZzFXMicro Music is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
           </p>
 
           <div class="space-y-2">
@@ -875,7 +873,7 @@
               <li>Choose <strong>instrument</strong> that is playing and change it's parameters.</li>
               <li>Try to make changes to the Arrangement/Blocks or Strudel pattern.</li>
               <li>Note: Arrangements/Blocks and Strudel patterns aren't integrated, they are separate resources</li>
-              <li>Click either <strong>Arrangement to ZzFXM</strong> or <strong>Pattern to ZzFXM</strong> and preview playback.</li>
+              <li>Click <strong>Export ZzFXMicro</strong> and preview playback.</li>
               <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Export WAV</strong> to share/test.</li>
             </ol>
           </div>
@@ -886,7 +884,7 @@
               <li><strong>Arranger</strong>: tracker-style workflow for composing loops with blocks.</li>
               <li><strong>Strudel</strong>: pattern notation and event scheduling.</li>
               <li><strong>ZzFXMicro</strong>: instrument parameter model and sound generation (registered as Strudel sounds for playback).</li>
-              <li><strong>ZzFXM</strong>: the export target format for games/apps.</li>
+              <li><strong>ZzFXMicro Player</strong>: the export target format for games/apps.</li>
             </ul>
           </div>
 
@@ -958,6 +956,9 @@
             ZzFX and ZzFXM are MIT-licensed components adapted for this workflow.
           </p>
           <p>
+            <strong>ZzFXMicro Music</strong> is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
+          </p>
+          <p>
             For full repository-level attribution details, see
             <code>THIRD_PARTY_NOTICES.md</code> in the project root.
           </p>
@@ -1001,7 +1002,7 @@
         </div>
         <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
           <p class="text-foreground/90 leading-relaxed">
-            This app is a browser-based composition and export tool. It combines Strudel as the pattern language and live-coding interface, ZzFXMicro as the synth engine for sound generation, and an export pipeline whose main output is ZzFXM-compatible song JSON.
+            This app is a browser-based composition and export tool. It combines Strudel as the pattern language and live-coding interface, ZzFXMicro as the synth engine for sound generation, and an export pipeline whose main output is ZzFXMicro Player-compatible song JSON.
           </p>
 
           <div class="space-y-2">
@@ -1042,10 +1043,25 @@
           <div class="space-y-2">
             <h3 class="text-foreground font-semibold">Export and preview</h3>
             <ul class="list-disc pl-5 space-y-1">
-              <li>Export is the main feature: it turns your composition into a ZzFXM song array <code>[instruments, patterns, sequence, BPM]</code> (plus optional stats), designed to be deterministic and engine-friendly.</li>
-              <li>Preview uses the same exported ZzFXM structure and ZzFXMicro synthesis to let you verify the result before downloading.</li>
+              <li>Export is the main feature: it turns your composition into a ZzFXMicro Player song array <code>[instruments, patterns, sequence, BPM]</code> (plus optional stats), designed to be deterministic and engine-friendly.</li>
+              <li>Preview uses the same exported ZzFXMicro Player structure and ZzFXMicro synthesis to let you verify the result before downloading.</li>
               <li><code>Export WAV</code> renders the exported song to PCM audio and encodes it as a WAV file (sample rate and bit depth are configurable in Export Settings).</li>
             </ul>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-foreground font-semibold">Using the standalone ZzFXMicro Player</h3>
+            <p class="leading-relaxed">
+              Exported JSON is for the <strong>ZzFXMicro Player</strong>, not the canonical ZzFXM player. To play songs in your game or project:
+            </p>
+            <ol class="list-decimal pl-5 space-y-1">
+              <li>Copy the <code>packages/zzfxmicro-player/</code> folder from this repo into your project.</li>
+              <li>Import: <code>import { playZzfxmSong, stopZzfxmSong } from './zzfxmicro-player/index.js';</code> (adjust path as needed).</li>
+              <li>Call <code>playZzfxmSong(songData, audioCtx, onEnded?)</code> with your exported <code>[instruments, patterns, sequence, BPM]</code> array and an <code>AudioContext</code>.</li>
+            </ol>
+            <p class="leading-relaxed">
+              The player has no dependencies. See <code>packages/zzfxmicro-player/README.md</code> in the repo for the full API.
+            </p>
           </div>
 
           <div class="space-y-2">
@@ -1094,7 +1110,7 @@
             <ul class="list-disc pl-5 mt-2 space-y-1">
               <li>First public alpha release.</li>
               <li>Strudel composition workflow with ZzFX instrument support.</li>
-              <li>ZzFXM-compatible export and preview flow.</li>
+              <li>ZzFXMicro Player-compatible export and preview flow.</li>
               <li>Experimental Blocks feature.</li>
               <li>In-app licensing and attribution modal.</li>
             </ul>
@@ -1659,7 +1675,7 @@
               </div>
             </div>
             <p class="text-xs text-muted-foreground/80 italic">
-              Applied to ZzFXM preview and arrangement playback. Uses soft clipping to reduce harsh digital clipping.
+              Applied to ZzFXMicro Player preview and arrangement playback. Uses soft clipping to reduce harsh digital clipping.
             </p>
           </div>
 
@@ -1967,22 +1983,19 @@
             <!-- Options filled by repl-app.js from Strudel presets -->
           </select>
         </label>
-        <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
-          <span class="text-sm text-foreground leading-snug">Developer mode</span>
-          <span class="relative inline-flex h-6 w-11 items-center">
-            <input type="checkbox" id="systemSettingsDevModeToggle" class="peer sr-only" />
-            <span class="absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-primary/70"></span>
-            <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background border border-border transition-transform peer-checked:translate-x-5"></span>
-          </span>
-        </label>
-        <p class="text-xs text-muted-foreground/90 leading-relaxed">
-          Use with caution. Will enable functionality that can lead to unintended data loss.
-        </p>
-
-              </button>
-            </div>
-          </div>
-        </details>
+        <div class="flex flex-col gap-2 p-3 rounded-md border border-input bg-card/40">
+          <label class="flex items-center justify-between gap-3">
+            <span class="text-sm text-foreground leading-snug">Developer mode</span>
+            <span class="relative inline-flex h-6 w-11 items-center">
+              <input type="checkbox" id="systemSettingsDevModeToggle" class="peer sr-only" />
+              <span class="absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-primary/70"></span>
+              <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background border border-border transition-transform peer-checked:translate-x-5"></span>
+            </span>
+          </label>
+          <p class="text-xs text-muted-foreground/90 leading-relaxed">
+            Use with caution. Will enable functionality that can lead to unintended data loss.
+          </p>
+        </div>
 
         <div class="flex justify-end gap-2">
           <button
@@ -2430,6 +2443,13 @@
                 class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1.5"
               >
                 Clear All
+              </button>
+              <button
+                id="duplicateTrackerBlockBtn"
+                class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1.5"
+                title="Duplicate this block (new name with suffix -2, -3, …)"
+              >
+                Duplicate block
               </button>
               <button
                 id="saveTrackerBtn"

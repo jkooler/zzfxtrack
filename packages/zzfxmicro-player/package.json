@@ -1,0 +1,23 @@
+{
+  "name": "zzfxmicro-player",
+  "version": "0.1.0",
+  "description": "ZzFXMicro Player — play song data (ZzFXMicro 21-param format) in games and other projects",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "src"
+  ],
+  "keywords": [
+    "zzfxmicro",
+    "zzfx",
+    "music",
+    "audio",
+    "game-audio"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,5 +1,5 @@
 {
-  "name": "strudel-to-zzfxm",
+  "name": "zzfxmicro-music",
   "version": "0.1.0-alpha.1",
   "main": "index.js",
   "type": "module",
@@ -7,7 +7,8 @@
     "dev": "vite",
     "dev:demo": "vite --mode demo",
     "export": "node export.js",
-    "export:all": "node export.js --all"
+    "export:all": "node export.js --all",
+    "sync-player": "node scripts/sync-player.js"
   },
   "keywords": [],
   "author": "",

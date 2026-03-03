@@ -1,14 +1,14 @@
-# User Guide (Strudel-for-ZzFXM) Implementation Plan
+# User Guide (ZzFXMicro Music) Implementation Plan
 
 Status: Proposed (not implemented)
 
 ## Problem Statement
 
-This app is not trying to teach “general Strudel mastery”. It’s a Strudel-assisted workflow for authoring **ZzFXM-ready game music**.
+This app is not trying to teach “general Strudel mastery”. It’s a Strudel-assisted workflow for authoring **ZzFXMicro Player-ready game music**.
 
 Users need:
 - A short, focused guide tailored to this app’s export constraints.
-- Small, copyable examples that are known to export reliably to ZzFXM.
+- Small, copyable examples that are known to export reliably to ZzFXMicro Player format.
 - A way to use the guide even in the hosted/demo build (offline-friendly, no web dependency).
 
 ## Goals
@@ -33,7 +33,7 @@ Create a new documentation section focused on game-music authoring patterns:
   - What exports reliably (supported subset)
   - Common loop templates (4-bar, intro+loop+outro)
   - Mixing/loudness presets (Safe/Balanced/Loud/Very Loud) and when to use them
-  - Export: ZzFXM vs WAV download settings (sample rate/bit depth)
+  - Export: ZzFXMicro Player vs WAV download settings (sample rate/bit depth)
   - Troubleshooting (quiet, clipping, “arrange doesn’t repeat”, preview vs export)
 - `docs/user-guide/recipes/*.md`
   - “Drums + bass + chords + lead” loop skeletons
@@ -125,7 +125,7 @@ Manual checks:
 
 1. Embed Strudel official docs
    - Pros: comprehensive
-   - Cons: not aligned to ZzFXM workflow; licensing/maintenance; encourages preview-only features
+   - Cons: not aligned to ZzFXMicro Player workflow; licensing/maintenance; encourages preview-only features
 
 2. Link out to Strudel docs
    - Pros: zero work
@@ -137,7 +137,7 @@ Manual checks:
 
 ## Recommendation
 
-Implement an offline, in-app **User Guide** that is intentionally scoped to “Strudel-for-ZzFXM game music”.
+Implement an offline, in-app **User Guide** that is intentionally scoped to “ZzFXMicro Music game music”.
 
 Start with:
 - A small set of export-safe recipes
