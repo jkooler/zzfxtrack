@@ -121,6 +121,59 @@ let editMode = {
 
 /** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
 let lastSavedSnapshot = '';
+
+/** Undo/redo: stacks of serialized tracker state (grid only; no focus/selection). */
+const MAX_UNDO_SIZE = 50;
+let undoStack = [];
+let redoStack = [];
+
+function pushUndo() {
+  if (!editMode.isEditing) return;
+  redoStack = [];
+  const snap = serializeTrackerState();
+  // Store a deep clone so no shared references (e.g. channelInstruments) can be mutated later
+  undoStack.push(JSON.parse(JSON.stringify(snap)));
+  if (undoStack.length > MAX_UNDO_SIZE) undoStack.shift();
+}
+
+function trackerUndo() {
+  if (!undoStack.length) return;
+  redoStack.push(JSON.parse(JSON.stringify(serializeTrackerState())));
+  const prev = undoStack.pop();
+  deserializeTrackerState(prev);
+  renderGrid();
+  updateSelectionHighlight();
+  updateOutput();
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    playPreview(currentOffset);
+  }
+  scheduleArrangementLiveEditUpdate();
+  focusNoteCell(state.focusedChannel, state.focusedStep);
+}
+
+function trackerRedo() {
+  if (!redoStack.length) return;
+  undoStack.push(JSON.parse(JSON.stringify(serializeTrackerState())));
+  const next = redoStack.pop();
+  deserializeTrackerState(next);
+  renderGrid();
+  updateSelectionHighlight();
+  updateOutput();
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    playPreview(currentOffset);
+  }
+  scheduleArrangementLiveEditUpdate();
+  focusNoteCell(state.focusedChannel, state.focusedStep);
+}
+
 /** When user reduces step count, we keep previous grids keyed by step count so restoring any count is non-destructive (preset or custom). */
 const gridBackupsBySteps = new Map(); // stepCount -> grid (deep copy)
 /** Per-block scroll position and focused cell (filename -> { scrollTop, channel, step }). */
@@ -301,6 +354,7 @@ function pasteFromBuffer() {
     state.focusedStep
   );
   if (!copyBuffer.length || !copyMeta) return;
+  pushUndo();
 
   for (const entry of copyBuffer) {
     const destCh = state.focusedChannel + entry.dCh;
@@ -338,6 +392,7 @@ function deleteSelectionWithShift() {
     selLog('deleteSelectionWithShift: empty selection, nothing to delete');
     return;
   }
+  pushUndo();
 
   const minCh = Math.min(state.selectionAnchor.channel, state.focusedChannel);
   const maxCh = Math.max(state.selectionAnchor.channel, state.focusedChannel);
@@ -385,6 +440,7 @@ function deleteSelectionWithShift() {
 }
 
 function clearSelectionNotes() {
+  pushUndo();
   const sel = getSelectionSet();
   if (!sel.size) {
     // Fallback: clear just the focused cell
@@ -1470,7 +1526,8 @@ function setupEventListeners() {
   elements.clearConfirmCancel?.addEventListener('click', closeClearConfirmModal);
   elements.clearConfirmOk?.addEventListener('click', () => {
     closeClearConfirmModal();
-    clearAll();
+    pushUndo();
+    clearGridContent();
   });
   elements.clearConfirmModal?.addEventListener('click', (e) => {
     if (e.target === elements.clearConfirmModal) closeClearConfirmModal();
@@ -1649,6 +1706,29 @@ function handleKeyDown(e) {
     e.preventDefault();
     e.stopPropagation();
     return;
+  }
+
+  // Undo/redo only when note cell or vol/reps/nd is focused
+  const el = document.activeElement;
+  const inGrid = el?.classList?.contains('tracker-cell') ||
+    el?.classList?.contains('tracker-vol-input') ||
+    el?.classList?.contains('tracker-reps-input') ||
+    el?.classList?.contains('tracker-nd-input');
+  if (inGrid && (e.ctrlKey || e.metaKey)) {
+    const k = e.key.toLowerCase();
+    if (k === 'z') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) trackerRedo();
+      else trackerUndo();
+      return;
+    }
+    if (k === 'y') {
+      e.preventDefault();
+      e.stopPropagation();
+      trackerRedo();
+      return;
+    }
   }
 
   // Don't capture if typing in a select/textarea/input (except vol/reps/nd)
@@ -1853,24 +1933,79 @@ function handleKeyDown(e) {
     return;
   }
 
-  // Note-only octave shift (Impulse Tracker-style): affects only the focused note cell.
+  // Note-only octave shift (Impulse Tracker-style).
   // Does NOT change octaveOffset (used for note entry).
-  if (key === ',' || key === '.') {
-    const activeEl = document.activeElement;
-    const isNoteCellFocused = Boolean(activeEl && activeEl.classList && activeEl.classList.contains('tracker-cell'));
-    if (isNoteCellFocused) {
+  // - With a single cell selected: shifts only the focused note (requires note cell focused).
+  // - With a multi-selection: shifts all notes in the selection rectangle, even if focus
+  //   is not currently on a grid cell, as long as we're not typing into a non-tracker input.
+  if (e.key === ',' || e.key === '.') {
+    const delta = e.key === ',' ? -1 : 1;
+
+    // Multi-selection path: runs whenever a selection rectangle is active.
+    if (isMultiSelection()) {
+      const sel = getSelectionSet();
+      if (!sel.size) return;
+
+      pushUndo();
+
+      let changedAny = false;
+      for (const keyStr of sel) {
+        const [chStr, stepStr] = keyStr.split(',');
+        const ch = parseInt(chStr, 10);
+        const step = parseInt(stepStr, 10);
+        if (!Number.isInteger(ch) || !Number.isInteger(step)) continue;
+        const current = state.grid?.[ch]?.[step]?.note;
+        if (typeof current === 'string' && current && current !== '-' && current !== '~') {
+          const next = applyOctaveOffset(current, delta);
+          if (next && next !== current) {
+            setNote(ch, step, next, { skipRender: true });
+            changedAny = true;
+          }
+        }
+      }
+
+      if (changedAny) {
+        renderGrid();
+        updateSelectionHighlight();
+        updateOutput();
+        if (previewState.isPlaying && previewState.audioContext) {
+          const ctx = previewState.audioContext;
+          const duration = previewState.bufferDuration || 2.0;
+          const elapsed = ctx.currentTime - previewState.startTime;
+          const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+          playPreview(currentOffset);
+        }
+        scheduleArrangementLiveEditUpdate();
+        // Keep grid focused so consecutive octave changes work.
+        const cell = document.querySelector(
+          `.tracker-cell[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+        );
+        if (cell) cell.focus();
+      }
+
       e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // Single-cell path: only when an actual note cell is focused.
+    const activeEl = document.activeElement;
+    const isNoteCellFocused = Boolean(activeEl?.classList?.contains('tracker-cell'));
+    if (isNoteCellFocused) {
       const current = state.grid?.[state.focusedChannel]?.[state.focusedStep]?.note;
       if (typeof current === 'string' && current && current !== '-' && current !== '~') {
-        const delta = key === ',' ? -1 : 1;
         const next = applyOctaveOffset(current, delta);
         if (next && next !== current) {
+          pushUndo();
           setNote(state.focusedChannel, state.focusedStep, next);
           focusNoteCell(state.focusedChannel, state.focusedStep);
         }
       }
+      e.preventDefault();
+      e.stopPropagation();
       return;
     }
+    // If not in a note cell and no multi-selection, let the key fall through.
   }
 
   // Note input
@@ -1878,6 +2013,7 @@ function handleKeyDown(e) {
     e.preventDefault();
     const note = applyOctaveOffset(KEYBOARD_MAP[key], octaveOffset);
     if (note) {
+      pushUndo();
       setNote(state.focusedChannel, state.focusedStep, note);
     }
     return;
@@ -1886,6 +2022,7 @@ function handleKeyDown(e) {
   // Note cut (Impulse Tracker-style)
   if (key === '1') {
     e.preventDefault();
+    pushUndo();
     setNote(state.focusedChannel, state.focusedStep, '-');
     const newStep = (state.focusedStep + 1) % state.steps;
     setFocus(state.focusedChannel, newStep);
@@ -1905,6 +2042,7 @@ function handleKeyDown(e) {
     const savedScrollTop = bodyScroll ? bodyScroll.scrollTop : 0;
     const savedTimeTrackScrollTop = timeTrackScrollEl ? timeTrackScrollEl.scrollTop : 0;
     if (isMultiSelection()) {
+      pushUndo();
       const minCh = Math.min(state.selectionAnchor.channel, state.focusedChannel);
       const maxCh = Math.max(state.selectionAnchor.channel, state.focusedChannel);
       const minStep = Math.min(state.selectionAnchor.step, state.focusedStep);
@@ -1944,6 +2082,7 @@ function handleKeyDown(e) {
       scheduleArrangementLiveEditUpdate();
     } else {
       insertBlankRowAtStep(state.focusedChannel, state.focusedStep);
+      scheduleArrangementLiveEditUpdate();
       setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
       requestAnimationFrame(() => {
         const body = elements.grid?.querySelector('.tracker-body-scroll');
@@ -1962,6 +2101,7 @@ function handleKeyDown(e) {
       clearSelectionNotes();
       return;
     }
+    pushUndo();
     setNote(state.focusedChannel, state.focusedStep, null);
     const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
     setFocus(state.focusedChannel, newStep);
@@ -1983,14 +2123,18 @@ function handleKeyDown(e) {
     const cell = state.grid?.[state.focusedChannel]?.[state.focusedStep];
     const hasNote = cell && (cell.note != null && cell.note !== '');
     if (hasNote) {
+      pushUndo();
       setNote(state.focusedChannel, state.focusedStep, null);
+      scheduleArrangementLiveEditUpdate();
       setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
     } else if (state.focusedStep === 0) {
       setNote(state.focusedChannel, state.focusedStep, null);
+      scheduleArrangementLiveEditUpdate();
       setFocus(state.focusedChannel, 0, { scroll: false });
     } else {
       // Remove current row: shift content from below up (don't touch the row above)
       shiftColumnUpFromStep(state.focusedChannel, state.focusedStep);
+      scheduleArrangementLiveEditUpdate();
       setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
     }
     requestAnimationFrame(() => {
@@ -2010,6 +2154,7 @@ function handleKeyDown(e) {
       clearSelectionNotes();
       return;
     }
+    pushUndo();
     setNote(state.focusedChannel, state.focusedStep, null);
     setFocus(state.focusedChannel, state.focusedStep);
     return;
@@ -2202,6 +2347,7 @@ function setNote(channel, step, note, options = {}) {
 }
 
 function shiftColumnUpFromStep(channel, startStep) {
+  pushUndo();
   for (let step = startStep; step < state.steps - 1; step++) {
     const src = state.grid[channel][step + 1];
     const dest = state.grid[channel][step];
@@ -2231,6 +2377,7 @@ function shiftColumnUpFromStep(channel, startStep) {
 }
 
 function insertBlankRowAtStep(channel, startStep) {
+  pushUndo();
   for (let step = state.steps - 1; step > startStep; step--) {
     const src = state.grid[channel][step - 1];
     const dest = state.grid[channel][step];
@@ -2314,20 +2461,46 @@ function playNotePreview(channel, step, noteStr) {
 }
 
 /**
- * Clear all tracker data
+ * Clear only sequenced content: notes, volume and effects (vol, reps, nd) in every cell.
+ * Keeps instrument assignments, step count, channels and BPM unchanged.
+ */
+function clearGridContent() {
+  for (let ch = 0; ch < state.channels; ch++) {
+    for (let step = 0; step < state.steps; step++) {
+      const cell = state.grid[ch]?.[step];
+      if (cell) {
+        cell.note = null;
+        cell.vol = null;
+        cell.reps = null;
+        cell.nd = null;
+      }
+    }
+  }
+  renderGrid();
+  updateOutput();
+  if (previewState.isPlaying && previewState.audioContext) {
+    const ctx = previewState.audioContext;
+    const duration = previewState.bufferDuration || 2.0;
+    const elapsed = ctx.currentTime - previewState.startTime;
+    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+    playPreview(currentOffset);
+  }
+  focusNoteCell(state.focusedChannel, state.focusedStep);
+}
+
+/**
+ * Clear all tracker data (grid + instrument assignments). Used when loading a block.
  */
 function clearAll() {
   initGrid();
   state.channelInstruments = Array(MAX_CHANNELS).fill('');
   renderGrid();
   updateOutput();
-  
   if (previewState.isPlaying && previewState.audioContext) {
     const ctx = previewState.audioContext;
     const duration = previewState.bufferDuration || 2.0;
     const elapsed = ctx.currentTime - previewState.startTime;
     const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    
     playPreview(currentOffset);
   }
 }
@@ -2828,6 +3001,15 @@ function updatePreviewUI() {
   elements.previewBtn.classList.add('text-foreground');
 
   createIcons({ icons });
+
+  // If the preview button has focus (e.g. user clicked Play), return focus to the grid
+  // so they can continue shift-selecting / octave changes without the button keeping focus.
+  if (document.activeElement === elements.previewBtn) {
+    const activeCell = document.querySelector(
+      `.tracker-cell[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+    );
+    if (activeCell) activeCell.focus();
+  }
 }
 
 /**
@@ -4408,10 +4590,12 @@ export function openTrackerForEdit(instrumentList, blockData) {
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
   editMode.blockScope = blockData.scope === 'example' ? 'example' : 'user';
-  
+  undoStack = [];
+  redoStack = [];
+
   // Update UI for edit mode
   updateEditModeUI();
-  
+
   // Clear and reset state first
   clearAll();
   
@@ -4480,6 +4664,8 @@ function resetEditMode() {
   editMode.returnToBlocksOnClose = false;
   editMode.arrangementInsertRowIndex = null;
   lastSavedSnapshot = '';
+  undoStack = [];
+  redoStack = [];
 }
 
 /**

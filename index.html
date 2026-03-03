@@ -2442,7 +2442,7 @@
                 id="clearTrackerBtn"
                 class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1.5"
               >
-                Clear All
+                Clear
               </button>
               <button
                 id="duplicateTrackerBlockBtn"
@@ -2494,7 +2494,7 @@
       </div>
     </div>
 
-    <!-- Clear Tracker Confirmation Modal (shown when user clicks Clear All in Tracker) -->
+    <!-- Clear Tracker Confirmation Modal (shown when user clicks Clear in Tracker) -->
     <div
       id="clearTrackerConfirmModal"
       class="modal-overlay fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
@@ -2503,10 +2503,10 @@
         class="modal fixed z-[81] grid w-full max-w-sm gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
       >
         <h2 class="text-lg font-semibold leading-none tracking-tight text-foreground">
-          Clear all tracker data?
+          Clear notes, volume and effects?
         </h2>
         <p class="text-sm text-muted-foreground">
-          All steps and channels will be reset. This cannot be undone.
+          All notes, volume and effects in the grid will be cleared. Instrument assignments are kept. You can undo this with Ctrl/Cmd-Z.
         </p>
         <div class="flex justify-end gap-2">
           <button
@@ -2521,7 +2521,7 @@
             type="button"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 shadow-sm"
           >
-            Clear All
+            Clear
           </button>
         </div>
       </div>

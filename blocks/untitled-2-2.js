@@ -7,7 +7,7 @@ export const scope = "user";
 
 export const pattern = `stack(
   note("d3 ~ ~ ~ ~ ~ a3 ~ ~ ~ ~ ~ ~ ~ ~ ~").s("synth-stab").gain("0.01 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"),
-  note("f3 ~ ~ f3 ~ ~ ~ ~ ~ ~ ~ e3 ~ ~ ~ ~").s("pad")
+  note("f3 ~ ~ f3 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~").s("pad")
 )`;
 
 // Optional: Tracker state for re-editing
@@ -47,10 +47,10 @@ export const trackerState = {
       null,
       null,
       null,
-      "e3",
       null,
       null,
-      "-",
+      null,
+      null,
       null
     ],
     [
