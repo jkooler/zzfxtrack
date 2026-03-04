@@ -871,9 +871,8 @@ strudel-editor {
 }
 
 .tracker-timetrack-row {
-  @apply text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-0.5 select-none cursor-pointer flex-shrink-0;
+  @apply text-[10px] text-muted-foreground/60 font-mono text-right flex items-center justify-end pr-0.5 select-none cursor-pointer flex-shrink-0 h-7;
   min-height: 1.75rem;
-  height: 1.75rem;
   width: 3ch;
   min-width: 3ch;
   line-height: 1;
@@ -928,16 +927,16 @@ strudel-editor {
 }
 
 .tracker-row {
-  @apply grid items-center gap-1 flex-shrink-0;
+  @apply grid items-center gap-1 flex-shrink-0 h-7;
   grid-template-columns: minmax(0, 1fr) 24px 24px 24px;
   min-height: 1.75rem;
-  height: 1.75rem;
   line-height: 1;
   box-sizing: border-box;
 }
 
 .tracker-cell {
-  @apply flex-1 h-7 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all hover:border-primary/50;
+  @apply flex-1 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all hover:border-primary/30 h-7;
+  min-height: 1.75rem;
 }
 
 /* When 5+ channels use dynamic width, keep the note cell readable (e.g. "C#4") */
@@ -949,16 +948,11 @@ strudel-editor {
   outline: none;
 }
 
-.tracker-vol-input {
-  @apply w-[24px] h-7 shrink-0 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
-}
-
-.tracker-reps-input {
-  @apply w-[24px] h-7 shrink-0 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
-}
-
+.tracker-vol-input,
+.tracker-reps-input,
 .tracker-nd-input {
-  @apply w-[24px] h-7 shrink-0 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  @apply w-[24px] shrink-0 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring h-7;
+  min-height: 1.75rem;
 }
 
 .tracker-reps-input::-webkit-outer-spin-button,
@@ -972,6 +966,46 @@ strudel-editor {
 .tracker-nd-input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
+}
+
+/* Dense rows: tighter row height, no vertical gaps, small horizontal gap */
+.tracker-grid[data-dense-rows="true"] .tracker-channels-header-inner,
+.tracker-grid[data-dense-rows="true"] .tracker-grid-body,
+.tracker-grid[data-dense-rows="true"] .tracker-timetrack,
+.tracker-grid[data-dense-rows="true"] .tracker-timetrack-header,
+.tracker-grid[data-dense-rows="true"] .tracker-channel,
+.tracker-grid[data-dense-rows="true"] .tracker-channel-header,
+.tracker-grid[data-dense-rows="true"] .tracker-channel-header-row,
+.tracker-grid[data-dense-rows="true"] .tracker-row {
+  row-gap: 0;
+  column-gap: 2px;
+}
+/* Dense row height: 90% of previous dense (1.225rem) = 14px */
+.tracker-grid[data-dense-rows="true"] .tracker-timetrack-row,
+.tracker-grid[data-dense-rows="true"] .tracker-row {
+  min-height: 14px;
+  height: 14px;
+  margin-bottom: 1px;
+}
+.tracker-grid[data-dense-rows="true"] .tracker-cell,
+.tracker-grid[data-dense-rows="true"] .tracker-vol-input,
+.tracker-grid[data-dense-rows="true"] .tracker-reps-input,
+.tracker-grid[data-dense-rows="true"] .tracker-nd-input {
+  min-height: 14px;
+  height: 14px;
+  @apply border-transparent rounded-none;
+}
+.tracker-grid[data-dense-rows="true"] .tracker-cell.active {
+  @apply border-primary bg-primary/10 text-primary;
+}
+.tracker-grid[data-dense-rows="true"] .tracker-cell.tracker-cell-selected:not(.active) {
+  @apply border-quaternary ring-1 ring-quaternary;
+}
+/* In dense mode, only show borders on vol/reps/nd when row has selection beyond the focused cell (multi-select) */
+.tracker-grid[data-dense-rows="true"] .tracker-row:has(.tracker-cell.tracker-cell-selected:not(.active)) .tracker-vol-input,
+.tracker-grid[data-dense-rows="true"] .tracker-row:has(.tracker-cell.tracker-cell-selected:not(.active)) .tracker-reps-input,
+.tracker-grid[data-dense-rows="true"] .tracker-row:has(.tracker-cell.tracker-cell-selected:not(.active)) .tracker-nd-input {
+  @apply border-input;
 }
 
 .tracker-vol-input::-webkit-outer-spin-button,

@@ -6787,7 +6787,7 @@ async function openTrackerModalForEdit(block, trackerState, options = {}) {
         params: inst.params,
     }));
     
-    // Resolve latest block scope/name from API so immutable example safeguards are accurate.
+    // Resolve latest block scope/name/denseRows from API so immutable example safeguards are accurate.
     let resolvedBlock = { ...block };
     if (block?.filename) {
         try {

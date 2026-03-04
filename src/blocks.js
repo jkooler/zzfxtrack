@@ -1831,19 +1831,16 @@ async function openTrackerForEdit(index = null) {
   
   suspendBlocksModal();
   
-  // Fetch the full block data including trackerState
+  // Always fetch full block data so we get trackerState, scope, denseRows, etc.
   let trackerState = block.trackerState;
-  
-  // If trackerState wasn't in the cached data, fetch it directly from the file
-  if (!trackerState && block.filename) {
+  if (block.filename) {
     try {
       const response = await fetch(`/api/blocks/${block.filename}`);
       if (response.ok) {
         const fullBlock = await response.json();
-        trackerState = fullBlock.trackerState;
-        if (fullBlock?.scope) {
-          block = { ...block, scope: fullBlock.scope };
-        }
+        trackerState = fullBlock.trackerState ?? trackerState;
+        block = { ...block };
+        if (fullBlock?.scope !== undefined) block.scope = fullBlock.scope;
       }
     } catch (err) {
       console.warn('[Blocks] Could not fetch full block data:', err);
@@ -1865,15 +1862,16 @@ async function openTrackerForArrangementBlock(filename) {
   let block = blocksCache.find(b => b.filename === filename) || { filename, name: filename, description: '' };
   let trackerState = block.trackerState;
 
-  if (!trackerState && block.filename) {
+  if (block.filename) {
     try {
       const response = await fetch(`/api/blocks/${block.filename}`);
       if (response.ok) {
         const fullBlock = await response.json();
-        trackerState = fullBlock.trackerState;
-        if (fullBlock?.scope) {
-          block = { ...block, scope: fullBlock.scope, name: fullBlock.name || block.name, description: fullBlock.description || block.description };
-        }
+        trackerState = fullBlock.trackerState ?? trackerState;
+        block = { ...block };
+        if (fullBlock?.scope !== undefined) block.scope = fullBlock.scope;
+        if (fullBlock?.name !== undefined) block.name = fullBlock.name;
+        if (fullBlock?.description !== undefined) block.description = fullBlock.description;
       }
     } catch (err) {
       console.warn('[Arranger] Could not fetch full block data:', err);
@@ -2073,7 +2071,6 @@ export async function saveBlock(name, description, pattern, trackerState, scope 
       trackerState,
       scope: normalizeScope(scope),
     };
-    
     const response = await fetch('/api/blocks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

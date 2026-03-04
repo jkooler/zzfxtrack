@@ -15,6 +15,7 @@ import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-set
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+const TRACKER_DENSE_ROWS_KEY = 'zzfxm-tracker-dense-rows';
 
 function isDeveloperModeEnabled() {
   try {
@@ -22,6 +23,20 @@ function isDeveloperModeEnabled() {
   } catch (_e) {
     return false;
   }
+}
+
+function getDenseRowsPreference() {
+  try {
+    return localStorage.getItem(TRACKER_DENSE_ROWS_KEY) === '1';
+  } catch (_e) {
+    return false;
+  }
+}
+
+function setDenseRowsPreference(value) {
+  try {
+    localStorage.setItem(TRACKER_DENSE_ROWS_KEY, value ? '1' : '0');
+  } catch (_e) {}
 }
 
 // Keyboard to note mapping (zxcvb row = C3-B3, qwerty row = C4-B4)
@@ -117,6 +132,7 @@ let editMode = {
   returnToArrangementsOnClose: false,
   returnToBlocksOnClose: false,
   arrangementInsertRowIndex: null,
+  denseRows: false,
 };
 
 /** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
@@ -974,6 +990,7 @@ function cacheElements() {
     blockRowsCustom: document.getElementById('trackerBlockRowsCustom'),
     blockChannels: document.getElementById('trackerBlockChannels'),
     blockAdvancedSettingsBtn: document.getElementById('trackerBlockAdvancedSettingsBtn'),
+    denseRowsToggle: document.getElementById('trackerDenseRowsToggle'),
     title: document.querySelector('#trackerModal h2'),
     clearConfirmModal: document.getElementById('clearTrackerConfirmModal'),
     clearConfirmCancel: document.getElementById('clearTrackerConfirmCancel'),
@@ -1048,6 +1065,7 @@ function renderGrid() {
   if (!elements.grid) return;
 
   elements.grid.dataset.channels = String(state.channels);
+  elements.grid.dataset.denseRows = editMode.denseRows ? 'true' : 'false';
   elements.grid.innerHTML = '';
 
   // ---- Headers row: time track (fixed) + channel headers in their own horizontal scroll ----
@@ -1540,6 +1558,14 @@ function setupEventListeners() {
   elements.saveBtn?.addEventListener('click', handleSaveBlock);
 
   elements.duplicateBlockBtn?.addEventListener('click', handleDuplicateBlock);
+
+  // Global dense rows preference (applies to all blocks)
+  elements.denseRowsToggle?.addEventListener('change', (e) => {
+    const checked = !!e.target?.checked;
+    setDenseRowsPreference(checked);
+    editMode.denseRows = checked;
+    renderGrid();
+  });
 
   // Preview button
   elements.previewBtn?.addEventListener('click', togglePreview);
@@ -4536,11 +4562,13 @@ export function openTracker(instrumentList, options = {}) {
     ? options.arrangementInsertRowIndex
     : null;
   editMode.blockScope = 'user';
+  editMode.denseRows = getDenseRowsPreference();
   state.bpm = 120;
   setSteps(16);
   
   // Update UI (save button will be visible now)
   updateEditModeUI();
+  if (elements.denseRowsToggle) elements.denseRowsToggle.checked = editMode.denseRows;
   
   if (instrumentList) {
     state.instruments = instrumentList;
@@ -4590,11 +4618,13 @@ export function openTrackerForEdit(instrumentList, blockData) {
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
   editMode.blockScope = blockData.scope === 'example' ? 'example' : 'user';
+  editMode.denseRows = getDenseRowsPreference();
   undoStack = [];
   redoStack = [];
 
   // Update UI for edit mode
   updateEditModeUI();
+  if (elements.denseRowsToggle) elements.denseRowsToggle.checked = editMode.denseRows;
 
   // Clear and reset state first
   clearAll();
@@ -4663,6 +4693,7 @@ function resetEditMode() {
   editMode.returnToArrangementsOnClose = false;
   editMode.returnToBlocksOnClose = false;
   editMode.arrangementInsertRowIndex = null;
+  editMode.denseRows = false;
   lastSavedSnapshot = '';
   undoStack = [];
   redoStack = [];
