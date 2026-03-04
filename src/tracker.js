@@ -39,6 +39,25 @@ function setDenseRowsPreference(value) {
   } catch (_e) {}
 }
 
+function updateDenseRowsToggleUI() {
+  const btn = elements.denseRowsToggle;
+  if (!btn) return;
+  const isDense = !!editMode.denseRows;
+  btn.setAttribute('aria-pressed', String(isDense));
+  const iconEl = btn.querySelector('[data-lucide]');
+  if (iconEl) {
+    const desired = isDense ? 'list-chevrons-up-down' : 'list-chevrons-down-up';
+    if (iconEl.getAttribute('data-lucide') !== desired) {
+      iconEl.setAttribute('data-lucide', desired);
+      try {
+        createIcons({ icons });
+      } catch (_e) {
+        // ignore icon refresh errors
+      }
+    }
+  }
+}
+
 // Keyboard to note mapping (zxcvb row = C3-B3, qwerty row = C4-B4)
 const KEYBOARD_MAP = {
   // Lower row (C3 - B3)
@@ -89,6 +108,21 @@ const SCRUB_NOTE_VALUES = (() => {
   }
   return list;
 })();
+
+function formatNoteLabel(note) {
+  if (note == null) return '·';
+  if (note === '-') return '-';
+  const m = /^([a-g](?:#)?)(\d)$/.exec(note);
+  if (!m) return note;
+  const name = m[1];
+  const oct = m[2];
+  if (name.length === 1) {
+    // Natural note: c3 -> c-3
+    return `${name}-${oct}`;
+  }
+  // Sharp: keep as-is (c#3)
+  return `${name}${oct}`;
+}
 
 /** Maximum number of channels; grid always has this many columns so reducing active channels keeps data. */
 const MAX_CHANNELS = 8;
@@ -1189,7 +1223,7 @@ function renderGrid() {
 
       const cellData = state.grid[ch][step];
       if (cellData.note) {
-        cellEl.textContent = cellData.note;
+        cellEl.textContent = formatNoteLabel(cellData.note);
         cellEl.classList.add('has-note');
       } else if (cellData.note === '-') {
         cellEl.textContent = '-';
@@ -1560,10 +1594,11 @@ function setupEventListeners() {
   elements.duplicateBlockBtn?.addEventListener('click', handleDuplicateBlock);
 
   // Global dense rows preference (applies to all blocks)
-  elements.denseRowsToggle?.addEventListener('change', (e) => {
-    const checked = !!e.target?.checked;
-    setDenseRowsPreference(checked);
-    editMode.denseRows = checked;
+  elements.denseRowsToggle?.addEventListener('click', () => {
+    const next = !editMode.denseRows;
+    editMode.denseRows = next;
+    setDenseRowsPreference(next);
+    updateDenseRowsToggleUI();
     renderGrid();
   });
 
@@ -1614,7 +1649,6 @@ function setupEventListeners() {
   if (elements.blockNameInput) {
     elements.blockNameInput.addEventListener('input', (e) => {
       editMode.blockName = e.target.value;
-      scheduleArrangementLiveEditUpdate();
     });
     elements.blockNameInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -1627,6 +1661,8 @@ function setupEventListeners() {
       if (name !== (editMode.blockName ?? '').trim()) {
         editMode.blockName = name || editMode.blockName;
       }
+      // When the name input loses focus (including via Enter), persist the rename.
+      scheduleArrangementLiveEditUpdate();
     });
   }
 
@@ -2228,7 +2264,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
       lastAppliedIndex = newIndex;
       const note = SCRUB_NOTE_VALUES[newIndex];
       setNote(ch, step, note, { skipRender: true });
-      cellEl.textContent = note === null ? '·' : note;
+      cellEl.textContent = formatNoteLabel(note);
       cellEl.classList.toggle('has-note', note && note !== '-');
       cellEl.classList.toggle('rest', note === '-');
       if (note && note !== '-') {
@@ -2338,7 +2374,7 @@ function updateNoteCellInDOM(channel, step) {
   if (!cellEl) return false;
   const cellData = state.grid[channel][step];
   const note = cellData?.note;
-  cellEl.textContent = note == null ? '·' : note === '-' ? '-' : note;
+  cellEl.textContent = formatNoteLabel(note);
   cellEl.classList.toggle('has-note', !!note && note !== '-');
   cellEl.classList.toggle('rest', note === '-');
   return true;
@@ -2593,18 +2629,60 @@ function scheduleArrangementLiveEditUpdate() {
   if (liveArrangementUpdateTimeout) {
     clearTimeout(liveArrangementUpdateTimeout);
   }
+  // Capture at schedule time so we save the correct block even if user switches blocks before the debounce fires.
+  const filename = editMode.blockFilename;
+  const arrangementInsertRowIndex = editMode.arrangementInsertRowIndex;
+  const isNewBlock = editMode.isNewBlock;
+  const trackerStateSnapshot = serializeTrackerState();
+  const nameSnapshot = (elements.blockNameInput?.value ?? editMode.blockName ?? '').trim();
+  const patternSnapshot = (elements.output?.value ?? '').trim();
   liveArrangementUpdateTimeout = setTimeout(() => {
     liveArrangementUpdateTimeout = null;
-    const trackerState = serializeTrackerState();
     document.dispatchEvent(new CustomEvent('tracker:stateChanged', {
       detail: {
-        filename: editMode.blockFilename,
-        trackerState,
-        arrangementInsertRowIndex: editMode.arrangementInsertRowIndex,
-        isNewBlock: editMode.isNewBlock,
+        filename,
+        trackerState: trackerStateSnapshot,
+        arrangementInsertRowIndex,
+        isNewBlock,
+        name: nameSnapshot || undefined,
+        pattern: patternSnapshot || undefined,
       }
     }));
   }, 120);
+}
+
+/**
+ * Immediately flush the current block state for save (no debounce).
+ * Call before switching blocks so rename/edits are persisted.
+ * @returns {boolean} true if a save was dispatched
+ */
+export function flushTrackerSaveForBlockSwitch() {
+  if (!editMode.isEditing) return false;
+  if (!editMode.returnToArrangementsOnClose && !editMode.autoSaveOnInput) return false;
+  const hasTarget = !!editMode.blockFilename || Number.isInteger(editMode.arrangementInsertRowIndex);
+  if (!hasTarget) return false;
+  if (liveArrangementUpdateTimeout) {
+    clearTimeout(liveArrangementUpdateTimeout);
+    liveArrangementUpdateTimeout = null;
+  }
+  const filename = editMode.blockFilename;
+  const arrangementInsertRowIndex = editMode.arrangementInsertRowIndex;
+  const isNewBlock = editMode.isNewBlock;
+  const trackerStateSnapshot = serializeTrackerState();
+  const nameSnapshot = (elements.blockNameInput?.value ?? editMode.blockName ?? '').trim();
+  const patternSnapshot = (elements.output?.value ?? '').trim();
+  document.dispatchEvent(new CustomEvent('tracker:stateChanged', {
+    detail: {
+      filename,
+      trackerState: trackerStateSnapshot,
+      arrangementInsertRowIndex,
+      isNewBlock,
+      name: nameSnapshot || undefined,
+      pattern: patternSnapshot || undefined,
+      immediate: true,
+    }
+  }));
+  return true;
 }
 
 // Note: keep explicit step timing; no compression.
@@ -3533,6 +3611,17 @@ function renderArrangementStateToMixBuffer(
     maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
   }
   if (!anyMixed || maxAmp === 0) {
+    if (!anyMixed) {
+      // Row(s) empty (e.g. last block removed) — return silent buffer so playback updates and stops the removed block.
+      return {
+        mixBuffer,
+        sampleRate,
+        secondsPerStep: secondsPerStepExact,
+        totalSteps: totalCycles * 16,
+        loopSegment: lastLoopIndex >= 0,
+        loopRowIndex: lastLoopIndex >= 0 ? lastLoopIndex : undefined,
+      };
+    }
     console.warn('[Arranger] Preview produced silence. Check block trackerState instruments match current instruments.');
     return null;
   }
@@ -4066,6 +4155,14 @@ function queueArrangementLiveSwap(rendered, { keepPosition = true, mode = 'row' 
   return true;
 }
 
+export function clearArrangementPendingLiveSwap() {
+  arrangementPreviewState._pendingLiveSwapRendered = null;
+  arrangementPreviewState._pendingLiveSwapKeepPosition = true;
+  arrangementPreviewState._pendingLiveSwapMode = 'row';
+  arrangementPreviewState._lastLiveSwapStep = null;
+  arrangementPreviewState._lastLiveSwapTime = null;
+}
+
 function flushQueuedArrangementLiveSwap({ currentStep = null, force = false, startOffsetSeconds } = {}) {
   const rendered = arrangementPreviewState._pendingLiveSwapRendered;
   if (!rendered?.mixBuffer) return false;
@@ -4568,7 +4665,7 @@ export function openTracker(instrumentList, options = {}) {
   
   // Update UI (save button will be visible now)
   updateEditModeUI();
-  if (elements.denseRowsToggle) elements.denseRowsToggle.checked = editMode.denseRows;
+  updateDenseRowsToggleUI();
   
   if (instrumentList) {
     state.instruments = instrumentList;
@@ -4624,7 +4721,7 @@ export function openTrackerForEdit(instrumentList, blockData) {
 
   // Update UI for edit mode
   updateEditModeUI();
-  if (elements.denseRowsToggle) elements.denseRowsToggle.checked = editMode.denseRows;
+  updateDenseRowsToggleUI();
 
   // Clear and reset state first
   clearAll();

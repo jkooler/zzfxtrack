@@ -2437,10 +2437,15 @@
               <option value="7">7</option>
               <option value="8">8</option>
             </select>
-            <label class="inline-flex items-center gap-2 cursor-pointer" title="Use tighter row height and spacing in the tracker grid">
-              <input type="checkbox" id="trackerDenseRowsToggle" class="rounded border-input">
-              <span class="text-xs font-bold text-muted-foreground uppercase whitespace-nowrap">Dense rows</span>
-            </label>
+            <button
+              id="trackerDenseRowsToggle"
+              type="button"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
+              title="Toggle dense tracker rows"
+              aria-pressed="false"
+            >
+              <i data-lucide="list-chevrons-down-up" class="w-4 h-4" aria-hidden="true"></i>
+            </button>
             <div class="flex gap-2 ml-auto">
               <button
                 id="clearTrackerBtn"
@@ -2450,10 +2455,10 @@
               </button>
               <button
                 id="duplicateTrackerBlockBtn"
-                class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1.5"
+                class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
                 title="Duplicate this block (new name with suffix -2, -3, …)"
               >
-                Duplicate block
+                <i data-lucide="copy-plus" class="w-4 h-4" aria-hidden="true"></i>
               </button>
               <button
                 id="saveTrackerBtn"

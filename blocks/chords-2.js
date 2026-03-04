@@ -15,7 +15,7 @@ export const pattern = `stack(
 // Optional: Tracker state for re-editing
 export const trackerState = {
   "version": 1,
-  "channels": 4,
+  "channels": 8,
   "steps": 32,
   "bpm": 120,
   "grid": [

@@ -987,7 +987,12 @@ strudel-editor {
   height: 14px;
   margin-bottom: 1px;
 }
-.tracker-grid[data-dense-rows="true"] .tracker-cell,
+.tracker-grid[data-dense-rows="true"] .tracker-cell {
+  min-height: 14px;
+  height: 14px;
+  font-size: 11px;
+  @apply border-transparent rounded-none;
+}
 .tracker-grid[data-dense-rows="true"] .tracker-vol-input,
 .tracker-grid[data-dense-rows="true"] .tracker-reps-input,
 .tracker-grid[data-dense-rows="true"] .tracker-nd-input {

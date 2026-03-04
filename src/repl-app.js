@@ -13,7 +13,7 @@ import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateIns
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport } from './tracker.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap } from './tracker.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
@@ -1550,11 +1550,49 @@ async function createNewArrangement(name) {
             slug = `${baseSlug}-${suffix}`;
         }
         const filename = `${slug}.js`;
+
+        // Create a starter block for the new arrangement: 1 channel, 16 steps, hh-closed on steps 1, 5, 9 (1-based).
+        let initialBlockFilename = null;
+        try {
+            const steps = 16;
+            const grid = [Array(steps).fill(null)];
+            // Rows 1, 5, 9 -> indices 0, 4, 8
+            grid[0][0] = 'c4';
+            grid[0][4] = 'c4';
+            grid[0][8] = 'c4';
+            const emptyRow = Array(steps).fill(null);
+            const trackerState = {
+                version: 1,
+                channels: 1,
+                steps,
+                bpm: 120,
+                grid,
+                vol: [emptyRow.slice()],
+                reps: [emptyRow.slice()],
+                nd: [emptyRow.slice()],
+                channelInstruments: ['hh-closed'],
+            };
+            const pattern = 'note("c4 ~ ~ ~ c4 ~ ~ ~ c4 ~ ~ ~ ~ ~ ~ ~").s("hh-closed")';
+            // Use the same Untitled-n naming scheme as other auto-created blocks.
+            await refreshBlocksLibrary();
+            const starterName = getNextUntitledBlockName();
+            const blockResult = await saveBlock(starterName, '', pattern, trackerState, 'user');
+            if (blockResult && blockResult.ok !== false && blockResult.block?.filename) {
+                initialBlockFilename = blockResult.block.filename;
+            }
+        } catch (e) {
+            console.warn('[Arrangements] Failed to create starter block for new arrangement:', e);
+        }
+
         const arrangementState = {
             version: 1,
             name: normalizedBase,
             bpm: 120,
-            rows: [{ repeats: 1, blocks: [], loop: false }],
+            rows: [{
+                repeats: 1,
+                blocks: initialBlockFilename ? [initialBlockFilename] : [],
+                loop: false,
+            }],
         };
 
         const res = await fetch('/api/arrangements', {
@@ -1567,6 +1605,25 @@ async function createNewArrangement(name) {
         await refreshArrangementList();
         await loadArrangement(filename);
         closeNewArrangementModal();
+
+        // If we successfully created a starter block, select it and start arrangement playback immediately.
+        if (initialBlockFilename) {
+            activeArrangementBlockFilename = initialBlockFilename;
+            arrangementSelectedBlockByArrangement[filename] = initialBlockFilename;
+            await refreshBlocksLibrary();
+            renderArrangementWorkspace();
+            renderTrackerWorkspace();
+
+            const payload = buildArrangementStatePayload();
+            // Stop any other playback before starting the new arrangement.
+            stopAllPlaybackForSelectionChange();
+            document.dispatchEvent(new CustomEvent('arrangements:preview', {
+                detail: {
+                    arrangement: { name: arrangementDraftState.name, arrangementState: payload },
+                    filename,
+                },
+            }));
+        }
     } catch (err) {
         console.error('[Arrangements] Create failed:', err);
         setStatus('Failed to create arrangement', 'error');
@@ -1891,6 +1948,30 @@ function emitArrangementStateChanged(extraDetail = {}) {
     }));
 }
 
+function applyArrangementPreviewAfterBlockRemoved(removedFilename) {
+    if (!isArrangementPreviewPlaying()) return;
+    if (arrangementPreviewPlayingFilename !== currentArrangementFilename) return;
+    if (!arrangementPreviewContext?.trackerStateByFilename || !arrangementPreviewContext?.instrumentList) return;
+    clearArrangementLiveOverride({ filename: removedFilename, scheduleUpdate: false });
+    clearArrangementPendingLiveSwap();
+    const arrangementState = buildArrangementStatePayload();
+    arrangementPreviewContext = {
+        ...arrangementPreviewContext,
+        arrangementState,
+        bpm: arrangementState.bpm || arrangementPreviewContext.bpm,
+        mixSettings: getPlaybackMixSettings(),
+    };
+    updateArrangementPreview({
+        arrangementState,
+        trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
+        instrumentList: arrangementPreviewContext.instrumentList,
+        bpm: arrangementPreviewContext.bpm,
+        mixSettings: arrangementPreviewContext.mixSettings,
+        keepPosition: false,
+    });
+    updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
+}
+
 function scheduleArrangementAutoSave() {
     if (arrangementAutoSaveTimeout) {
         clearTimeout(arrangementAutoSaveTimeout);
@@ -1933,6 +2014,10 @@ async function saveCurrentArrangement() {
         } catch (_e) {
             // Ignore localStorage failures.
         }
+        const entry = arrangementEntriesCache.find((e) => e.filename === currentArrangementFilename);
+        if (entry) {
+            entry.arrangementState = arrangementState;
+        }
         setStatus('Saved arrangement', 'success');
     } catch (err) {
         console.error('[Arrangements] Autosave failed:', err);
@@ -1940,7 +2025,7 @@ async function saveCurrentArrangement() {
     }
 }
 
-function scheduleTrackerAutoSave({ filename, trackerState }) {
+function scheduleTrackerAutoSave({ filename, trackerState, name: nameOverride, pattern: patternOverride, immediate }) {
     if (!filename || !trackerState || DEMO_MODE) return;
     const block = getBlockByFilename(filename);
     if (!block) return;
@@ -1948,8 +2033,12 @@ function scheduleTrackerAutoSave({ filename, trackerState }) {
 
     const trackerNameInput = document.getElementById('trackerBlockName');
     const trackerOutput = document.getElementById('trackerOutput');
-    const nextName = String(trackerNameInput?.value || block.name || filename.replace(/\.js$/i, '')).trim() || block.name || filename.replace(/\.js$/i, '');
-    const nextPattern = String(trackerOutput?.value || block.pattern || '').trim();
+    const nextName = nameOverride != null
+        ? String(nameOverride).trim() || block.name || filename.replace(/\.js$/i, '')
+        : String(trackerNameInput?.value || block.name || filename.replace(/\.js$/i, '')).trim() || block.name || filename.replace(/\.js$/i, '');
+    const nextPattern = patternOverride != null
+        ? String(patternOverride).trim() || block.pattern || ''
+        : String(trackerOutput?.value || block.pattern || '').trim();
     const payload = {
         name: nextName,
         description: block.description || '',
@@ -1963,8 +2052,10 @@ function scheduleTrackerAutoSave({ filename, trackerState }) {
 
     if (trackerAutoSaveTimeout) {
         clearTimeout(trackerAutoSaveTimeout);
+        trackerAutoSaveTimeout = null;
     }
-    trackerAutoSaveTimeout = setTimeout(async () => {
+
+    const runSave = async () => {
         const activePayload = pendingTrackerSavePayload;
         pendingTrackerSavePayload = null;
         trackerAutoSaveTimeout = null;
@@ -1972,35 +2063,47 @@ function scheduleTrackerAutoSave({ filename, trackerState }) {
         const blockNow = getBlockByFilename(activePayload.filename);
         if (blockNow && normalizeScope(blockNow.scope) === 'example' && !isDeveloperModeEnabled()) return;
         try {
-            const res = await fetch(`/api/blocks/${encodeURIComponent(activePayload.filename)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
-                body: JSON.stringify({
-                    name: activePayload.name,
-                    description: activePayload.description,
-                    pattern: activePayload.pattern,
-                    trackerState: activePayload.trackerState,
-                    scope: activePayload.scope,
-                }),
-            });
-            if (!res.ok) throw new Error(res.status === 403 ? 'Example block is read-only' : 'Autosave failed');
+            // Use the same update logic as explicit saves so renames also update the filename on disk.
+            const result = await updateBlock(
+                activePayload.filename,
+                activePayload.name,
+                activePayload.description,
+                activePayload.pattern,
+                activePayload.trackerState,
+                activePayload.scope,
+            );
+            if (!result || result.ok === false) {
+                throw new Error(result?.error || 'Autosave failed');
+            }
+            const updatedFilename = result.filename || activePayload.filename;
+            const previousFilename = result.previousFilename || activePayload.filename;
             try {
-                localStorage.removeItem(`unsaved_block_${activePayload.filename}`);
+                localStorage.removeItem(`unsaved_block_${previousFilename}`);
             } catch (_e) {
                 // Ignore storage failures.
             }
-            const idx = blocksLibraryCache.findIndex((item) => item.filename === activePayload.filename);
-            if (idx !== -1) {
-                blocksLibraryCache[idx] = {
-                    ...blocksLibraryCache[idx],
-                    name: activePayload.name,
-                    pattern: activePayload.pattern,
-                    trackerState: activePayload.trackerState,
-                };
+            // If the block filename changed (due to rename), update in-memory references used by the workspace.
+            if (updatedFilename !== previousFilename) {
+                if (Array.isArray(arrangementDraftState?.rows)) {
+                    arrangementDraftState.rows = arrangementDraftState.rows.map((row) => ({
+                        ...row,
+                        blocks: Array.isArray(row?.blocks)
+                            ? row.blocks.map((b) => (b === previousFilename ? updatedFilename : b))
+                            : [],
+                    }));
+                }
+                if (activeArrangementBlockFilename === previousFilename) {
+                    activeArrangementBlockFilename = updatedFilename;
+                    if (currentArrangementFilename) {
+                        arrangementSelectedBlockByArrangement[currentArrangementFilename] = updatedFilename;
+                    }
+                }
             }
+            // Keep the blocks library cache in sync before re-rendering workspaces,
+            // so getBlockByFilename(activeArrangementBlockFilename) can resolve the renamed block.
+            await refreshBlocksLibrary();
             renderArrangementWorkspace();
             renderTrackerWorkspace();
-            void refreshBlocksLibrary();
         } catch (err) {
             console.error('[Tracker] Autosave failed:', err);
             try {
@@ -2010,7 +2113,13 @@ function scheduleTrackerAutoSave({ filename, trackerState }) {
             }
             setStatus(err.message === 'Example block is read-only' ? err.message : 'Failed to autosave block', 'error');
         }
-    }, 200);
+    };
+
+    if (immediate) {
+        void runSave();
+    } else {
+        trackerAutoSaveTimeout = setTimeout(runSave, 200);
+    }
 }
 
 function renderTrackerWorkspace() {
@@ -2444,6 +2553,7 @@ function renderArrangementWorkspace() {
             }
             const fromRowIndex = Number.isInteger(rowPayload?.fromRowIndex) ? rowPayload.fromRowIndex : null;
             if (fromRowIndex != null) {
+                if (arrangementDraftState.rows.length === 1) return;
                 const confirmed = await confirmDialog({
                     title: 'Delete row?',
                     message: 'Delete this row? This cannot be undone.',
@@ -2462,6 +2572,8 @@ function renderArrangementWorkspace() {
                 renderArrangementWorkspace();
                 scheduleArrangementAutoSave();
                 emitArrangementStateChanged();
+                // Persist immediately so block usage on disk matches the UI.
+                await saveCurrentArrangement();
                 return;
             }
 
@@ -2484,7 +2596,10 @@ function renderArrangementWorkspace() {
                     renderArrangementWorkspace();
                     renderTrackerWorkspace();
                     scheduleArrangementAutoSave();
-                    emitArrangementStateChanged();
+                    emitArrangementStateChanged({ removedFilename: filename });
+                    applyArrangementPreviewAfterBlockRemoved(filename);
+                    // Persist immediately so block usage on disk matches the UI (e.g. when row emptied, block can be deleted from library).
+                    await saveCurrentArrangement();
                 }
             }
         });
@@ -2606,8 +2721,12 @@ function renderArrangementWorkspace() {
             rowNumberEl.setAttribute('aria-label', 'Row ' + (rowIndex + 1) + ' (click to play from here, drag to reorder)');
             rowNumberEl.title = 'Click to play from this row';
             if (!readonly) {
-                rowNumberEl.draggable = true;
+                rowNumberEl.draggable = arrangementDraftState.rows.length > 1;
                 rowNumberEl.addEventListener('dragstart', (e) => {
+                    if (arrangementDraftState.rows.length === 1) {
+                        e.preventDefault();
+                        return;
+                    }
                     if (!e.dataTransfer) return;
                     e.dataTransfer.effectAllowed = 'move';
                     e.dataTransfer.setData('application/x-zzfxm-arr-row', JSON.stringify({ fromRowIndex: rowIndex }));
@@ -2769,7 +2888,7 @@ function renderArrangementWorkspace() {
             duplicateRowBtn.type = 'button';
             duplicateRowBtn.className = 'arr-row-del arr-row-dup';
             duplicateRowBtn.title = 'Duplicate row';
-            duplicateRowBtn.innerHTML = '<i data-lucide="copy" class="w-4 h-4"></i>';
+            duplicateRowBtn.innerHTML = '<i data-lucide="copy-plus" class="w-4 h-4"></i>';
             duplicateRowBtn.disabled = readonly;
             duplicateRowBtn.classList.toggle('opacity-40', readonly);
             duplicateRowBtn.classList.toggle('cursor-not-allowed', readonly);
@@ -2791,11 +2910,12 @@ function renderArrangementWorkspace() {
             const removeRowBtn = document.createElement('button');
             removeRowBtn.type = 'button';
             removeRowBtn.className = 'arr-row-del';
-            removeRowBtn.title = 'Remove row';
+            removeRowBtn.title = arrangementDraftState.rows.length === 1 ? 'Cannot remove the only row' : 'Remove row';
             removeRowBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
-            removeRowBtn.disabled = readonly;
-            removeRowBtn.classList.toggle('opacity-40', readonly);
-            removeRowBtn.classList.toggle('cursor-not-allowed', readonly);
+            const cannotRemoveRow = arrangementDraftState.rows.length === 1;
+            removeRowBtn.disabled = readonly || cannotRemoveRow;
+            removeRowBtn.classList.toggle('opacity-40', readonly || cannotRemoveRow);
+            removeRowBtn.classList.toggle('cursor-not-allowed', readonly || cannotRemoveRow);
             removeRowBtn.addEventListener('click', async () => {
                 if (readonly) return;
                 const confirmed = await confirmDialog({
@@ -2848,7 +2968,7 @@ function renderArrangementWorkspace() {
                             renderArrangementWorkspace();
                             renderTrackerWorkspace();
                         });
-                        chip.querySelector('.arr-chip-del')?.addEventListener('click', (event) => {
+                        chip.querySelector('.arr-chip-del')?.addEventListener('click', async (event) => {
                             event.stopPropagation();
                             if (readonly) return;
                             const idx = row.blocks.indexOf(filename);
@@ -2860,7 +2980,10 @@ function renderArrangementWorkspace() {
                             renderArrangementWorkspace();
                             renderTrackerWorkspace();
                             scheduleArrangementAutoSave();
-                            emitArrangementStateChanged();
+                            emitArrangementStateChanged({ removedFilename: filename });
+                            applyArrangementPreviewAfterBlockRemoved(filename);
+                            // Persist immediately so block usage on disk matches the UI (e.g. when row emptied, block can be deleted from library).
+                            await saveCurrentArrangement();
                         });
                         chipsEl.appendChild(chip);
                     });
@@ -3072,6 +3195,9 @@ async function refreshBlocksLibrary() {
                     e.dataTransfer.setData('text/plain', block.filename);
                 });
                 li.addEventListener('click', async () => {
+                    // Blur block name input so editMode.blockName is updated, then flush save before switching blocks.
+                    document.getElementById('trackerBlockName')?.blur();
+                    flushTrackerSaveForBlockSwitch();
                     activeArrangementBlockFilename = block.filename;
                     if (currentArrangementFilename) arrangementSelectedBlockByArrangement[currentArrangementFilename] = block.filename;
                     renderArrangementWorkspace();
@@ -7813,6 +7939,7 @@ function setupBlocksEventListeners() {
 
 	        document.addEventListener('arrangements:stateChanged', (e) => {
             if (!isArrangementPreviewPlaying()) return;
+            if (arrangementPreviewPlayingFilename !== currentArrangementFilename) return;
             const arrangementState = e?.detail?.arrangementState;
             if (!arrangementState) return;
 	            arrangementPreviewContext = {
@@ -7823,19 +7950,24 @@ function setupBlocksEventListeners() {
 	            };
             const addedRowIndex = e?.detail?.addedRowIndex;
             const addedFilename = e?.detail?.addedFilename;
+            const removedFilename = e?.detail?.removedFilename;
             if (Number.isInteger(addedRowIndex)) {
                 clearArrangementLiveOverride({ rowIndex: addedRowIndex, scheduleUpdate: false });
             }
             if (addedFilename) {
                 clearArrangementLiveOverride({ filename: addedFilename, scheduleUpdate: false });
             }
+            if (removedFilename) {
+                clearArrangementLiveOverride({ filename: removedFilename, scheduleUpdate: false });
+            }
+            const keepPosition = !removedFilename;
 	            updateArrangementPreview({
 		                arrangementState,
 		                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
 		                instrumentList: arrangementPreviewContext.instrumentList,
 		                bpm: arrangementPreviewContext.bpm,
 	                    mixSettings: arrangementPreviewContext.mixSettings,
-		                keepPosition: true,
+		                keepPosition,
 				            });
                 updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
         });
@@ -7884,10 +8016,10 @@ function setupBlocksEventListeners() {
         });
 
         document.addEventListener('tracker:stateChanged', (e) => {
-            const { filename, trackerState, arrangementInsertRowIndex } = e.detail || {};
+            const { filename, trackerState, arrangementInsertRowIndex, name, pattern, immediate } = e.detail || {};
             if (!trackerState) return;
             if (filename && (currentArrangementFilename || activeArrangementBlockFilename)) {
-                scheduleTrackerAutoSave({ filename, trackerState });
+                scheduleTrackerAutoSave({ filename, trackerState, name, pattern, immediate });
             }
 
             if (!isArrangementPreviewPlaying()) return;
