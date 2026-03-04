@@ -13,8 +13,8 @@ import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateIns
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap } from './tracker.js';
-import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock } from './blocks.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate } from './tracker.js';
+import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, loadFolderState, saveFolderState, BLOCKS_FOLDER_STATE_KEY } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
 import { confirmDialog, alertDialog } from './dialog.js';
@@ -3144,6 +3144,104 @@ function applyArrangementWorkspacePlayhead(detail = {}) {
     arrangementWorkspacePlayingRowIndex = rowIndex;
 }
 
+function renderBlocksLibraryFromCache() {
+    if (!dom.blocksLibraryList) return;
+    dom.blocksLibraryList.innerHTML = '';
+
+    if (!blocksLibraryCache.length) {
+        dom.blocksLibraryList.innerHTML = '<div class="text-xs text-muted-foreground px-2 py-2">No blocks available.</div>';
+        return;
+    }
+
+    const blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: false });
+
+    const appendFolder = (scope, label, entries) => {
+            const isEmpty = entries.length === 0;
+            const expanded = isEmpty
+                ? true
+                : (scope === 'example' ? blockFolderState.example : blockFolderState.user);
+            const icon = expanded ? 'folder-open' : 'folder';
+            const folder = document.createElement('div');
+            folder.className = 'mb-0 py-px';
+            folder.innerHTML = `
+                <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-block-folder="${scope}">
+                    <span class="inline-flex items-center gap-1.5">
+                        <i data-lucide="${icon}" class="w-5 h-5 ${expanded ? 'fill-current' : 'fill-[var(--secondary)]'} stroke-[var(--card)]"></i>
+                        ${label}
+                    </span>
+                    <span class="opacity-70">${entries.length}</span>
+                </button>
+                <div class="space-y-2 mt-1 ${expanded ? '' : 'hidden'}" data-block-folder-items="${scope}"></div>
+            `;
+            const list = folder.querySelector(`[data-block-folder-items="${scope}"]`);
+            folder.querySelector(`[data-block-folder="${scope}"]`)?.addEventListener('click', () => {
+                if (isEmpty) return;
+                const next = { ...blockFolderState };
+                if (scope === 'example') {
+                    next.example = !next.example;
+                } else {
+                    next.user = !next.user;
+                }
+                saveFolderState(BLOCKS_FOLDER_STATE_KEY, next);
+                renderBlocksLibraryFromCache();
+            });
+
+            if (entries.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'text-xs text-muted-foreground px-2 py-1';
+                empty.textContent = scope === 'user'
+                    ? 'No user blocks yet. Click "+ New" to create one.'
+                    : 'No example blocks available.';
+                list?.appendChild(empty);
+            }
+
+            entries.forEach((block) => {
+                const li = document.createElement('div');
+                const isSelected = block.filename === activeArrangementBlockFilename;
+                li.className = `list-item block-item ${isSelected ? 'active' : ''}`;
+                li.dataset.filename = block.filename;
+                const isReadonly = normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled();
+                li.innerHTML = `
+                    <span class="font-medium text-xs">${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
+                    ${isReadonly ? '' : `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
+                `;
+                li.draggable = true;
+                li.addEventListener('dragstart', (e) => {
+                    if (e.target.closest('button')) return;
+                    if (!e.dataTransfer) return;
+                    e.dataTransfer.effectAllowed = 'copyMove';
+                    e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({ filename: block.filename }));
+                    e.dataTransfer.setData('text/plain', block.filename);
+                });
+                li.addEventListener('click', async () => {
+                    document.getElementById('trackerBlockName')?.blur();
+                    flushTrackerSaveForBlockSwitch();
+                    activeArrangementBlockFilename = block.filename;
+                    if (currentArrangementFilename) arrangementSelectedBlockByArrangement[currentArrangementFilename] = block.filename;
+                    renderArrangementWorkspace();
+                    renderTrackerWorkspace();
+                });
+                li.querySelector('.sidebar-del-btn')?.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await deleteBlockFromLibrary(block.filename, block.name || block.filename);
+                });
+                list?.appendChild(li);
+            });
+
+            dom.blocksLibraryList.appendChild(folder);
+        };
+
+        const sorted = blocksLibraryCache
+            .slice()
+            .sort((a, b) => String(a?.name || a?.filename || '').localeCompare(String(b?.name || b?.filename || '')));
+        const userEntries = sorted.filter((b) => normalizeScope(b.scope) !== 'example');
+        const exampleEntries = sorted.filter((b) => normalizeScope(b.scope) === 'example');
+        appendFolder('user', 'User', userEntries);
+        appendFolder('example', 'Examples', exampleEntries);
+
+        createIcons({ icons });
+}
+
 async function refreshBlocksLibrary() {
     if (!dom.blocksLibraryList) return;
     try {
@@ -3166,54 +3264,10 @@ async function refreshBlocksLibrary() {
                 trackerState: block?.trackerState ?? previous.trackerState,
             };
         });
-        dom.blocksLibraryList.innerHTML = '';
-
-        if (!blocksLibraryCache.length) {
-            dom.blocksLibraryList.innerHTML = '<li class="text-xs text-muted-foreground px-2 py-2">No blocks available.</li>';
-            return;
-        }
-
-        blocksLibraryCache
-            .slice()
-            .sort((a, b) => String(a?.name || a?.filename || '').localeCompare(String(b?.name || b?.filename || '')))
-            .forEach((block) => {
-                const li = document.createElement('li');
-                const isSelected = block.filename === activeArrangementBlockFilename;
-                li.className = `list-item ${isSelected ? 'active' : ''}`;
-                li.dataset.filename = block.filename;
-                const isReadonly = normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled();
-                li.innerHTML = `
-                    <span class="font-medium text-xs">${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
-                    ${isReadonly ? '' : `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
-                `;
-                li.draggable = true;
-                li.addEventListener('dragstart', (e) => {
-                    if (e.target.closest('button')) return;
-                    if (!e.dataTransfer) return;
-                    e.dataTransfer.effectAllowed = 'copyMove';
-                    e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({ filename: block.filename }));
-                    e.dataTransfer.setData('text/plain', block.filename);
-                });
-                li.addEventListener('click', async () => {
-                    // Blur block name input so editMode.blockName is updated, then flush save before switching blocks.
-                    document.getElementById('trackerBlockName')?.blur();
-                    flushTrackerSaveForBlockSwitch();
-                    activeArrangementBlockFilename = block.filename;
-                    if (currentArrangementFilename) arrangementSelectedBlockByArrangement[currentArrangementFilename] = block.filename;
-                    renderArrangementWorkspace();
-                    renderTrackerWorkspace();
-                });
-                li.querySelector('.sidebar-del-btn')?.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    await deleteBlockFromLibrary(block.filename, block.name || block.filename);
-                });
-                dom.blocksLibraryList.appendChild(li);
-            });
-
-        createIcons({ icons });
+        renderBlocksLibraryFromCache();
     } catch (err) {
         console.error('[Blocks] Failed to refresh library:', err);
-        dom.blocksLibraryList.innerHTML = '<li class="text-xs text-destructive px-2 py-2">Failed to load block library.</li>';
+        dom.blocksLibraryList.innerHTML = '<div class="text-xs text-destructive px-2 py-2">Failed to load block library.</div>';
     }
 }
 
@@ -6855,6 +6909,29 @@ function setupTrackerEventListeners() {
             }
         } else {
             clearPlaybackInstrumentAliases('tracker-preview');
+        }
+    });
+
+    document.addEventListener('instruments:updated', async () => {
+        const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+        const instruments = getDefragmentedInstruments();
+        const instrumentList = instruments.map(inst => ({
+            id: inst.strudelAlias,
+            name: inst.strudelAlias,
+            params: inst.params,
+        }));
+
+        if (isTrackerOpen() && isTrackerPreviewPlaying()) {
+            updateTrackerInstruments(instrumentList);
+            refreshTrackerPreview();
+        }
+
+        if (isArrangementPreviewPlaying()) {
+            arrangementPreviewContext = {
+                ...arrangementPreviewContext,
+                instrumentList,
+            };
+            scheduleArrangementPreviewInstrumentUpdate(instrumentList);
         }
     });
 

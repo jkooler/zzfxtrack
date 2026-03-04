@@ -36,7 +36,7 @@ let arrangementEditMode = {
 let arrangementToDelete = null;
 let arrangementRowToDeleteIndex = null;
 // v2: default User expanded, Examples collapsed when first using the app
-const BLOCKS_FOLDER_STATE_KEY = 'zzfxm-folder-state-blocks-v2';
+export const BLOCKS_FOLDER_STATE_KEY = 'zzfxm-folder-state-blocks-v2';
 const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v2';
 let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: false });
 let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, example: false });
@@ -92,7 +92,7 @@ function updateInsertButtonsDisabledState() {
   if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null || !canInsert;
 }
 
-function loadFolderState(key, fallback) {
+export function loadFolderState(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return { ...fallback };
@@ -106,7 +106,7 @@ function loadFolderState(key, fallback) {
   }
 }
 
-function saveFolderState(key, value) {
+export function saveFolderState(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (_e) {
@@ -1595,6 +1595,8 @@ async function loadBlocksList() {
  */
 function renderBlocksList() {
   if (!elements.blocksList) return;
+
+  blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: false });
   
   elements.blocksList.innerHTML = '';
   selectedBlockIndex = null;

@@ -1142,6 +1142,13 @@ function renderGrid() {
     selectEl.addEventListener('change', (e) => {
       state.channelInstruments[ch] = e.target.value;
       updateOutput();
+      if (previewState.isPlaying && previewState.audioContext) {
+        const ctx = previewState.audioContext;
+        const duration = previewState.bufferDuration || 2.0;
+        const elapsed = ctx.currentTime - previewState.startTime;
+        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+        playPreview(currentOffset);
+      }
     });
 
     const repsLabelEl = document.createElement('div');
@@ -4543,6 +4550,17 @@ export function setArrangementLiveOverride({ filename, rowIndex, trackerState })
   scheduleArrangementPreviewUpdate();
 }
 
+/**
+ * Schedule arrangement preview re-render with updated instrument list.
+ * Use when instrument params change during arrangement playback (block need not be open).
+ */
+export function scheduleArrangementPreviewInstrumentUpdate(instrumentList) {
+  if (!instrumentList || !arrangementPreviewState.isPlaying) return;
+  arrangementPreviewState.instrumentList = instrumentList;
+  invalidateArrangementSourceCaches();
+  scheduleArrangementPreviewUpdate();
+}
+
 export function clearArrangementLiveOverride({ filename, rowIndex, scheduleUpdate = true } = {}) {
   if (filename) arrangementPreviewState.overridesByFilename.delete(filename);
   if (Number.isInteger(rowIndex)) arrangementPreviewState.overridesByRowIndex.delete(rowIndex);
@@ -5024,6 +5042,27 @@ export function isTrackerOpen() {
 export function updateInstruments(instrumentList) {
   state.instruments = instrumentList;
   renderGrid();
+}
+
+/**
+ * Whether tracker block preview is currently playing
+ */
+export function isTrackerPreviewPlaying() {
+  return previewState.isPlaying;
+}
+
+/**
+ * Re-render and swap the tracker preview buffer at current position.
+ * Call when instruments or params change during playback.
+ */
+export function refreshTrackerPreview() {
+  if (!previewState.isPlaying || !previewState.audioContext) return false;
+  const ctx = previewState.audioContext;
+  const duration = previewState.bufferDuration || 2.0;
+  const elapsed = ctx.currentTime - previewState.startTime;
+  const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+  playPreview(currentOffset);
+  return true;
 }
 
 /**

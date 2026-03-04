@@ -1679,6 +1679,8 @@ function handleParamChange(paramIndex) {
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
     
+    document.dispatchEvent(new CustomEvent('instruments:updated', { detail: { paramsChanged: true } }));
+    
     // Play test note (debounced) if Strudel isn't currently playing
     if (!isStrudelPlaybackActive()) {
         const instrument = getInstrumentById(currentInstrumentId);
@@ -1893,6 +1895,8 @@ function handleConfirmImport() {
 
     autoUpdateInstrumentsFile();
     reloadInstruments();
+    
+    document.dispatchEvent(new CustomEvent('instruments:updated', { detail: { paramsChanged: true } }));
     
     // Visual feedback
     console.log('[InstrumentUI] Imported ZzFX params:', pendingImportParams);

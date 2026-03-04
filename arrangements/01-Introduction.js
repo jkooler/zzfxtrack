@@ -32,7 +32,7 @@ export const arrangementState = {
         "chords.js",
         "synths.js",
         "bass.js",
-        "cow.js"
+        "cowbell.js"
       ],
       "loop": false
     },
@@ -43,7 +43,7 @@ export const arrangementState = {
         "chords.js",
         "synths.js",
         "bass.js",
-        "cow.js"
+        "cowbell.js"
       ],
       "loop": false
     }

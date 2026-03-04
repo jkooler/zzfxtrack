@@ -1,4 +1,4 @@
-// Arrangement: 02-Testing2
+// Arrangement: 02-Testing
 
 export const name = "02-Testing";
 export const scope = "user";
@@ -9,10 +9,11 @@ export const arrangementState = {
   "bpm": 120,
   "rows": [
     {
-      "repeats": 2,
+      "repeats": 4,
       "blocks": [
-        "chords-2.js",
-        "lopo.js"
+        "drums-398.js",
+        "synths-048.js",
+        "chords-143.js"
       ],
       "loop": false
     }

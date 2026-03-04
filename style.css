@@ -279,6 +279,9 @@ body {
 .blocks-library-list {
   transition: max-height 0.2s ease, padding 0.2s ease;
 }
+.blocks-library-list > div.mb-0 {
+  margin-bottom: 0;
+}
 .blocks-library-chevron {
   transition: transform 0.2s ease;
 }
