@@ -31,6 +31,7 @@ export const zzfxm_demo_elpiano = [0.32,0,440,0,0.09,1.01,1,14.5,0,0,0,0,0.23,0.
 export const zzfxm_demo_horn = [0.48,0,110,0.03,0.22,0.1,2,7.8,0,0,0,0,0,0,0,0,0,0.92,0.82,0,-300];
 export const zzfxm_horn = [0.48,0,110,0.03,0.22,0.1,2,7.8,0,0,0,0,0,0,0,0,0,0.92,0.82,0,-300,-300];
 export const zzfxm_elpiano = [0.32,0,440,0,0.09,1.01,1,14.5,0,0,0,0,0.23,0.08,0,0,0,0.82,0.19,0.1,-180];
+export const zzfxm_kickdrum_2 = [1,0,72,0,0.01,0.08,0,1,0,0,0,0,0,0,0,0,0,0.57,0.01,0,0];
 export const zzfxm_kickdrum = [0.9,0,130,0,0.06,0.05,1,0.8,-2,5,0,0,0,0,0.6,0,0,0.2,0.14,0,-1100];
 export const zzfxm_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
 export const zzfxm_bass = [0.55,0,55,0.01,0,0,5,0.8,0,0,0,0,0,0,0,0,0,0,0.3,0,-540];
@@ -69,15 +70,16 @@ export const instrumentMapping = {
     "demo-horn": 19,
     "horn": 20,
     "elpiano": 21,
-    "kickdrum": 22,
-    "hh-open": 23,
-    "bass": 24,
-    "cowbell": 25,
-    "pad": 26,
-    "hh-closed": 27,
-    "synth-stab": 28,
-    "snare": 29,
-    "simple-saw": 30
+    "kickdrum-2": 22,
+    "kickdrum": 23,
+    "hh-open": 24,
+    "bass": 25,
+    "cowbell": 26,
+    "pad": 27,
+    "hh-closed": 28,
+    "synth-stab": 29,
+    "snare": 30,
+    "simple-saw": 31
 };
 
 // Map them to IDs you want to use in Strudel
@@ -104,6 +106,7 @@ export const instruments = {
     "demo-horn": zzfxm_demo_horn,
     "horn": zzfxm_horn,
     "elpiano": zzfxm_elpiano,
+    "kickdrum-2": zzfxm_kickdrum_2,
     "kickdrum": zzfxm_kickdrum,
     "hh-open": zzfxm_hh_open,
     "bass": zzfxm_bass,
@@ -139,6 +142,7 @@ export const instrumentMonophonic = {
     "demo-horn": true,
     "horn": true,
     "elpiano": false,
+    "kickdrum-2": false,
     "kickdrum": false,
     "hh-open": false,
     "bass": true,
@@ -174,6 +178,7 @@ export const instrumentScope = {
     "demo-horn": "example",
     "horn": "user",
     "elpiano": "user",
+    "kickdrum-2": "user",
     "kickdrum": "user",
     "hh-open": "user",
     "bass": "user",
@@ -209,6 +214,7 @@ export const instrumentArray = [
     zzfxm_demo_horn,
     zzfxm_horn,
     zzfxm_elpiano,
+    zzfxm_kickdrum_2,
     zzfxm_kickdrum,
     zzfxm_hh_open,
     zzfxm_bass,

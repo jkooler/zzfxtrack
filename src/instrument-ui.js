@@ -263,6 +263,16 @@ export function refreshInstrumentListUI() {
  * Setup all event listeners
  */
 function setupEventListeners() {
+    // Allow native paste/copy in instrument drawer — prevent tracker from intercepting Ctrl+V/C when focus is here
+    document.addEventListener('keydown', (e) => {
+        const inDrawer = e.target?.closest?.('.instrument-drawer');
+        if (!inDrawer) return;
+        const k = e.key?.toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && (k === 'v' || k === 'c')) {
+            e.stopImmediatePropagation();
+        }
+    }, true);
+
     // Tab switching
     dom.strudelTab.addEventListener('click', () => switchView('strudel'));
     dom.blocksTab?.addEventListener('click', () => switchView('blocks'));
@@ -1867,6 +1877,8 @@ function handleImportZzFX() {
     dom.importConfirmationModal.classList.add('open');
 }
 
+let exportZzFXSuccessTimeout = null;
+
 async function handleExportZzFX() {
     if (!currentInstrumentId) return;
     const instrument = getInstrumentById(currentInstrumentId);
@@ -1883,6 +1895,14 @@ async function handleExportZzFX() {
         if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(csv);
             console.log('[InstrumentUI] Exported ZzFX params copied to clipboard');
+            if (exportZzFXSuccessTimeout) clearTimeout(exportZzFXSuccessTimeout);
+            const btn = dom.exportZzFXBtn;
+            btn.innerHTML = '<i data-lucide="check" class="w-4 h-4 shrink-0 text-muted-foreground"></i><span class="ml-1.5 text-muted-foreground">Copied successfully</span>';
+            createIcons({ icons });
+            exportZzFXSuccessTimeout = setTimeout(() => {
+                exportZzFXSuccessTimeout = null;
+                btn.textContent = 'Copy to clipboard';
+            }, 1000);
             return;
         }
     } catch (err) {
