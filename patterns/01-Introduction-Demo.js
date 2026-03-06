@@ -8,13 +8,13 @@ export const bpm = 120;
 // https://patterns.slab.org/learn/getting-started/
 
 const pattern = stack(
-  note("bb2 bb2(-1,2) bb2 [bb2(2,8) d4] bb2 bb2(-1,2) bb2(3,8) [[bb2 bb4] bb2 d4 bb2]").s("demo-kickdrum").slow(4),
-  note("c2 a1(3,8) c2(2,8) g1 bb1 g1(3,8) c2(2,8) [- g1]").slow(4).s("demo-bass"),
-  sound("demo-hh-closed(16,16), [- demo-hh-open]*4"),
-  sound("- - - - - - - [demo-cowbell] - - - - - - [- demo-cowbell] [demo-cowbell]").slow(4),
-  note("[- c2]*2").s("demo-snare"),
-  note("[d4|f4|g4] [bb3 c4] f3 [f4 eb4]").s("demo-synth-stab"),
-  note("<c2 [eb2 g2]> <[c4,f4,bb3]@2 [c3,eb4,bb4] [d4,f4,a4]>*2").s("demo-pad").slow(2)
+  note("bb2 bb2(-1,2) bb2 [bb2(2,8) d4] bb2 bb2(-1,2) bb2(3,8) [[bb2 bb4] bb2 d4 bb2]").s("sys-kickdrum").slow(4),
+  note("c2 a1(3,8) c2(2,8) g1 bb1 g1(3,8) c2(2,8) [- g1]").slow(4).s("sys-bass"),
+  sound("sys-hh-closed(16,16), [- sys-hh-open]*4"),
+  sound("- - - - - - - [sys-cowbell] - - - - - - [- sys-cowbell] [sys-cowbell]").slow(4),
+  note("[- c2]*2").s("sys-snare"),
+  note("[d4|f4|g4] [bb3 c4] f3 [f4 eb4]").s("sys-synth-stab"),
+  note("<c2 [eb2 g2]> <[c4,f4,bb3]@2 [c3,eb4,bb4] [d4,f4,a4]>*2").s("sys-pad").slow(2)
 )
 
 

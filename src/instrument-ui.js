@@ -17,7 +17,9 @@ import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { getAudioContext } from '@strudel/webaudio';
 
-import { reloadInstruments, isStrudelPlaybackActive, refreshPatternListActiveState } from './repl-app.js';
+import { reloadInstruments, isStrudelPlaybackActive, refreshPatternListActiveState, updateInstrumentReferencesInPatternsAndBlocks } from './repl-app.js';
+import { isTrackerOpen, applyInstrumentRenameToChannelInstruments } from './tracker.js';
+import { addRenameMapping } from './instrument-rename-map.js';
 import { createIcons, icons } from 'lucide';
 import { getInstrumentAnalyser } from './zzfx-loader.js';
 import { ScopeVisualizer, getVisualizerAnalyser } from './visualizer.js';
@@ -1631,10 +1633,19 @@ function handleDrawerAliasBlur() {
     const exportName = generateExportName(strudelAlias);
     dom.instExportName.value = exportName;
 
+    const oldAlias = current.strudelAlias || '';
     updateInstrument(currentInstrumentId, { exportName, strudelAlias });
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
+    if (oldAlias && oldAlias !== strudelAlias) {
+        addRenameMapping(oldAlias, strudelAlias);
+        void updateInstrumentReferencesInPatternsAndBlocks(oldAlias, strudelAlias);
+        if (isTrackerOpen()) {
+            applyInstrumentRenameToChannelInstruments(oldAlias, strudelAlias);
+        }
+        document.dispatchEvent(new CustomEvent('instruments:updated', { detail: { aliasChanged: true } }));
+    }
 }
 
 /**

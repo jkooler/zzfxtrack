@@ -5,7 +5,7 @@ export const name = "Demo-Bass";
 export const description = "Created in tracker";
 export const scope = "example";
 
-export const pattern = `note("c2 ~ ~ ~ ~ ~ ~ ~ a1 ~ ~ a1 ~ ~ a1 ~ c2 ~ ~ ~ c2 ~ ~ ~ g1 ~ ~ ~ ~ ~ ~ ~ a#1 ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ g1 ~ ~ g1 ~ c2 ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ ~").s("demo-bass")`;
+export const pattern = `note("c2 ~ ~ ~ ~ ~ ~ ~ a1 ~ ~ a1 ~ ~ a1 ~ c2 ~ ~ ~ c2 ~ ~ ~ g1 ~ ~ ~ ~ ~ ~ ~ a#1 ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ g1 ~ ~ g1 ~ c2 ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ g1 ~ ~ ~").s("sys-bass")`;
 
 // Optional: Tracker state for re-editing
 export const trackerState = {
@@ -2134,7 +2134,7 @@ export const trackerState = {
     ]
   ],
   "channelInstruments": [
-    "demo-bass",
+    "sys-bass",
     "demo-pad",
     "demo-pad",
     "demo-pad",

@@ -5,7 +5,7 @@ export const name = "Demo-Synths";
 export const description = "Created in tracker";
 export const scope = "example";
 
-export const pattern = `note("d4 ~ ~ ~ a#3 ~ c4 ~ f3 ~ ~ ~ f4 ~ d#4 ~ f4 ~ ~ ~ a#3 ~ c4 ~ f3 ~ ~ ~ f4 ~ d#4 ~ g4 ~ ~ ~ a#3 ~ c4 ~ f3 ~ ~ ~ f4 ~ d#4 ~ d4 ~ ~ ~ a#3 ~ c4 ~ f3 ~ ~ ~ f4 ~ d#4 ~").s("demo-synth-stab")`;
+export const pattern = `note("d4 ~ ~ ~ a#3 ~ c4 ~ f3 ~ ~ ~ f4 ~ d#4 ~ f4 ~ ~ ~ a#3 ~ c4 ~ f3 ~ ~ ~ f4 ~ d#4 ~ g4 ~ ~ ~ a#3 ~ c4 ~ f3 ~ ~ ~ f4 ~ d#4 ~ d4 ~ ~ ~ a#3 ~ c4 ~ f3 ~ ~ ~ f4 ~ d#4 ~").s("sys-synth-stab")`;
 
 // Optional: Tracker state for re-editing
 export const trackerState = {
@@ -2134,7 +2134,7 @@ export const trackerState = {
     ]
   ],
   "channelInstruments": [
-    "demo-synth-stab",
+    "sys-synth-stab",
     "",
     "",
     "",

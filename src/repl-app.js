@@ -14,6 +14,7 @@ import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate } from './tracker.js';
+import { resolveTrackerStateChannelInstruments } from './instrument-rename-map.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, BLOCKS_FOLDER_STATE_KEY } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
@@ -897,12 +898,15 @@ export async function reloadInstruments() {
         if (inst.monophonic) monophonicAliases.add(inst.strudelAlias);
     });
 
-    // Ensure every static instrument (e.g. cowbell) is in the registry even if missing from
-    // localStorage — so reload never unregisters them and patterns play without a full page reload.
-    for (const [alias, params] of Object.entries(staticInstruments)) {
-        if (Array.isArray(params) && map[alias] === undefined) {
-            map[alias] = params;
-            if (staticMonophonic && staticMonophonic[alias]) monophonicAliases.add(alias);
+    // Only use static fallback when user has no instruments (initial/demo state).
+    // When user has instruments, their list is the source of truth — do not re-inject
+    // renamed/removed aliases from staticInstruments.
+    if (defragged.length === 0) {
+        for (const [alias, params] of Object.entries(staticInstruments)) {
+            if (Array.isArray(params) && map[alias] === undefined) {
+                map[alias] = params;
+                if (staticMonophonic && staticMonophonic[alias]) monophonicAliases.add(alias);
+            }
         }
     }
 
@@ -914,6 +918,119 @@ export async function reloadInstruments() {
 
     loadZzFXInstruments(map, { monophonicAliases });
     console.log('[ReplApp] Reloaded', Object.keys(map).length, 'instruments into Strudel');
+}
+
+/**
+ * Replace instrument alias in Strudel code (exact match in double or single quotes)
+ */
+function replaceAliasInCode(code, oldAlias, newAlias) {
+    if (!oldAlias || oldAlias === newAlias) return code;
+    let out = code;
+    out = out.split(`"${oldAlias}"`).join(`"${newAlias}"`);
+    out = out.split(`'${oldAlias}'`).join(`'${newAlias}'`);
+    return out;
+}
+
+/**
+ * Replace instrument alias in trackerState.channelInstruments array
+ */
+function replaceAliasInTrackerState(trackerState, oldAlias, newAlias) {
+    if (!trackerState || !oldAlias || oldAlias === newAlias) return trackerState;
+    const channelInstruments = Array.isArray(trackerState.channelInstruments) ? [...trackerState.channelInstruments] : [];
+    const updated = channelInstruments.map((id) => (id === oldAlias ? newAlias : id));
+    if (JSON.stringify(updated) === JSON.stringify(channelInstruments)) return trackerState;
+    return { ...trackerState, channelInstruments: updated };
+}
+
+/**
+ * Update all patterns and blocks that reference oldAlias to use newAlias.
+ * Only touches user-scope files. Shows confirmation before bulk edit.
+ */
+export async function updateInstrumentReferencesInPatternsAndBlocks(oldAlias, newAlias) {
+    if (DEMO_MODE) return;
+    if (!oldAlias || !newAlias || oldAlias === newAlias) return;
+
+    try {
+        const [patternsRes, blocksRes] = await Promise.all([
+            fetch('/api/patterns'),
+            fetch('/api/blocks'),
+        ]);
+        if (!patternsRes.ok || !blocksRes.ok) return;
+
+        const patternsPayload = await patternsRes.json();
+        const blocksPayload = await blocksRes.json();
+        const patternEntries = normalizePatternEntries(patternsPayload).filter((e) => normalizeScope(e?.scope) !== 'example');
+        const blockItems = (Array.isArray(blocksPayload) ? blocksPayload : []).filter((b) => normalizeScope(b?.scope) !== 'example');
+
+        let patternsToUpdate = [];
+        let blocksToUpdate = [];
+
+        for (const entry of patternEntries) {
+            const filename = entry?.filename;
+            if (!filename) continue;
+            const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`);
+            if (!res.ok) continue;
+            const content = await res.text();
+            if (content.includes(`"${oldAlias}"`) || content.includes(`'${oldAlias}'`)) {
+                patternsToUpdate.push({ filename, content });
+            }
+        }
+
+        for (const block of blockItems) {
+            const filename = block?.filename;
+            if (!filename) continue;
+            const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
+            if (!res.ok) continue;
+            const detail = await res.json();
+            const pattern = detail?.pattern || '';
+            const channelInstruments = Array.isArray(detail?.trackerState?.channelInstruments) ? detail.trackerState.channelInstruments : [];
+            const patternHasAlias = pattern.includes(`"${oldAlias}"`) || pattern.includes(`'${oldAlias}'`);
+            const trackerHasAlias = channelInstruments.includes(oldAlias);
+            if (patternHasAlias || trackerHasAlias) {
+                blocksToUpdate.push({ filename, block: detail });
+            }
+        }
+
+        const total = patternsToUpdate.length + blocksToUpdate.length;
+        if (total === 0) return;
+
+        const ok = await confirmDialog({
+            title: 'Update References',
+            message: `Update ${patternsToUpdate.length} pattern(s) and ${blocksToUpdate.length} block(s) to use "${newAlias}" instead of "${oldAlias}"?`,
+            confirmLabel: 'Update',
+            cancelLabel: 'Cancel',
+        });
+        if (!ok) return;
+
+        for (const { filename, content } of patternsToUpdate) {
+            const updated = replaceAliasInCode(content, oldAlias, newAlias);
+            const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`, {
+                method: 'POST',
+                headers: getDeveloperModeHeaders(),
+                body: updated,
+            });
+            if (!res.ok) console.warn('[ReplApp] Failed to update pattern:', filename);
+        }
+
+        const { updateBlock } = await import('./blocks.js');
+        for (const { filename, block: detail } of blocksToUpdate) {
+            const updatedPattern = replaceAliasInCode(detail.pattern || '', oldAlias, newAlias);
+            const updatedTrackerState = replaceAliasInTrackerState(detail.trackerState ?? null, oldAlias, newAlias);
+            await updateBlock(
+                filename,
+                detail.name || filename.replace('.js', ''),
+                detail.description || '',
+                updatedPattern,
+                updatedTrackerState,
+                normalizeScope(detail.scope, 'user')
+            );
+        }
+
+        if (patternsToUpdate.length > 0) await refreshPatternList();
+        setStatus(`Updated ${total} file(s) to use "${newAlias}"`, 'success');
+    } catch (err) {
+        console.error('[ReplApp] Failed to update instrument references:', err);
+    }
 }
 
 // --- Auto-Save and Hot-Reload Setup ---
@@ -1865,7 +1982,7 @@ async function buildArrangementExportContext() {
             trackerState: block.trackerState || null,
         });
         if (block.trackerState) {
-            trackerStateByFilename[filename] = block.trackerState;
+            trackerStateByFilename[filename] = resolveTrackerStateChannelInstruments(block.trackerState);
         }
     }
 
@@ -3473,7 +3590,7 @@ async function runArrangementPreviewPrime(filename) {
   const cachedBlocks = Array.isArray(blocksLibraryCache) ? blocksLibraryCache : [];
   for (const f of wantedBlockFiles) {
     const block = cachedBlocks.find((b) => b?.filename === f);
-    if (block?.trackerState) trackerStateByFilename[f] = block.trackerState;
+    if (block?.trackerState) trackerStateByFilename[f] = resolveTrackerStateChannelInstruments(block.trackerState);
   }
   if (Object.keys(trackerStateByFilename).length === 0) return;
   const instrumentList = await getArrangementInstrumentList();
@@ -6920,17 +7037,29 @@ function setupTrackerEventListeners() {
             params: inst.params,
         }));
 
-        if (isTrackerOpen() && isTrackerPreviewPlaying()) {
+        if (isTrackerOpen()) {
             updateTrackerInstruments(instrumentList);
-            refreshTrackerPreview();
+            if (isTrackerPreviewPlaying()) {
+                refreshTrackerPreview();
+            }
         }
 
         if (isArrangementPreviewPlaying()) {
+            const currentByFilename = arrangementPreviewContext?.trackerStateByFilename || {};
+            const resolvedTrackerStateByFilename = {};
+            for (const [filename, ts] of Object.entries(currentByFilename)) {
+                resolvedTrackerStateByFilename[filename] = resolveTrackerStateChannelInstruments(ts);
+            }
             arrangementPreviewContext = {
                 ...arrangementPreviewContext,
                 instrumentList,
+                trackerStateByFilename: resolvedTrackerStateByFilename,
             };
-            scheduleArrangementPreviewInstrumentUpdate(instrumentList);
+            updateArrangementPreview({
+                trackerStateByFilename: resolvedTrackerStateByFilename,
+                instrumentList,
+                keepPosition: true,
+            });
         }
     });
 
@@ -7825,7 +7954,8 @@ function setupBlocksEventListeners() {
             params: inst.params,
         }));
 
-	        previewTrackerStateOnce(trackerState, instrumentList, trackerState.bpm || 120, getPlaybackMixSettings());
+	        const resolved = resolveTrackerStateChannelInstruments(trackerState);
+	        previewTrackerStateOnce(resolved, instrumentList, (resolved || trackerState).bpm || 120, getPlaybackMixSettings());
 	    });
 
 	    // Listen for arrangements:preview event
@@ -7888,7 +8018,11 @@ function setupBlocksEventListeners() {
 	                return ts.grid.some((channel, ch) => {
 	                    const instId = ts.channelInstruments[ch];
 	                    if (!instId || !instrumentIdSet.has(instId)) return false;
-	                    return Array.isArray(channel) && channel.some(note => note && note !== '~' && note !== '-');
+	                    const hasPlayableNote = (cell) => {
+	                        const n = cell && typeof cell === 'object' ? cell.note : cell;
+	                        return n && n !== '~' && n !== '-';
+	                    };
+	                    return Array.isArray(channel) && channel.some(hasPlayableNote);
 	                });
 	            };
 
@@ -7898,9 +8032,10 @@ function setupBlocksEventListeners() {
 	            let playable = 0;
 	            const registerTrackerState = (filename, trackerState) => {
 	                if (!filename || !trackerState || trackerStateByFilename[filename]) return;
-	                trackerStateByFilename[filename] = trackerState;
+	                const resolved = resolveTrackerStateChannelInstruments(trackerState);
+	                trackerStateByFilename[filename] = resolved;
 	                previewBlocks.push({ filename, trackerState });
-	                if (isPlayableTrackerState(trackerState)) playable++;
+	                if (isPlayableTrackerState(resolved)) playable++;
 	            };
 
 	            const cachedBlocksByFilename = new Map(

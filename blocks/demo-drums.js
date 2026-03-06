@@ -6,10 +6,10 @@ export const description = "Created in tracker";
 export const scope = "example";
 
 export const pattern = `stack(
-  note("a#2 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ a#2 ~ ~ ~ a#2 ~ ~ ~ ~ ~ ~ ~ a#2 ~ a#2 ~ d4 ~ ~ ~").s("demo-kickdrum"),
-  note("~ ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ c2 ~ ~ ~").s("demo-snare"),
-  note("~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~").s("demo-hh-open"),
-  note("c3 ~ ~ c3 ~ c3 ~ ~ ~ ~ ~ c3 ~ c3 ~ ~ c3 ~ ~ c3 ~ c3 ~ ~ c3 ~ ~ c3 c3 ~ ~ ~").s("demo-hh-closed")
+  note("a#2 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ a#2 ~ ~ ~ a#2 ~ ~ ~ ~ ~ ~ ~ a#2 ~ a#2 ~ d4 ~ ~ ~").s("sys-kickdrum"),
+  note("~ ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ c2 ~ ~ ~ ~ ~ ~ ~ c2 ~ ~ ~").s("sys-snare"),
+  note("~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~ ~ ~ c3 ~").s("sys-hh-open"),
+  note("c3 ~ ~ c3 ~ c3 ~ ~ ~ ~ ~ c3 ~ c3 ~ ~ c3 ~ ~ c3 ~ c3 ~ ~ c3 ~ ~ c3 c3 ~ ~ ~").s("sys-hh-closed")
 )`;
 
 // Optional: Tracker state for re-editing
@@ -1115,10 +1115,10 @@ export const trackerState = {
     ]
   ],
   "channelInstruments": [
-    "demo-kickdrum",
-    "demo-snare",
-    "demo-hh-open",
-    "demo-hh-closed",
+    "sys-kickdrum",
+    "sys-snare",
+    "sys-hh-open",
+    "sys-hh-closed",
     "",
     "",
     "",

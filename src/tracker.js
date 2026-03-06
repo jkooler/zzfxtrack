@@ -12,6 +12,7 @@ import { setupScrubInteraction } from './instrument-ui.js';
 import { connectToDestination, getAudioContext } from '@strudel/webaudio';
 import { getVisualizerAnalyser } from './visualizer.js';
 import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-settings.js';
+import { resolveChannelInstruments } from './instrument-rename-map.js';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
@@ -3257,10 +3258,14 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
   const generatedSampleCache = new Map();
   const noteFreqCache = new Map();
 
+  const hasPlayableNote = (cell) => {
+    const n = cell && typeof cell === 'object' ? cell.note : cell;
+    return n && n !== '~' && n !== '-';
+  };
   const hasContent = grid.some((channel, ch) => {
     const instId = channelInstruments[ch];
     if (!instId) return false;
-    return Array.isArray(channel) && channel.some(note => note && note !== '~' && note !== '-');
+    return Array.isArray(channel) && channel.some(hasPlayableNote);
   });
   if (!hasContent) return;
 
@@ -3318,7 +3323,8 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
     const channel = grid[ch] || [];
 
     for (let step = 0; step < steps; step++) {
-      const note = channel[step];
+      const cell = channel[step];
+      const note = cell && typeof cell === 'object' ? cell.note : cell;
       const freq = noteToFreq(note);
       if (freq === null) continue;
 
@@ -5066,6 +5072,25 @@ export function updateInstruments(instrumentList) {
 }
 
 /**
+ * Replace an instrument alias in channel assignments (e.g. when instrument is renamed).
+ * Updates in-memory state and re-renders so UI reflects the change.
+ */
+export function applyInstrumentRenameToChannelInstruments(oldAlias, newAlias) {
+  if (!oldAlias || !newAlias || oldAlias === newAlias) return;
+  let changed = false;
+  for (let ch = 0; ch < state.channelInstruments.length; ch++) {
+    if (state.channelInstruments[ch] === oldAlias) {
+      state.channelInstruments[ch] = newAlias;
+      changed = true;
+    }
+  }
+  if (changed) {
+    renderGrid();
+    updateOutput();
+  }
+}
+
+/**
  * Whether tracker block preview is currently playing
  */
 export function isTrackerPreviewPlaying() {
@@ -5181,9 +5206,10 @@ export function deserializeTrackerState(data) {
       }
     }
 
-    // Load instrument assignments (pad to MAX_CHANNELS)
+    // Load instrument assignments (pad to MAX_CHANNELS).
+    // Resolve through rename map so renamed instruments stay linked.
     if (data.channelInstruments && Array.isArray(data.channelInstruments)) {
-      state.channelInstruments = data.channelInstruments.slice(0, MAX_CHANNELS);
+      state.channelInstruments = resolveChannelInstruments(data.channelInstruments.slice(0, MAX_CHANNELS));
     }
     while (state.channelInstruments.length < MAX_CHANNELS) {
       state.channelInstruments.push('');
