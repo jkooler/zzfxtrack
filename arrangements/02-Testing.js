@@ -11,9 +11,9 @@ export const arrangementState = {
     {
       "repeats": 4,
       "blocks": [
-        "drums-398.js",
-        "synths-048.js",
-        "chords-143.js"
+        "143-drums.js",
+        "143-synths.js",
+        "143-chords.js"
       ],
       "loop": false
     }

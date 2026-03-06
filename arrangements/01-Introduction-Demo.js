@@ -11,28 +11,28 @@ export const arrangementState = {
     {
       "repeats": 4,
       "blocks": [
-        "demo-chords.js",
-        "demo-bass.js"
+        "351-chords.js",
+        "351-bass.js"
       ],
       "loop": false
     },
     {
       "repeats": 4,
       "blocks": [
-        "demo-drums.js",
-        "demo-chords.js",
-        "demo-bass.js"
+        "351-drums.js",
+        "351-chords.js",
+        "351-bass.js"
       ],
       "loop": false
     },
     {
       "repeats": 8,
       "blocks": [
-        "demo-drums.js",
-        "demo-chords.js",
-        "demo-synths.js",
-        "demo-bass.js",
-        "demo-cowbell.js"
+        "351-drums.js",
+        "351-chords.js",
+        "351-synths.js",
+        "351-bass.js",
+        "351-cowbell.js"
       ],
       "loop": false
     }
