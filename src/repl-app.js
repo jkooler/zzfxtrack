@@ -2609,7 +2609,6 @@ function renderArrangementWorkspace() {
         const selectedIsPlaying = isArrangementPreviewPlaying() && arrangementPreviewPlayingFilename === currentArrangementFilename;
         if (selectedIsPlaying) {
             stopArrangementPreview();
-            clearArrangementLiveOverrides({ scheduleUpdate: false });
             document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: false } }));
             return;
         }
@@ -7965,7 +7964,6 @@ function setupBlocksEventListeners() {
 	                    bpm,
 	                    mixSettings,
 	                };
-	                clearArrangementLiveOverrides({ scheduleUpdate: false });
 	                if (previewBlocks.length) {
 	                    document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
 	                }
@@ -8099,7 +8097,6 @@ function setupBlocksEventListeners() {
                 scheduleTrackerAutoSave({ filename, trackerState, name, pattern, immediate });
             }
 
-            if (!isArrangementPreviewPlaying()) return;
             if (filename) {
                 setArrangementLiveOverride({ filename, trackerState });
             } else if (Number.isInteger(arrangementInsertRowIndex)) {

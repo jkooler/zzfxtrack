@@ -335,9 +335,21 @@ function setupEventListeners() {
         });
     }
     
-    // Drawer inputs - auto-save and preview on change
+    // Drawer inputs - alias: commit on blur (like pattern/arrangement/block rename); export name stays derived from alias
+    dom.instStrudelAlias.addEventListener('input', () => {
+        if (!currentInstrumentId) return;
+        const current = getInstrumentById(currentInstrumentId);
+        if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
+        dom.instExportName.value = generateExportName(sanitizeStrudelAlias(dom.instStrudelAlias.value));
+    });
+    dom.instStrudelAlias.addEventListener('blur', handleDrawerAliasBlur);
+    dom.instStrudelAlias.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            dom.instStrudelAlias.blur();
+        }
+    });
     dom.instExportName.addEventListener('input', handleDrawerChange);
-    dom.instStrudelAlias.addEventListener('input', handleDrawerChange);
     
     // Parameter inputs - debounced preview
     paramInputs.forEach((input, index) => {
@@ -1589,30 +1601,46 @@ function closeDrawer() {
 }
 
 /**
- * Handle drawer field changes (Strudel alias)
- * Auto-generates export name from alias
+ * Commit instrument alias on blur (same pattern as pattern/arrangement/block rename).
+ * Allows typing "-", empty field while editing; sanitizes and persists only on blur.
+ */
+function handleDrawerAliasBlur() {
+    if (!currentInstrumentId) return;
+    const current = getInstrumentById(currentInstrumentId);
+    if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
+
+    const rawAlias = String(dom.instStrudelAlias.value || '').trim();
+    if (rawAlias === '') {
+        dom.instStrudelAlias.value = current.strudelAlias || '';
+        dom.instExportName.value = generateExportName(current.strudelAlias || '');
+        return;
+    }
+
+    const strudelAlias = sanitizeStrudelAlias(rawAlias);
+    dom.instStrudelAlias.value = strudelAlias;
+    const exportName = generateExportName(strudelAlias);
+    dom.instExportName.value = exportName;
+
+    updateInstrument(currentInstrumentId, { exportName, strudelAlias });
+    renderInstrumentList();
+    autoUpdateInstrumentsFile();
+    reloadInstruments(); // Reload instruments into Strudel
+}
+
+/**
+ * Handle drawer field changes (export name only; alias is committed on blur)
  */
 function handleDrawerChange() {
     if (!currentInstrumentId) return;
     const current = getInstrumentById(currentInstrumentId);
     if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
-    
+
     const rawAlias = dom.instStrudelAlias.value;
     const strudelAlias = sanitizeStrudelAlias(rawAlias);
-    if (rawAlias !== strudelAlias) {
-        dom.instStrudelAlias.value = strudelAlias;
-    }
     const exportName = generateExportName(strudelAlias);
-    
-    // Update the display of the auto-generated export name
     dom.instExportName.value = exportName;
-    
-    const changes = {
-        exportName: exportName,
-        strudelAlias: strudelAlias
-    };
-    
-    updateInstrument(currentInstrumentId, changes);
+
+    updateInstrument(currentInstrumentId, { exportName, strudelAlias });
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel

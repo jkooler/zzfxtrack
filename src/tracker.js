@@ -623,18 +623,40 @@ function getInstrumentListSignature(instrumentList) {
   return signature;
 }
 
+function getOverrideSignature(overridesByFilename, overridesByRowIndex) {
+  if (!overridesByFilename?.size && !overridesByRowIndex?.size) return '';
+  const parts = [];
+  if (overridesByFilename && overridesByFilename.size > 0) {
+    const byFile = Array.from(overridesByFilename.entries())
+      .sort((a, b) => (a[0] || '').localeCompare(b[0] || ''))
+      .map(([f, s]) => `${f}:${Array.isArray(s?.channelInstruments) ? s.channelInstruments.join(',') : ''}`);
+    parts.push(byFile.join(';'));
+  }
+  if (overridesByRowIndex && overridesByRowIndex.size > 0) {
+    const byRow = Array.from(overridesByRowIndex.entries())
+      .sort((a, b) => (a[0] ?? 0) - (b[0] ?? 0))
+      .map(([r, s]) => `r${r}:${Array.isArray(s?.channelInstruments) ? s.channelInstruments.join(',') : ''}`);
+    parts.push(byRow.join(';'));
+  }
+  return parts.join('|');
+}
+
 function getArrangementRenderCacheKey(
   arrangementState,
   needFullBuffer,
   trackerStateByFilename,
   instrumentList = null,
   mixSettings = null,
-  renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT
+  renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT,
+  overrides = null
 ) {
   const rows = Array.isArray(arrangementState?.rows) ? arrangementState.rows : [];
   const structure = { r: rows.map((row) => ({ blocks: Array.isArray(row?.blocks) ? row.blocks.slice().sort() : [], repeats: row?.repeats, loop: Boolean(row?.loop) })), bpm: arrangementState?.bpm, nfb: needFullBuffer, rp: renderProfile };
   const files = typeof trackerStateByFilename === 'object' && trackerStateByFilename !== null ? Object.keys(trackerStateByFilename).sort() : [];
-  return `${JSON.stringify(structure)}\n${files.join(',')}\n${getInstrumentListSignature(instrumentList)}\n${getMixSettingsSignature(mixSettings)}`;
+  const byFilename = overrides?.byFilename instanceof Map ? overrides.byFilename : null;
+  const byRowIndex = overrides?.byRowIndex instanceof Map ? overrides.byRowIndex : null;
+  const overrideSig = getOverrideSignature(byFilename, byRowIndex);
+  return `${JSON.stringify(structure)}\n${files.join(',')}\n${getInstrumentListSignature(instrumentList)}\n${getMixSettingsSignature(mixSettings)}\n${overrideSig}`;
 }
 
 function ensureArrangementAudioContext() {
@@ -4247,7 +4269,8 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
     arrangementPreviewState.trackerStateByFilename,
     arrangementPreviewState.instrumentList,
     arrangementPreviewState.mixSettings,
-    ARRANGEMENT_RENDER_PROFILE_LIVE
+    ARRANGEMENT_RENDER_PROFILE_LIVE,
+    { byFilename: arrangementPreviewState.overridesByFilename, byRowIndex: arrangementPreviewState.overridesByRowIndex }
   );
   const cacheSlot = needFullBuffer ? { key: '_renderCacheKeyFull', value: '_renderCacheFull' } : { key: '_renderCacheKey', value: '_renderCache' };
   const cacheHit = cache[cacheSlot.key] === cacheKey && cache[cacheSlot.value]?.mixBuffer;
@@ -4628,8 +4651,6 @@ export function stopArrangementPreview() {
     clearTimeout(arrangementPreviewState.pendingUpdate);
     arrangementPreviewState.pendingUpdate = null;
   }
-  arrangementPreviewState.overridesByFilename.clear();
-  arrangementPreviewState.overridesByRowIndex.clear();
   arrangementPreviewState.isPlaying = false;
   arrangementPreviewState.bufferDuration = 0;
   arrangementPreviewState.loopDuration = 0;
