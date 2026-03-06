@@ -14,7 +14,7 @@ import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate } from './tracker.js';
-import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, loadFolderState, saveFolderState, BLOCKS_FOLDER_STATE_KEY } from './blocks.js';
+import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, BLOCKS_FOLDER_STATE_KEY } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
 import { confirmDialog, alertDialog } from './dialog.js';
@@ -3198,7 +3198,7 @@ function renderBlocksLibraryFromCache() {
             entries.forEach((block) => {
                 const li = document.createElement('div');
                 const isSelected = block.filename === activeArrangementBlockFilename;
-                li.className = `list-item block-item ${isSelected ? 'active' : ''}`;
+                li.className = `list-item ${isSelected ? 'active' : ''}`;
                 li.dataset.filename = block.filename;
                 const isReadonly = normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled();
                 li.innerHTML = `
