@@ -1,7 +1,7 @@
 // Arrangement: 02-Testing
 
 export const name = "02-Testing";
-export const scope = "user";
+export const scope = "example";
 
 export const arrangementState = {
   "version": 1,

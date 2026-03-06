@@ -9,26 +9,26 @@
 // 4: Noise
 // 5: Square (Pulse)
 
-export const zzfxm_test_cp = [1,0,110,0.55,1.4,3,1,11,0,0,0,0,0,0.45,0,0,0.9,0.21,0,0,-2964];
-export const zzfxm_test_enterprise = [1,0,523.2511,0.14,1,1,1,1,0,0,0,0,0,0.1,0,0,0.25,0,0.08,0,0];
-export const zzfxm_test_sine = [0.2,0,232,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_tri = [0.2,0,232,0.01,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_saw = [0.2,0,232,0.01,0,0,2,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_tan = [0.2,0,232,0.01,0,0,3,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_minimal = [1,6,232,0.2,3,1,0,20,-1,1,155,10,1,0,5,0,0.3,0.1,1,1,-500];
-export const zzfxm_test_noise = [0.2,0,232,0.01,0,0,4,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_square = [0.2,0,232,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_kick = [1,0,72,0,0.01,0.08,0,1,0,0,0,0,0,0,0,0,0,0.57,0.01,0,0];
-export const zzfxm_demo_snare = [1.3,0.05,240,0,0.01,0.28,4,1.4,38,98,477,0,0,0,172,0,0,0.4,0.03,0,-1203];
-export const zzfxm_demo_synth_stab = [0.7,0,440,0.01,0,0,0,4.7,0,0,0,0,0.48,0,0,0,0.64,0,0.23,3,-648];
-export const zzfxm_demo_hh_closed = [0.3,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.08,0,3700];
-export const zzfxm_demo_pad = [0.5,0,440,0.5,1,0,2,3,0,0,0,0,0.4,0.2,0,0,0,0.2,0.4,0.3,-553];
-export const zzfxm_demo_cowbell = [0.7,0,440,0,0.1,0,0,0,50,50,0,0,0,0,34121,0,0,0,0.4,0,-1255];
-export const zzfxm_demo_bass = [0.55,0,55,0.01,0,0,5,0.8,0,0,0,0,0,0,0,0,0,0,0.3,0,-540];
-export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
-export const zzfxm_demo_kickdrum = [0.9,0,130,0,0.06,0.05,1,0.8,-2,5,0,0,0,0,0.6,0,0,0.2,0.14,0,-1100];
-export const zzfxm_demo_elpiano = [0.32,0,440,0,0.09,1.01,1,14.5,0,0,0,0,0.23,0.08,0,0,0,0.82,0.19,0.1,-180];
-export const zzfxm_demo_horn = [0.48,0,110,0.03,0.22,0.1,2,7.8,0,0,0,0,0,0,0,0,0,0.92,0.82,0,-300];
+export const zzfxm_sys_cp = [1,0,110,0.55,1.4,3,1,11,0,0,0,0,0,0.45,0,0,0.9,0.21,0,0,-2964];
+export const zzfxm_sys_enterprise = [1,0,523.2511,0.14,1,1,1,1,0,0,0,0,0,0.1,0,0,0.25,0,0.08,0,0];
+export const zzfxm_sys_sine = [0.2,0,232,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_sys_tri = [0.2,0,232,0.01,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_sys_saw = [0.2,0,232,0.01,0,0,2,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_sys_tan = [0.2,0,232,0.01,0,0,3,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_sys_minimal = [1,6,232,0.2,3,1,0,20,-1,1,155,10,1,0,5,0,0.3,0.1,1,1,-500];
+export const zzfxm_sys_noise = [0.2,0,232,0.01,0,0,4,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_sys_square = [0.2,0,232,0.01,0,0,5,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_sys_kick = [1,0,72,0,0.01,0.08,0,1,0,0,0,0,0,0,0,0,0,0.57,0.01,0,0];
+export const zzfxm_sys_snare = [1.3,0.05,233.08,0,0.16,0,1,14,38,98,358,0,0,2.16,730,0,0,0.06,0.17,0,578];
+export const zzfxm_sys_synth_stab = [0.85,0,440,0,0.29,0.16,1,6.3,0,0,0,0,0.48,0.15,0,0,0,0.04,0.1,-0.5,0];
+export const zzfxm_sys_hh_closed = [0.3,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.08,0,3700];
+export const zzfxm_sys_pad = [0.5,0,440,0.5,1,0,2,3,0,0,0,0,0.4,0.2,0,0,0,0.2,0.4,0.3,-553];
+export const zzfxm_sys_cowbell = [0.7,0,440,0,0.1,0,0,0,50,50,0,0,0,0,34121,0,0,0,0.4,0,-1255];
+export const zzfxm_sys_bass = [0.55,0,55,0.01,0,0,5,0.8,0,0,0,0,0,0,0,0,0,0,0.3,0,-540];
+export const zzfxm_sys_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,0,3800];
+export const zzfxm_sys_kickdrum = [0.9,0,130,0,0.06,0.05,1,0.8,-2,5,0,0,0,0,0.6,0,0,0.2,0.14,0,-1100];
+export const zzfxm_sys_elpiano = [0.32,0,440,0,0.09,1.01,1,14.5,0,0,0,0,0.23,0.08,0,0,0,0.82,0.19,0.1,-180];
+export const zzfxm_sys_horn = [0.48,0,110,0.03,0.22,0.1,2,7.8,0,0,0,0,0,0,0,0,0,0.92,0.82,0,-300];
 export const zzfxm_horn = [0.48,0,110,0.03,0.22,0.1,2,7.8,0,0,0,0,0,0,0,0,0,0.92,0.82,0,-300,-300];
 export const zzfxm_elpiano = [0.32,0,440,0,0.09,1.01,1,14.5,0,0,0,0,0.23,0.08,0,0,0,0.82,0.19,0.1,-180];
 export const zzfxm_kickdrum_2 = [1,0,72,0,0.01,0.08,0,1,0,0,0,0,0,0,0,0,0,0.57,0.01,0,0];
@@ -40,7 +40,7 @@ export const zzfxm_pad = [0.5,0,440,0.5,0.21,0.92,2,3,0,0,0,0,0.4,0.2,0,0,0,0.2,
 export const zzfxm_hh_closed = [0.3,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.08,0,3700];
 export const zzfxm_synth_stab = [0.85,0,440,0,0.29,0.16,1,6.3,0,0,0,0,0.48,0.15,0,0,0,0.04,0.1,-0.5,0];
 export const zzfxm_snare = [1.3,0.05,233.08,0,0.16,0,1,14,38,98,358,0,0,2.16,730,0,0,0.06,0.17,0,578];
-export const zzfxm_simple_saw = [0.2,0,440,0.01,0,0,2,1.5,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_sys_saw2 = [0.2,0,440,0.01,0,0,2,1.5,0,0,0,0,0,0,0,0,0,0,1,0,0];
 
 /**
  * Strudel Sound Names to ZzFXMicro Player Channel Indices
@@ -48,26 +48,26 @@ export const zzfxm_simple_saw = [0.2,0,440,0.01,0,0,2,1.5,0,0,0,0,0,0,0,0,0,0,1,
  * while still baking to correct ZzFXMicro Player channels.
  */
 export const instrumentMapping = {
-    "test-cp": 0,
-    "test-enterprise": 1,
-    "test-sine": 2,
-    "test-tri": 3,
-    "test-saw": 4,
-    "test-tan": 5,
-    "test-minimal": 6,
-    "test-noise": 7,
-    "test-square": 8,
-    "test-kick": 9,
-    "demo-snare": 10,
-    "demo-synth-stab": 11,
-    "demo-hh-closed": 12,
-    "demo-pad": 13,
-    "demo-cowbell": 14,
-    "demo-bass": 15,
-    "demo-hh-open": 16,
-    "demo-kickdrum": 17,
-    "demo-elpiano": 18,
-    "demo-horn": 19,
+    "sys-cp": 0,
+    "sys-enterprise": 1,
+    "sys-sine": 2,
+    "sys-tri": 3,
+    "sys-saw": 4,
+    "sys-tan": 5,
+    "sys-minimal": 6,
+    "sys-noise": 7,
+    "sys-square": 8,
+    "sys-kick": 9,
+    "sys-snare": 10,
+    "sys-synth-stab": 11,
+    "sys-hh-closed": 12,
+    "sys-pad": 13,
+    "sys-cowbell": 14,
+    "sys-bass": 15,
+    "sys-hh-open": 16,
+    "sys-kickdrum": 17,
+    "sys-elpiano": 18,
+    "sys-horn": 19,
     "horn": 20,
     "elpiano": 21,
     "kickdrum-2": 22,
@@ -79,31 +79,31 @@ export const instrumentMapping = {
     "hh-closed": 28,
     "synth-stab": 29,
     "snare": 30,
-    "simple-saw": 31
+    "sys-saw2": 31
 };
 
 // Map them to IDs you want to use in Strudel
 export const instruments = {
-    "test-cp": zzfxm_test_cp,
-    "test-enterprise": zzfxm_test_enterprise,
-    "test-sine": zzfxm_test_sine,
-    "test-tri": zzfxm_test_tri,
-    "test-saw": zzfxm_test_saw,
-    "test-tan": zzfxm_test_tan,
-    "test-minimal": zzfxm_test_minimal,
-    "test-noise": zzfxm_test_noise,
-    "test-square": zzfxm_test_square,
-    "test-kick": zzfxm_test_kick,
-    "demo-snare": zzfxm_demo_snare,
-    "demo-synth-stab": zzfxm_demo_synth_stab,
-    "demo-hh-closed": zzfxm_demo_hh_closed,
-    "demo-pad": zzfxm_demo_pad,
-    "demo-cowbell": zzfxm_demo_cowbell,
-    "demo-bass": zzfxm_demo_bass,
-    "demo-hh-open": zzfxm_demo_hh_open,
-    "demo-kickdrum": zzfxm_demo_kickdrum,
-    "demo-elpiano": zzfxm_demo_elpiano,
-    "demo-horn": zzfxm_demo_horn,
+    "sys-cp": zzfxm_sys_cp,
+    "sys-enterprise": zzfxm_sys_enterprise,
+    "sys-sine": zzfxm_sys_sine,
+    "sys-tri": zzfxm_sys_tri,
+    "sys-saw": zzfxm_sys_saw,
+    "sys-tan": zzfxm_sys_tan,
+    "sys-minimal": zzfxm_sys_minimal,
+    "sys-noise": zzfxm_sys_noise,
+    "sys-square": zzfxm_sys_square,
+    "sys-kick": zzfxm_sys_kick,
+    "sys-snare": zzfxm_sys_snare,
+    "sys-synth-stab": zzfxm_sys_synth_stab,
+    "sys-hh-closed": zzfxm_sys_hh_closed,
+    "sys-pad": zzfxm_sys_pad,
+    "sys-cowbell": zzfxm_sys_cowbell,
+    "sys-bass": zzfxm_sys_bass,
+    "sys-hh-open": zzfxm_sys_hh_open,
+    "sys-kickdrum": zzfxm_sys_kickdrum,
+    "sys-elpiano": zzfxm_sys_elpiano,
+    "sys-horn": zzfxm_sys_horn,
     "horn": zzfxm_horn,
     "elpiano": zzfxm_elpiano,
     "kickdrum-2": zzfxm_kickdrum_2,
@@ -115,31 +115,31 @@ export const instruments = {
     "hh-closed": zzfxm_hh_closed,
     "synth-stab": zzfxm_synth_stab,
     "snare": zzfxm_snare,
-    "simple-saw": zzfxm_simple_saw
+    "sys-saw2": zzfxm_sys_saw2
 };
 
 // Per-instrument playback settings
 export const instrumentMonophonic = {
-    "test-cp": false,
-    "test-enterprise": false,
-    "test-sine": false,
-    "test-tri": false,
-    "test-saw": false,
-    "test-tan": false,
-    "test-minimal": false,
-    "test-noise": false,
-    "test-square": false,
-    "test-kick": false,
-    "demo-snare": false,
-    "demo-synth-stab": false,
-    "demo-hh-closed": false,
-    "demo-pad": false,
-    "demo-cowbell": false,
-    "demo-bass": true,
-    "demo-hh-open": false,
-    "demo-kickdrum": false,
-    "demo-elpiano": false,
-    "demo-horn": true,
+    "sys-cp": false,
+    "sys-enterprise": false,
+    "sys-sine": false,
+    "sys-tri": false,
+    "sys-saw": false,
+    "sys-tan": false,
+    "sys-minimal": false,
+    "sys-noise": false,
+    "sys-square": false,
+    "sys-kick": false,
+    "sys-snare": false,
+    "sys-synth-stab": false,
+    "sys-hh-closed": false,
+    "sys-pad": false,
+    "sys-cowbell": false,
+    "sys-bass": true,
+    "sys-hh-open": false,
+    "sys-kickdrum": false,
+    "sys-elpiano": false,
+    "sys-horn": true,
     "horn": true,
     "elpiano": false,
     "kickdrum-2": false,
@@ -151,31 +151,31 @@ export const instrumentMonophonic = {
     "hh-closed": false,
     "synth-stab": false,
     "snare": false,
-    "simple-saw": false
+    "sys-saw2": false
 };
 
 // User vs example (for conflict resolution when loading from disc)
 export const instrumentScope = {
-    "test-cp": "example",
-    "test-enterprise": "example",
-    "test-sine": "example",
-    "test-tri": "example",
-    "test-saw": "example",
-    "test-tan": "example",
-    "test-minimal": "example",
-    "test-noise": "example",
-    "test-square": "example",
-    "test-kick": "example",
-    "demo-snare": "example",
-    "demo-synth-stab": "example",
-    "demo-hh-closed": "example",
-    "demo-pad": "example",
-    "demo-cowbell": "example",
-    "demo-bass": "example",
-    "demo-hh-open": "example",
-    "demo-kickdrum": "example",
-    "demo-elpiano": "example",
-    "demo-horn": "example",
+    "sys-cp": "example",
+    "sys-enterprise": "example",
+    "sys-sine": "example",
+    "sys-tri": "example",
+    "sys-saw": "example",
+    "sys-tan": "example",
+    "sys-minimal": "example",
+    "sys-noise": "example",
+    "sys-square": "example",
+    "sys-kick": "example",
+    "sys-snare": "example",
+    "sys-synth-stab": "example",
+    "sys-hh-closed": "example",
+    "sys-pad": "example",
+    "sys-cowbell": "example",
+    "sys-bass": "example",
+    "sys-hh-open": "example",
+    "sys-kickdrum": "example",
+    "sys-elpiano": "example",
+    "sys-horn": "example",
     "horn": "user",
     "elpiano": "user",
     "kickdrum-2": "user",
@@ -187,31 +187,31 @@ export const instrumentScope = {
     "hh-closed": "user",
     "synth-stab": "user",
     "snare": "user",
-    "simple-saw": "user"
+    "sys-saw2": "example"
 };
 
 // Also export as array for the exporter (ordered by channel index)
 export const instrumentArray = [
-    zzfxm_test_cp,
-    zzfxm_test_enterprise,
-    zzfxm_test_sine,
-    zzfxm_test_tri,
-    zzfxm_test_saw,
-    zzfxm_test_tan,
-    zzfxm_test_minimal,
-    zzfxm_test_noise,
-    zzfxm_test_square,
-    zzfxm_test_kick,
-    zzfxm_demo_snare,
-    zzfxm_demo_synth_stab,
-    zzfxm_demo_hh_closed,
-    zzfxm_demo_pad,
-    zzfxm_demo_cowbell,
-    zzfxm_demo_bass,
-    zzfxm_demo_hh_open,
-    zzfxm_demo_kickdrum,
-    zzfxm_demo_elpiano,
-    zzfxm_demo_horn,
+    zzfxm_sys_cp,
+    zzfxm_sys_enterprise,
+    zzfxm_sys_sine,
+    zzfxm_sys_tri,
+    zzfxm_sys_saw,
+    zzfxm_sys_tan,
+    zzfxm_sys_minimal,
+    zzfxm_sys_noise,
+    zzfxm_sys_square,
+    zzfxm_sys_kick,
+    zzfxm_sys_snare,
+    zzfxm_sys_synth_stab,
+    zzfxm_sys_hh_closed,
+    zzfxm_sys_pad,
+    zzfxm_sys_cowbell,
+    zzfxm_sys_bass,
+    zzfxm_sys_hh_open,
+    zzfxm_sys_kickdrum,
+    zzfxm_sys_elpiano,
+    zzfxm_sys_horn,
     zzfxm_horn,
     zzfxm_elpiano,
     zzfxm_kickdrum_2,
@@ -223,5 +223,5 @@ export const instrumentArray = [
     zzfxm_hh_closed,
     zzfxm_synth_stab,
     zzfxm_snare,
-    zzfxm_simple_saw
+    zzfxm_sys_saw2
 ];

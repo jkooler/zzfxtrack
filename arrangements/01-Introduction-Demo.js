@@ -1,4 +1,4 @@
-// Arrangement: 01-introduction-demo
+// Arrangement: 01-Introduction-Demo
 
 export const name = "01-Introduction-Demo";
 export const scope = "example";
@@ -13,7 +13,8 @@ export const arrangementState = {
       "blocks": [
         "demo-chords.js",
         "demo-bass.js"
-      ]
+      ],
+      "loop": false
     },
     {
       "repeats": 4,
@@ -21,7 +22,8 @@ export const arrangementState = {
         "demo-drums.js",
         "demo-chords.js",
         "demo-bass.js"
-      ]
+      ],
+      "loop": false
     },
     {
       "repeats": 8,
@@ -29,8 +31,10 @@ export const arrangementState = {
         "demo-drums.js",
         "demo-chords.js",
         "demo-synths.js",
-        "demo-bass.js"
-      ]
+        "demo-bass.js",
+        "demo-cowbell.js"
+      ],
+      "loop": false
     }
   ]
 };
