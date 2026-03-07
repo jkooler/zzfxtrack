@@ -714,7 +714,7 @@ function setupParameterOrdering() {
     
     // Create toggle UI
     const toggleContainer = document.createElement('div');
-    toggleContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #333;';
+    toggleContainer.className = 'instrument-drawer-params-header';
     toggleContainer.innerHTML = `
         <h4 class="m-0 text-sm">Parameters</h4>
         <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #888; cursor: pointer;">
@@ -1279,13 +1279,13 @@ function renderInstrumentList() {
         const expanded = isEmpty
             ? true
             : (scope === 'example' ? instrumentFolderState.example : instrumentFolderState.user);
-        const icon = expanded ? 'folder-open' : 'folder';
+        const icon = expanded ? 'chevron-down' : 'chevron-right';
         const highlightIcon = expanded && (scope !== 'user' || items.length > 0);
 
         folderItem.innerHTML = `
             <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
                 <span class="inline-flex items-center gap-1.5">
-                    <i data-lucide="${icon}" class="w-5 h-5 ${expanded ? 'fill-current' : 'fill-[var(--secondary)]'} stroke-[var(--card)]"></i>
+                    <i data-lucide="${icon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-foreground' : 'text-muted-foreground'}"></i>
                     ${label}
                 </span>
                 <span class="opacity-70">${items.length}</span>

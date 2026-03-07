@@ -278,6 +278,8 @@ body {
 /* Blocks library: expandable on mobile, collapsed by default */
 .blocks-library-list {
   transition: max-height 0.2s ease, padding 0.2s ease;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
 }
 .blocks-library-list > div.mb-0 {
   margin-bottom: 0;
@@ -291,9 +293,6 @@ body {
     overflow: hidden;
     padding-top: 0;
     padding-bottom: 0;
-  }
-  #blocksLibrarySidebar.blocks-library[data-collapsed="true"] .blocks-library-chevron {
-    transform: rotate(-180deg);
   }
 }
 @media (min-width: 1024px) {
@@ -381,14 +380,24 @@ input[readonly]:focus-visible {
 
 /* Dynamic Classes used by JS */
 .pattern-list {
-  @apply list-none m-0 px-2 py-0 space-y-1;
+  @apply list-none m-0 px-1 py-0 space-y-1;
+}
+
+#patternList,
+#arrangementList {
+  @apply pt-2 pb-2;
 }
 
 .instrument-list {
-  @apply list-none m-0 p-2 space-y-1;
+  @apply list-none m-0 py-2 px-1 space-y-1;
 }
 .instrument-list.active {
   @apply block;
+}
+
+/* Instrument drawer: parameters toggle row (JS-created) */
+.instrument-drawer-params-header {
+  @apply flex justify-between items-center mb-4 pb-2.5 border-b border-border;
 }
 
 #drawerTitle {
@@ -455,8 +464,7 @@ input[readonly]:focus-visible {
 }
 
 .instrument-item {
-  @apply flex items-center justify-between rounded-md hover:bg-accent/50 cursor-pointer transition-colors text-sm relative;
-  padding: 2px 4px;
+  @apply flex items-center justify-between rounded-md hover:bg-accent/50 cursor-pointer transition-colors text-sm relative py-0.5 px-1;
 }
 .instrument-item.active {
   background-color: color-mix(in srgb, var(--tertiary), transparent 50%);
@@ -1159,9 +1167,7 @@ strudel-editor {
 
 /* Arranger */
 .arr-rows-header {
-  @apply flex items-center gap-3 text-[11px] font-bold text-muted-foreground uppercase select-none;
-  padding-left: 4px;
-  padding-right: 4px;
+  @apply flex items-center gap-3 text-[11px] font-bold text-muted-foreground uppercase select-none px-1;
   padding-bottom: calc(var(--spacing) * 2);
 }
 
@@ -1179,8 +1185,7 @@ strudel-editor {
 }
 
 .arr-row {
-  @apply flex flex-col gap-2;
-  padding: 12px 8px;
+  @apply flex flex-col gap-2 py-3 px-2;
   border-width: 1px 0 0 0;
   border-style: solid none none none;
   border-color: var(--border);
