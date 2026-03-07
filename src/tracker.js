@@ -148,6 +148,18 @@ let copyBuffer = [];
 /** Metadata for last copy: selection bounds (min/max channel & step). */
 let copyMeta = null;
 
+/** Pen (draw) mode: click adds/removes note, drag paints/erases. When false, normal focus + scrub. */
+let drawMode = false;
+/** Note used when adding in pen mode; updated when user scrubs with Alt held. */
+let brushNote = 'c4';
+/** Paint session: 'add' | 'remove' | null. */
+let paintAction = null;
+/** Last cell key (e.g. "0,3") painted in current stroke to avoid re-applying. */
+let lastPaintedCell = null;
+/** Window listeners for paint mousemove/mouseup (removed on mouseup). */
+let paintMoveHandler = null;
+let paintUpHandler = null;
+
 /** Set to true to log multi-select/copy/paste flow to console (remove or set false for production). */
 const DEBUG_TRACKER_SELECTION = true;
 function selLog(...args) {
@@ -1048,6 +1060,7 @@ function cacheElements() {
     blockChannels: document.getElementById('trackerBlockChannels'),
     blockAdvancedSettingsBtn: document.getElementById('trackerBlockAdvancedSettingsBtn'),
     denseRowsToggle: document.getElementById('trackerDenseRowsToggle'),
+    penModeBtn: document.getElementById('trackerPenModeBtn'),
     title: document.querySelector('#trackerModal h2'),
     clearConfirmModal: document.getElementById('clearTrackerConfirmModal'),
     clearConfirmCancel: document.getElementById('clearTrackerConfirmCancel'),
@@ -1214,6 +1227,7 @@ function renderGrid() {
   const timeTrackEl = document.createElement('div');
   timeTrackEl.className = 'tracker-timetrack';
 
+  let suppressRowStripClick = false; // set true after row-strip drag so click doesn't select row
   for (let step = 0; step < state.steps; step++) {
     const stepEl = document.createElement('div');
     stepEl.className = 'tracker-timetrack-row';
@@ -1221,7 +1235,20 @@ function renderGrid() {
     stepEl.textContent = String(step + 1);
     if (step % 4 === 0) stepEl.classList.add('beat');
     if (step === state.focusedStep) stepEl.classList.add('active');
-    stepEl.addEventListener('click', () => setFocus(state.focusedChannel, step));
+    stepEl.addEventListener('click', () => {
+      if (suppressRowStripClick) return;
+      const minCh = Math.min(state.selectionAnchor.channel, state.focusedChannel);
+      const maxCh = Math.max(state.selectionAnchor.channel, state.focusedChannel);
+      const minStep = Math.min(state.selectionAnchor.step, state.focusedStep);
+      const maxStep = Math.max(state.selectionAnchor.step, state.focusedStep);
+      const isFullRowSelected = minCh === 0 && maxCh === state.channels - 1 && minStep === step && maxStep === step;
+      if (isFullRowSelected) {
+        setFocus(0, step);
+      } else {
+        setFocus(0, step);
+        setFocus(state.channels - 1, step, { extendSelection: true });
+      }
+    });
     timeTrackEl.appendChild(stepEl);
   }
 
@@ -1431,6 +1458,50 @@ function renderGrid() {
     scrollSyncLock = false;
   });
 
+  // Drag row strip to change vertical scroll position
+  function startRowStripDrag(clientY) {
+    const startY = clientY;
+    const startScrollTop = channelsScroll.scrollTop;
+    const maxScrollTop = Math.max(0, channelsScroll.scrollHeight - channelsScroll.clientHeight);
+    let didMove = false;
+    timeTrackScroll.classList.add('tracker-timetrack-dragging');
+
+    const onMove = (moveEvent) => {
+      const y = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
+      moveEvent.preventDefault();
+      didMove = true;
+      const deltaY = startY - y;
+      const newScrollTop = Math.min(Math.max(0, startScrollTop + deltaY), maxScrollTop);
+      scrollSyncLock = true;
+      channelsScroll.scrollTop = newScrollTop;
+      timeTrackScroll.scrollTop = newScrollTop;
+      scrollSyncLock = false;
+    };
+    const onUp = () => {
+      timeTrackScroll.classList.remove('tracker-timetrack-dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove, { passive: false });
+      document.removeEventListener('touchend', onUp);
+      if (didMove) {
+        suppressRowStripClick = true;
+        setTimeout(() => { suppressRowStripClick = false; }, 0);
+      }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  }
+  timeTrackScroll.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    startRowStripDrag(e.clientY);
+  });
+  timeTrackScroll.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    startRowStripDrag(e.touches[0].clientY);
+  }, { passive: true });
+
   // Sync horizontal scroll: channel headers <-> channels body (so headers scroll when user scrolls tracker)
   let hScrollSyncLock = false;
   channelsHeaderScroll.addEventListener('scroll', () => {
@@ -1630,6 +1701,33 @@ function setupEventListeners() {
     setDenseRowsPreference(next);
     updateDenseRowsToggleUI();
     renderGrid();
+  });
+
+  // Pen mode toggle: click to add/remove notes, drag to paint; hold Alt to scrub pitch
+  const drawModeAltKeyDown = (e) => {
+    if (e.altKey && elements.grid) elements.grid.classList.add('tracker-draw-mode-alt');
+  };
+  const drawModeAltKeyUp = (e) => {
+    if (e.key === 'Alt' && elements.grid) elements.grid.classList.remove('tracker-draw-mode-alt');
+  };
+  elements.penModeBtn?.addEventListener('click', () => {
+    drawMode = !drawMode;
+    if (elements.penModeBtn) {
+      elements.penModeBtn.setAttribute('aria-pressed', String(drawMode));
+      elements.penModeBtn.classList.toggle('bg-accent', drawMode);
+      elements.penModeBtn.classList.toggle('border-primary', drawMode);
+    }
+    if (elements.grid) {
+      elements.grid.classList.toggle('tracker-draw-mode', drawMode);
+      if (!drawMode) elements.grid.classList.remove('tracker-draw-mode-alt');
+    }
+    if (drawMode) {
+      document.addEventListener('keydown', drawModeAltKeyDown);
+      document.addEventListener('keyup', drawModeAltKeyUp);
+    } else {
+      document.removeEventListener('keydown', drawModeAltKeyDown);
+      document.removeEventListener('keyup', drawModeAltKeyUp);
+    }
   });
 
   // Preview button
@@ -2294,6 +2392,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
       lastAppliedIndex = newIndex;
       const note = SCRUB_NOTE_VALUES[newIndex];
       setNote(ch, step, note, { skipRender: true });
+      if (note && note !== '-') brushNote = note;
       cellEl.textContent = formatNoteLabel(note);
       cellEl.classList.toggle('has-note', note && note !== '-');
       cellEl.classList.toggle('rest', note === '-');
@@ -2319,7 +2418,67 @@ function setupNoteCellScrub(cellEl, ch, step) {
 
   const onMouseDown = (e) => {
     if (e.button !== 0) return;
-    if (state.focusedChannel !== ch || state.focusedStep !== step) return;
+
+    if (drawMode && !e.altKey) {
+      pushUndo();
+      const cell = state.grid[ch]?.[step];
+      const currentNote = cell?.note;
+      const hasNote = currentNote && currentNote !== '-';
+      if (hasNote) {
+        setNote(ch, step, null, { skipRender: true });
+        paintAction = 'remove';
+      } else {
+        setNote(ch, step, brushNote, { skipRender: true });
+        paintAction = 'add';
+      }
+      updateNoteCellInDOM(ch, step);
+      updateOutput();
+      lastPaintedCell = `${ch},${step}`;
+      if (previewState.isPlaying && previewState.audioContext) {
+        const ctx = previewState.audioContext;
+        const duration = previewState.bufferDuration || 2.0;
+        const elapsed = ctx.currentTime - previewState.startTime;
+        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+        playPreview(currentOffset);
+      }
+      const onPaintMove = (moveE) => {
+        const under = document.elementFromPoint(moveE.clientX, moveE.clientY);
+        const targetCell = under?.closest?.('.tracker-cell');
+        if (!targetCell) return;
+        const c = parseInt(targetCell.dataset.channel, 10);
+        const s = parseInt(targetCell.dataset.step, 10);
+        if (Number.isNaN(c) || Number.isNaN(s)) return;
+        const key = `${c},${s}`;
+        if (key === lastPaintedCell) return;
+        lastPaintedCell = key;
+        if (paintAction === 'add') setNote(c, s, brushNote, { skipRender: true });
+        else if (paintAction === 'remove') setNote(c, s, null, { skipRender: true });
+        updateNoteCellInDOM(c, s);
+        updateOutput();
+      };
+      const onPaintUp = () => {
+        window.removeEventListener('mousemove', paintMoveHandler);
+        window.removeEventListener('mouseup', paintUpHandler);
+        paintMoveHandler = null;
+        paintUpHandler = null;
+        paintAction = null;
+        lastPaintedCell = null;
+        if (previewState.isPlaying && previewState.audioContext) {
+          const ctx = previewState.audioContext;
+          const duration = previewState.bufferDuration || 2.0;
+          const elapsed = ctx.currentTime - previewState.startTime;
+          const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+          playPreview(currentOffset);
+        }
+      };
+      paintMoveHandler = onPaintMove;
+      paintUpHandler = onPaintUp;
+      window.addEventListener('mousemove', paintMoveHandler);
+      window.addEventListener('mouseup', paintUpHandler);
+      return;
+    }
+
+    if (!drawMode && (state.focusedChannel !== ch || state.focusedStep !== step)) return;
     startY = e.clientY;
     startIndex = getCurrentIndex();
     lastAppliedIndex = startIndex;
@@ -2348,7 +2507,16 @@ function setupNoteCellScrub(cellEl, ch, step) {
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
     clearScrubPreview();
-    if (isDragging) renderGrid();
+    if (isDragging) {
+      renderGrid();
+      if (previewState.isPlaying && previewState.audioContext) {
+        const ctx = previewState.audioContext;
+        const duration = previewState.bufferDuration || 2.0;
+        const elapsed = ctx.currentTime - previewState.startTime;
+        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+        playPreview(currentOffset);
+      }
+    }
     isDragging = false;
   };
 
@@ -2382,8 +2550,16 @@ function setupNoteCellScrub(cellEl, ch, step) {
     window.removeEventListener('touchcancel', onTouchEnd);
     document.body.classList.remove('scrubbing');
     clearScrubPreview();
-    if (isDragging) renderGrid();
-    else {
+    if (isDragging) {
+      renderGrid();
+      if (previewState.isPlaying && previewState.audioContext) {
+        const ctx = previewState.audioContext;
+        const duration = previewState.bufferDuration || 2.0;
+        const elapsed = ctx.currentTime - previewState.startTime;
+        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
+        playPreview(currentOffset);
+      }
+    } else {
       setFocus(ch, step);
       cellEl.focus();
     }
