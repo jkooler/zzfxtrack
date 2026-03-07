@@ -1285,7 +1285,7 @@ function renderInstrumentList() {
         folderItem.innerHTML = `
             <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
                 <span class="inline-flex items-center gap-1.5">
-                    <i data-lucide="${icon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-foreground' : 'text-muted-foreground'}"></i>
+                    <i data-lucide="${icon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground'}"></i>
                     ${label}
                 </span>
                 <span class="opacity-70">${items.length}</span>
