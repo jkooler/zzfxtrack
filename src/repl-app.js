@@ -319,20 +319,20 @@ const dom = {
     advancedSettingsModal: document.getElementById('advancedSettingsModal'),
     advancedSettingsTitle: document.getElementById('advancedSettingsTitle'),
     advancedSettingsResourceLabel: document.getElementById('advancedSettingsResourceLabel'),
-    advancedSettingsExamplesToggle: document.getElementById('advancedSettingsExamplesToggle'),
-    advancedSettingsExampleLockIcon: document.getElementById('advancedSettingsExampleLockIcon'),
-    advancedSettingsExampleLabel: document.getElementById('advancedSettingsExampleLabel'),
+    advancedSettingsSystemToggle: document.getElementById('advancedSettingsSystemToggle'),
+    advancedSettingsSystemLockIcon: document.getElementById('advancedSettingsSystemLockIcon'),
+    advancedSettingsSystemLabel: document.getElementById('advancedSettingsSystemLabel'),
     closeAdvancedSettingsModalBtn: document.getElementById('closeAdvancedSettingsModalBtn'),
     cancelAdvancedSettingsBtn: document.getElementById('cancelAdvancedSettingsBtn'),
     saveAdvancedSettingsBtn: document.getElementById('saveAdvancedSettingsBtn'),
 };
 
 const PATTERN_FOLDER_STATE_KEY = 'zzfxm-folder-state-patterns-v1';
-/** Default: user folder open, examples collapsed. User toggles are persisted and restored on next launch. */
-let patternFolderState = loadFolderState(PATTERN_FOLDER_STATE_KEY, { user: true, example: false });
+/** Default: user folder open, system collapsed. User toggles are persisted and restored on next launch. */
+let patternFolderState = loadFolderState(PATTERN_FOLDER_STATE_KEY, { user: true, system: false });
 
 const ARRANGEMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v1';
-let arrangementFolderState = loadFolderState(ARRANGEMENT_FOLDER_STATE_KEY, { user: true, example: false });
+let arrangementFolderState = loadFolderState(ARRANGEMENT_FOLDER_STATE_KEY, { user: true, system: false });
 
 const COLOR_THEME_KEY = 'zzfxm-color-theme';
 // Apply saved theme or default to Phantom when none saved (non-destructive: html:root keeps original default)
@@ -363,7 +363,7 @@ const COLOR_THEME_KEY = 'zzfxm-color-theme';
 })();
 
 function normalizeScope(value) {
-    return value === 'example' ? 'example' : 'user';
+    return value === 'system' ? 'system' : 'user';
 }
 
 function loadFolderState(key, fallback) {
@@ -373,7 +373,7 @@ function loadFolderState(key, fallback) {
         const parsed = JSON.parse(raw);
         return {
             user: typeof parsed?.user === 'boolean' ? parsed.user : fallback.user,
-            example: typeof parsed?.example === 'boolean' ? parsed.example : fallback.example,
+            system: typeof parsed?.system === 'boolean' ? parsed.system : fallback.system,
         };
     } catch (_e) {
         return { ...fallback };
@@ -959,8 +959,8 @@ export async function updateInstrumentReferencesInPatternsAndBlocks(oldAlias, ne
 
         const patternsPayload = await patternsRes.json();
         const blocksPayload = await blocksRes.json();
-        const patternEntries = normalizePatternEntries(patternsPayload).filter((e) => normalizeScope(e?.scope) !== 'example');
-        const blockItems = (Array.isArray(blocksPayload) ? blocksPayload : []).filter((b) => normalizeScope(b?.scope) !== 'example');
+        const patternEntries = normalizePatternEntries(patternsPayload).filter((e) => normalizeScope(e?.scope) !== 'system');
+        const blockItems = (Array.isArray(blocksPayload) ? blocksPayload : []).filter((b) => normalizeScope(b?.scope) !== 'system');
 
         let patternsToUpdate = [];
         let blocksToUpdate = [];
@@ -1074,7 +1074,7 @@ function setupAutoSave() {
                     // Update indicators in sidebar
                     updateInstrumentUsage(currentCode);
                     
-                    if (currentPatternScope !== 'example' || isDeveloperModeEnabled()) {
+                    if (currentPatternScope !== 'system' || isDeveloperModeEnabled()) {
                         // IMMEDIATELY save to localStorage as backup
                         localStorage.setItem(`unsaved_${currentPatternFilename}`, currentCode);
                         
@@ -1130,13 +1130,13 @@ function setupAutoSave() {
 
 registerBeforeUnloadConfirmer(() => {
     if (DEMO_MODE) return false;
-    if (currentPatternScope === 'example' && !isDeveloperModeEnabled()) return false;
+    if (currentPatternScope === 'system' && !isDeveloperModeEnabled()) return false;
     return Boolean(autoSaveTimeout && currentPatternFilename);
 });
 
 registerBeforeUnloadFlusher(() => {
     if (DEMO_MODE) return;
-    if (currentPatternScope === 'example' && !isDeveloperModeEnabled()) return;
+    if (currentPatternScope === 'system' && !isDeveloperModeEnabled()) return;
     if (!(autoSaveTimeout && currentPatternFilename)) return;
 
     clearTimeout(autoSaveTimeout);
@@ -1148,7 +1148,7 @@ registerBeforeUnloadFlusher(() => {
     // Use sendBeacon for reliable delivery even as page closes.
     // Note: sendBeacon cannot send custom headers, so for developer mode (which needs a header)
     // we use fetch({ keepalive: true }) instead.
-    if (currentPatternScope === 'example' && isDeveloperModeEnabled()) {
+    if (currentPatternScope === 'system' && isDeveloperModeEnabled()) {
         fetch(`/api/pattern/${currentPatternFilename}`, {
             method: 'POST',
             headers: getDeveloperModeHeaders(),
@@ -1225,7 +1225,7 @@ async function refreshPatternList() {
         const entries = DEMO_MODE
             ? Array.from(demoPatternSourceByFile.keys())
                 .sort()
-                .map((filename) => ({ filename, scope: 'example' }))
+                .map((filename) => ({ filename, scope: 'system' }))
             : await (async () => {
                 const res = await fetch('/api/patterns');
                 if (!res.ok) throw new Error('Failed to list patterns');
@@ -1255,7 +1255,7 @@ async function refreshPatternList() {
             const isEmpty = items.length === 0;
             const expanded = isEmpty
                 ? true
-                : (scope === 'example' ? patternFolderState.example : patternFolderState.user);
+                : (scope === 'system' ? patternFolderState.system : patternFolderState.user);
             const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
             const highlightIcon = expanded && (scope !== 'user' || items.length > 0);
 
@@ -1274,8 +1274,8 @@ async function refreshPatternList() {
             const list = folderLi.querySelector(`[data-pattern-folder-items="${scope}"]`);
             folderLi.querySelector(`[data-pattern-folder="${scope}"]`)?.addEventListener('click', () => {
                 if (isEmpty) return;
-                if (scope === 'example') {
-                    patternFolderState.example = !patternFolderState.example;
+                if (scope === 'system') {
+                    patternFolderState.system = !patternFolderState.system;
                 } else {
                     patternFolderState.user = !patternFolderState.user;
                 }
@@ -1288,16 +1288,16 @@ async function refreshPatternList() {
                 empty.className = 'text-xs text-muted-foreground px-2 py-1';
                 empty.textContent = scope === 'user'
                     ? 'Create a new pattern to get started.'
-                    : 'No example patterns available.';
+                    : 'No system patterns available.';
                 list?.appendChild(empty);
             }
 
             items.forEach((entry) => {
                 const file = entry.filename;
                 const fileName = decodeURIComponent(file.replace('.js', ''));
-                const isExample = normalizeScope(entry.scope) === 'example';
+                const isSystem = normalizeScope(entry.scope) === 'system';
                 const devMode = isDeveloperModeEnabled();
-                const isImmutable = isExample && !devMode;
+                const isImmutable = isSystem && !devMode;
                 const li = document.createElement('li');
                 const isIntroductionVisible = dom.welcomeView?.style?.display === 'flex';
                 li.className = `list-item ${file === currentPatternFilename && !isIntroductionVisible ? 'active' : ''}`;
@@ -1332,10 +1332,10 @@ async function refreshPatternList() {
             dom.patternList.appendChild(folderLi);
         };
 
-        const userEntries = entries.filter((entry) => normalizeScope(entry.scope) !== 'example');
-        const exampleEntries = entries.filter((entry) => normalizeScope(entry.scope) === 'example');
+        const userEntries = entries.filter((entry) => normalizeScope(entry.scope) !== 'system');
+        const systemEntries = entries.filter((entry) => normalizeScope(entry.scope) === 'system');
         appendFolder('user', 'Your patterns', userEntries);
-        appendFolder('example', 'Examples', exampleEntries);
+        appendFolder('system', 'System', systemEntries);
         
         updatePatternListVisualizer();
         createIcons({ icons });
@@ -1493,7 +1493,7 @@ async function refreshArrangementList() {
         };
         const entries = DEMO_MODE
             ? Array.from(demoArrangementSourceByFile.keys())
-                .map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'example' }))
+                .map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'system' }))
                 .sort(sortByLeadingNumber)
             : await (async () => {
                 const res = await fetch('/api/arrangements');
@@ -1511,7 +1511,7 @@ async function refreshArrangementList() {
             const isEmpty = items.length === 0;
             const expanded = isEmpty
                 ? true
-                : (scope === 'example' ? arrangementFolderState.example : arrangementFolderState.user);
+                : (scope === 'system' ? arrangementFolderState.system : arrangementFolderState.user);
             const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
             const folderLi = document.createElement('li');
             folderLi.className = 'mt-1 pb-1 border-b border-border/40';
@@ -1528,8 +1528,8 @@ async function refreshArrangementList() {
             const list = folderLi.querySelector(`[data-arrangement-folder-items="${scope}"]`);
             folderLi.querySelector(`[data-arrangement-folder="${scope}"]`)?.addEventListener('click', () => {
                 if (isEmpty) return;
-                if (scope === 'example') {
-                    arrangementFolderState.example = !arrangementFolderState.example;
+                if (scope === 'system') {
+                    arrangementFolderState.system = !arrangementFolderState.system;
                 } else {
                     arrangementFolderState.user = !arrangementFolderState.user;
                 }
@@ -1542,14 +1542,14 @@ async function refreshArrangementList() {
                 empty.className = 'text-xs text-muted-foreground px-2 py-1';
                 empty.textContent = scope === 'user'
                     ? 'Create a new arrangement to get started.'
-                    : 'No example arrangements available.';
+                    : 'No system arrangements available.';
                 list?.appendChild(empty);
             }
 
             items.forEach((entry) => {
-                const isExample = normalizeScope(entry.scope) === 'example';
+                const isSystem = normalizeScope(entry.scope) === 'system';
                 const devMode = isDeveloperModeEnabled();
-                const isImmutable = isExample && !devMode;
+                const isImmutable = isSystem && !devMode;
                 const li = document.createElement('li');
                 li.className = `list-item ${entry.filename === currentArrangementFilename ? 'active' : ''}`;
                 li.dataset.scope = normalizeScope(entry.scope);
@@ -1585,9 +1585,9 @@ async function refreshArrangementList() {
         };
 
         const userItems = [...entries.filter((entry) => normalizeScope(entry.scope) === 'user')].sort(sortByLeadingNumber);
-        const exampleItems = [...entries.filter((entry) => normalizeScope(entry.scope) === 'example')].sort(sortByLeadingNumber);
+        const systemItems = [...entries.filter((entry) => normalizeScope(entry.scope) === 'system')].sort(sortByLeadingNumber);
         appendFolder('user', 'Your arrangements', userItems);
-        appendFolder('example', 'Examples', exampleItems);
+        appendFolder('system', 'System', systemItems);
         createIcons({ icons });
         updateArrangementListScopeVisualizer();
     } catch (err) {
@@ -1608,8 +1608,8 @@ function refreshArrangementListActiveState() {
 async function deleteArrangement(filename) {
     if (!filename || DEMO_MODE) return;
     const scope = normalizeScope(getArrangementEntry(filename)?.scope);
-    if (scope === 'example' && !isDeveloperModeEnabled()) {
-        setStatus('Example arrangements are immutable', 'normal');
+    if (scope === 'system' && !isDeveloperModeEnabled()) {
+        setStatus('System arrangements are immutable', 'normal');
         return;
     }
     const displayName = decodeURIComponent(filename.replace(/\.js$/i, ''));
@@ -1748,12 +1748,12 @@ async function createNewArrangement(name) {
 }
 
 function getArrangementReadonly() {
-    return DEMO_MODE || (currentArrangementScope === 'example' && !isDeveloperModeEnabled());
+    return DEMO_MODE || (currentArrangementScope === 'system' && !isDeveloperModeEnabled());
 }
 
 function canRecoverUnsavedForScope(scope) {
     const normalizedScope = normalizeScope(scope);
-    return normalizedScope !== 'example' || isDeveloperModeEnabled();
+    return normalizedScope !== 'system' || isDeveloperModeEnabled();
 }
 
 function readUnsavedArrangementState(filename, scope) {
@@ -2146,7 +2146,7 @@ function scheduleTrackerAutoSave({ filename, trackerState, name: nameOverride, p
     if (!filename || !trackerState || DEMO_MODE) return;
     const block = getBlockByFilename(filename);
     if (!block) return;
-    if (normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled()) return;
+    if (normalizeScope(block.scope) === 'system' && !isDeveloperModeEnabled()) return;
 
     const trackerNameInput = document.getElementById('trackerBlockName');
     const trackerOutput = document.getElementById('trackerOutput');
@@ -2178,7 +2178,7 @@ function scheduleTrackerAutoSave({ filename, trackerState, name: nameOverride, p
         trackerAutoSaveTimeout = null;
         if (!activePayload) return;
         const blockNow = getBlockByFilename(activePayload.filename);
-        if (blockNow && normalizeScope(blockNow.scope) === 'example' && !isDeveloperModeEnabled()) return;
+        if (blockNow && normalizeScope(blockNow.scope) === 'system' && !isDeveloperModeEnabled()) return;
         try {
             // Use the same update logic as explicit saves so renames also update the filename on disk.
             const result = await updateBlock(
@@ -2228,7 +2228,7 @@ function scheduleTrackerAutoSave({ filename, trackerState, name: nameOverride, p
             } catch (_e) {
                 // Ignore storage failures.
             }
-            setStatus(err.message === 'Example block is read-only' ? err.message : 'Failed to autosave block', 'error');
+            setStatus(err.message === 'System block is read-only' ? err.message : 'Failed to autosave block', 'error');
         }
     };
 
@@ -2310,7 +2310,7 @@ function renderArrangementWorkspace() {
     const isPreviewPlaying = isArrangementPreviewPlaying();
     const blocksAvailableForPicker = readonly
         ? blocksLibraryCache
-        : blocksLibraryCache.filter((block) => normalizeScope(block.scope) !== 'example');
+        : blocksLibraryCache.filter((block) => normalizeScope(block.scope) !== 'system');
 
     const sortBlocksForPicker = (blocks) => {
         const collator = typeof Intl !== 'undefined' && Intl.Collator
@@ -2566,8 +2566,8 @@ function renderArrangementWorkspace() {
         if (currentArrangementFilename && !getArrangementReadonly()) {
             void saveCurrentArrangement();
             void renameArrangement({ quiet: true });
-        } else if (currentArrangementFilename && currentArrangementScope === 'example') {
-            setStatus('Example arrangements cannot be renamed', 'normal');
+        } else if (currentArrangementFilename && currentArrangementScope === 'system') {
+            setStatus('System arrangements cannot be renamed', 'normal');
             updateArrangementDisplayName(currentArrangementFilename, newName);
         } else if (currentArrangementFilename) {
             updateArrangementDisplayName(currentArrangementFilename, newName);
@@ -3269,13 +3269,13 @@ function renderBlocksLibraryFromCache() {
         return;
     }
 
-    const blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: false });
+    const blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, system: false });
 
     const appendFolder = (scope, label, entries) => {
             const isEmpty = entries.length === 0;
             const expanded = isEmpty
                 ? true
-                : (scope === 'example' ? blockFolderState.example : blockFolderState.user);
+                : (scope === 'system' ? blockFolderState.system : blockFolderState.user);
             const icon = expanded ? 'chevron-down' : 'chevron-right';
             const folder = document.createElement('div');
             folder.className = 'mb-0 py-px';
@@ -3293,8 +3293,8 @@ function renderBlocksLibraryFromCache() {
             folder.querySelector(`[data-block-folder="${scope}"]`)?.addEventListener('click', () => {
                 if (isEmpty) return;
                 const next = { ...blockFolderState };
-                if (scope === 'example') {
-                    next.example = !next.example;
+                if (scope === 'system') {
+                    next.system = !next.system;
                 } else {
                     next.user = !next.user;
                 }
@@ -3307,7 +3307,7 @@ function renderBlocksLibraryFromCache() {
                 empty.className = 'text-xs text-muted-foreground px-2 py-1';
                 empty.textContent = scope === 'user'
                     ? 'No user blocks yet. Click "+ New" to create one.'
-                    : 'No example blocks available.';
+                    : 'No system blocks available.';
                 list?.appendChild(empty);
             }
 
@@ -3316,7 +3316,7 @@ function renderBlocksLibraryFromCache() {
                 const isSelected = block.filename === activeArrangementBlockFilename;
                 li.className = `list-item ${isSelected ? 'active' : ''}`;
                 li.dataset.filename = block.filename;
-                const isReadonly = normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled();
+                const isReadonly = normalizeScope(block.scope) === 'system' && !isDeveloperModeEnabled();
                 li.innerHTML = `
                     <span class="font-medium text-xs">${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
                     ${isReadonly ? '' : `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
@@ -3350,10 +3350,10 @@ function renderBlocksLibraryFromCache() {
         const sorted = blocksLibraryCache
             .slice()
             .sort((a, b) => String(a?.name || a?.filename || '').localeCompare(String(b?.name || b?.filename || '')));
-        const userEntries = sorted.filter((b) => normalizeScope(b.scope) !== 'example');
-        const exampleEntries = sorted.filter((b) => normalizeScope(b.scope) === 'example');
+        const userEntries = sorted.filter((b) => normalizeScope(b.scope) !== 'system');
+        const systemEntries = sorted.filter((b) => normalizeScope(b.scope) === 'system');
         appendFolder('user', 'User', userEntries);
-        appendFolder('example', 'Examples', exampleEntries);
+        appendFolder('system', 'System', systemEntries);
 
         createIcons({ icons });
 }
@@ -3367,7 +3367,7 @@ async function refreshBlocksLibrary() {
                 .map((block) => [block.filename, block])
         );
         const list = DEMO_MODE
-            ? Array.from(demoBlockSourceByFile.keys()).map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'example', trackerState: null }))
+            ? Array.from(demoBlockSourceByFile.keys()).map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'system', trackerState: null }))
             : await fetch('/api/blocks').then((r) => (r.ok ? r.json() : []));
         blocksLibraryCache = (Array.isArray(list) ? list : []).map((block) => {
             const previous = previousBlocksByFilename.get(block?.filename);
@@ -3520,8 +3520,8 @@ function getArrangementReferencesForBlock(filename) {
 async function deleteBlockFromLibrary(filename, displayName) {
     if (!filename || DEMO_MODE) return;
     const block = getBlockByFilename(filename);
-    if (normalizeScope(block?.scope) === 'example' && !isDeveloperModeEnabled()) {
-        setStatus('Example blocks are immutable', 'normal');
+    if (normalizeScope(block?.scope) === 'system' && !isDeveloperModeEnabled()) {
+        setStatus('System blocks are immutable', 'normal');
         return;
     }
 
@@ -3628,7 +3628,7 @@ async function loadArrangement(filename) {
 
     try {
         // Do not stop playback when switching: like patterns, only the Play button stops current and starts the selected resource.
-        const loadedScope = DEMO_MODE ? 'example' : normalizeScope(getArrangementEntry(filename)?.scope);
+        const loadedScope = DEMO_MODE ? 'system' : normalizeScope(getArrangementEntry(filename)?.scope);
         const detail = DEMO_MODE
             ? null
             : await fetch(`/api/arrangements/${encodeURIComponent(filename)}`).then((r) => (r.ok ? r.json() : null));
@@ -3808,7 +3808,7 @@ async function loadPattern(filename) {
         // Do not stop playback here: let the Strudel play button stop arrangement (etc.) and start pattern when user presses play.
         let fileCode = '';
         const loadedPatternScope = DEMO_MODE
-            ? 'example'
+            ? 'system'
             : normalizeScope(getPatternEntry(filename)?.scope);
         if (DEMO_MODE) {
             fileCode = demoPatternSourceByFile.get(filename);
@@ -3823,7 +3823,7 @@ async function loadPattern(filename) {
         let editorCode = fileToEditor(fileCode);
         
         // Check if there's an unsaved version in localStorage
-        if (loadedPatternScope !== 'example' || isDeveloperModeEnabled()) {
+        if (loadedPatternScope !== 'system' || isDeveloperModeEnabled()) {
             const unsavedCode = localStorage.getItem(`unsaved_${filename}`);
             if (unsavedCode) {
                 // Recover from localStorage
@@ -3848,7 +3848,7 @@ async function loadPattern(filename) {
         currentPatternDisplayName = decodeURIComponent(filename.replace('.js', '')); // Store without extension
         originalPatternName = currentPatternDisplayName; // Track for rename detection
         dom.patternNameInput.value = currentPatternDisplayName;
-        dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled());
+        dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'system' && !isDeveloperModeEnabled());
         dom.patternNameInput.placeholder = '';
         if (dom.openPatternAdvancedSettingsBtn) {
             updateAdvancedSettingsButtonsVisibility();
@@ -3908,7 +3908,7 @@ async function loadPatternMeta(filename) {
         const data = await res.json();
         if (typeof data?.scope === 'string') {
             currentPatternScope = normalizeScope(data.scope);
-            dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled());
+            dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'system' && !isDeveloperModeEnabled());
         }
         const mixSettings = sanitizePlaybackMixSettings({
             targetPeak: data?.playbackTargetPeak,
@@ -4056,7 +4056,7 @@ function setPlaybackPresetControl(presetId) {
 async function saveCurrentPattern() {
     if (DEMO_MODE) return;
     if (!currentPatternFilename) return;
-    if (currentPatternScope === 'example' && !isDeveloperModeEnabled()) return;
+    if (currentPatternScope === 'system' && !isDeveloperModeEnabled()) return;
     
     try {
         const editorCode = dom.repl.editor.code;
@@ -4255,7 +4255,7 @@ async function exportCurrentPattern(options = {}) {
     if (dom.statusMsg.innerText.startsWith('⚠️')) {
         const confirmed = await confirmDialog({
             title: 'Export With Warnings?',
-            message: 'This code uses functions that ZzFXMicro Player format ignores (for example reverb/delay). Export anyway?',
+            message: 'This code uses functions that ZzFXMicro Player format ignores (e.g. reverb/delay). Export anyway?',
             confirmLabel: 'Export',
             cancelLabel: 'Cancel',
             variant: 'danger',
@@ -4574,16 +4574,16 @@ function openAdvancedSettingsModal(context) {
             : `${typeLabel[0].toUpperCase()}${typeLabel.slice(1)}`;
     }
     const devMode = isDeveloperModeEnabled();
-    if (dom.advancedSettingsExamplesToggle) {
-        dom.advancedSettingsExamplesToggle.checked = pendingAdvancedSettingsContext.scope === 'example';
-        dom.advancedSettingsExamplesToggle.disabled = DEMO_MODE || !devMode;
+    if (dom.advancedSettingsSystemToggle) {
+        dom.advancedSettingsSystemToggle.checked = pendingAdvancedSettingsContext.scope === 'system';
+        dom.advancedSettingsSystemToggle.disabled = DEMO_MODE || !devMode;
     }
-    if (dom.advancedSettingsExampleLockIcon) {
-        dom.advancedSettingsExampleLockIcon.classList.toggle('hidden', devMode);
+    if (dom.advancedSettingsSystemLockIcon) {
+        dom.advancedSettingsSystemLockIcon.classList.toggle('hidden', devMode);
     }
-    if (dom.advancedSettingsExampleLabel) {
-        dom.advancedSettingsExampleLabel.classList.toggle('text-muted-foreground', !devMode);
-        dom.advancedSettingsExampleLabel.classList.toggle('text-foreground', devMode);
+    if (dom.advancedSettingsSystemLabel) {
+        dom.advancedSettingsSystemLabel.classList.toggle('text-muted-foreground', !devMode);
+        dom.advancedSettingsSystemLabel.classList.toggle('text-foreground', devMode);
     }
     if (dom.saveAdvancedSettingsBtn) {
         dom.saveAdvancedSettingsBtn.disabled = DEMO_MODE;
@@ -4600,13 +4600,13 @@ function closeAdvancedSettingsModal() {
 async function applyAdvancedSettings() {
     if (!pendingAdvancedSettingsContext) return;
     if (DEMO_MODE) {
-        setStatus('Demo mode: updating example visibility is disabled', 'normal');
+        setStatus('Demo mode: updating system visibility is disabled', 'normal');
         closeAdvancedSettingsModal();
         return;
     }
-    const nextScope = dom.advancedSettingsExamplesToggle?.checked ? 'example' : 'user';
-    if (nextScope === 'example' && !isDeveloperModeEnabled()) {
-        setStatus('Enable developer mode to set resource as example', 'normal');
+    const nextScope = dom.advancedSettingsSystemToggle?.checked ? 'system' : 'user';
+    if (nextScope === 'system' && !isDeveloperModeEnabled()) {
+        setStatus('Enable developer mode to set resource as system', 'normal');
         return;
     }
     const context = pendingAdvancedSettingsContext;
@@ -4619,7 +4619,7 @@ async function applyAdvancedSettings() {
             if (entry) entry.scope = nextScope;
                 if (context.filename === currentPatternFilename) {
                     currentPatternScope = nextScope;
-                    dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled());
+                    dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'system' && !isDeveloperModeEnabled());
                 }
             await refreshPatternList();
         } else if (context.type === 'instrument') {
@@ -5132,7 +5132,7 @@ async function downloadPatternsAndInstruments() {
 
             if (DEMO_MODE) {
                 const metaFilename = filename.replace(/\.js$/i, '.meta.json');
-                zip.file(`patterns/${decodeURIComponent(metaFilename)}`, JSON.stringify({ scope: 'example' }, null, 2));
+                zip.file(`patterns/${decodeURIComponent(metaFilename)}`, JSON.stringify({ scope: 'system' }, null, 2));
             } else {
                 const metaRes = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
                 if (metaRes.ok) {
@@ -5847,8 +5847,8 @@ let patternToDelete = null;
 
 function showDeleteConfirmation(filename) {
     const scope = normalizeScope(getPatternEntry(filename)?.scope);
-    if (scope === 'example' && !isDeveloperModeEnabled()) {
-        setStatus('Example patterns cannot be deleted', 'normal');
+    if (scope === 'system' && !isDeveloperModeEnabled()) {
+        setStatus('System patterns cannot be deleted', 'normal');
         return;
     }
     patternToDelete = filename;
@@ -5871,14 +5871,14 @@ let originalPatternName = '';
 // Input: do not save; draft is the input value. Save/rename only on blur (or Enter → blur).
 dom.patternNameInput.addEventListener('input', () => {
     if (!currentPatternFilename) return;
-    if (DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled())) return;
+    if (DEMO_MODE || (currentPatternScope === 'system' && !isDeveloperModeEnabled())) return;
     // No-op: name is saved on blur only.
 });
 
 // Save/rename when leaving the input (only renames if name actually changed).
 dom.patternNameInput.addEventListener('blur', () => {
     if (!currentPatternFilename) return;
-    if (DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled())) return;
+    if (DEMO_MODE || (currentPatternScope === 'system' && !isDeveloperModeEnabled())) return;
     renamePattern({ quiet: true });
 });
 
@@ -5894,8 +5894,8 @@ async function renamePattern(options = {}) {
     if (DEMO_MODE) return;
     const { quiet = false } = options;
     if (!currentPatternFilename) return;
-    if (currentPatternScope === 'example' && !isDeveloperModeEnabled()) {
-        if (!quiet) setStatus('Example patterns are immutable', 'normal');
+    if (currentPatternScope === 'system' && !isDeveloperModeEnabled()) {
+        if (!quiet) setStatus('System patterns are immutable', 'normal');
         return;
     }
     
@@ -5991,8 +5991,8 @@ async function deletePattern(filename) {
         setStatus('Demo mode: deleting patterns is disabled', 'normal');
         return;
     }
-    if (normalizeScope(getPatternEntry(filename)?.scope) === 'example' && !isDeveloperModeEnabled()) {
-        setStatus('Example patterns cannot be deleted', 'normal');
+    if (normalizeScope(getPatternEntry(filename)?.scope) === 'system' && !isDeveloperModeEnabled()) {
+        setStatus('System patterns cannot be deleted', 'normal');
         return;
     }
     setStatus('Deleting...');
@@ -6786,7 +6786,7 @@ Coloris({
 document.addEventListener('developer-mode:changed', () => {
     // Immediately update local read-only flags and rerender lists.
     if (dom.patternNameInput) {
-        dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'example' && !isDeveloperModeEnabled());
+        dom.patternNameInput.readOnly = DEMO_MODE || (currentPatternScope === 'system' && !isDeveloperModeEnabled());
     }
     updateAdvancedSettingsButtonsVisibility();
     updateDevModeToolbarLabelVisibility();
@@ -7124,7 +7124,7 @@ async function openTrackerModalForEdit(block, trackerState, options = {}) {
         params: inst.params,
     }));
     
-    // Resolve latest block scope/name/denseRows from API so immutable example safeguards are accurate.
+    // Resolve latest block scope/name/denseRows from API so immutable system safeguards are accurate.
     let resolvedBlock = { ...block };
     if (block?.filename) {
         try {

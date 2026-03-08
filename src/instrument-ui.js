@@ -33,7 +33,7 @@ let hasSelectedPattern = false;
 let hasSelectedArrangement = false;
 const playbackAliasesBySource = new Map();
 const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-instruments-v1';
-let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, example: false });
+let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, system: false });
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
 
 function isDeveloperModeEnabled() {
@@ -111,7 +111,7 @@ for (let i = 0; i <= 20; i++) {
 }
 
 function normalizeScope(value) {
-    return value === 'example' ? 'example' : 'user';
+    return value === 'system' ? 'system' : 'user';
 }
 
 function getWaveShapeLabel(params) {
@@ -213,7 +213,7 @@ function loadFolderState(key, fallback) {
         const parsed = JSON.parse(raw);
         return {
             user: typeof parsed?.user === 'boolean' ? parsed.user : fallback.user,
-            example: typeof parsed?.example === 'boolean' ? parsed.example : fallback.example,
+            system: typeof parsed?.system === 'boolean' ? parsed.system : fallback.system,
         };
     } catch (_e) {
         return { ...fallback };
@@ -351,7 +351,7 @@ function setupEventListeners() {
     dom.instStrudelAlias.addEventListener('input', () => {
         if (!currentInstrumentId) return;
         const current = getInstrumentById(currentInstrumentId);
-        if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
+        if (current && normalizeScope(current.scope) === 'system' && !isDeveloperModeEnabled()) return;
         dom.instExportName.value = generateExportName(sanitizeStrudelAlias(dom.instStrudelAlias.value));
     });
     dom.instStrudelAlias.addEventListener('blur', handleDrawerAliasBlur);
@@ -1269,7 +1269,7 @@ function renderInstrumentList() {
         return regex.test(lastKnownCode);
     });
     const userInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'user');
-    const exampleInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'example');
+    const systemInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'system');
 
     const appendFolder = (scope, label, items) => {
         const folderItem = document.createElement('li');
@@ -1278,7 +1278,7 @@ function renderInstrumentList() {
         const isEmpty = items.length === 0;
         const expanded = isEmpty
             ? true
-            : (scope === 'example' ? instrumentFolderState.example : instrumentFolderState.user);
+            : (scope === 'system' ? instrumentFolderState.system : instrumentFolderState.user);
         const icon = expanded ? 'chevron-down' : 'chevron-right';
         const highlightIcon = expanded && (scope !== 'user' || items.length > 0);
 
@@ -1297,8 +1297,8 @@ function renderInstrumentList() {
         const list = folderItem.querySelector(`[data-folder-items="${scope}"]`);
         button?.addEventListener('click', () => {
             if (isEmpty) return;
-            if (scope === 'example') {
-                instrumentFolderState.example = !instrumentFolderState.example;
+            if (scope === 'system') {
+                instrumentFolderState.system = !instrumentFolderState.system;
             } else {
                 instrumentFolderState.user = !instrumentFolderState.user;
             }
@@ -1311,26 +1311,26 @@ function renderInstrumentList() {
             empty.className = 'text-xs text-muted-foreground px-2 py-1';
             empty.textContent = scope === 'user'
                 ? 'Create one to get started.'
-                : 'No example instruments available.';
+                : 'No system instruments available.';
             list?.appendChild(empty);
         }
 
         items.forEach((inst) => {
             const instScope = normalizeScope(inst.scope);
-            const isExample = instScope === 'example';
-            const isImmutable = isExample && !devMode;
+            const isSystem = instScope === 'system';
+            const isImmutable = isSystem && !devMode;
             const waveShapeLabel = getWaveShapeLabel(inst.params);
 
             const li = document.createElement('li');
             li.className = `instrument-item ${inst.id === currentInstrumentId ? 'active' : ''}`;
-            li.draggable = !isExample;
+            li.draggable = !isSystem;
             li.dataset.instrumentId = inst.id;
             li.dataset.alias = inst.strudelAlias;
             li.dataset.scope = instScope;
 
             li.innerHTML = `
                 <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
-                <div class="instrument-info" style="cursor: ${isExample ? 'pointer' : 'move'}; display: flex; align-items: center; gap: 8px;">
+                <div class="instrument-info" style="cursor: ${isSystem ? 'pointer' : 'move'}; display: flex; align-items: center; gap: 8px;">
                     <canvas class="instrument-scope w-[1.6rem] h-[1.6rem] rounded-full bg-black/20 border border-border/20 opacity-50 transition-opacity shrink-0" width="64" height="64"></canvas>
                     <div class="min-w-0">
                         <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
@@ -1366,7 +1366,7 @@ function renderInstrumentList() {
                 showDeleteInstrumentConfirmation(inst.id);
             });
 
-            if (!isExample) {
+            if (!isSystem) {
                 li.addEventListener('dragstart', handleDragStart);
                 li.addEventListener('dragover', handleDragOver);
                 li.addEventListener('dragleave', handleDragLeave);
@@ -1381,7 +1381,7 @@ function renderInstrumentList() {
     };
 
     appendFolder('user', 'Instruments (User)', userInstruments);
-    appendFolder('example', 'Examples', exampleInstruments);
+    appendFolder('system', 'System', systemInstruments);
     
     createIcons({ icons });
 
@@ -1504,8 +1504,8 @@ function handleDrop(e) {
         // Get all instruments
         const instruments = loadInstruments();
 
-        const examples = instruments.filter((inst) => normalizeScope(inst.scope) === 'example');
-        const users = instruments.filter((inst) => normalizeScope(inst.scope) !== 'example');
+        const systemInstruments = instruments.filter((inst) => normalizeScope(inst.scope) === 'system');
+        const users = instruments.filter((inst) => normalizeScope(inst.scope) !== 'system');
         const displayedUsers = [...users].reverse();
         const draggedIndex = displayedUsers.findIndex((inst) => inst.id === draggedId);
         const targetIndex = displayedUsers.findIndex((inst) => inst.id === targetId);
@@ -1514,7 +1514,7 @@ function handleDrop(e) {
         const [moved] = displayedUsers.splice(draggedIndex, 1);
         displayedUsers.splice(targetIndex, 0, moved);
         const reorderedUsers = [...displayedUsers].reverse();
-        const reordered = [...examples, ...reorderedUsers];
+        const reordered = [...systemInstruments, ...reorderedUsers];
         reordered.forEach((inst, index) => {
             inst.channel = index;
         });
@@ -1550,8 +1550,8 @@ function handleDragEnd(e) {
 function openDrawer(instrumentId) {
     const instrument = getInstrumentById(instrumentId);
     if (!instrument) return;
-    const isExample = normalizeScope(instrument.scope) === 'example';
-    const isImmutable = isExample && !isDeveloperModeEnabled();
+    const isSystem = normalizeScope(instrument.scope) === 'system';
+    const isImmutable = isSystem && !isDeveloperModeEnabled();
     
     currentInstrumentId = instrumentId;
     
@@ -1619,7 +1619,7 @@ function closeDrawer() {
 function handleDrawerAliasBlur() {
     if (!currentInstrumentId) return;
     const current = getInstrumentById(currentInstrumentId);
-    if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
+    if (current && normalizeScope(current.scope) === 'system' && !isDeveloperModeEnabled()) return;
 
     const rawAlias = String(dom.instStrudelAlias.value || '').trim();
     if (rawAlias === '') {
@@ -1654,7 +1654,7 @@ function handleDrawerAliasBlur() {
 function handleDrawerChange() {
     if (!currentInstrumentId) return;
     const current = getInstrumentById(currentInstrumentId);
-    if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
+    if (current && normalizeScope(current.scope) === 'system' && !isDeveloperModeEnabled()) return;
 
     const rawAlias = dom.instStrudelAlias.value;
     const strudelAlias = sanitizeStrudelAlias(rawAlias);
@@ -1670,7 +1670,7 @@ function handleDrawerChange() {
 function handleMonophonicChange() {
     if (!currentInstrumentId) return;
     const current = getInstrumentById(currentInstrumentId);
-    if (current && normalizeScope(current.scope) === 'example' && !isDeveloperModeEnabled()) return;
+    if (current && normalizeScope(current.scope) === 'system' && !isDeveloperModeEnabled()) return;
     updateInstrument(currentInstrumentId, { monophonic: Boolean(dom.instMonophonic.checked) });
     renderInstrumentList();
     autoUpdateInstrumentsFile();
@@ -1718,7 +1718,7 @@ function handleParamChange(paramIndex) {
     
     const instrument = getInstrumentById(currentInstrumentId);
     if (!instrument) return;
-    if (normalizeScope(instrument.scope) === 'example' && !isDeveloperModeEnabled()) return;
+    if (normalizeScope(instrument.scope) === 'system' && !isDeveloperModeEnabled()) return;
     
     // Update parameter
     const newParams = [...instrument.params];
@@ -1813,8 +1813,8 @@ let instrumentToDelete = null;
 function showDeleteInstrumentConfirmation(instrumentId) {
     const instrument = getInstrumentById(instrumentId);
     if (!instrument) return;
-    if (normalizeScope(instrument.scope) === 'example' && !isDeveloperModeEnabled()) {
-        alert('Example instruments cannot be deleted.');
+    if (normalizeScope(instrument.scope) === 'system' && !isDeveloperModeEnabled()) {
+        alert('System instruments cannot be deleted.');
         return;
     }
     
@@ -1839,7 +1839,7 @@ function handleDeleteInstrument() {
     
     const deleted = deleteInstrument(instrumentToDelete);
     if (!deleted) {
-        alert('Example instruments cannot be deleted.');
+        alert('System instruments cannot be deleted.');
         closeDeleteInstrumentModal();
         return;
     }

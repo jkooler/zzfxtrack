@@ -35,17 +35,17 @@ let arrangementEditMode = {
 	};
 let arrangementToDelete = null;
 let arrangementRowToDeleteIndex = null;
-// v2: default User expanded, Examples collapsed when first using the app
+// v2: default User expanded, System collapsed when first using the app
 export const BLOCKS_FOLDER_STATE_KEY = 'zzfxm-folder-state-blocks-v2';
 const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v2';
-let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: false });
-let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, example: false });
+let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, system: false });
+let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, system: false });
 const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 let targetPatternScope = 'user';
 
 function normalizeScope(value) {
-  return value === 'example' ? 'example' : 'user';
+  return value === 'system' ? 'system' : 'user';
 }
 
 function isDeveloperModeEnabled() {
@@ -67,23 +67,23 @@ function updateArrangementAdvancedSettingsVisibility() {
 }
 
 function updateArrangementSaveGuardUI() {
-  const isReadonlyExample = arrangementEditMode.scope === 'example' && !isDeveloperModeEnabled();
+  const isReadonlySystem = arrangementEditMode.scope === 'system' && !isDeveloperModeEnabled();
   if (elements.arrangementName) {
-    elements.arrangementName.readOnly = isReadonlyExample;
+    elements.arrangementName.readOnly = isReadonlySystem;
   }
   if (elements.arrangementBpm) {
-    elements.arrangementBpm.readOnly = isReadonlyExample;
+    elements.arrangementBpm.readOnly = isReadonlySystem;
   }
   if (elements.saveArrangementBtn) {
-    elements.saveArrangementBtn.disabled = isReadonlyExample;
-    elements.saveArrangementBtn.title = isReadonlyExample
-      ? 'Enable developer mode to edit example arrangements'
+    elements.saveArrangementBtn.disabled = isReadonlySystem;
+    elements.saveArrangementBtn.title = isReadonlySystem
+      ? 'Enable developer mode to edit system arrangements'
       : '';
   }
 }
 
 function canInsertIntoCurrentPattern() {
-  return !(normalizeScope(targetPatternScope) === 'example' && !isDeveloperModeEnabled());
+  return !(normalizeScope(targetPatternScope) === 'system' && !isDeveloperModeEnabled());
 }
 
 function updateInsertButtonsDisabledState() {
@@ -99,7 +99,7 @@ export function loadFolderState(key, fallback) {
     const parsed = JSON.parse(raw);
     return {
       user: typeof parsed?.user === 'boolean' ? parsed.user : fallback.user,
-      example: typeof parsed?.example === 'boolean' ? parsed.example : fallback.example,
+      system: typeof parsed?.system === 'boolean' ? parsed.system : fallback.system,
     };
   } catch (_e) {
     return { ...fallback };
@@ -667,7 +667,7 @@ function renderArrangementsList() {
     const isEmpty = entries.length === 0;
     const expanded = isEmpty
       ? true
-      : (scope === 'example' ? arrangementFolderState.example : arrangementFolderState.user);
+      : (scope === 'system' ? arrangementFolderState.system : arrangementFolderState.user);
     const icon = expanded ? 'chevron-down' : 'chevron-right';
     const highlightIcon = expanded && (scope !== 'user' || entries.length > 0);
 
@@ -686,8 +686,8 @@ function renderArrangementsList() {
     const list = folder.querySelector(`[data-arr-folder-items="${scope}"]`);
     folder.querySelector(`[data-arr-folder="${scope}"]`)?.addEventListener('click', () => {
       if (isEmpty) return;
-      if (scope === 'example') {
-        arrangementFolderState.example = !arrangementFolderState.example;
+      if (scope === 'system') {
+        arrangementFolderState.system = !arrangementFolderState.system;
       } else {
         arrangementFolderState.user = !arrangementFolderState.user;
       }
@@ -700,13 +700,13 @@ function renderArrangementsList() {
       empty.className = 'text-xs text-muted-foreground px-2 py-1';
       empty.textContent = scope === 'user'
         ? 'No user arrangements yet. Create one to start arranging your blocks.'
-        : 'No example arrangements available.';
+        : 'No system arrangements available.';
       list?.appendChild(empty);
     }
 
     entries.forEach(({ arr, index }) => {
-      const isExample = normalizeScope(arr.scope) === 'example';
-      const isImmutable = isExample && !devMode;
+      const isSystem = normalizeScope(arr.scope) === 'system';
+      const isImmutable = isSystem && !devMode;
       const el = document.createElement('div');
       el.className = 'block-item';
       el.dataset.index = index;
@@ -716,7 +716,7 @@ function renderArrangementsList() {
       el.innerHTML = `
         <div class="min-w-0">
           <div class="block-name font-medium text-sm text-foreground">${escapeHtml(displayName)}</div>
-          <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(`BPM ${arr.bpm ?? 120}${isExample ? ' • Example' : ''}`)}</div>
+          <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(`BPM ${arr.bpm ?? 120}${isSystem ? ' • System' : ''}`)}</div>
         </div>
         <div class="list-item-actions">
           <button class="sidebar-edit-btn" title="Edit ${escapeHtml(displayName)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
@@ -771,16 +771,16 @@ function renderArrangementsList() {
   };
   arrangementsCache.sort(sortByLeadingNumber);
   const userEntries = [];
-  const exampleEntries = [];
+  const systemEntries = [];
   arrangementsCache.forEach((arr, index) => {
-    if (normalizeScope(arr.scope) === 'example') {
-      exampleEntries.push({ arr, index });
+    if (normalizeScope(arr.scope) === 'system') {
+      systemEntries.push({ arr, index });
     } else {
       userEntries.push({ arr, index });
     }
   });
   appendFolder('user', 'User', userEntries);
-  appendFolder('example', 'Examples', exampleEntries);
+  appendFolder('system', 'System', systemEntries);
 
   createIcons({ icons });
   updateBlocksModalScopeVisualizer();
@@ -811,10 +811,10 @@ function selectArrangement(index, { preview = true } = {}) {
 async function deleteArrangementByIndex(index) {
 		  const arr = arrangementsCache[index];
 		  if (!arr?.filename) return;
-	    if (normalizeScope(arr.scope) === 'example' && !isDeveloperModeEnabled()) {
+	    if (normalizeScope(arr.scope) === 'system' && !isDeveloperModeEnabled()) {
 	      await alertDialog({
-          title: 'Cannot Delete Example Resource',
-          message: 'Example arrangements are read-only and cannot be deleted.',
+          title: 'Cannot Delete System Resource',
+          message: 'System arrangements are read-only and cannot be deleted.',
         });
 	      return;
 	    }
@@ -885,11 +885,11 @@ async function confirmDeleteArrangement() {
 		    return;
 		  }
   const filename = arrangementToDelete.filename;
-  if (normalizeScope(arrangementToDelete.scope) === 'example' && !isDeveloperModeEnabled()) {
+  if (normalizeScope(arrangementToDelete.scope) === 'system' && !isDeveloperModeEnabled()) {
     closeDeleteArrangementModal();
     await alertDialog({
-      title: 'Cannot Delete Example Resource',
-      message: 'Example arrangements are read-only and cannot be deleted.',
+      title: 'Cannot Delete System Resource',
+      message: 'System arrangements are read-only and cannot be deleted.',
     });
     return;
   }
@@ -916,7 +916,7 @@ function getSelectedArrangement() {
 
 function insertSelectedArrangement() {
   if (!canInsertIntoCurrentPattern()) {
-    emitStatus('Cannot insert into example pattern outside developer mode', 'error');
+    emitStatus('Cannot insert into system pattern outside developer mode', 'error');
     return;
   }
   const arr = getSelectedArrangement();
@@ -1016,9 +1016,9 @@ function closeArrangementUnsavedConfirmModal() {
 
 function requestCloseArrangementEditor() {
   if (hasArrangementUnsavedChanges()) {
-    const isReadonlyExample = arrangementEditMode.scope === 'example' && !isDeveloperModeEnabled();
+    const isReadonlySystem = arrangementEditMode.scope === 'system' && !isDeveloperModeEnabled();
     if (elements.arrangementUnsavedSave) {
-      elements.arrangementUnsavedSave.classList.toggle('hidden', isReadonlyExample);
+      elements.arrangementUnsavedSave.classList.toggle('hidden', isReadonlySystem);
     }
     elements.arrangementUnsavedModal?.classList.add('open');
     return;
@@ -1076,10 +1076,10 @@ function renderArrangementRows() {
       return collator ? collator.compare(aFile, bFile) : aFile.localeCompare(bFile);
     });
   };
-  // When editing a user-scope arrangement, only list user blocks in the add-block picker (no example blocks)
+  // When editing a user-scope arrangement, only list user blocks in the add-block picker (no system blocks)
   const blocksAvailableForPicker =
     arrangementEditMode.scope === 'user'
-      ? blocksCache.filter((b) => normalizeScope(b?.scope) !== 'example')
+      ? blocksCache.filter((b) => normalizeScope(b?.scope) !== 'system')
       : blocksCache;
   const blocksForPicker = sortBlocksForPicker(blocksAvailableForPicker);
   const blockByFilename = new Map(blocksCache.map((b) => [b.filename, b]));
@@ -1457,8 +1457,8 @@ function renderArrangementRows() {
 	}
 
 async function saveArrangementFromEditor() {
-  if (arrangementEditMode.scope === 'example' && !isDeveloperModeEnabled()) {
-    emitStatus('Example arrangements are read-only. Enable developer mode to edit.', 'error');
+  if (arrangementEditMode.scope === 'system' && !isDeveloperModeEnabled()) {
+    emitStatus('System arrangements are read-only. Enable developer mode to edit.', 'error');
     return;
   }
   const rawName = elements.arrangementName?.value?.trim() || '';
@@ -1596,7 +1596,7 @@ async function loadBlocksList() {
 function renderBlocksList() {
   if (!elements.blocksList) return;
 
-  blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, example: false });
+  blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, system: false });
   
   elements.blocksList.innerHTML = '';
   selectedBlockIndex = null;
@@ -1618,7 +1618,7 @@ function renderBlocksList() {
     const isEmpty = entries.length === 0;
     const expanded = isEmpty
       ? true
-      : (scope === 'example' ? blockFolderState.example : blockFolderState.user);
+      : (scope === 'system' ? blockFolderState.system : blockFolderState.user);
     const icon = expanded ? 'chevron-down' : 'chevron-right';
     const highlightIcon = expanded && (scope !== 'user' || entries.length > 0);
     const folder = document.createElement('div');
@@ -1636,8 +1636,8 @@ function renderBlocksList() {
     const list = folder.querySelector(`[data-block-folder-items="${scope}"]`);
     folder.querySelector(`[data-block-folder="${scope}"]`)?.addEventListener('click', () => {
       if (isEmpty) return;
-      if (scope === 'example') {
-        blockFolderState.example = !blockFolderState.example;
+      if (scope === 'system') {
+        blockFolderState.system = !blockFolderState.system;
       } else {
         blockFolderState.user = !blockFolderState.user;
       }
@@ -1650,20 +1650,20 @@ function renderBlocksList() {
       empty.className = 'text-xs text-muted-foreground px-2 py-1';
       empty.textContent = scope === 'user'
         ? 'No user blocks yet. Click \"Create Block\" to make your first pattern.'
-        : 'No example blocks available.';
+        : 'No system blocks available.';
       list?.appendChild(empty);
     }
 
     entries.forEach(({ block, index }) => {
-      const isExample = normalizeScope(block.scope) === 'example';
-      const isImmutable = isExample && !devMode;
+      const isSystem = normalizeScope(block.scope) === 'system';
+      const isImmutable = isSystem && !devMode;
       const bpm = Number.isFinite(block?.trackerState?.bpm) ? block.trackerState.bpm : null;
       const steps = Number.isFinite(block?.trackerState?.steps)
         ? block.trackerState.steps
         : (Array.isArray(block?.trackerState?.grid?.[0]) ? block.trackerState.grid[0].length : null);
       const blockMeta = (bpm != null && steps != null)
-        ? `BPM ${bpm} • ${steps} row${steps === 1 ? '' : 's'}${isExample ? ' • Example' : ''}`
-        : `${block.description || 'No block metadata'}${isExample ? ' • Example' : ''}`;
+        ? `BPM ${bpm} • ${steps} row${steps === 1 ? '' : 's'}${isSystem ? ' • System' : ''}`
+        : `${block.description || 'No block metadata'}${isSystem ? ' • System' : ''}`;
 
       const blockEl = document.createElement('div');
       blockEl.className = 'block-item';
@@ -1719,16 +1719,16 @@ function renderBlocksList() {
   };
 
   const userEntries = [];
-  const exampleEntries = [];
+  const systemEntries = [];
   blocksCache.forEach((block, index) => {
-    if (normalizeScope(block.scope) === 'example') {
-      exampleEntries.push({ block, index });
+    if (normalizeScope(block.scope) === 'system') {
+      systemEntries.push({ block, index });
     } else {
       userEntries.push({ block, index });
     }
   });
   appendFolder('user', 'User', userEntries);
-  appendFolder('example', 'Examples', exampleEntries);
+  appendFolder('system', 'System', systemEntries);
 
   createIcons({ icons });
   updateBlocksModalScopeVisualizer();
@@ -1757,7 +1757,7 @@ function selectBlock(index, { preview = true } = {}) {
     // Enable insert/delete/edit buttons
   updateInsertButtonsDisabledState();
   if (elements.deleteBlockBtn) {
-    elements.deleteBlockBtn.disabled = selectedBlockIndex == null || (normalizeScope(block?.scope) === 'example' && !isDeveloperModeEnabled());
+    elements.deleteBlockBtn.disabled = selectedBlockIndex == null || (normalizeScope(block?.scope) === 'system' && !isDeveloperModeEnabled());
   }
   // Trigger preview on selection (skip when opening Edit to avoid one-shot preview then hard cut)
   if (preview && block) {
@@ -1899,7 +1899,7 @@ async function openTrackerForArrangementBlock(filename) {
  */
 async function insertSelectedBlock() {
   if (!canInsertIntoCurrentPattern()) {
-    emitStatus('Cannot insert into example pattern outside developer mode', 'error');
+    emitStatus('Cannot insert into system pattern outside developer mode', 'error');
     return;
   }
   const block = getSelectedBlock();
@@ -1953,10 +1953,10 @@ async function deleteBlockByIndex(index) {
 
 function showDeleteBlockConfirmation(block) {
   if (!block) return;
-  if (normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled()) {
+  if (normalizeScope(block.scope) === 'system' && !isDeveloperModeEnabled()) {
     void alertDialog({
-      title: 'Cannot Delete Example Resource',
-      message: 'Example blocks are read-only and cannot be deleted.',
+      title: 'Cannot Delete System Resource',
+      message: 'System blocks are read-only and cannot be deleted.',
     });
     return;
   }
@@ -1975,11 +1975,11 @@ function closeDeleteBlockModal() {
 async function confirmDeleteBlock() {
   if (!blockToDelete) return;
   const block = blockToDelete;
-  if (normalizeScope(block.scope) === 'example' && !isDeveloperModeEnabled()) {
+  if (normalizeScope(block.scope) === 'system' && !isDeveloperModeEnabled()) {
     closeDeleteBlockModal();
     await alertDialog({
-      title: 'Cannot Delete Example Resource',
-      message: 'Example blocks are read-only and cannot be deleted.',
+      title: 'Cannot Delete System Resource',
+      message: 'System blocks are read-only and cannot be deleted.',
     });
     return;
   }

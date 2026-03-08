@@ -9,7 +9,7 @@ const PATTERNS_DIR = path.resolve(__dirname, 'patterns');
 const OUTPUT_DIR = path.resolve(__dirname, 'output');
 const BLOCKS_DIR = path.resolve(__dirname, 'blocks');
 const ARRANGEMENTS_DIR = path.resolve(__dirname, 'arrangements');
-const VALID_SCOPES = new Set(['user', 'example']);
+const VALID_SCOPES = new Set(['user', 'system']);
 
 function normalizeScope(value, fallback = 'user') {
   if (typeof value !== 'string') return fallback;
@@ -153,9 +153,9 @@ const apiPlugin = () => ({
         
         // POST - Save pattern content
         if (req.method === 'POST') {
-            if (readPatternScope(resolvedPatternName) === 'example' && !isDeveloperModeRequest(req)) {
+            if (readPatternScope(resolvedPatternName) === 'system' && !isDeveloperModeRequest(req)) {
                 res.statusCode = 403;
-                res.end('Example patterns are immutable');
+                res.end('System patterns are immutable');
                 return;
             }
             let body = '';
@@ -170,9 +170,9 @@ const apiPlugin = () => ({
         // DELETE - Delete pattern
         if (req.method === 'DELETE') {
              if (fs.existsSync(filePath)) {
-                 if (readPatternScope(resolvedPatternName) === 'example' && !isDeveloperModeRequest(req)) {
+                 if (readPatternScope(resolvedPatternName) === 'system' && !isDeveloperModeRequest(req)) {
                      res.statusCode = 403;
-                     res.end('Example patterns are immutable and cannot be removed');
+                     res.end('System patterns are immutable and cannot be removed');
                      return;
                  }
                  fs.unlinkSync(filePath);
@@ -353,9 +353,9 @@ const apiPlugin = () => ({
                res.end('Pattern not found');
                return;
              }
-	             if (readPatternScope(oldName) === 'example' && !isDeveloperModeRequest(req)) {
+	             if (readPatternScope(oldName) === 'system' && !isDeveloperModeRequest(req)) {
 	               res.statusCode = 403;
-	               res.end('Example patterns are immutable');
+	               res.end('System patterns are immutable');
 	               return;
 	             }
              
@@ -415,9 +415,9 @@ const apiPlugin = () => ({
                return;
              }
              const content = fs.readFileSync(oldPath, 'utf-8');
-             if (readScopeFromContent(content, 'user') === 'example' && !isDeveloperModeRequest(req)) {
+             if (readScopeFromContent(content, 'user') === 'system' && !isDeveloperModeRequest(req)) {
                res.statusCode = 403;
-               res.end('Example arrangements cannot be renamed. Enable developer mode to edit.');
+               res.end('System arrangements cannot be renamed. Enable developer mode to edit.');
                return;
              }
 
@@ -629,9 +629,9 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
             try {
               const content = fs.readFileSync(filePath, 'utf-8');
               const scope = readScopeFromContent(content, 'user');
-              if (scope === 'example' && !isDeveloperModeRequest(req)) {
+              if (scope === 'system' && !isDeveloperModeRequest(req)) {
                 res.statusCode = 403;
-                res.end('Example blocks are immutable and cannot be removed');
+                res.end('System blocks are immutable and cannot be removed');
                 return;
               }
             } catch (_e) {
@@ -673,9 +673,9 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
                 }
               }
               const normalizedScope = normalizeScope(scope, existingScope);
-              if (existingScope === 'example' && normalizedScope === 'example' && !isDeveloperModeRequest(req)) {
+              if (existingScope === 'system' && normalizedScope === 'system' && !isDeveloperModeRequest(req)) {
                 res.statusCode = 403;
-                res.end('Example blocks are immutable');
+                res.end('System blocks are immutable');
                 return;
               }
               
@@ -730,7 +730,7 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
                     const arrStateMatch = content.match(/export\s+const\s+arrangementState\s*=\s*(\{[\s\S]*?\})\s*;/);
                     if (!arrStateMatch) continue;
                     const arrScope = readScopeFromContent(content, 'user');
-                    if (arrScope === 'example' && !isDeveloperModeRequest(req)) continue;
+                    if (arrScope === 'system' && !isDeveloperModeRequest(req)) continue;
                     const arrName = arrNameMatch ? arrNameMatch[1] : arrFile.replace('.js', '');
                     const arrangementState = JSON.parse(arrStateMatch[1]);
                     if (!Array.isArray(arrangementState?.rows)) continue;
@@ -945,9 +945,9 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
             try {
               const content = fs.readFileSync(filePath, 'utf-8');
               const scope = readScopeFromContent(content, 'user');
-              if (scope === 'example' && !isDeveloperModeRequest(req)) {
+              if (scope === 'system' && !isDeveloperModeRequest(req)) {
                 res.statusCode = 403;
-                res.end('Example arrangements are immutable and cannot be removed');
+                res.end('System arrangements are immutable and cannot be removed');
                 return;
               }
             } catch (_e) {
@@ -979,9 +979,9 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
                 }
               }
               const normalizedScope = normalizeScope(scope, existingScope);
-              if (existingScope === 'example' && normalizedScope === 'example' && !isDeveloperModeRequest(req)) {
+              if (existingScope === 'system' && normalizedScope === 'system' && !isDeveloperModeRequest(req)) {
                 res.statusCode = 403;
-                res.end('Example arrangements are immutable');
+                res.end('System arrangements are immutable');
                 return;
               }
 

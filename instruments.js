@@ -154,28 +154,28 @@ export const instrumentMonophonic = {
     "sys-saw2": false
 };
 
-// User vs example (for conflict resolution when loading from disc)
+// User vs system (for conflict resolution when loading from disc)
 export const instrumentScope = {
-    "sys-cp": "example",
-    "sys-enterprise": "example",
-    "sys-sine": "example",
-    "sys-tri": "example",
-    "sys-saw": "example",
-    "sys-tan": "example",
-    "sys-minimal": "example",
-    "sys-noise": "example",
-    "sys-square": "example",
-    "sys-kick": "example",
-    "sys-snare": "example",
-    "sys-synth-stab": "example",
-    "sys-hh-closed": "example",
-    "sys-pad": "example",
-    "sys-cowbell": "example",
-    "sys-bass": "example",
-    "sys-hh-open": "example",
-    "sys-kickdrum": "example",
-    "sys-elpiano": "example",
-    "sys-horn": "example",
+    "sys-cp": "system",
+    "sys-enterprise": "system",
+    "sys-sine": "system",
+    "sys-tri": "system",
+    "sys-saw": "system",
+    "sys-tan": "system",
+    "sys-minimal": "system",
+    "sys-noise": "system",
+    "sys-square": "system",
+    "sys-kick": "system",
+    "sys-snare": "system",
+    "sys-synth-stab": "system",
+    "sys-hh-closed": "system",
+    "sys-pad": "system",
+    "sys-cowbell": "system",
+    "sys-bass": "system",
+    "sys-hh-open": "system",
+    "sys-kickdrum": "system",
+    "sys-elpiano": "system",
+    "sys-horn": "system",
     "horn": "user",
     "elpiano": "user",
     "kickdrum-2": "user",
@@ -187,7 +187,7 @@ export const instrumentScope = {
     "hh-closed": "user",
     "synth-stab": "user",
     "snare": "user",
-    "sys-saw2": "example"
+    "sys-saw2": "system"
 };
 
 // Also export as array for the exporter (ordered by channel index)

@@ -119,5 +119,5 @@ Expected:
 ## Known Non-Goals During This QA
 
 - Narrow/responsive layout behavior.
-- “Create user copy” flow for example resources.
+- “Create user copy” flow for system resources.
 - Export-from-arrangements feature work.

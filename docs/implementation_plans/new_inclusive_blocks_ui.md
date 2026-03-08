@@ -42,7 +42,7 @@ This design is selection-driven (no explicit “mode” toggle): selecting a pat
 
 - Responsive/mobile layout decisions (assume desktop-first; revisit later).
 - Detachable “multi-target tracker” (single active block at a time).
-- “Create user copy” UX for example resources (defer placement/flow).
+- “Create user copy” UX for system resources (defer placement/flow).
 - Full export-from-arrangements UX (may be added later; keep architecture open).
 
 ---
@@ -56,9 +56,9 @@ This design is selection-driven (no explicit “mode” toggle): selecting a pat
 
 **Blocks tab**
 - Shows arrangements list with the same structure/behavior as patterns list today:
-  - User/Examples folder grouping (scope-aware)
+  - User/System folder grouping (scope-aware)
   - Active row highlight
-  - Delete affordance only when deletable (not examples)
+  - Delete affordance only when deletable (not system)
   - “New arrangement” button opens a name dialog (like New pattern)
   - Note: Clicking the item will not start playback, so that is also identical how it's in the patterns
 
@@ -206,7 +206,7 @@ Likely files:
 
 - Add “Blocks” tab button and list container in sidebar.
 - Implement arrangements list rendering to match patterns UX:
-  - scope grouping (User/Examples)
+  - scope grouping (User/System)
   - delete button where allowed
   - create arrangement (name dialog)
   - select arrangement (sets `selectedArrangement`, clears `selectedPattern`)
@@ -286,7 +286,7 @@ Likely files:
 
 ## Open Questions / Future Work
 
-- Where to place “Create user copy” for examples (context menu vs header action).
+- Where to place “Create user copy” for system resources (context menu vs header action).
 - Export-from-arrangements UX (direct export without inserting to a pattern).
 - Responsive/narrow layout behavior.
 - Potential “detached edits” (browse/edit blocks without changing the current arranger selection).

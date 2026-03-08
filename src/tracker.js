@@ -1741,7 +1741,7 @@ function setupEventListeners() {
         type: 'block',
         filename: editMode.blockFilename,
         name,
-        scope: editMode.blockScope === 'example' ? 'example' : 'user',
+        scope: editMode.blockScope === 'system' ? 'system' : 'user',
       }
     }));
   });
@@ -1850,7 +1850,7 @@ function setupEventListeners() {
     if (!editMode.isEditing) return;
     if (editMode.blockFilename && detail.filename !== editMode.blockFilename) return;
     if (!editMode.blockFilename && detail.filename) return;
-    editMode.blockScope = detail.scope === 'example' ? 'example' : 'user';
+    editMode.blockScope = detail.scope === 'system' ? 'system' : 'user';
   });
 
   document.addEventListener('developer-mode:changed', () => {
@@ -4935,7 +4935,7 @@ export function openTrackerForEdit(instrumentList, blockData) {
   editMode.blockFilename = blockData.filename;
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
-  editMode.blockScope = blockData.scope === 'example' ? 'example' : 'user';
+  editMode.blockScope = blockData.scope === 'system' ? 'system' : 'user';
   editMode.denseRows = getDenseRowsPreference();
   undoStack = [];
   redoStack = [];
@@ -5021,8 +5021,8 @@ function resetEditMode() {
  * Update UI based on edit mode state
  */
 function updateEditModeUI() {
-  const isReadonlyExample = editMode.isEditing
-    && editMode.blockScope === 'example'
+  const isReadonlySystem = editMode.isEditing
+    && editMode.blockScope === 'system'
     && !isDeveloperModeEnabled();
   const usesAutoSave = editMode.isEditing && editMode.autoSaveOnInput;
 
@@ -5044,7 +5044,7 @@ function updateEditModeUI() {
       elements.blockPropsRow2.classList.remove('hidden');
       if (elements.blockNameInput) {
         elements.blockNameInput.value = editMode.blockName || '';
-        elements.blockNameInput.readOnly = isReadonlyExample;
+        elements.blockNameInput.readOnly = isReadonlySystem;
       }
       if (elements.blockBpmInput) {
         elements.blockBpmInput.value = String(state.bpm || 120);
@@ -5084,9 +5084,9 @@ function updateEditModeUI() {
   if (elements.saveBtn) {
     if (editMode.isEditing && !usesAutoSave) {
       elements.saveBtn.classList.remove('hidden');
-      elements.saveBtn.disabled = isReadonlyExample;
-      elements.saveBtn.title = isReadonlyExample
-        ? 'Enable developer mode to edit example blocks'
+      elements.saveBtn.disabled = isReadonlySystem;
+      elements.saveBtn.title = isReadonlySystem
+        ? 'Enable developer mode to edit system blocks'
         : '';
     } else {
       elements.saveBtn.classList.add('hidden');
@@ -5097,9 +5097,9 @@ function updateEditModeUI() {
   if (elements.duplicateBlockBtn) {
     if (editMode.isEditing) {
       elements.duplicateBlockBtn.classList.remove('hidden');
-      elements.duplicateBlockBtn.disabled = isReadonlyExample;
-      elements.duplicateBlockBtn.title = isReadonlyExample
-        ? 'Enable developer mode to duplicate example blocks'
+      elements.duplicateBlockBtn.disabled = isReadonlySystem;
+      elements.duplicateBlockBtn.title = isReadonlySystem
+        ? 'Enable developer mode to duplicate system blocks'
         : 'Duplicate this block (new name with suffix -2, -3, …)';
     } else {
       elements.duplicateBlockBtn.classList.add('hidden');
@@ -5114,7 +5114,7 @@ function updateEditModeUI() {
  */
 function handleSaveBlock() {
   if (!editMode.isEditing) return;
-  if (editMode.blockScope === 'example' && !isDeveloperModeEnabled()) return;
+  if (editMode.blockScope === 'system' && !isDeveloperModeEnabled()) return;
   
   // Get and validate name
   let name = editMode.blockName;
@@ -5191,9 +5191,9 @@ function closeUnsavedConfirmModal() {
  */
 function requestCloseTracker() {
   if (hasUnsavedChanges()) {
-    const isReadonlyExample = editMode.blockScope === 'example' && !isDeveloperModeEnabled();
+    const isReadonlySystem = editMode.blockScope === 'system' && !isDeveloperModeEnabled();
     if (elements.unsavedSave) {
-      elements.unsavedSave.classList.toggle('hidden', isReadonlyExample);
+      elements.unsavedSave.classList.toggle('hidden', isReadonlySystem);
     }
     elements.unsavedConfirmModal?.classList.add('open');
     return;

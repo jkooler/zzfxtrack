@@ -4,7 +4,7 @@
  */
 
 const STORAGE_KEY = "zzfxm-instruments";
-const VALID_SCOPES = new Set(["user", "example"]);
+const VALID_SCOPES = new Set(["user", "system"]);
 const DEVELOPER_MODE_KEY = "zzfxm-developer-mode";
 
 function isDeveloperModeEnabled() {
@@ -24,7 +24,7 @@ function normalizeScope(value, fallback = "user") {
 function inferLegacyScope(instrument) {
   const alias = String(instrument?.strudelAlias || "").toLowerCase();
   if (alias.startsWith("demo-") || alias.startsWith("test-")) {
-    return "example";
+    return "system";
   }
   return "user";
 }
@@ -141,7 +141,7 @@ export function updateInstrument(id, changes) {
   const currentScope = normalizeScope(current?.scope, inferLegacyScope(current));
   const changeKeys = Object.keys(changes || {});
   const isScopeOnlyChange = changeKeys.length > 0 && changeKeys.every((key) => key === "scope");
-  if (currentScope === "example" && !isDeveloperModeEnabled() && !isScopeOnlyChange) {
+  if (currentScope === "system" && !isDeveloperModeEnabled() && !isScopeOnlyChange) {
     console.warn("[InstrumentManager] Example instruments are immutable:", id);
     return current;
   }
@@ -165,7 +165,7 @@ export function deleteInstrument(id) {
   const target = instruments.find((inst) => inst.id === id);
   if (
     target &&
-    normalizeScope(target.scope, inferLegacyScope(target)) === "example" &&
+    normalizeScope(target.scope, inferLegacyScope(target)) === "system" &&
     !isDeveloperModeEnabled()
   ) {
     console.warn("[InstrumentManager] Example instruments are immutable:", id);
@@ -293,7 +293,7 @@ export function migrateFromFile(importedData) {
       .map((inst) => [inst.strudelAlias.toLowerCase(), inst]),
   );
   const monophonicFromFile = importedData?.instrumentMonophonic || {};
-  // Optional: file/API can provide scope per alias (e.g. instrumentScope: { "z-piano": "example" })
+  // Optional: file/API can provide scope per alias (e.g. instrumentScope: { "z-piano": "system" })
   const scopeFromFile = importedData?.instrumentScope || {};
 
   const instruments = [];
@@ -331,8 +331,8 @@ export function migrateFromFile(importedData) {
           monophonicFromFile?.[alias.toLowerCase()] ??
           monophonicFromFile?.[alias.toUpperCase()];
         // Scope: prefer file if provided, else preserve local (prev), else safe default "user".
-        // We do not infer "example" from alias (e.g. demo-/test-) when prev is missing — that would misclassify
-        // user instruments and miss example instruments with other names. Only use "example" when file sends it
+        // We do not infer "system" from alias (e.g. demo-/test-) when prev is missing — that would misclassify
+        // user instruments and miss system instruments with other names. Only use "system" when file sends it
         // or when we had it locally (prev).
         const fileScope =
           scopeFromFile[alias] ??
