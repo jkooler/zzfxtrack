@@ -18,7 +18,7 @@ import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { getAudioContext } from '@strudel/webaudio';
 
 import { reloadInstruments, isStrudelPlaybackActive, refreshPatternListActiveState, updateInstrumentReferencesInPatternsAndBlocks } from './repl-app.js';
-import { isTrackerOpen, applyInstrumentRenameToChannelInstruments } from './tracker.js';
+import { isTrackerOpen, applyInstrumentRenameToChannelInstruments, isArrangementPreviewPlaying, isTrackerPreviewPlaying } from './tracker.js';
 import { addRenameMapping } from './instrument-rename-map.js';
 import { createIcons, icons } from 'lucide';
 import { getInstrumentAnalyser } from './zzfx-loader.js';
@@ -42,6 +42,10 @@ function isDeveloperModeEnabled() {
     } catch (_e) {
         return false;
     }
+}
+
+function isDrawerAutoTestBlocked() {
+    return isStrudelPlaybackActive() || isArrangementPreviewPlaying() || isTrackerPreviewPlaying();
 }
 
 // DOM Elements
@@ -1730,8 +1734,8 @@ function handleParamChange(paramIndex) {
     
     document.dispatchEvent(new CustomEvent('instruments:updated', { detail: { paramsChanged: true } }));
     
-    // Play test note (debounced) if Strudel isn't currently playing
-    if (!isStrudelPlaybackActive()) {
+    // Keep the auto-test silent while any pattern/arrangement/block playback is already active.
+    if (!isDrawerAutoTestBlocked()) {
         const instrument = getInstrumentById(currentInstrumentId);
         playTestNoteDebounced(newParams, null, 300, instrument?.strudelAlias ?? null);
     }
