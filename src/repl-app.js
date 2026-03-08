@@ -138,6 +138,9 @@ let arrangementLiveEditSession = {
     active: false,
     committed: false,
 };
+const TRACKER_PREVIEW_INSTRUMENT_REFRESH_DEBOUNCE_MS = 120;
+let trackerPreviewInstrumentRefreshTimeout = null;
+let trackerPreviewInstrumentRefreshSeq = 0;
 let arrangementAutoSaveTimeout = null;
 let arrangementRenameDebounceTimeout = null;
 let arrangementPreviewPrimeTimeoutId = null;
@@ -458,6 +461,7 @@ function stopAllPlaybackForSelectionChange() {
     if (isArrangementPreviewPlaying()) {
         stopArrangementPreview();
     }
+    arrangementPreviewPlayingFilename = null;
     clearArrangementWorkspacePlayheadVisuals();
     clearPlaybackInstrumentAliases('tracker-preview');
     clearArrangementPlaybackInstrumentAliases();
@@ -1458,7 +1462,9 @@ function updatePatternListVisualizer() {
 function updateArrangementListScopeVisualizer() {
     if (!isArrangementListVisible()) return;
 
-    const playingFilename = arrangementPreviewPlayingFilename ?? (isArrangementPreviewPlaying() ? currentArrangementFilename : null);
+    const playingFilename = isArrangementPreviewPlaying()
+        ? (arrangementPreviewPlayingFilename ?? currentArrangementFilename)
+        : null;
     const playingEntry = arrangementEntriesCache.find((e) => e.filename === playingFilename);
     const playingScope = playingEntry ? normalizeScope(playingEntry.scope) : null;
     let visualizerAttached = false;
@@ -7224,9 +7230,7 @@ function setupTrackerEventListeners() {
 
         if (isTrackerOpen()) {
             updateTrackerInstruments(instrumentList);
-            if (isTrackerPreviewPlaying()) {
-                refreshTrackerPreview();
-            }
+            scheduleTrackerPreviewInstrumentRefresh();
         }
 
         if (isArrangementPreviewPlaying()) {
@@ -7240,11 +7244,7 @@ function setupTrackerEventListeners() {
                 instrumentList,
                 trackerStateByFilename: resolvedTrackerStateByFilename,
             };
-            updateArrangementPreview({
-                trackerStateByFilename: resolvedTrackerStateByFilename,
-                instrumentList,
-                keepPosition: true,
-            });
+            scheduleArrangementPreviewInstrumentUpdate(instrumentList);
         }
     });
 
@@ -7285,6 +7285,38 @@ async function syncTrackerPreviewReferenceContext(options = {}) {
         return;
     }
     setTrackerPreviewReferenceContext(context);
+}
+
+function scheduleTrackerPreviewInstrumentRefresh() {
+    trackerPreviewInstrumentRefreshSeq += 1;
+    const refreshSeq = trackerPreviewInstrumentRefreshSeq;
+    if (trackerPreviewInstrumentRefreshTimeout) {
+        clearTimeout(trackerPreviewInstrumentRefreshTimeout);
+    }
+    trackerPreviewInstrumentRefreshTimeout = setTimeout(async () => {
+        trackerPreviewInstrumentRefreshTimeout = null;
+        if (refreshSeq !== trackerPreviewInstrumentRefreshSeq) return;
+        if (!isTrackerOpen()) return;
+
+        const shouldSyncArrangementReference = Boolean(
+            currentArrangementFilename
+            && arrangementDraftState
+            && (isArrangementWorkspaceActive() || arrangementLiveEditSession.active)
+        );
+        if (shouldSyncArrangementReference) {
+            const context = await buildArrangementExportContext();
+            if (refreshSeq !== trackerPreviewInstrumentRefreshSeq) return;
+            if (context) {
+                setTrackerPreviewReferenceContext(context);
+            } else {
+                clearTrackerPreviewReferenceContext();
+            }
+        }
+
+        if (isTrackerPreviewPlaying()) {
+            refreshTrackerPreview();
+        }
+    }, TRACKER_PREVIEW_INSTRUMENT_REFRESH_DEBOUNCE_MS);
 }
 
 async function openTrackerModal(options = {}) {

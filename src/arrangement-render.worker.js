@@ -461,8 +461,13 @@ function renderArrangementStateToMixBuffer(
 
   if (!skipGlobalNormalization && normalizationReferencePeak > 0) {
     const scale = targetPeak / normalizationReferencePeak;
-    for (let i = 0; i < mixBuffer.length; i++) {
-      mixBuffer[i] *= scale;
+    const effectiveScale = renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE
+      ? Math.min(scale, 1)
+      : scale;
+    if (effectiveScale !== 1) {
+      for (let i = 0; i < mixBuffer.length; i++) {
+        mixBuffer[i] *= effectiveScale;
+      }
     }
   }
 

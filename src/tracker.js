@@ -3059,6 +3059,7 @@ function playPreview(startOffset = 0) {
   };
   const rendered = renderTrackerStateToMixBuffer(trackerState, state.instruments, state.bpm, {
     tailSeconds: 0,
+    normalizeMaster: false,
     mixSettings: REFERENCE_MIX_SETTINGS,
     applyMasterProcessing: false,
   });
@@ -3283,6 +3284,7 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120,
 
   const rendered = renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, {
     tailSeconds: 1,
+    normalizeMaster: false,
     mixSettings: REFERENCE_MIX_SETTINGS,
     applyMasterProcessing: false,
   });
@@ -3426,10 +3428,11 @@ function arrangementContainsBlockFilename(arrangementState, filename) {
 }
 
 function getTrackerPreviewArrangementReferenceScale(trackerState, standalonePeak) {
-  if (!(standalonePeak > 0)) return 1;
+  let scale = standalonePeak > 1 ? (1 / standalonePeak) : 1;
+  if (!(standalonePeak > 0)) return scale;
   const context = trackerPreviewReferenceContext;
   if (!context?.arrangementState || !context?.trackerStateByFilename || !Array.isArray(context?.instrumentList)) {
-    return 1;
+    return scale;
   }
 
   let overrides = null;
@@ -3455,11 +3458,11 @@ function getTrackerPreviewArrangementReferenceScale(trackerState, standalonePeak
     { skipGlobalNormalization: true }
   );
   const referencePeak = referenceRender?.normalizationReferencePeak;
-  if (!(referencePeak > 0)) return 1;
+  if (!(referencePeak > 0)) return scale;
 
-  const scale = standalonePeak / referencePeak;
-  if (!Number.isFinite(scale) || scale <= 0) return 1;
-  return Math.min(scale, 1);
+  const referenceScale = referencePeak > 1 ? (1 / referencePeak) : 1;
+  if (!Number.isFinite(referenceScale) || referenceScale <= 0) return scale;
+  return Math.min(scale, referenceScale);
 }
 
 function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds = 0, normalizeMaster = true, mixSettings = null, applyMasterProcessing = true } = {}) {
@@ -3919,8 +3922,13 @@ function renderArrangementStateToMixBuffer(
 
   if (!skipGlobalNormalization && normalizationReferencePeak > 0) {
     const scale = targetPeak / normalizationReferencePeak;
-    for (let i = 0; i < mixBuffer.length; i++) {
-      mixBuffer[i] *= scale;
+    const effectiveScale = renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE
+      ? Math.min(scale, 1)
+      : scale;
+    if (effectiveScale !== 1) {
+      for (let i = 0; i < mixBuffer.length; i++) {
+        mixBuffer[i] *= effectiveScale;
+      }
     }
   }
 

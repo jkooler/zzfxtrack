@@ -41,7 +41,7 @@ export const zzfxm_hh_closed = [0.3,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.08,0,3
 export const zzfxm_synth_stab = [0.85,0,440,0,0.29,0.16,1,6.3,0,0,0,0,0.48,0.15,0,0,0,0.04,0.1,-0.5,0];
 export const zzfxm_snare = [1.3,0.05,233.08,0,0.16,0,1,14,38,98,358,0,0,2.16,730,0,0,0.06,0.17,0,578];
 export const zzfxm_sys_saw2 = [0.2,0,440,0.01,0,0,2,1.5,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxm_test_loudness_norm = [1.08,0,440,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_test_loudness_norm = [0.03,0,440,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
 
 /**
  * Strudel Sound Names to ZzFXMicro Player Channel Indices
