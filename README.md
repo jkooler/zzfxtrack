@@ -108,6 +108,7 @@ This project also depends on and/or includes adapted code from:
 
 - Strudel (`@strudel/*`) - `AGPL-3.0-or-later`
 - ZzFX / ZzFXMicro - `MIT`
+- ZzFXM for early boilerplate and inspiration
 
 See `THIRD_PARTY_NOTICES.md` for attribution details and upstream links.
 
