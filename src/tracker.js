@@ -556,6 +556,8 @@ let previewState = {
   instrumentSignature: '',
 };
 
+let trackerPreviewReferenceContext = null;
+
 const arrangementPreviewState = {
   audioContext: null,
   playingSource: null,
@@ -733,6 +735,23 @@ export function invalidateArrangementSourceCaches() {
       // ignore
     }
   }
+}
+
+export function setTrackerPreviewReferenceContext(context = null) {
+  if (!context?.arrangementState || !context?.trackerStateByFilename || !Array.isArray(context?.instrumentList)) {
+    trackerPreviewReferenceContext = null;
+    return;
+  }
+  trackerPreviewReferenceContext = {
+    arrangementState: context.arrangementState,
+    trackerStateByFilename: context.trackerStateByFilename,
+    instrumentList: context.instrumentList,
+    bpm: Number.isFinite(context.bpm) ? context.bpm : 120,
+  };
+}
+
+export function clearTrackerPreviewReferenceContext() {
+  trackerPreviewReferenceContext = null;
 }
 
 function rejectArrangementWorkerJobs(reason = 'cancelled') {
@@ -3019,7 +3038,7 @@ function playPreview(startOffset = 0) {
   // Check if we have any notes with instruments
   const hasContent = state.channelInstruments.some((inst, ch) => {
     if (!inst) return false;
-    return state.grid[ch].some(cell => cell.note && cell.note !== '~');
+    return state.grid[ch].some(cell => cell.note && cell.note !== '~' && cell.note !== '-');
   });
 
   if (!hasContent) {
@@ -3027,163 +3046,53 @@ function playPreview(startOffset = 0) {
     return;
   }
 
-  // Initialize audio context if needed
-  if (!previewState.audioContext) {
-    previewState.audioContext = getAudioContext();
-  }
+  const ctx = ensureArrangementAudioContext();
+  if (!ctx) return;
+  previewState.audioContext = ctx;
 
-  const ctx = previewState.audioContext;
-  if (ctx.state === 'suspended') {
-    ctx.resume();
-  }
-
-  // Default BPM (16 steps per cycle, 4 beats per cycle = 16th notes)
-  const secondsPerBeat = 60 / state.bpm;
-  const secondsPerStep = secondsPerBeat / 4; // 16th notes
-
-  const sampleRate = 44100;
-  const samplesPerStep = Math.floor(secondsPerStep * sampleRate);
-  
-  // Calculate buffer length (exact pattern length for seamless looping)
-  const totalSteps = state.steps;
-  const patternSamples = Math.ceil(totalSteps * samplesPerStep);
-  const mixBuffer = new Float32Array(patternSamples);
-
-  const noteToFreq = (noteStr) => {
-    if (!noteStr || noteStr === '~' || noteStr === '-') return null;
-    
-    const noteMap = {
-      'c': 0, 'c#': 1, 'd': 2, 'd#': 3, 'e': 4, 'f': 5,
-      'f#': 6, 'g': 7, 'g#': 8, 'a': 9, 'a#': 10, 'b': 11
-    };
-    
-    const match = noteStr.match(/^([a-g]#?)(\d)$/i);
-    if (!match) return null;
-    
-    const noteName = match[1].toLowerCase();
-    const octave = parseInt(match[2], 10);
-    
-    const noteOffset = noteMap[noteName];
-    if (noteOffset === undefined) return null;
-    
-    const midiNote = (octave + 1) * 12 + noteOffset;
-    return 440 * Math.pow(2, (midiNote - 69) / 12);
+  const trackerState = {
+    channels: state.channels,
+    steps: state.steps,
+    grid: state.grid,
+    channelInstruments: state.channelInstruments,
+    bpm: state.bpm,
   };
-
-  // Process each channel
-  for (let ch = 0; ch < state.channels; ch++) {
-    const instrumentId = state.channelInstruments[ch];
-    if (!instrumentId) continue;
-
-    // Find instrument params
-    const instrument = state.instruments.find(i => i.id === instrumentId);
-    if (!instrument || !instrument.params) {
-      console.warn(`[Tracker] Instrument not found: ${instrumentId}`);
-      continue;
-    }
-
-    const baseParams = instrument.params;
-
-    // Process each step
-    for (let step = 0; step < state.steps; step++) {
-      const cell = state.grid[ch][step];
-      const freq = noteToFreq(cell.note);
-      if (freq === null) continue;
-
-      // Clone and modify params for this note
-      const p = [...baseParams];
-      while (p.length < 21) p.push(0);
-
-      // Set absolute frequency
-      p[2] = freq;
-
-      // Generate samples
-      const intendedVol = p[0] !== undefined ? p[0] : 1;
-      p[0] = 1; // Generate at full volume for normalization
-
-      let samples;
-      try {
-        samples = zzfxG(...p);
-      } catch (err) {
-        console.error(`[Tracker] Failed to generate sound for ${instrumentId}:`, err);
-        continue;
-      }
-
-      if (!samples || samples.length === 0) continue;
-
-      // Normalize
-      let maxAmp = 0;
-      for (let i = 0; i < samples.length; i++) {
-        const abs = Math.abs(samples[i]);
-        if (abs > maxAmp) maxAmp = abs;
-      }
-      if (maxAmp > 0) {
-        const scale = (0.5 / maxAmp) * intendedVol;
-        for (let i = 0; i < samples.length; i++) {
-          samples[i] *= scale;
-        }
-      }
-
-      const { reps, delaySteps, substepCount } = resolveSubsteps(cell.reps, cell.nd);
-      const noteGain = Number.isInteger(cell.vol) ? Math.min(Math.max(cell.vol, 1), 99) / 99 : 1;
-      const stepSize = substepCount / reps;
-      // Cut at first later step that is a rest or has a note (not just the immediate next row)
-      let cutAtStep = null;
-      for (let t = step + 1; t < state.steps; t++) {
-        const n = state.grid[ch][t].note;
-        if (n === '-' || (n && n !== '~')) {
-          cutAtStep = t;
-          break;
-        }
-      }
-      const stepEndSample = cutAtStep != null ? cutAtStep * samplesPerStep : patternSamples;
-      for (let r = 0; r < reps; r++) {
-        const subOffset = Math.floor(samplesPerStep * ((delaySteps + r * stepSize) / substepCount));
-        const noteStart = step * samplesPerStep + subOffset;
-        for (let j = 0; j < samples.length; j++) {
-          const bufferIndex = noteStart + j;
-          if (bufferIndex >= patternSamples) break;
-          if (bufferIndex >= stepEndSample) break;
-          mixBuffer[bufferIndex] += samples[j] * noteGain;
-        }
-      }
-    }
+  const rendered = renderTrackerStateToMixBuffer(trackerState, state.instruments, state.bpm, {
+    tailSeconds: 0,
+    mixSettings: REFERENCE_MIX_SETTINGS,
+    applyMasterProcessing: false,
+  });
+  if (!rendered?.mixBuffer?.length) {
+    console.warn('[Tracker] Preview render failed.');
+    return;
   }
+  scaleMixBuffer(
+    rendered.mixBuffer,
+    getTrackerPreviewArrangementReferenceScale(trackerState, rendered.peakBeforeNormalization)
+  );
 
-  // Final normalization
-  let maxAmp = 0;
-  for (let i = 0; i < mixBuffer.length; i++) {
-    maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
-  }
-  if (maxAmp > 0) {
-    const scale = 0.5 / maxAmp;
-    for (let i = 0; i < mixBuffer.length; i++) {
-      mixBuffer[i] *= scale;
-    }
-  }
-
-  // Create audio buffer and play
-  const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
-  audioBuffer.getChannelData(0).set(mixBuffer);
+  const audioBuffer = ctx.createBuffer(1, rendered.mixBuffer.length, rendered.sampleRate);
+  audioBuffer.getChannelData(0).set(rendered.mixBuffer);
 
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
-  source.loop = true; // Loop indefinitely
-  source.connect(ctx.destination);
-  
-  // Start with offset if provided to maintain loop position
-  source.start(0, startOffset % audioBuffer.duration);
+  source.loop = true;
+  const masterGainInput = ensureArrangementMasterChain(ctx);
+  applyMixToArrangementMasterChain(arrangementPreviewState.mixSettings);
+  connectPreviewSource(ctx, source, 1, { outputNode: masterGainInput });
+  const offset = audioBuffer.duration > 0 ? (startOffset % audioBuffer.duration) : 0;
+  source.start(0, offset);
 
   previewState.playingSource = source;
   previewState.isPlaying = true;
   previewState.bufferDuration = audioBuffer.duration;
   // Calculate when the loop effectively started to track position for future updates
-  previewState.startTime = ctx.currentTime - (startOffset % audioBuffer.duration);
+  previewState.startTime = ctx.currentTime - offset;
 
   startPlayhead({
     ctx,
-    secondsPerStep,
-    totalSteps,
+    secondsPerStep: rendered.samplesPerStep / rendered.sampleRate,
+    totalSteps: state.steps,
   });
 
   // Update button state
@@ -3197,7 +3106,7 @@ function playPreview(startOffset = 0) {
   
   // No onended handler needed for looping, as it stops only on manual stop()
 
-  console.log(`[Tracker] Preview playing loop (${totalSteps} steps @ ${BPM} BPM)`);
+  console.log(`[Tracker] Preview playing loop (${state.steps} steps @ ${state.bpm} BPM)`);
 }
 
 /**
@@ -3374,14 +3283,22 @@ export function previewTrackerStateOnce(trackerState, instrumentList, bpm = 120,
 
   const rendered = renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, {
     tailSeconds: 1,
-    mixSettings,
+    mixSettings: REFERENCE_MIX_SETTINGS,
+    applyMasterProcessing: false,
   });
   if (!rendered) return;
 
   const { mixBuffer, sampleRate } = rendered;
+  scaleMixBuffer(
+    mixBuffer,
+    getTrackerPreviewArrangementReferenceScale(trackerState, rendered.peakBeforeNormalization)
+  );
   const aliases = collectPlayableAliasesFromTrackerState(trackerState);
   emitTrackerPreviewInstruments({ playing: true, aliases });
-  playMixBuffer(mixBuffer, sampleRate);
+  playMixBuffer(mixBuffer, sampleRate, {
+    outputNode: ensureArrangementMasterChain(ctx),
+    onBeforeStart: () => applyMixToArrangementMasterChain(mixSettings || arrangementPreviewState.mixSettings),
+  });
 }
 
 function notifyVisualizerReady() {
@@ -3457,7 +3374,7 @@ function connectPreviewSource(ctx, source, initialGain = 1, options = {}) {
   return gainNode;
 }
 
-function playMixBuffer(mixBuffer, sampleRate) {
+function playMixBuffer(mixBuffer, sampleRate, { sourceGain = 1, outputNode = null, onBeforeStart = null } = {}) {
   if (!mixBuffer || mixBuffer.length === 0) return;
 
   if (!previewState.audioContext) {
@@ -3475,7 +3392,8 @@ function playMixBuffer(mixBuffer, sampleRate) {
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
   source.loop = false;
-  connectPreviewSource(ctx, source);
+  connectPreviewSource(ctx, source, sourceGain, { outputNode });
+  if (typeof onBeforeStart === 'function') onBeforeStart();
   source.start(0);
 
   previewState.playingSource = source;
@@ -3492,6 +3410,56 @@ function playMixBuffer(mixBuffer, sampleRate) {
       emitTrackerPreviewInstruments({ playing: false, aliases: [] });
     }
   };
+}
+
+function scaleMixBuffer(mixBuffer, scale) {
+  if (!mixBuffer || !Number.isFinite(scale) || scale === 1) return;
+  for (let i = 0; i < mixBuffer.length; i++) {
+    mixBuffer[i] *= scale;
+  }
+}
+
+function arrangementContainsBlockFilename(arrangementState, filename) {
+  if (!filename) return false;
+  const rows = Array.isArray(arrangementState?.rows) ? arrangementState.rows : [];
+  return rows.some((row) => Array.isArray(row?.blocks) && row.blocks.includes(filename));
+}
+
+function getTrackerPreviewArrangementReferenceScale(trackerState, standalonePeak) {
+  if (!(standalonePeak > 0)) return 1;
+  const context = trackerPreviewReferenceContext;
+  if (!context?.arrangementState || !context?.trackerStateByFilename || !Array.isArray(context?.instrumentList)) {
+    return 1;
+  }
+
+  let overrides = null;
+  if (editMode.blockFilename) {
+    if (!arrangementContainsBlockFilename(context.arrangementState, editMode.blockFilename)) {
+      return 1;
+    }
+    overrides = { byFilename: new Map([[editMode.blockFilename, trackerState]]) };
+  } else if (Number.isInteger(editMode.arrangementInsertRowIndex)) {
+    overrides = { byRowIndex: new Map([[editMode.arrangementInsertRowIndex, trackerState]]) };
+  } else {
+    return 1;
+  }
+
+  const referenceRender = renderArrangementStateToMixBuffer(
+    context.arrangementState,
+    context.trackerStateByFilename,
+    context.instrumentList,
+    context.bpm,
+    overrides,
+    REFERENCE_MIX_SETTINGS,
+    ARRANGEMENT_RENDER_PROFILE_LIVE,
+    { skipGlobalNormalization: true }
+  );
+  const referencePeak = referenceRender?.normalizationReferencePeak;
+  if (!(referencePeak > 0)) return 1;
+
+  const scale = standalonePeak / referencePeak;
+  if (!Number.isFinite(scale) || scale <= 0) return 1;
+  return Math.min(scale, 1);
 }
 
 function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tailSeconds = 0, normalizeMaster = true, mixSettings = null, applyMasterProcessing = true } = {}) {
@@ -3621,8 +3589,15 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
       const repsVal = repsGrid[ch]?.[step];
       const ndVal = ndGrid[ch]?.[step];
       const volVal = volGrid[ch]?.[step];
-      const { reps, delaySteps, substepCount } = resolveSubsteps(repsVal, ndVal);
-      const noteGain = Number.isInteger(volVal) ? Math.min(Math.max(volVal, 1), 99) / 99 : 1;
+      const cellReps = cell && typeof cell === 'object' ? cell.reps : null;
+      const cellNd = cell && typeof cell === 'object' ? cell.nd : null;
+      const cellVol = cell && typeof cell === 'object' ? cell.vol : null;
+      const { reps, delaySteps, substepCount } = resolveSubsteps(
+        Number.isInteger(repsVal) ? repsVal : cellReps,
+        Number.isInteger(ndVal) ? ndVal : cellNd
+      );
+      const noteVol = Number.isInteger(volVal) ? volVal : cellVol;
+      const noteGain = Number.isInteger(noteVol) ? Math.min(Math.max(noteVol, 1), 99) / 99 : 1;
       const stepSize = substepCount / reps;
       // Cut at first later step that is a rest or has a note (not just the immediate next row)
       let cutAtStep = null;
@@ -3654,13 +3629,10 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
     return null;
   }
 
+  const peakBeforeNormalization = getBufferPeak(mixBuffer);
   if (normalizeMaster) {
-    let maxAmp = 0;
-    for (let i = 0; i < mixBuffer.length; i++) {
-      maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
-    }
-    if (maxAmp > 0) {
-      const scale = targetPeak / maxAmp;
+    if (peakBeforeNormalization > 0) {
+      const scale = targetPeak / peakBeforeNormalization;
       for (let i = 0; i < mixBuffer.length; i++) {
         mixBuffer[i] *= scale;
       }
@@ -3673,7 +3645,7 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
     }
   }
 
-  return { mixBuffer, sampleRate, samplesPerStep, mainSamples };
+  return { mixBuffer, sampleRate, samplesPerStep, mainSamples, peakBeforeNormalization };
 }
 
 export function previewArrangementStateOnce(arrangementState, trackerStateByFilename, instrumentList, bpm = 120) {
@@ -3915,6 +3887,7 @@ function renderArrangementStateToMixBuffer(
         loopSegment: lastLoopIndex >= 0,
         loopRowIndex: lastLoopIndex >= 0 ? lastLoopIndex : undefined,
         peakBeforeNormalization: 0,
+        normalizationReferencePeak: 0,
       };
     }
     console.warn('[Arranger] Preview produced silence. Check block trackerState instruments match current instruments.');
@@ -3923,11 +3896,7 @@ function renderArrangementStateToMixBuffer(
 
   let normalizationReferencePeak = maxAmp;
   const loopTruncatesArrangement = lastLoopIndex >= 0 && lastLoopIndex < rowDescriptors.length - 1;
-  if (
-    !skipGlobalNormalization
-    && renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE
-    && loopTruncatesArrangement
-  ) {
+  if (renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE && loopTruncatesArrangement) {
     const fullArrangementState = {
       ...arrangementState,
       rows: rows.map((row) => ({ ...row, loop: false })),
@@ -3969,6 +3938,7 @@ function renderArrangementStateToMixBuffer(
     loopSegment: lastLoopIndex >= 0,
     loopRowIndex: lastLoopIndex >= 0 ? lastLoopIndex : undefined,
     peakBeforeNormalization: maxAmp,
+    normalizationReferencePeak,
   };
 }
 
@@ -5345,6 +5315,7 @@ export function closeTracker() {
   }
   // Stop any playing preview
   stopPreview();
+  clearTrackerPreviewReferenceContext();
 
   closeClearConfirmModal();
   closeUnsavedConfirmModal();

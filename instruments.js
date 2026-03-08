@@ -41,6 +41,7 @@ export const zzfxm_hh_closed = [0.3,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.08,0,3
 export const zzfxm_synth_stab = [0.85,0,440,0,0.29,0.16,1,6.3,0,0,0,0,0.48,0.15,0,0,0,0.04,0.1,-0.5,0];
 export const zzfxm_snare = [1.3,0.05,233.08,0,0.16,0,1,14,38,98,358,0,0,2.16,730,0,0,0.06,0.17,0,578];
 export const zzfxm_sys_saw2 = [0.2,0,440,0.01,0,0,2,1.5,0,0,0,0,0,0,0,0,0,0,1,0,0];
+export const zzfxm_test_loudness_norm = [1.08,0,440,0.01,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0];
 
 /**
  * Strudel Sound Names to ZzFXMicro Player Channel Indices
@@ -79,7 +80,8 @@ export const instrumentMapping = {
     "hh-closed": 28,
     "synth-stab": 29,
     "snare": 30,
-    "sys-saw2": 31
+    "sys-saw2": 31,
+    "test-loudness-norm": 32
 };
 
 // Map them to IDs you want to use in Strudel
@@ -115,7 +117,8 @@ export const instruments = {
     "hh-closed": zzfxm_hh_closed,
     "synth-stab": zzfxm_synth_stab,
     "snare": zzfxm_snare,
-    "sys-saw2": zzfxm_sys_saw2
+    "sys-saw2": zzfxm_sys_saw2,
+    "test-loudness-norm": zzfxm_test_loudness_norm
 };
 
 // Per-instrument playback settings
@@ -151,7 +154,8 @@ export const instrumentMonophonic = {
     "hh-closed": false,
     "synth-stab": false,
     "snare": false,
-    "sys-saw2": false
+    "sys-saw2": false,
+    "test-loudness-norm": false
 };
 
 // User vs system (for conflict resolution when loading from disc)
@@ -187,7 +191,8 @@ export const instrumentScope = {
     "hh-closed": "user",
     "synth-stab": "user",
     "snare": "user",
-    "sys-saw2": "system"
+    "sys-saw2": "system",
+    "test-loudness-norm": "system"
 };
 
 // Also export as array for the exporter (ordered by channel index)
@@ -223,5 +228,6 @@ export const instrumentArray = [
     zzfxm_hh_closed,
     zzfxm_synth_stab,
     zzfxm_snare,
-    zzfxm_sys_saw2
+    zzfxm_sys_saw2,
+    zzfxm_test_loudness_norm
 ];

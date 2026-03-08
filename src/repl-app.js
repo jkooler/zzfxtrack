@@ -13,7 +13,7 @@ import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateIns
 import { setInstrumentScope } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
-import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate } from './tracker.js';
+import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate, setTrackerPreviewReferenceContext, clearTrackerPreviewReferenceContext } from './tracker.js';
 import { resolveTrackerStateChannelInstruments } from './instrument-rename-map.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, BLOCKS_FOLDER_STATE_KEY } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
@@ -4169,6 +4169,10 @@ function applyPlaybackMixSettingsToInputs(settings) {
     if (dom.playbackTargetPeak) dom.playbackTargetPeak.value = String(clean.targetPeak);
     if (dom.playbackMasterGainDb) dom.playbackMasterGainDb.value = String(clean.masterGainDb);
     if (dom.playbackSoftClipDrive) dom.playbackSoftClipDrive.value = String(clean.softClipDrive);
+    // Keep preview-side mix state in sync when previews are idle; active previews are refreshed elsewhere.
+    if (!isArrangementPreviewPlaying() && !isTrackerPreviewPlaying()) {
+        updateArrangementPreview({ mixSettings: clean });
+    }
 }
 
 function setPlaybackPresetControl(presetId) {
@@ -7025,11 +7029,14 @@ function updateExportSettingsApplyButton() {
 
 /** Apply current playback loudness settings to live preview (no persist). So changes are heard immediately. */
 function applyPlaybackMixToPreview() {
-    if (!isArrangementPreviewPlaying()) return;
+    const mixSettings = getPlaybackMixSettings();
     updateArrangementPreview({
-        mixSettings: getPlaybackMixSettings(),
+        mixSettings,
         keepPosition: true,
     });
+    if (isTrackerPreviewPlaying()) {
+        refreshTrackerPreview();
+    }
 }
 
 function setupExportSettingsModal() {
@@ -7056,12 +7063,7 @@ function setupExportSettingsModal() {
         savePatternMeta();
         const inferred = inferPlaybackPresetId(getPlaybackMixSettings());
         setPlaybackPresetControl(inferred);
-        if (isArrangementPreviewPlaying()) {
-            updateArrangementPreview({
-                mixSettings: getPlaybackMixSettings(),
-                keepPosition: true,
-            });
-        }
+        applyPlaybackMixToPreview();
         exportSettingsSnapshot = getExportSettingsSnapshot();
         dom.exportSettingsModal.classList.remove('open');
     });
@@ -7262,12 +7264,36 @@ function setupTrackerEventListeners() {
 /**
  * Open the tracker modal with current instruments
  */
+async function syncTrackerPreviewReferenceContext(options = {}) {
+    const useArrangementReference = Boolean(
+        currentArrangementFilename
+        && arrangementDraftState
+        && (
+            isArrangementWorkspaceActive()
+            || options?.returnToArrangementsOnClose
+            || options?.returnToBlocksOnClose === false
+        )
+    );
+    if (!useArrangementReference) {
+        clearTrackerPreviewReferenceContext();
+        return;
+    }
+
+    const context = await buildArrangementExportContext();
+    if (!context) {
+        clearTrackerPreviewReferenceContext();
+        return;
+    }
+    setTrackerPreviewReferenceContext(context);
+}
+
 async function openTrackerModal(options = {}) {
     if (options?.returnToArrangementsOnClose) {
         arrangementLiveEditSession = { active: true, committed: false };
     } else {
         arrangementLiveEditSession = { active: false, committed: false };
     }
+    await syncTrackerPreviewReferenceContext(options);
     const { getDefragmentedInstruments } = await import('./instrument-manager.js');
     const instruments = getDefragmentedInstruments();
     
@@ -7292,6 +7318,7 @@ async function openTrackerModalForEdit(block, trackerState, options = {}) {
     } else {
         arrangementLiveEditSession = { active: false, committed: false };
     }
+    await syncTrackerPreviewReferenceContext(options);
     const { getDefragmentedInstruments } = await import('./instrument-manager.js');
     const instruments = getDefragmentedInstruments();
     

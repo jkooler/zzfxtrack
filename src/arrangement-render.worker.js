@@ -178,8 +178,15 @@ function renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, { tail
       const repsVal = repsGrid[ch]?.[step];
       const ndVal = ndGrid[ch]?.[step];
       const volVal = volGrid[ch]?.[step];
-      const { reps, delaySteps, substepCount } = resolveSubsteps(repsVal, ndVal);
-      const noteGain = Number.isInteger(volVal) ? Math.min(Math.max(volVal, 1), 99) / 99 : 1;
+      const cellReps = cell && typeof cell === 'object' ? cell.reps : null;
+      const cellNd = cell && typeof cell === 'object' ? cell.nd : null;
+      const cellVol = cell && typeof cell === 'object' ? cell.vol : null;
+      const { reps, delaySteps, substepCount } = resolveSubsteps(
+        Number.isInteger(repsVal) ? repsVal : cellReps,
+        Number.isInteger(ndVal) ? ndVal : cellNd
+      );
+      const noteVol = Number.isInteger(volVal) ? volVal : cellVol;
+      const noteGain = Number.isInteger(noteVol) ? Math.min(Math.max(noteVol, 1), 99) / 99 : 1;
       const stepSize = substepCount / reps;
       let cutAtStep = null;
       for (let t = step + 1; t < steps; t++) {
