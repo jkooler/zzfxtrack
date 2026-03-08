@@ -254,7 +254,7 @@ export function loadZzFXInstruments(instrumentMap, options = {}) {
             }
 
             // Dynamic Generation with True Pitch Shifting!
-            // We mimic the ZzFXMicro Player logic exactly to ensure parity.
+            // We mimic the ZzFXTrack Player logic exactly to ensure parity.
             
             // 1. Determine Target Pitch
             let targetMidi = 60;

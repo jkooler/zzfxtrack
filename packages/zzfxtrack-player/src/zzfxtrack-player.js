@@ -2,9 +2,9 @@ import { zzfxG } from './zzfx-core.js';
 import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-settings.js';
 
 /**
- * ZzFXMicro Player — ZzFX Music Renderer v2.0.3 by Frank Force 2019
+ * ZzFXTrack Player — ZzFX Music Renderer v2.0.3 by Frank Force 2019
  * Adapted from ZzFXM (Keith Clark and Frank Force, MIT License)
- * for ES Modules and ZzFXMicro Player export format. Uses ZzFXMicro (21-param) engine.
+ * for ES Modules and ZzFXTrack Player export format. Uses ZzFXMicro (21-param) engine.
  * Original project: https://keithclark.github.io/ZzFXM/
  */
 
@@ -218,10 +218,10 @@ let playingSource = null;
 export function playZzfxmSong(songData, audioCtx, onEnded, options = {}) {
     stopZzfxmSong();
     
-    console.log("[ZzFXMicro] Building song...", songData);
+    console.log("[ZzFXTrack Player] Building song...", songData);
     const pcm = buildSong(songData, options);
     if (!pcm) {
-        console.error("[ZzFXMicro] Failed to build song");
+        console.error("[ZzFXTrack Player] Failed to build song");
         if (onEnded) onEnded();
         return;
     }
@@ -236,12 +236,12 @@ export function playZzfxmSong(songData, audioCtx, onEnded, options = {}) {
     
     playingSource = source;
     
-    console.log(`[ZzFXMicro] Playing ${pcm.length} samples.`);
+    console.log(`[ZzFXTrack Player] Playing ${pcm.length} samples.`);
     
     source.onended = () => {
         if (playingSource === source) {
             playingSource = null;
-            console.log("[ZzFXMicro] Ended.");
+            console.log("[ZzFXTrack Player] Ended.");
             if (onEnded) onEnded();
         }
     };
@@ -251,6 +251,6 @@ export function stopZzfxmSong() {
     if (playingSource) {
         try { playingSource.stop(); } catch(e){}
         playingSource = null;
-        console.log("[ZzFXMicro] Stopped.");
+        console.log("[ZzFXTrack Player] Stopped.");
     }
 }

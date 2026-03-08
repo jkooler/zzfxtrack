@@ -119,7 +119,7 @@ function exportSong() {
         return;
     }
 
-    status.innerText = "🍞 Exporting ZzFXMicro Player JSON...";
+    status.innerText = "🍞 Exporting ZzFXTrack Player JSON...";
     const songData = exportPattern(currentPattern, currentBpm, instruments);
     
     // Download logic

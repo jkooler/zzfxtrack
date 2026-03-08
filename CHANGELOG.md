@@ -6,9 +6,10 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
-- First public alpha release.
-- Strudel-based composition workflow in the browser.
-- ZzFX instrument loading, preview, and editing flow.
-- ZzFXMicro Player-compatible song export pipeline.
-- In-app licensing and attribution modal.
-- In-app change log modal.
+First public alpha release.
+Strudel composition workflow with external ZzFXMicro instrument support.
+Arranger and Blocks with tracker style workflow.
+ZzFX instrument loading, preview, and editing flow.
+Export JSON for the bundled ZzFXTrack Player
+Export to WAV file format
+In-app licensing and attribution modal.

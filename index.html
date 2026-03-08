@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ZzFXMicro Music</title>
+    <title>ZzFXTrack</title>
     <script>
       (function() {
         var key = 'zzfxm-color-theme';
@@ -98,7 +98,7 @@
           class="text-sm font-extrabold tracking-tight text-primary font-mono text-center pt-[5px] pb-[5px] mt-0 mb-0 cursor-pointer hover:text-primary/90 transition-colors"
           title="Show introduction (click again when viewing intro to return to pattern)"
         >
-          ZzFXMicro Music
+          ZzFXTrack
         </h1>
         <!-- Tabs -->
         <div class="sidebar-tabs grid grid-cols-2 rounded-md gap-x-0 gap-y-1">
@@ -476,11 +476,11 @@
           </div>
         </div>
 
-        <!-- ZzFXMicro Data Section -->
+        <!-- Song Data (ZzFXTrack Player export) Section -->
         <div class="param-field space-y-1.5 pt-4 border-t border-border">
           <label
             class="block text-sm font-medium pb-2 leading-none text-foreground"
-            >ZzFXMicro Data</label
+            >Song Data</label
           >
           <div class="flex gap-2">
             <input
@@ -569,7 +569,7 @@
           <h1
             class="text-4xl font-black tracking-tight text-primary drop-shadow-sm font-mono"
           >
-            ZzFXMicro Music
+            ZzFXTrack
           </h1>
           <p class="text-base leading-relaxed text-foreground/80">
             With this app you can create musical content using
@@ -589,7 +589,7 @@
           </p>
           <p class="text-base text-foreground/80">
             Export your creations as JSON files and use them in
-            your games or other projects using the bundled <strong>ZzFXMicro Player</strong>.
+            your games or other projects using the bundled <strong>ZzFXTrack Player</strong>.
           </p>
           <div class="text-sm text-muted-foreground">The exported JSON is
             <strong>not compatible</strong> with the <strong>ZzFXM player</strong> and it's modified ZzFX engine. Strudel's internal ZzFX engine is not supported as well.
@@ -696,34 +696,34 @@
             </button>
             <div
               id="exportMenu"
-              class="hidden absolute bottom-full left-0 mb-2 min-w-[190px] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg z-20"
+              class="hidden absolute bottom-full left-0 mb-2 grid overflow-hidden rounded-md border border-border bg-background text-foreground shadow-lg z-20"
+              style="grid-template-columns: max-content;"
               role="menu"
               aria-labelledby="exportBtn"
             >
+              <div id="exportMenuTitle" class="px-3 py-2 text-xs font-semibold text-muted-foreground border-b border-border uppercase tracking-wide whitespace-nowrap" role="presentation">Export Pattern to...</div>
               <button
                 id="exportJsonBtn"
                 type="button"
-                class="w-full inline-flex items-center justify-between gap-3 px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                class="inline-flex items-center px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap min-w-0"
                 role="menuitem"
               >
-                <span>ZzFXMicro (json)</span>
-                <i data-lucide="file-json" class="w-4 h-4 shrink-0"></i>
+                <span>ZzFXTrack Player (json)</span>
               </button>
               <button
                 id="exportWavBtn"
                 type="button"
-                class="w-full inline-flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                class="inline-flex items-center border-t border-border px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap min-w-0"
                 role="menuitem"
               >
                 <span>Audio file (wav)</span>
-                <i data-lucide="audio-waveform" class="w-4 h-4 shrink-0"></i>
               </button>
             </div>
           </div>
           <button
             id="previewPlayBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground text-foreground h-9 w-9 p-0 flex items-center justify-center"
-            title="Play ZzFXMicro"
+            title="Play ZzFXTrack Player preview"
             disabled
             style="display: none"
           >
@@ -735,11 +735,10 @@
             disabled
             style="display: none"
           >
-            Song Data
+            Data
           </button>
-          <span aria-hidden="true" class="h-5 w-px shrink-0 bg-border/80"></span>
           </div>
-          <div class="flex items-center gap-3 footer-utility-group">
+          <div class="flex items-center footer-utility-group">
           <span
             id="devModeToolbarLabel"
             class="hidden text-[10px] leading-tight text-muted-foreground font-mono tracking-wide uppercase text-right"
@@ -785,7 +784,7 @@
           <h2
             class="text-lg font-semibold leading-none tracking-tight text-primary"
           >
-            Song Data
+            Data for ZzFXTrack Player
           </h2>
           <button
             id="closeJsonModalBtn"
@@ -864,10 +863,10 @@
 
         <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
           <p class="text-foreground/90 leading-relaxed">
-            <strong>ZzFXMicro Music</strong> is an authoring/export tool for the bundled <strong>ZzFXMicro Player</strong> that embeds <strong>Strudel</strong> for its REPL workflow and <strong>Arranger</strong>. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
+            <strong>ZzFXTrack</strong> is an authoring/export tool for the bundled <strong>ZzFXTrack Player</strong> that embeds <strong>Strudel</strong> for its REPL workflow and <strong>Arranger</strong>. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
           </p>
           <p class="text-muted-foreground/90 text-xs leading-relaxed">
-            ZzFXMicro Music is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
+            ZzFXTrack is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
           </p>
 
           <div class="space-y-2">
@@ -877,7 +876,7 @@
               <li>Choose <strong>instrument</strong> that is playing and change it's parameters.</li>
               <li>Try to make changes to the Arrangement/Blocks or Strudel pattern.</li>
               <li>Note: Arrangements/Blocks and Strudel patterns aren't integrated, they are separate resources</li>
-              <li>Click <strong>Export ZzFXMicro</strong> and preview playback.</li>
+              <li>Click <strong>Export ZzFXTrack</strong> and preview playback.</li>
               <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Export WAV</strong> to share/test.</li>
             </ol>
           </div>
@@ -888,7 +887,7 @@
               <li><strong>Arranger</strong>: tracker-style workflow for composing loops with blocks.</li>
               <li><strong>Strudel</strong>: pattern notation and event scheduling.</li>
               <li><strong>ZzFXMicro</strong>: instrument parameter model and sound generation (registered as Strudel sounds for playback).</li>
-              <li><strong>ZzFXMicro Player</strong>: the export target format for games/apps.</li>
+              <li><strong>ZzFXTrack Player</strong>: the export target format for games/apps.</li>
             </ul>
           </div>
 
@@ -897,6 +896,7 @@
             <ul class="list-disc pl-5 space-y-1">
               <li>Some Strudel features may preview fine but not export 1:1.</li>
               <li>For best results, stick to simple, repeatable patterns and test with exported playback.</li>
+              <li>Phones are not supported, but tablets should work. Optimized for laptop-desktop widths.</li>
             </ul>
           </div>
         </div>
@@ -960,7 +960,7 @@
             ZzFX and ZzFXM are MIT-licensed components adapted for this workflow.
           </p>
           <p>
-            <strong>ZzFXMicro Music</strong> is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
+            <strong>ZzFXTrack</strong> is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
           </p>
           <p>
             For full repository-level attribution details, see
@@ -968,7 +968,7 @@
           </p>
           <div class="h-px bg-border my-2"></div>
           <p class="text-xs text-muted-foreground/90 leading-relaxed">
-            Disclaimer: At current state the app is made for my specific needs, but I'm always happy to hear if you have found it useful! -Jarno K
+            Disclaimer: At current state the app is made for my specific needs. -Jarno K
           </p>
         </div>
         <div class="flex justify-end">
@@ -1006,7 +1006,7 @@
         </div>
         <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
           <p class="text-foreground/90 leading-relaxed">
-            This app is a browser-based composition and export tool. It combines Strudel as the pattern language and live-coding interface, ZzFXMicro as the synth engine for sound generation, and an export pipeline whose main output is ZzFXMicro Player-compatible song JSON.
+            This app is a browser-based composition and export tool. It combines Strudel as the pattern language and live-coding interface, ZzFXMicro as the synth engine for sound generation, and an export pipeline whose main output is ZzFXTrack Player-compatible song JSON.
           </p>
 
           <div class="space-y-2">
@@ -1047,24 +1047,24 @@
           <div class="space-y-2">
             <h3 class="text-foreground font-semibold">Export and preview</h3>
             <ul class="list-disc pl-5 space-y-1">
-              <li>Export is the main feature: it turns your composition into a ZzFXMicro Player song array <code>[instruments, patterns, sequence, BPM]</code> (plus optional stats), designed to be deterministic and engine-friendly.</li>
-              <li>Preview uses the same exported ZzFXMicro Player structure and ZzFXMicro synthesis to let you verify the result before downloading.</li>
+              <li>Export is the main feature: it turns your composition into a ZzFXTrack Player song array <code>[instruments, patterns, sequence, BPM]</code> (plus optional stats), designed to be deterministic and engine-friendly.</li>
+              <li>Preview uses the same exported ZzFXTrack Player structure and ZzFXMicro synthesis to let you verify the result before downloading.</li>
               <li><code>Export WAV</code> renders the exported song to PCM audio and encodes it as a WAV file (sample rate and bit depth are configurable in Export Settings).</li>
             </ul>
           </div>
 
           <div class="space-y-2">
-            <h3 class="text-foreground font-semibold">Using the standalone ZzFXMicro Player</h3>
+            <h3 class="text-foreground font-semibold">Using the standalone ZzFXTrack Player</h3>
             <p class="leading-relaxed">
-              Exported JSON is for the <strong>ZzFXMicro Player</strong>, not the canonical ZzFXM player. To play songs in your game or project:
+              Exported JSON is for the <strong>ZzFXTrack Player</strong>, not the canonical ZzFXM player. To play songs in your game or project:
             </p>
             <ol class="list-decimal pl-5 space-y-1">
-              <li>Copy the <code>packages/zzfxmicro-player/</code> folder from this repo into your project.</li>
-              <li>Import: <code>import { playZzfxmSong, stopZzfxmSong } from './zzfxmicro-player/index.js';</code> (adjust path as needed).</li>
+              <li>Copy the <code>packages/zzfxtrack-player/</code> folder from this repo into your project.</li>
+              <li>Import: <code>import { playZzfxmSong, stopZzfxmSong } from './zzfxtrack-player/index.js';</code> (adjust path as needed).</li>
               <li>Call <code>playZzfxmSong(songData, audioCtx, onEnded?)</code> with your exported <code>[instruments, patterns, sequence, BPM]</code> array and an <code>AudioContext</code>.</li>
             </ol>
             <p class="leading-relaxed">
-              The player has no dependencies. See <code>packages/zzfxmicro-player/README.md</code> in the repo for the full API.
+              The player has no dependencies. See <code>packages/zzfxtrack-player/README.md</code> in the repo for the full API.
             </p>
           </div>
 
@@ -1113,9 +1113,11 @@
             <p class="text-xs opacity-80">Q2/2026</p>
             <ul class="list-disc pl-5 mt-2 space-y-1">
               <li>First public alpha release.</li>
-              <li>Strudel composition workflow with ZzFX instrument support.</li>
-              <li>ZzFXMicro Player-compatible export and preview flow.</li>
-              <li>Experimental Blocks feature.</li>
+              <li>Strudel composition workflow with external ZzFXMicro instrument support.</li>
+              <li>Arranger and Blocks with tracker style workflow.</li>
+              <li>ZzFX instrument loading, preview, and editing flow.</li>
+              <li>Export JSON for the bundled ZzFXTrack Player</li>
+              <li>Export to WAV file format</li>
               <li>In-app licensing and attribution modal.</li>
             </ul>
           </div>
@@ -1679,7 +1681,7 @@
               </div>
             </div>
             <p class="text-xs text-muted-foreground/80 italic">
-              Applied to ZzFXMicro Player preview and arrangement playback. Uses soft clipping to reduce harsh digital clipping.
+              Applied to ZzFXTrack Player preview and arrangement playback. Uses soft clipping to reduce harsh digital clipping.
             </p>
           </div>
 

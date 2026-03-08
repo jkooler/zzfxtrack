@@ -1,6 +1,6 @@
-# zzfxmicro-player
+# ZzFXTrack Player
 
-**ZzFXMicro Player** — play song data in your game or project. Uses the **ZzFXMicro** 21-parameter engine (sample-rate synthesis). No dependencies.
+**ZzFXTrack Player** — play song data in your game or project. Uses the **ZzFXMicro** 21-parameter engine (sample-rate synthesis). No dependencies.
 
 **Format:** This player accepts either:
 - **Legacy:** `[instruments, patterns, sequence, BPM]` (21-param ZzFXMicro instrument arrays), or
@@ -10,7 +10,7 @@ It is **not** compatible with the canonical ZzFXM player (different engine and f
 
 ### Installation (alpha)
 
-No npm package yet. Copy this entire folder (`zzfxmicro-player`) into your project, then import from it (e.g. `import { playZzfxmSong } from './zzfxmicro-player/index.js';`). The package has no dependencies.
+No npm package yet. Copy this entire folder (`zzfxtrack-player`) into your project, then import from it (e.g. `import { playZzfxmSong } from './zzfxtrack-player/index.js';`). The package has no dependencies.
 
 ## API
 
@@ -30,7 +30,7 @@ No npm package yet. Copy this entire folder (`zzfxmicro-player`) into your proje
 
 ```js
 // Copy this folder into your project, then import (adjust path as needed):
-import { playZzfxmSong, stopZzfxmSong } from './zzfxmicro-player/index.js';
+import { playZzfxmSong, stopZzfxmSong } from './zzfxtrack-player/index.js';
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const songData = [instruments, patterns, sequence, BPM]; // e.g. from JSON

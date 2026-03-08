@@ -6,7 +6,7 @@ import { instruments as staticInstruments, instrumentMonophonic as staticMonopho
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
 import { exportPattern } from './export-logic.js';
-import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxmicro-player.js';
+import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxtrack-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
@@ -186,6 +186,7 @@ const dom = {
     exportBtnLabel: document.getElementById('exportBtnLabel'),
     exportMenuWrap: document.getElementById('exportMenuWrap'),
     exportMenu: document.getElementById('exportMenu'),
+    exportMenuTitle: document.getElementById('exportMenuTitle'),
     exportJsonBtn: document.getElementById('exportJsonBtn'),
     exportWavBtn: document.getElementById('exportWavBtn'),
     newPatternBtn: document.getElementById('newPatternBtn'),
@@ -506,7 +507,7 @@ function setZzfxmPreviewData(songData, meta = null, { type, filename, reveal = t
     }
 }
 
-function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFXMicro Player data' } = {}) {
+function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFXTrack Player data' } = {}) {
     if (isPreviewPlaying) {
         stopZzfxmSong();
         updatePreviewPlayButton(false);
@@ -523,12 +524,15 @@ function updateFooterExportActionLabels() {
     if (dom.exportBtnLabel) {
         dom.exportBtnLabel.textContent = 'Export';
     }
+    if (dom.exportMenuTitle) {
+        dom.exportMenuTitle.textContent = arrangementMode ? 'Export Arrangement to...' : 'Export Pattern to...';
+    }
     if (dom.exportBtn) {
         dom.exportBtn.title = arrangementMode ? 'Export arrangement' : 'Export pattern';
         dom.exportBtn.classList.toggle('export-arrangement-mode', arrangementMode);
     }
     if (dom.exportJsonBtn) {
-        dom.exportJsonBtn.title = arrangementMode ? 'Export arrangement to ZzFXMicro JSON' : 'Export pattern to ZzFXMicro JSON';
+        dom.exportJsonBtn.title = arrangementMode ? 'Export arrangement to ZzFXTrack JSON' : 'Export pattern to ZzFXTrack JSON';
     }
     if (dom.exportWavBtn) {
         dom.exportWavBtn.title = arrangementMode ? 'Download arrangement mix as WAV' : 'Download pattern mix as WAV';
@@ -797,7 +801,7 @@ async function init() {
     
     // Disable default samples (TidalCycles/Dirt) to ensure only ZzFX instruments are used
     dom.repl.prelude = `
-// ZzFXMicro Music
+// ZzFXTrack
 // Default samples are disabled.
 // Only ZzFX instruments defined in instruments.js are available.
 `;
@@ -2799,7 +2803,7 @@ function renderArrangementWorkspace() {
             document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: false } }));
             return;
         }
-        // Stop any other playback (Strudel pattern, ZzFXMicro Player preview, tracker, or another arrangement) before starting this arrangement's preview.
+        // Stop any other playback (Strudel pattern, ZzFXTrack Player preview, tracker, or another arrangement) before starting this arrangement's preview.
         stopAllPlaybackForSelectionChange();
         document.dispatchEvent(new CustomEvent('arrangements:preview', {
             detail: { arrangement: { name: arrangementDraftState.name, arrangementState: buildArrangementStatePayload() }, filename: currentArrangementFilename }
@@ -3951,7 +3955,7 @@ async function loadPattern(filename) {
         
         setExportControlsDisabled(false);
         
-        // Clear ZzFXMicro Player export preview until this pattern/arrangement is exported again.
+        // Clear ZzFXTrack Player export preview until this pattern/arrangement is exported again.
         clearZzfxmPreviewData();
         setStatus('');
         
@@ -4358,7 +4362,7 @@ function shouldWarnExportLength(cycles, bpm) {
     return durationSec > EXPORT_LENGTH_WARNING_DURATION_SEC || cycles > EXPORT_LENGTH_WARNING_CYCLES;
 }
 
-/** Rough estimate of ZzFXMicro Player JSON size in bytes (instruments + pattern data). */
+/** Rough estimate of ZzFXTrack Player JSON size in bytes (instruments + pattern data). */
 function estimateExportSizeBytes(cycles, rowsPerCycle, instrumentCount, channelCount) {
     const totalRows = cycles * rowsPerCycle;
     const instrumentBytes = Math.max(0, instrumentCount) * 280;
@@ -4389,7 +4393,7 @@ async function exportCurrentPattern(options = {}) {
     if (dom.statusMsg.innerText.startsWith('⚠️')) {
         const confirmed = await confirmDialog({
             title: 'Export With Warnings?',
-            message: 'This code uses functions that ZzFXMicro Player format ignores (e.g. reverb/delay). Export anyway?',
+            message: 'This code uses functions that ZzFXTrack Player format ignores (e.g. reverb/delay). Export anyway?',
             confirmLabel: 'Export',
             cancelLabel: 'Cancel',
             variant: 'danger',
@@ -4506,7 +4510,7 @@ async function exportCurrentPattern(options = {}) {
         const jsonFilename = currentPatternFilename.replace('.js', '.json');
         await saveExportedSongFiles(jsonFilename, exportData);
         
-        // Show and enable ZzFXMicro Player preview buttons only for explicit ZzFXMicro Player export flow.
+        // Show and enable ZzFXTrack Player preview buttons only for explicit ZzFXTrack Player export flow.
         if (revealZzfxmPreview) {
             refreshZzfxmPreviewControlsVisibility();
         }
@@ -6187,11 +6191,11 @@ dom.previewPlayBtn.addEventListener('click', () => {
     }
 
     if (!lastExportedData) {
-        setStatus('Nothing to play. Export ZzFXMicro first.', 'error');
+        setStatus('Nothing to play. Export ZzFXTrack first.', 'error');
         return;
     }
 
-    // Stop Strudel, arrangement preview, and tracker preview so only ZzFXMicro Player preview plays.
+    // Stop Strudel, arrangement preview, and tracker preview so only ZzFXTrack Player preview plays.
     stopAllPlaybackForSelectionChange();
 
     playZzfxmSong(lastExportedData, getAudioContext(), () => {
@@ -6249,7 +6253,7 @@ async function togglePlay(e) {
         return;
     }
 
-    // Stop any other playback (arrangement preview, ZzFXMicro Player, tracker) before starting Strudel.
+    // Stop any other playback (arrangement preview, ZzFXTrack Player, tracker) before starting Strudel.
     stopAllPlaybackForSelectionChange();
     isStrudelPaused = false;
 
@@ -6348,8 +6352,8 @@ document.addEventListener('keyup', (e) => {
 
 function buildZzfxmSongJsModule(songData) {
     const headerLines = [
-        '//! Generated by ZzFXMicro Music',
-        '// ZzFXMicro Player song data: [instruments, patterns, sequence, BPM]',
+        '//! Generated by ZzFXTrack',
+        '// ZzFXTrack Player song data: [instruments, patterns, sequence, BPM]',
         ''
     ];
     const json = JSON.stringify(songData);
@@ -7200,7 +7204,7 @@ function setupTrackerEventListeners() {
         const detail = e?.detail || {};
         const aliases = Array.isArray(detail.aliases) ? detail.aliases : [];
         if (detail.playing) {
-            // Stop Strudel pattern and ZzFXMicro Player export preview so only tracker preview is heard
+            // Stop Strudel pattern and ZzFXTrack Player export preview so only tracker preview is heard
             try {
                 if (dom.repl.editor?.repl?.scheduler?.started) {
                     dom.repl.editor.stop();

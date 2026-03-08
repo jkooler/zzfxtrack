@@ -20,10 +20,10 @@ const pattern = stack(
 
 export const pattern = arrange([16, pattern])
 
-// If you look down, you'll see the "Export ZzFXMicro" button.
-// Clicking it will generate the song data as .json, that is compatible with ZzFXMicro Player.
+// If you look down, you'll see the "Export ZzFXTrack" button.
+// Clicking it will generate the song data as .json, that is compatible with ZzFXTrack Player.
 
 // 1. Audio processing effects will not carry over to exported .json file.
 // 2. Some more advanced Strudel pattern logic may also be only partially compatible.
 // 3. Make sure to use the "Instruments" instead of the synthesis provided by Strudel.
-// 4. Sounds produced by Strudel's inherit sound engines will not carry to ZzFXMicro Player export.;
+// 4. Sounds produced by Strudel's inherit sound engines will not carry to ZzFXTrack Player export.

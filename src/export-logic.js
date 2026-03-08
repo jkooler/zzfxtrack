@@ -1,7 +1,7 @@
 import { noteToMidi } from '@strudel/core';
 
 /**
- * Shared logic for converting a Strudel pattern into ZzFXMicro Player format.
+ * Shared logic for converting a Strudel pattern into ZzFXTrack Player format.
  * Supports chord expansion: multiple notes at the same time on the same
  * instrument are allocated to separate voice channels.
  */
@@ -162,7 +162,7 @@ function getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoices = Infin
 }
 
 /**
- * Export a Strudel pattern into ZzFXMicro Player format.
+ * Export a Strudel pattern into ZzFXTrack Player format.
  * @param {Pattern} pattern - Strudel pattern
  * @param {number} bpm - Beats per minute
  * @param {Array} instrumentArray - Array of ZzFX instrument definitions
@@ -171,7 +171,7 @@ function getAvailableVoice(voiceTracker, instIndex, gridIndex, maxVoices = Infin
  * @param {Object} options - Optional settings
  * @param {number} options.maxVoicesPerInstrument - Max voices per instrument (default: Infinity)
  * @param {Array} options.monophonicByInstrumentIndex - Boolean array aligned to instrumentArray (default: [])
- * @returns {Object} { song: ZzFXMicro Player song array, stats: { channelCount, droppedNotes } }
+ * @returns {Object} { song: ZzFXTrack Player song array, stats: { channelCount, droppedNotes } }
  */
 export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, cycles = 8, options = {}) {
     const {

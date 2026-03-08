@@ -29,9 +29,9 @@ export const zzfxm_demo_hh_open = [0.5,0,440,0,0,0,4,1,0,0,0,0,0,0,0,0,0,0,0.25,
 export const zzfxm_demo_kickdrum = [1,0,130,0,0.08,0.05,1,0.5,-2,5,0,0,0,0,0,0,0,0.3,0.1,0,0];
 
 /**
- * Strudel Sound Names to ZzFXMicro Player Channel Indices
+ * Strudel Sound Names to ZzFXTrack Player Channel Indices
  * This mapping ensures we can use descriptive names in Strudel
- * while still baking to correct ZzFXMicro Player channels.
+ * while still baking to correct ZzFXTrack Player channels.
  */
 export const instrumentMapping = {
     "test-cp": 0,
