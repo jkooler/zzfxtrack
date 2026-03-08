@@ -1429,35 +1429,70 @@ function updatePatternListVisualizer() {
 function updateArrangementListScopeVisualizer() {
     if (!isArrangementListVisible()) return;
 
-    let target = null;
     const playingFilename = arrangementPreviewPlayingFilename ?? (isArrangementPreviewPlaying() ? currentArrangementFilename : null);
-    if (isArrangementPreviewPlaying() && playingFilename) {
-        target = Array.from(dom.arrangementList.querySelectorAll('.list-item'))
-            .find((item) => item.dataset.filename === playingFilename) || null;
-    }
+    const playingEntry = arrangementEntriesCache.find((e) => e.filename === playingFilename);
+    const playingScope = playingEntry ? normalizeScope(playingEntry.scope) : null;
+    let visualizerAttached = false;
 
-    Array.from(dom.arrangementList.querySelectorAll('.list-item')).forEach((item) => {
+    // When the playing arrangement's folder is collapsed, show the scope visualizer on the folder row
+    const folderRows = Array.from(dom.arrangementList.children).filter((li) =>
+        li.querySelector('[data-arrangement-folder]')
+    );
+    folderRows.forEach((folderLi) => {
+        const folderButton = folderLi.querySelector('[data-arrangement-folder]');
+        const scope = folderButton?.getAttribute('data-arrangement-folder');
+        const itemsUl = folderLi.querySelector('[data-arrangement-folder-items]');
+        const isCollapsed = itemsUl?.classList.contains('hidden');
+        const isPlayingInThisFolder = playingScope === scope && playingFilename;
+
+        if (isCollapsed && isPlayingInThisFolder) {
+            let canvas = folderLi.querySelector('canvas.list-item-visualizer');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.className = 'list-item-visualizer';
+                folderLi.classList.add('relative', 'overflow-hidden');
+                folderLi.insertBefore(canvas, folderLi.firstChild);
+            }
+            canvas.width = folderLi.clientWidth;
+            canvas.height = folderLi.clientHeight;
+            attachVisualizer(canvas);
+            visualizerAttached = true;
+        } else {
+            const canvas = folderLi.querySelector('canvas.list-item-visualizer');
+            if (canvas) canvas.remove();
+            folderLi.classList.remove('relative', 'overflow-hidden');
+        }
+    });
+
+    const listItems = Array.from(dom.arrangementList.querySelectorAll('.list-item'));
+    const target = playingFilename
+        ? listItems.find((item) => item.dataset.filename === playingFilename) || null
+        : null;
+
+    listItems.forEach((item) => {
         if (item !== target) {
             item.classList.remove('relative', 'overflow-hidden');
             item.querySelector('canvas.list-item-visualizer')?.remove();
         }
     });
 
-    if (!target) {
-        attachVisualizer(null);
-        return;
+    if (target && !visualizerAttached) {
+        target.classList.add('relative', 'overflow-hidden');
+        let canvas = target.querySelector('canvas.list-item-visualizer');
+        if (!canvas) {
+            canvas = document.createElement('canvas');
+            canvas.className = 'list-item-visualizer';
+            target.insertBefore(canvas, target.firstChild);
+        }
+        canvas.width = target.clientWidth;
+        canvas.height = target.clientHeight;
+        attachVisualizer(canvas);
+        visualizerAttached = true;
     }
 
-    target.classList.add('relative', 'overflow-hidden');
-    let canvas = target.querySelector('canvas.list-item-visualizer');
-    if (!canvas) {
-        canvas = document.createElement('canvas');
-        canvas.className = 'list-item-visualizer';
-        target.insertBefore(canvas, target.firstChild);
+    if (!visualizerAttached) {
+        attachVisualizer(null);
     }
-    canvas.width = target.clientWidth;
-    canvas.height = target.clientHeight;
-    attachVisualizer(canvas);
 }
 
 /**
