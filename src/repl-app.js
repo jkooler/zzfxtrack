@@ -15,7 +15,7 @@ import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate, setTrackerPreviewReferenceContext, clearTrackerPreviewReferenceContext } from './tracker.js';
 import { resolveTrackerStateChannelInstruments } from './instrument-rename-map.js';
-import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, BLOCKS_FOLDER_STATE_KEY } from './blocks.js';
+import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, BLOCKS_FOLDER_STATE_KEY, restoreSuspendedBlocksModals } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
 import { confirmDialog, alertDialog } from './dialog.js';
@@ -7442,10 +7442,14 @@ function setupBlocksEventListeners() {
 	    // Listen for blocks:create event (from Blocks modal)
     document.addEventListener('blocks:create', (e) => {
         const detail = e?.detail || {};
-        openTrackerModal({
+        Promise.resolve(openTrackerModal({
             returnToArrangementsOnClose: !!detail.returnToArrangementsOnClose,
             returnToBlocksOnClose: typeof detail.returnToBlocksOnClose === 'boolean' ? detail.returnToBlocksOnClose : undefined,
             arrangementInsertRowIndex: detail.arrangementInsertRowIndex,
+        })).catch((err) => {
+            console.error('[Blocks] Failed to open tracker for new block:', err);
+            restoreSuspendedBlocksModals({ arrangement: !!detail.returnToArrangementsOnClose });
+            setStatus('Failed to open tracker', 'error');
         });
 
     });
@@ -7453,7 +7457,13 @@ function setupBlocksEventListeners() {
     // Listen for blocks:edit event (from Blocks modal)
     document.addEventListener('blocks:edit', async (e) => {
         const { block, trackerState, returnToArrangementsOnClose, returnToBlocksOnClose } = e.detail;
-        await openTrackerModalForEdit(block, trackerState, { returnToArrangementsOnClose, returnToBlocksOnClose });
+        try {
+            await openTrackerModalForEdit(block, trackerState, { returnToArrangementsOnClose, returnToBlocksOnClose });
+        } catch (err) {
+            console.error('[Blocks] Failed to open tracker for edit:', err);
+            restoreSuspendedBlocksModals({ arrangement: !!returnToArrangementsOnClose });
+            setStatus('Failed to open block in tracker', 'error');
+        }
     });
     
     // Listen for blocks:insert event

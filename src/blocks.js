@@ -229,6 +229,15 @@ function resumeBlocksModal() {
   elements.modal.classList.remove('is-suspended');
 }
 
+export function restoreSuspendedBlocksModals({ arrangement = false } = {}) {
+  resumeBlocksModal();
+  if (arrangement) {
+    resumeArrangementModal();
+    updateArrangementAdvancedSettingsVisibility();
+    updateArrangementPreviewButtonState();
+  }
+}
+
 function getArrangementDraftState() {
   const name = (elements.arrangementName?.value || arrangementDraft.name || 'Arrangement').trim() || 'Arrangement';
   const bpmVal = parseInt(elements.arrangementBpm?.value || String(arrangementDraft.bpm || 120), 10);
