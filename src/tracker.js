@@ -109,6 +109,8 @@ const SCRUB_NOTE_VALUES = (() => {
   }
   return list;
 })();
+/** Index of C-4 in SCRUB_NOTE_VALUES; used as initial value when scrubbing from an empty cell. */
+const SCRUB_EMPTY_START_INDEX = SCRUB_NOTE_VALUES.indexOf('c4');
 
 function formatNoteLabel(note) {
   if (note == null) return '·';
@@ -669,7 +671,8 @@ function getArrangementRenderCacheKey(
   const byFilename = overrides?.byFilename instanceof Map ? overrides.byFilename : null;
   const byRowIndex = overrides?.byRowIndex instanceof Map ? overrides.byRowIndex : null;
   const overrideSig = getOverrideSignature(byFilename, byRowIndex);
-  return `${JSON.stringify(structure)}\n${files.join(',')}\n${getInstrumentListSignature(instrumentList)}\n${getMixSettingsSignature(mixSettings)}\n${overrideSig}`;
+  const mixSig = renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE ? getMixSettingsSignature(REFERENCE_MIX_SETTINGS) : getMixSettingsSignature(mixSettings);
+  return `${JSON.stringify(structure)}\n${files.join(',')}\n${getInstrumentListSignature(instrumentList)}\n${mixSig}\n${overrideSig}`;
 }
 
 function ensureArrangementAudioContext() {
@@ -713,7 +716,8 @@ function pruneOldestMapEntries(map, maxSize) {
 }
 
 function getArrangementSourceRenderSignature(instrumentList, bpm, mixSettings, renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT) {
-  return `${renderProfile}|${bpm}|${getMixSettingsSignature(mixSettings)}|${getInstrumentListSignature(instrumentList)}`;
+  const mixSig = renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE ? getMixSettingsSignature(REFERENCE_MIX_SETTINGS) : getMixSettingsSignature(mixSettings);
+  return `${renderProfile}|${bpm}|${mixSig}|${getInstrumentListSignature(instrumentList)}`;
 }
 
 /** Clear per-block and instrument caches so the next render uses fresh instrument/mix config. Call when instrument list or mix settings change. */
@@ -867,6 +871,9 @@ const ARRANGEMENT_LIVE_SWAP_CROSSFADE_SECONDS = 0;
 const ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS = 0.008;
 const ARRANGEMENT_RENDER_PROFILE_EXPORT = 'export';
 const ARRANGEMENT_RENDER_PROFILE_LIVE = 'live_export_match';
+
+/** Used for LIVE arrangement buffer so mix can be applied in the playback graph and updated in real time. */
+const REFERENCE_MIX_SETTINGS = Object.freeze({ targetPeak: 1, masterGainDb: 0, softClipDrive: 1 });
 
 // DOM Elements
 let elements = {};
@@ -2384,6 +2391,17 @@ function setupNoteCellScrub(cellEl, ch, step) {
     return idx === -1 ? 0 : idx;
   };
 
+  const startScrubFromEmpty = () => {
+    pushUndo();
+    const initialNote = SCRUB_NOTE_VALUES[SCRUB_EMPTY_START_INDEX];
+    setNote(ch, step, initialNote, { skipRender: true });
+    if (initialNote && initialNote !== '-') brushNote = initialNote;
+    cellEl.textContent = formatNoteLabel(initialNote);
+    cellEl.classList.toggle('has-note', initialNote && initialNote !== '-');
+    cellEl.classList.toggle('rest', initialNote === '-');
+    return SCRUB_EMPTY_START_INDEX;
+  };
+
   const applyDelta = (clientY) => {
     const deltaY = startY - clientY;
     const steps = Math.round(deltaY / sensitivity);
@@ -2480,8 +2498,15 @@ function setupNoteCellScrub(cellEl, ch, step) {
 
     if (!drawMode && (state.focusedChannel !== ch || state.focusedStep !== step)) return;
     startY = e.clientY;
-    startIndex = getCurrentIndex();
-    lastAppliedIndex = startIndex;
+    const currentNote = state.grid[ch]?.[step]?.note;
+    const isEmpty = currentNote == null || currentNote === '';
+    if (isEmpty) {
+      startIndex = startScrubFromEmpty();
+      lastAppliedIndex = startIndex;
+    } else {
+      startIndex = getCurrentIndex();
+      lastAppliedIndex = startIndex;
+    }
     isDragging = false;
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
@@ -2524,8 +2549,15 @@ function setupNoteCellScrub(cellEl, ch, step) {
     if (e.touches.length !== 1) return;
     if (state.focusedChannel !== ch || state.focusedStep !== step) return;
     startY = e.touches[0].clientY;
-    startIndex = getCurrentIndex();
-    lastAppliedIndex = startIndex;
+    const currentNote = state.grid[ch]?.[step]?.note;
+    const isEmpty = currentNote == null || currentNote === '';
+    if (isEmpty) {
+      startIndex = startScrubFromEmpty();
+      lastAppliedIndex = startIndex;
+    } else {
+      startIndex = getCurrentIndex();
+      lastAppliedIndex = startIndex;
+    }
     isDragging = false;
     window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend', onTouchEnd);
@@ -3358,6 +3390,44 @@ function notifyVisualizerReady() {
 
 const arrangementSourceGainByNode = new WeakMap();
 
+const ARRANGEMENT_MASTER_CURVE_LENGTH = 256;
+
+function buildSoftClipWaveshaperCurve(drive) {
+  const curve = new Float32Array(ARRANGEMENT_MASTER_CURVE_LENGTH);
+  const shapedDrive = Math.max(1, drive);
+  for (let i = 0; i < ARRANGEMENT_MASTER_CURVE_LENGTH; i++) {
+    const x = (i / (ARRANGEMENT_MASTER_CURVE_LENGTH - 1)) * 2 - 1;
+    curve[i] = softClipSample(x, shapedDrive);
+  }
+  return curve;
+}
+
+function ensureArrangementMasterChain(ctx) {
+  if (arrangementPreviewState._masterWaveshaperNode) {
+    return arrangementPreviewState._masterGainNode;
+  }
+  const gainNode = ctx.createGain();
+  const waveshaperNode = ctx.createWaveShaper();
+  waveshaperNode.curve = buildSoftClipWaveshaperCurve(arrangementPreviewState.mixSettings.softClipDrive);
+  waveshaperNode.oversample = '2x';
+  gainNode.connect(waveshaperNode);
+  connectPreviewNode(ctx, waveshaperNode);
+  arrangementPreviewState._masterGainNode = gainNode;
+  arrangementPreviewState._masterWaveshaperNode = waveshaperNode;
+  const settings = arrangementPreviewState.mixSettings;
+  gainNode.gain.value = settings.targetPeak * dbToGain(settings.masterGainDb);
+  return gainNode;
+}
+
+function applyMixToArrangementMasterChain(mixSettings) {
+  const gainNode = arrangementPreviewState._masterGainNode;
+  const waveshaperNode = arrangementPreviewState._masterWaveshaperNode;
+  if (!gainNode || !waveshaperNode) return;
+  const s = sanitizePlaybackMixSettings(mixSettings);
+  gainNode.gain.setValueAtTime(s.targetPeak * dbToGain(s.masterGainDb), gainNode.context.currentTime);
+  waveshaperNode.curve = buildSoftClipWaveshaperCurve(s.softClipDrive);
+}
+
 function connectPreviewNode(ctx, node) {
   // Route preview audio through Strudel's output bus so channel layout stays
   // consistent even after Strudel playback reconfigures destination channels.
@@ -3373,11 +3443,16 @@ function connectPreviewNode(ctx, node) {
   notifyVisualizerReady();
 }
 
-function connectPreviewSource(ctx, source, initialGain = 1) {
+function connectPreviewSource(ctx, source, initialGain = 1, options = {}) {
   const gainNode = ctx.createGain();
   gainNode.gain.value = Math.max(0, initialGain);
   source.connect(gainNode);
-  connectPreviewNode(ctx, gainNode);
+  const outputNode = options.outputNode;
+  if (outputNode) {
+    gainNode.connect(outputNode);
+  } else {
+    connectPreviewNode(ctx, gainNode);
+  }
   arrangementSourceGainByNode.set(source, gainNode);
   return gainNode;
 }
@@ -3655,9 +3730,11 @@ function renderArrangementStateToMixBuffer(
 ) {
   if (!arrangementState || !instrumentList) return null;
   const resolvedMixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
-  const targetPeak = resolvedMixSettings.targetPeak;
-  const masterGain = dbToGain(resolvedMixSettings.masterGainDb);
-  const clipDrive = resolvedMixSettings.softClipDrive;
+  const forBuffer = renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE ? REFERENCE_MIX_SETTINGS : resolvedMixSettings;
+  const targetPeak = forBuffer.targetPeak;
+  const masterGain = dbToGain(forBuffer.masterGainDb);
+  const clipDrive = forBuffer.softClipDrive;
+  const applyMasterAtPlayback = renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE;
 
   const secondsPerBeat = 60 / bpm;
   const secondsPerStep = secondsPerBeat / 4; // 16th notes (ideal)
@@ -3703,7 +3780,7 @@ function renderArrangementStateToMixBuffer(
   const mixBuffer = new Float32Array(totalSamples);
   const renderedByFilename = new Map();
   const renderedByState = new WeakMap();
-  const sourceSignature = getArrangementSourceRenderSignature(instrumentList, bpm, resolvedMixSettings, renderProfile);
+  const sourceSignature = getArrangementSourceRenderSignature(instrumentList, bpm, forBuffer, renderProfile);
   const persistentFilenameCache = arrangementPreviewState._sourceRenderCacheByFilename;
   const persistentStateCache = arrangementPreviewState._sourceRenderCacheByState;
 
@@ -3746,7 +3823,7 @@ function renderArrangementStateToMixBuffer(
     const rendered = renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, {
       tailSeconds: 1,
       normalizeMaster: false,
-      mixSettings: resolvedMixSettings,
+      mixSettings: forBuffer,
       applyMasterProcessing: false,
     });
     if (!rendered?.mixBuffer) return null;
@@ -3843,8 +3920,10 @@ function renderArrangementStateToMixBuffer(
     }
   }
 
-  for (let i = 0; i < mixBuffer.length; i++) {
-    mixBuffer[i] = softClipSample(mixBuffer[i] * masterGain, clipDrive);
+  if (!applyMasterAtPlayback) {
+    for (let i = 0; i < mixBuffer.length; i++) {
+      mixBuffer[i] = softClipSample(mixBuffer[i] * masterGain, clipDrive);
+    }
   }
 
   return {
@@ -4192,12 +4271,13 @@ function scheduleArrangementLoopStarts() {
     arrangementPreviewState.nextStartTime = startTime + (loopsElapsed + 1) * loopDuration;
   }
 
+  const masterGainInput = ensureArrangementMasterChain(ctx);
   while (arrangementPreviewState.nextStartTime < now + lookaheadSeconds) {
     const startAt = arrangementPreviewState.nextStartTime;
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.loop = false;
-    connectPreviewSource(ctx, source);
+    connectPreviewSource(ctx, source, 1, { outputNode: masterGainInput });
     source.onended = () => {
       arrangementPreviewState.playingSources = arrangementPreviewState.playingSources.filter(s => s !== source);
       if (arrangementPreviewState.playingSource === source) {
@@ -4265,6 +4345,9 @@ function playArrangementMixBuffer(
   const previousGainNode = previousSource ? arrangementSourceGainByNode.get(previousSource) : null;
   stopArrangementPlaybackSources({ preserveSource: previousSource });
 
+  const masterGainInput = ensureArrangementMasterChain(ctx);
+  applyMixToArrangementMasterChain(arrangementPreviewState.mixSettings);
+
   const audioBuffer = ctx.createBuffer(1, mixBuffer.length, sampleRate);
   audioBuffer.getChannelData(0).set(mixBuffer);
 
@@ -4284,7 +4367,7 @@ function playArrangementMixBuffer(
     source.loopEnd = loopDuration;
   }
   const effectiveCrossfade = shouldCrossfade && previousGainNode ? crossfadeSeconds : 0;
-  const sourceGainNode = connectPreviewSource(ctx, source, effectiveCrossfade > 0 ? 0 : 1);
+  const sourceGainNode = connectPreviewSource(ctx, source, effectiveCrossfade > 0 ? 0 : 1, { outputNode: masterGainInput });
   source.onended = () => {
     arrangementPreviewState.playingSources = arrangementPreviewState.playingSources.filter(s => s !== source);
     if (arrangementPreviewState.playingSource === source) {
@@ -4536,6 +4619,12 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
   if (Number.isFinite(bpm)) arrangementPreviewState.bpm = bpm;
   if (mixSettings) arrangementPreviewState.mixSettings = sanitizePlaybackMixSettings(mixSettings);
   const resolvedMixSettings = arrangementPreviewState.mixSettings;
+
+  const mixOnly = mixSettings != null && !arrangementState && !trackerStateByFilename && !instrumentList && !Number.isFinite(bpm);
+  if (mixOnly && arrangementPreviewState.isPlaying) {
+    applyMixToArrangementMasterChain(arrangementPreviewState.mixSettings);
+    return true;
+  }
 
   if (instrumentList || mixSettings != null) invalidateArrangementSourceCaches();
 

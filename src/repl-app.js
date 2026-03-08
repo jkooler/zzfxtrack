@@ -304,7 +304,8 @@ const dom = {
     channelLimitGroup: document.getElementById('channelLimitGroup'),
     maxChannelsInput: document.getElementById('maxChannelsInput'),
     normalizeLayers: document.getElementById('normalizeLayers'),
-    closeExportSettings: document.getElementById('closeExportSettings'),
+    cancelExportSettings: document.getElementById('cancelExportSettings'),
+    applyExportSettings: document.getElementById('applyExportSettings'),
     exportResolutionHint: document.getElementById('exportResolutionHint'),
     exportResolutionCustomWrap: document.getElementById('exportResolutionCustomWrap'),
     exportResolutionCustom: document.getElementById('exportResolutionCustom'),
@@ -4049,6 +4050,66 @@ function getWavExportSettings() {
     };
 }
 
+/** Snapshot of Mixing settings modal form state for Cancel/revert and dirty check. */
+function getExportSettingsSnapshot() {
+    const resolutionChecked = document.querySelector('input[name="exportResolution"]:checked');
+    return {
+        limitChannels: Boolean(dom.limitChannels?.checked),
+        maxChannelsInput: String(dom.maxChannelsInput?.value ?? '16'),
+        normalizeLayers: Boolean(dom.normalizeLayers?.checked),
+        playbackLoudnessPreset: String(dom.playbackLoudnessPreset?.value ?? 'balanced'),
+        playbackTargetPeak: String(dom.playbackTargetPeak?.value ?? '0.5'),
+        playbackMasterGainDb: String(dom.playbackMasterGainDb?.value ?? '3'),
+        playbackSoftClipDrive: String(dom.playbackSoftClipDrive?.value ?? '1.4'),
+        exportResolution: resolutionChecked ? String(resolutionChecked.value) : '96',
+        exportResolutionCustom: String(dom.exportResolutionCustom?.value ?? '96'),
+        wavSampleRate: String(dom.wavSampleRate?.value ?? '44100'),
+        wavBitDepth: String(dom.wavBitDepth?.value ?? '16'),
+    };
+}
+
+function applyExportSettingsSnapshot(snap) {
+    if (!snap) return;
+    if (dom.limitChannels) dom.limitChannels.checked = Boolean(snap.limitChannels);
+    if (dom.maxChannelsInput) dom.maxChannelsInput.value = snap.maxChannelsInput;
+    if (dom.channelLimitGroup) dom.channelLimitGroup.classList.toggle('hidden', !snap.limitChannels);
+    if (dom.maxChannelsInput) dom.maxChannelsInput.disabled = !snap.limitChannels;
+    if (dom.normalizeLayers) dom.normalizeLayers.checked = Boolean(snap.normalizeLayers);
+    if (dom.playbackLoudnessPreset) dom.playbackLoudnessPreset.value = snap.playbackLoudnessPreset;
+    if (dom.playbackTargetPeak) dom.playbackTargetPeak.value = snap.playbackTargetPeak;
+    if (dom.playbackMasterGainDb) dom.playbackMasterGainDb.value = snap.playbackMasterGainDb;
+    if (dom.playbackSoftClipDrive) dom.playbackSoftClipDrive.value = snap.playbackSoftClipDrive;
+    const resolutionInputs = document.querySelectorAll('input[name="exportResolution"]');
+    resolutionInputs.forEach((input) => {
+        input.checked = input.value === snap.exportResolution;
+    });
+    if (dom.exportResolutionCustom) dom.exportResolutionCustom.value = snap.exportResolutionCustom;
+    if (dom.exportResolutionHint) dom.exportResolutionHint.style.display = snap.exportResolution === '48' ? 'block' : 'none';
+    if (dom.exportResolutionCustomWrap) dom.exportResolutionCustomWrap.classList.toggle('hidden', snap.exportResolution !== 'custom');
+    if (dom.wavSampleRate) dom.wavSampleRate.value = snap.wavSampleRate;
+    if (dom.wavBitDepth) dom.wavBitDepth.value = snap.wavBitDepth;
+}
+
+function hasExportSettingsChanges() {
+    const current = getExportSettingsSnapshot();
+    if (!exportSettingsSnapshot) return false;
+    return (
+        current.limitChannels !== exportSettingsSnapshot.limitChannels ||
+        current.maxChannelsInput !== exportSettingsSnapshot.maxChannelsInput ||
+        current.normalizeLayers !== exportSettingsSnapshot.normalizeLayers ||
+        current.playbackLoudnessPreset !== exportSettingsSnapshot.playbackLoudnessPreset ||
+        current.playbackTargetPeak !== exportSettingsSnapshot.playbackTargetPeak ||
+        current.playbackMasterGainDb !== exportSettingsSnapshot.playbackMasterGainDb ||
+        current.playbackSoftClipDrive !== exportSettingsSnapshot.playbackSoftClipDrive ||
+        current.exportResolution !== exportSettingsSnapshot.exportResolution ||
+        current.exportResolutionCustom !== exportSettingsSnapshot.exportResolutionCustom ||
+        current.wavSampleRate !== exportSettingsSnapshot.wavSampleRate ||
+        current.wavBitDepth !== exportSettingsSnapshot.wavBitDepth
+    );
+}
+
+let exportSettingsSnapshot = null;
+
 function normalizePlaybackPresetId(value) {
     const key = String(value || '').trim();
     if (!key || key === 'custom') return key || null;
@@ -4387,7 +4448,8 @@ async function exportCurrentPattern(options = {}) {
             monophonicByInstrumentIndex: monophonicByIndex,
             forceCycles: isArrangementSong ? inferredArrangeCycles : null
         });
-        const songData = result.song;
+        const rawSong = result.song;
+        const exportData = { song: rawSong, mix: getPlaybackMixSettings() };
         const {
             channelCount,
             droppedNotes,
@@ -4396,7 +4458,7 @@ async function exportCurrentPattern(options = {}) {
         } = result.stats;
         
         // Store for preview
-        setZzfxmPreviewData(songData, { monophonicByInstrumentIndex: monophonicByIndex }, {
+        setZzfxmPreviewData(exportData, { monophonicByInstrumentIndex: monophonicByIndex }, {
             type: 'pattern',
             filename: currentPatternFilename,
             reveal: revealZzfxmPreview,
@@ -4404,7 +4466,7 @@ async function exportCurrentPattern(options = {}) {
         
         // 4. Send JSON to server (local mode only)
         const jsonFilename = currentPatternFilename.replace('.js', '.json');
-        await saveExportedSongFiles(jsonFilename, songData);
+        await saveExportedSongFiles(jsonFilename, exportData);
         
         // Show and enable ZzFXMicro Player preview buttons only for explicit ZzFXMicro Player export flow.
         if (revealZzfxmPreview) {
@@ -4974,7 +5036,8 @@ async function exportCurrentArrangement() {
             monophonicByInstrumentIndex: monophonicByIndex,
             forceCycles: arrangementCycles || null,
         });
-        const songData = result.song;
+        const rawSong = result.song;
+        const exportData = { song: rawSong, mix: getPlaybackMixSettings() };
         const {
             channelCount,
             droppedNotes,
@@ -4982,14 +5045,14 @@ async function exportCurrentArrangement() {
             unknownInstrumentAliases = [],
         } = result.stats;
 
-        setZzfxmPreviewData(songData, { monophonicByInstrumentIndex: monophonicByIndex }, {
+        setZzfxmPreviewData(exportData, { monophonicByInstrumentIndex: monophonicByIndex }, {
             type: 'arrangement',
             filename: currentArrangementFilename,
             reveal: true,
         });
 
         const jsonFilename = currentArrangementFilename.replace(/\.js$/i, '.json');
-        await saveExportedSongFiles(jsonFilename, songData);
+        await saveExportedSongFiles(jsonFilename, exportData);
 
         let statusMsg = `/output/${jsonFilename} (${channelCount} ch)`;
         if (droppedNotes > 0) {
@@ -6911,24 +6974,58 @@ function closeExternalLinkModal() {
 
 // --- Export Settings Modal ---
 
+function updateExportSettingsApplyButton() {
+    if (!dom.applyExportSettings) return;
+    dom.applyExportSettings.disabled = !hasExportSettingsChanges();
+}
+
+/** Apply current playback loudness settings to live preview (no persist). So changes are heard immediately. */
+function applyPlaybackMixToPreview() {
+    if (!isArrangementPreviewPlaying()) return;
+    updateArrangementPreview({
+        mixSettings: getPlaybackMixSettings(),
+        keepPosition: true,
+    });
+}
+
 function setupExportSettingsModal() {
     if (dom.playbackLoudnessPreset && !normalizePlaybackPresetId(dom.playbackLoudnessPreset.value)) {
         dom.playbackLoudnessPreset.value = DEFAULT_PLAYBACK_PRESET_ID;
     }
 
-    // Open modal
+    // Open modal: take snapshot so Cancel can revert and Apply disabled state is correct
     dom.exportSettingsBtn.addEventListener('click', () => {
+        exportSettingsSnapshot = getExportSettingsSnapshot();
         dom.exportSettingsModal.classList.add('open');
+        updateExportSettingsApplyButton();
     });
-    
-    // Close modal
-    dom.closeExportSettings.addEventListener('click', () => {
+
+    // Cancel: revert form to snapshot and close
+    dom.cancelExportSettings?.addEventListener('click', () => {
+        applyExportSettingsSnapshot(exportSettingsSnapshot);
         dom.exportSettingsModal.classList.remove('open');
     });
-    
-    // Close on overlay click
+
+    // Apply: persist and close
+    dom.applyExportSettings?.addEventListener('click', () => {
+        if (!hasExportSettingsChanges()) return;
+        savePatternMeta();
+        const inferred = inferPlaybackPresetId(getPlaybackMixSettings());
+        setPlaybackPresetControl(inferred);
+        if (isArrangementPreviewPlaying()) {
+            updateArrangementPreview({
+                mixSettings: getPlaybackMixSettings(),
+                keepPosition: true,
+            });
+        }
+        exportSettingsSnapshot = getExportSettingsSnapshot();
+        dom.exportSettingsModal.classList.remove('open');
+    });
+
+    // Close on overlay click (same as Cancel: revert and close)
     dom.exportSettingsModal.addEventListener('click', (e) => {
         if (e.target === dom.exportSettingsModal) {
+            applyExportSettingsSnapshot(exportSettingsSnapshot);
             dom.exportSettingsModal.classList.remove('open');
         }
     });
@@ -6947,15 +7044,15 @@ function setupExportSettingsModal() {
     resolutionInputs.forEach(input => {
         input.addEventListener('change', () => {
             updateResolutionUi();
-            savePatternMeta();
+            updateExportSettingsApplyButton();
         });
     });
     dom.exportResolutionCustom?.addEventListener('input', () => {
         updateResolutionUi();
-        savePatternMeta();
+        updateExportSettingsApplyButton();
     });
     updateResolutionUi();
-    
+
     // Toggle channel limit input based on checkbox
     dom.limitChannels.addEventListener('change', () => {
         if (dom.limitChannels.checked) {
@@ -6966,41 +7063,42 @@ function setupExportSettingsModal() {
             dom.channelLimitGroup.classList.add('hidden');
             dom.maxChannelsInput.disabled = true;
         }
-        savePatternMeta();
+        updateExportSettingsApplyButton();
     });
 
-    dom.maxChannelsInput?.addEventListener('input', savePatternMeta);
-    dom.normalizeLayers?.addEventListener('change', savePatternMeta);
-    const handlePlaybackMixChange = () => {
-        const inferred = inferPlaybackPresetId(getPlaybackMixSettings());
-        setPlaybackPresetControl(inferred);
-        savePatternMeta();
-        if (!isArrangementPreviewPlaying()) return;
-        updateArrangementPreview({
-            mixSettings: getPlaybackMixSettings(),
-            keepPosition: true,
-        });
-    };
+    dom.maxChannelsInput?.addEventListener('input', updateExportSettingsApplyButton);
+    dom.normalizeLayers?.addEventListener('change', updateExportSettingsApplyButton);
     dom.playbackLoudnessPreset?.addEventListener('change', () => {
         const presetId = normalizePlaybackPresetId(dom.playbackLoudnessPreset?.value);
         if (!presetId || presetId === 'custom') {
             setPlaybackPresetControl(inferPlaybackPresetId(getPlaybackMixSettings()));
-            return;
+        } else {
+            const presetSettings = PLAYBACK_LOUDNESS_PRESETS[presetId];
+            applyPlaybackMixSettingsToInputs(presetSettings);
         }
-        const presetSettings = PLAYBACK_LOUDNESS_PRESETS[presetId];
-        applyPlaybackMixSettingsToInputs(presetSettings);
-        handlePlaybackMixChange();
+        updateExportSettingsApplyButton();
+        applyPlaybackMixToPreview();
     });
-    dom.playbackTargetPeak?.addEventListener('input', handlePlaybackMixChange);
-    dom.playbackMasterGainDb?.addEventListener('input', handlePlaybackMixChange);
-    dom.playbackSoftClipDrive?.addEventListener('input', handlePlaybackMixChange);
-    dom.wavSampleRate?.addEventListener('change', savePatternMeta);
-    dom.wavBitDepth?.addEventListener('change', savePatternMeta);
+    dom.playbackTargetPeak?.addEventListener('input', () => {
+        updateExportSettingsApplyButton();
+        applyPlaybackMixToPreview();
+    });
+    dom.playbackMasterGainDb?.addEventListener('input', () => {
+        updateExportSettingsApplyButton();
+        applyPlaybackMixToPreview();
+    });
+    dom.playbackSoftClipDrive?.addEventListener('input', () => {
+        updateExportSettingsApplyButton();
+        applyPlaybackMixToPreview();
+    });
+    dom.wavSampleRate?.addEventListener('change', updateExportSettingsApplyButton);
+    dom.wavBitDepth?.addEventListener('change', updateExportSettingsApplyButton);
 
     if (!dom.playbackTargetPeak?.value || !dom.playbackMasterGainDb?.value || !dom.playbackSoftClipDrive?.value) {
         applyPlaybackMixSettingsToInputs(PLAYBACK_LOUDNESS_PRESETS[DEFAULT_PLAYBACK_PRESET_ID]);
     }
     setPlaybackPresetControl(inferPlaybackPresetId(getPlaybackMixSettings()));
+    exportSettingsSnapshot = getExportSettingsSnapshot();
 }
 
 // Initialize export settings modal

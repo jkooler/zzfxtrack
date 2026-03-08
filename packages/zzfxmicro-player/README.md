@@ -2,7 +2,11 @@
 
 **ZzFXMicro Player** — play song data in your game or project. Uses the **ZzFXMicro** 21-parameter engine (sample-rate synthesis). No dependencies.
 
-**Format:** This player expects song data in the format `[instruments, patterns, sequence, BPM]` with 21-param ZzFXMicro instrument arrays. It is **not** compatible with the canonical ZzFXM player (different engine and format). Use it with JSON exported from tools that target this format.
+**Format:** This player accepts either:
+- **Legacy:** `[instruments, patterns, sequence, BPM]` (21-param ZzFXMicro instrument arrays), or
+- **With mix (exported by this app):** `{ song: [instruments, patterns, sequence, BPM], mix: { targetPeak, masterGainDb, softClipDrive } }`. When present, the stored mix is applied so your game or project sounds like the in-app preview. Caller `options` override stored mix.
+
+It is **not** compatible with the canonical ZzFXM player (different engine and format).
 
 ### Installation (alpha)
 
@@ -37,11 +41,19 @@ playZzfxmSong(songData, audioCtx, () => console.log('Done'));
 
 ## Song format
 
+**Accepted input:**
+
+1. **Array (legacy):** `[instruments, patterns, sequence, BPM]`
+2. **Object with mix:** `{ song: [instruments, patterns, sequence, BPM], mix?: { targetPeak, masterGainDb, softClipDrive } }` — JSON/JS exported from this app include `mix` so the bundled player applies the same loudness/limiting by default. You can still pass `options` to override.
+
+**Array shape:**
+
 - **song** = `[instruments, patterns, sequence, BPM]`
 - **instruments** = array of 21-param ZzFXMicro arrays
 - **patterns** = array of patterns; each pattern = array of channels; each channel = array of `[instrumentIndex, attenuation, semitone]` or null per row
 - **sequence** = array of pattern indices
 - **BPM** = number
+- **mix** (optional) = `{ targetPeak (0.1–0.99), masterGainDb (-24–24), softClipDrive (1–8) }`
 
 ## License
 

@@ -11,12 +11,30 @@ import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-set
 // Max attenuation used in export-logic.js
 const MAX_ATTENUATION = 20;
 
+/**
+ * Normalize song input: accept either legacy [instruments, patterns, sequence, BPM] or
+ * wrapped format { song: [...], mix?: { targetPeak, masterGainDb, softClipDrive } }.
+ * Returns { song: array, options: merged options (stored mix + caller options, caller overrides) }.
+ */
+function normalizeSongInput(song, options = {}) {
+    if (!song) return { song: null, options };
+    if (Array.isArray(song)) {
+        return { song, options };
+    }
+    if (song && typeof song === 'object' && Array.isArray(song.song)) {
+        const storedMix = song.mix != null ? sanitizePlaybackMixSettings(song.mix) : {};
+        const mergedOptions = { ...storedMix, ...options };
+        return { song: song.song, options: mergedOptions };
+    }
+    return { song: null, options };
+}
+
 export const buildSong = (song, options = {}) => {
-    // song structure: [instruments, patterns, sequence, BPM]
-    if (!song) return null;
-    let [instruments, patterns, sequence, BPM] = song;
-    const monophonicByInstrumentIndex = options?.monophonicByInstrumentIndex || [];
-    const mixSettings = sanitizePlaybackMixSettings(options);
+    const { song: actualSong, options: mergedOptions } = normalizeSongInput(song, options);
+    if (!actualSong) return null;
+    let [instruments, patterns, sequence, BPM] = actualSong;
+    const monophonicByInstrumentIndex = mergedOptions?.monophonicByInstrumentIndex || [];
+    const mixSettings = sanitizePlaybackMixSettings(mergedOptions);
     const targetPeak = mixSettings.targetPeak;
     
     let sampleRate = 44100;

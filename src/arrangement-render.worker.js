@@ -7,6 +7,8 @@ const MAX_SOURCE_CACHE_ENTRIES = 256;
 const ARRANGEMENT_RENDER_PROFILE_EXPORT = 'export';
 const ARRANGEMENT_RENDER_PROFILE_LIVE = 'live_export_match';
 
+const REFERENCE_MIX_SETTINGS = Object.freeze({ targetPeak: 1, masterGainDb: 0, softClipDrive: 1 });
+
 function pruneMap(map, maxEntries) {
   while (map.size > maxEntries) {
     const oldest = map.keys().next().value;
@@ -250,9 +252,11 @@ function renderArrangementStateToMixBuffer(
 ) {
   if (!arrangementState || !instrumentList) return null;
   const resolvedMixSettings = sanitizePlaybackMixSettings(mixSettings || {});
-  const targetPeak = resolvedMixSettings.targetPeak;
-  const masterGain = dbToGain(resolvedMixSettings.masterGainDb);
-  const clipDrive = resolvedMixSettings.softClipDrive;
+  const forBuffer = renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE ? REFERENCE_MIX_SETTINGS : resolvedMixSettings;
+  const targetPeak = forBuffer.targetPeak;
+  const masterGain = dbToGain(forBuffer.masterGainDb);
+  const clipDrive = forBuffer.softClipDrive;
+  const applyMasterAtPlayback = renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE;
 
   const secondsPerBeat = 60 / bpm;
   const secondsPerStep = secondsPerBeat / 4;
@@ -292,7 +296,7 @@ function renderArrangementStateToMixBuffer(
   const totalSamples = loopSamples + tailSamples;
   const mixBuffer = new Float32Array(totalSamples);
 
-  const sourceSignature = `${renderProfile}|${bpm}|${getMixSettingsSignature(resolvedMixSettings)}|${getInstrumentListSignature(instrumentList)}`;
+  const sourceSignature = `${renderProfile}|${bpm}|${getMixSettingsSignature(forBuffer)}|${getInstrumentListSignature(instrumentList)}`;
   const getRenderedSource = (filename, trackerState) => {
     if (!trackerState) return null;
 
@@ -334,7 +338,7 @@ function renderArrangementStateToMixBuffer(
     const rendered = renderTrackerStateToMixBuffer(trackerState, instrumentList, bpm, {
       tailSeconds: 1,
       normalizeMaster: false,
-      mixSettings: resolvedMixSettings,
+      mixSettings: forBuffer,
       applyMasterProcessing: false,
     });
     if (!rendered?.mixBuffer) return null;
@@ -422,8 +426,10 @@ function renderArrangementStateToMixBuffer(
     }
   }
 
-  for (let i = 0; i < mixBuffer.length; i++) {
-    mixBuffer[i] = softClipSample(mixBuffer[i] * masterGain, clipDrive);
+  if (!applyMasterAtPlayback) {
+    for (let i = 0; i < mixBuffer.length; i++) {
+      mixBuffer[i] = softClipSample(mixBuffer[i] * masterGain, clipDrive);
+    }
   }
 
   return {
