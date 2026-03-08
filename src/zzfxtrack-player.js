@@ -49,15 +49,17 @@ export const buildSong = (song, options = {}) => {
     // patternData is an array of channels.
     // sequence is `[0]`.
     
+    // Channel can be dense (array) or sparse (object with _ = length, "index": note).
+    const channelLength = (ch) => (Array.isArray(ch) ? ch.length : (ch && ch._) || 0);
+    const noteAt = (ch, i) => (Array.isArray(ch) ? ch[i] : ch[i]);
+
     // We iterate the sequence to build the full buffer.
     // Calculate total buffer length first.
     let totalRows = 0;
     sequence.forEach(patIndex => {
         let pattern = patterns[patIndex];
-        // Pattern length is determined by channel length.
-        // Assuming all channels same length.
         if (pattern && pattern.length > 0) {
-            totalRows += pattern[0].length;
+            totalRows += channelLength(pattern[0]);
         }
     });
 
@@ -76,18 +78,18 @@ export const buildSong = (song, options = {}) => {
 
         // Iterate Channels
         pattern.forEach((channel, channelIndex) => {
-            // Channel is array of note events: [InstrumentIndex, Attenuation, Semitone]
+            // Channel is dense array or sparse object { _: length, "index": [inst, atten, semi], ... }
 
-            // If an instrument is marked monophonic, cut its note at the next note-on in the same channel.
-            const nextNoteAt = Array(channel.length).fill(null);
+            const len = channelLength(channel);
+            const nextNoteAt = Array(len).fill(null);
             let next = null;
-            for (let i = channel.length - 1; i >= 0; i--) {
+            for (let i = len - 1; i >= 0; i--) {
                 nextNoteAt[i] = next;
-                if (channel[i]) next = i;
+                if (noteAt(channel, i)) next = i;
             }
             
-            for (let i = 0; i < channel.length; i++) {
-                const noteData = channel[i];
+            for (let i = 0; i < len; i++) {
+                const noteData = noteAt(channel, i);
                 if (noteData) {
                     // noteData is [inst, atten, semi] or just [inst, atten, semi]
                     // Exporter: `tracks[instIndex][gridIndex] = [instIndex, attenuation, semitone];`
@@ -186,9 +188,9 @@ export const buildSong = (song, options = {}) => {
             }
         });
         
-        // Advance offset by pattern length
+        // Advance offset by pattern length (use channelLength for sparse or dense channels)
         if (pattern.length > 0) {
-            currentSampleOffset += pattern[0].length * samplesPerRow;
+            currentSampleOffset += channelLength(pattern[0]) * samplesPerRow;
         }
     });
     

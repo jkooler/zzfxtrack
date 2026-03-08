@@ -10,7 +10,7 @@ import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxtrack-player.js';
 import { attachVisualizer } from './visualizer.js';
 import { getAudioContext } from '@strudel/webaudio';
 import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
-import { setInstrumentScope } from './instrument-manager.js';
+import { setInstrumentScope, getDefragmentedInstruments } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate, setTrackerPreviewReferenceContext, clearTrackerPreviewReferenceContext } from './tracker.js';
@@ -315,6 +315,7 @@ const dom = {
     exportResolutionHint: document.getElementById('exportResolutionHint'),
     exportResolutionCustomWrap: document.getElementById('exportResolutionCustomWrap'),
     exportResolutionCustom: document.getElementById('exportResolutionCustom'),
+    simpleExport: document.getElementById('simpleExport'),
     wavSampleRate: document.getElementById('wavSampleRate'),
     wavBitDepth: document.getElementById('wavBitDepth'),
     playbackLoudnessPreset: document.getElementById('playbackLoudnessPreset'),
@@ -4101,6 +4102,7 @@ function getExportSettingsSnapshot() {
         playbackSoftClipDrive: String(dom.playbackSoftClipDrive?.value ?? '1.4'),
         exportResolution: resolutionChecked ? String(resolutionChecked.value) : '96',
         exportResolutionCustom: String(dom.exportResolutionCustom?.value ?? '96'),
+        simpleExport: Boolean(dom.simpleExport?.checked),
         wavSampleRate: String(dom.wavSampleRate?.value ?? '44100'),
         wavBitDepth: String(dom.wavBitDepth?.value ?? '16'),
     };
@@ -4124,6 +4126,7 @@ function applyExportSettingsSnapshot(snap) {
     if (dom.exportResolutionCustom) dom.exportResolutionCustom.value = snap.exportResolutionCustom;
     if (dom.exportResolutionHint) dom.exportResolutionHint.style.display = snap.exportResolution === '48' ? 'block' : 'none';
     if (dom.exportResolutionCustomWrap) dom.exportResolutionCustomWrap.classList.toggle('hidden', snap.exportResolution !== 'custom');
+    if (dom.simpleExport) dom.simpleExport.checked = Boolean(snap.simpleExport);
     if (dom.wavSampleRate) dom.wavSampleRate.value = snap.wavSampleRate;
     if (dom.wavBitDepth) dom.wavBitDepth.value = snap.wavBitDepth;
 }
@@ -4141,6 +4144,7 @@ function hasExportSettingsChanges() {
         current.playbackSoftClipDrive !== exportSettingsSnapshot.playbackSoftClipDrive ||
         current.exportResolution !== exportSettingsSnapshot.exportResolution ||
         current.exportResolutionCustom !== exportSettingsSnapshot.exportResolutionCustom ||
+        current.simpleExport !== exportSettingsSnapshot.simpleExport ||
         current.wavSampleRate !== exportSettingsSnapshot.wavSampleRate ||
         current.wavBitDepth !== exportSettingsSnapshot.wavBitDepth
     );
@@ -5049,16 +5053,46 @@ async function exportCurrentArrangement() {
             'arrangement_pattern',
         ].join('\n');
 
+        // Cumulative cycle index at the start of each row (for per-row pattern slicing)
+        const rowCycleBoundaries = [0];
+        for (const row of rows) {
+            const repeats = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) : 1;
+            rowCycleBoundaries.push(rowCycleBoundaries[rowCycleBoundaries.length - 1] + repeats);
+        }
+
         const editor = dom.repl.editor;
         await editor.repl.evaluate(arrangementCode, false);
         const pattern = editor.repl.scheduler.pattern;
         if (!pattern) throw new Error('No arrangement pattern found');
 
+        // Only include instruments that are used in this arrangement (from blocks' channelInstruments)
+        const usedAliases = new Set();
+        for (const block of context.blocks) {
+            const ts = block.trackerState || context.trackerStateByFilename[block.filename];
+            if (ts && Array.isArray(ts.channelInstruments)) {
+                ts.channelInstruments.forEach((id) => { if (id) usedAliases.add(id); });
+            }
+        }
+        const fullList = getDefragmentedInstruments();
         const {
-            array: instrumentArray,
-            mapping: instrumentMapping,
-            monophonicByIndex,
+            array: fullInstrumentArray,
+            mapping: fullMapping,
+            monophonicByIndex: fullMonophonic,
         } = await getInstrumentsForExporter();
+        const usedIndices = [];
+        fullList.forEach((inst, i) => {
+            if (usedAliases.has(inst.strudelAlias)) usedIndices.push(i);
+        });
+        const instrumentArray = usedIndices.length > 0
+            ? usedIndices.map((i) => fullInstrumentArray[i])
+            : fullInstrumentArray;
+        const instrumentMapping = usedIndices.length > 0
+            ? Object.fromEntries(usedIndices.map((oldIdx, newIdx) => [fullList[oldIdx].strudelAlias, newIdx]))
+            : fullMapping;
+        const monophonicByIndex = usedIndices.length > 0
+            ? usedIndices.map((i) => fullMonophonic[i])
+            : fullMonophonic;
+
         const isLimitEnabled = dom.limitChannels.checked;
         const maxChannels = isLimitEnabled ? (parseInt(dom.maxChannelsInput.value, 10) || 16) : Infinity;
         const normalizeLayers = dom.normalizeLayers?.checked || false;
@@ -5077,6 +5111,8 @@ async function exportCurrentArrangement() {
             rowsPerCycle,
             monophonicByInstrumentIndex: monophonicByIndex,
             forceCycles: arrangementCycles || null,
+            rowCycleBoundaries: rowCycleBoundaries.length >= 2 ? rowCycleBoundaries : null,
+            simpleExport: Boolean(dom.simpleExport?.checked),
         });
         const rawSong = result.song;
         const exportData = { song: rawSong, mix: getPlaybackMixSettings() };
@@ -7124,6 +7160,7 @@ function setupExportSettingsModal() {
 
     dom.maxChannelsInput?.addEventListener('input', updateExportSettingsApplyButton);
     dom.normalizeLayers?.addEventListener('change', updateExportSettingsApplyButton);
+    dom.simpleExport?.addEventListener('change', updateExportSettingsApplyButton);
     dom.playbackLoudnessPreset?.addEventListener('change', () => {
         const presetId = normalizePlaybackPresetId(dom.playbackLoudnessPreset?.value);
         if (!presetId || presetId === 'custom') {

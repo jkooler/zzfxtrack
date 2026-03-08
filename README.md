@@ -76,6 +76,15 @@ The export format is effectively monophonic per channel. If you use chords, expo
 - If you target tight constraints (js13k-style), consider enabling `Limit channel usage`.
 - If you use stacked unison notes, consider enabling `Normalize Layers`.
 
+### Export resolution and file size
+
+Export uses **rows per cycle** (e.g. 48 or 96) to grid notes in time. Each cycle (e.g. one bar) is that many rows in the pattern data.
+
+- **Higher resolution** (e.g. 96) → more rows per bar → larger JSON and more precise timing.
+- **Lower resolution** (e.g. 48) → fewer rows per bar → smaller export and slightly coarser timing.
+
+If exported pattern data feels long or bloated, try a lower resolution; it often reduces file size noticeably with little audible difference for typical loops.
+
 ## Using the ZzFXTrack Player in your project
 
 Exported JSON from this app is for the **ZzFXTrack Player** (ZzFXMicro 21-param format). It is not compatible with the canonical ZzFXM player. To play exported songs in your game or other project you need the standalone player.

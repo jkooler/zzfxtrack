@@ -179,7 +179,9 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
         normalizeUnisonLayers = false,
         rowsPerCycle = DEFAULT_ROWS_PER_CYCLE,
         monophonicByInstrumentIndex = [],
-        forceCycles = null
+        forceCycles = null,
+        rowCycleBoundaries = null,
+        simpleExport = false
     } = options;
 
     const hasForcedCycles = Number.isFinite(forceCycles) && forceCycles > 0;
@@ -375,21 +377,123 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
     const bpmScale = rowsPerCycle / BASE_RESOLUTION;
 
     const channelCount = patternData.length;
-    
+
+    // Convert a dense channel array to sparse: { _: length, "index": [inst, atten, semi], ... }
+    // so JSON has no repeated 0s (smaller file, like ZzFXM style).
+    function denseChannelToSparse(arr) {
+        const out = { _: arr.length };
+        for (let i = 0; i < arr.length; i++) {
+            if (arr[i]) out[i] = arr[i];
+        }
+        return out;
+    }
+
+    // --- SEQUENCE & REUSABLE PATTERNS ---
+    // Arrangement export: slice by row (block) boundaries so patterns = unique row contents,
+    // sequence = which pattern per row. Pattern export: slice only when we have a detected
+    // repeat period; otherwise one pattern, sequence [0].
+    const useRowBoundaries = hasForcedCycles && Array.isArray(rowCycleBoundaries) && rowCycleBoundaries.length >= 2;
+    const periodCycles = !useRowBoundaries && (detectedPeriod != null && exportCycles >= detectedPeriod && detectedPeriod > 0)
+        ? detectedPeriod
+        : null;
+    const patternsList = [];
+    const sequence = [];
+    const patternSignatureToIndex = new Map();
+
+    // Arrangement: either simple (one chunk per row = full repeats) or optimized (one chunk per cycle, deduped).
+    if (useRowBoundaries) {
+        if (simpleExport) {
+            // Simple: one pattern per arrangement row (length = repeats × rowsPerCycle). Larger files, original behaviour.
+            for (let i = 0; i < rowCycleBoundaries.length - 1; i++) {
+                const startCycle = rowCycleBoundaries[i];
+                const endCycle = rowCycleBoundaries[i + 1];
+                const startRow = startCycle * rowsPerCycle;
+                const endRow = Math.min(endCycle * rowsPerCycle, totalRows);
+                const chunk = patternData.map(ch => ch.slice(startRow, endRow));
+                const targetLen = endRow - startRow;
+                chunk.forEach(ch => {
+                    while (ch.length < targetLen) ch.push(0);
+                });
+                const sparseChunk = chunk.map(denseChannelToSparse);
+                const signature = JSON.stringify(sparseChunk);
+                if (patternSignatureToIndex.has(signature)) {
+                    sequence.push(patternSignatureToIndex.get(signature));
+                } else {
+                    const idx = patternsList.length;
+                    patternsList.push(sparseChunk);
+                    patternSignatureToIndex.set(signature, idx);
+                    sequence.push(idx);
+                }
+            }
+        } else {
+            // Optimized: one pattern per cycle (per repeat), deduped. Sequence has one entry per cycle.
+            for (let i = 0; i < rowCycleBoundaries.length - 1; i++) {
+                const startCycle = rowCycleBoundaries[i];
+                const endCycle = rowCycleBoundaries[i + 1];
+                for (let c = startCycle; c < endCycle; c++) {
+                    const cycleStartRow = c * rowsPerCycle;
+                    const cycleEndRow = Math.min((c + 1) * rowsPerCycle, totalRows);
+                    const chunk = patternData.map(ch => ch.slice(cycleStartRow, cycleEndRow));
+                    const targetLen = cycleEndRow - cycleStartRow;
+                    chunk.forEach(ch => {
+                        while (ch.length < targetLen) ch.push(0);
+                    });
+                    const sparseChunk = chunk.map(denseChannelToSparse);
+                    const signature = JSON.stringify(sparseChunk);
+                    if (patternSignatureToIndex.has(signature)) {
+                        sequence.push(patternSignatureToIndex.get(signature));
+                    } else {
+                        const idx = patternsList.length;
+                        patternsList.push(sparseChunk);
+                        patternSignatureToIndex.set(signature, idx);
+                        sequence.push(idx);
+                    }
+                }
+            }
+        }
+    } else {
+        const periodRows = periodCycles != null ? periodCycles * rowsPerCycle : totalRows;
+        for (let start = 0; start < totalRows; start += periodRows) {
+            const end = Math.min(start + periodRows, totalRows);
+            const chunk = patternData.map(ch => ch.slice(start, end));
+            const targetLen = end - start;
+            chunk.forEach(ch => {
+                while (ch.length < targetLen) ch.push(0);
+            });
+            const sparseChunk = chunk.map(denseChannelToSparse);
+            const signature = JSON.stringify(sparseChunk);
+            if (patternSignatureToIndex.has(signature)) {
+                sequence.push(patternSignatureToIndex.get(signature));
+            } else {
+                const idx = patternsList.length;
+                patternsList.push(sparseChunk);
+                patternSignatureToIndex.set(signature, idx);
+                sequence.push(idx);
+            }
+        }
+    }
+
+    if (patternsList.length === 0) {
+        patternsList.push(patternData.map(ch => denseChannelToSparse(ch.slice())));
+        sequence.push(0);
+    }
+
     console.log("Exporter Output:", {
         channelCount,
+        patternCount: patternsList.length,
+        sequenceLength: sequence.length,
         droppedNotes,
         unknownInstrumentNotes,
         unknownInstrumentAliases: Array.from(unknownInstrumentAliases),
         maxVoicesPerInstrument: maxVoicesPerInstrument === Infinity ? 'unlimited' : maxVoicesPerInstrument
     });
 
-    // --- THE ZzFXMicro SONG STRUCTURE ---
+    // --- THE ZzFXTrack PLAYER SONG STRUCTURE ---
     const song = [
-        instrumentArray, // 0: Instruments
-        [patternData],   // 1: Patterns
-        [0],             // 2: Sequence
-        bpm * bpmScale   // 3: BPM
+        instrumentArray,  // 0: Instruments
+        patternsList,     // 1: Patterns (array of patterns; same pattern can be reused via sequence)
+        sequence,         // 2: Sequence (pattern indices to play in order)
+        bpm * bpmScale    // 3: BPM
     ];
     
     return {
@@ -405,7 +509,9 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
                 finiteCycles,
                 lookaheadCycles,
                 forcedCycles: hasForcedCycles ? Math.floor(forceCycles) : null,
-                exportCycles
+                exportCycles,
+                patternCount: patternsList.length,
+                sequenceLength: sequence.length
             }
         }
     };

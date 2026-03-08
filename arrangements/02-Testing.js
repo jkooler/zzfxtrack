@@ -9,7 +9,7 @@ export const arrangementState = {
   "bpm": 120,
   "rows": [
     {
-      "repeats": 4,
+      "repeats": 16,
       "blocks": [
         "143-drums.js",
         "143-synths.js",
