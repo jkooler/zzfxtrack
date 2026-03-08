@@ -369,6 +369,17 @@ input[readonly]:focus-visible {
   background-color: color-mix(in srgb, var(--quaternary) 80%, transparent);
 }
 
+#mainFooter {
+  position: relative;
+  z-index: 30;
+  overflow: visible;
+}
+
+#footerExportGroup,
+#exportMenuWrap {
+  overflow: visible;
+}
+
 /* ZzFXMicro Player preview: when playing, stop button border pulses between primary and border */
 @keyframes preview-stop-border-pulse {
   0%, 100% { border-color: var(--primary); }

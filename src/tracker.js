@@ -3719,6 +3719,14 @@ function getArrangementRowScale(rowMix, targetPeakPerRow, renderProfile) {
   return targetPeakPerRow / rowMax;
 }
 
+function getBufferPeak(buffer) {
+  let maxAmp = 0;
+  for (let i = 0; i < buffer.length; i++) {
+    maxAmp = Math.max(maxAmp, Math.abs(buffer[i]));
+  }
+  return maxAmp;
+}
+
 function renderArrangementStateToMixBuffer(
   arrangementState,
   trackerStateByFilename,
@@ -3726,7 +3734,8 @@ function renderArrangementStateToMixBuffer(
   bpm = 120,
   overrides = {},
   mixSettings = null,
-  renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT
+  renderProfile = ARRANGEMENT_RENDER_PROFILE_EXPORT,
+  { skipGlobalNormalization = false } = {}
 ) {
   if (!arrangementState || !instrumentList) return null;
   const resolvedMixSettings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
@@ -3894,10 +3903,7 @@ function renderArrangementStateToMixBuffer(
     writeOffset += rowMainSamples;
   }
 
-  let maxAmp = 0;
-  for (let i = 0; i < mixBuffer.length; i++) {
-    maxAmp = Math.max(maxAmp, Math.abs(mixBuffer[i]));
-  }
+  const maxAmp = getBufferPeak(mixBuffer);
   if (!anyMixed || maxAmp === 0) {
     if (!anyMixed) {
       // Row(s) empty (e.g. last block removed) — return silent buffer so playback updates and stops the removed block.
@@ -3908,13 +3914,42 @@ function renderArrangementStateToMixBuffer(
         totalSteps: totalCycles * 16,
         loopSegment: lastLoopIndex >= 0,
         loopRowIndex: lastLoopIndex >= 0 ? lastLoopIndex : undefined,
+        peakBeforeNormalization: 0,
       };
     }
     console.warn('[Arranger] Preview produced silence. Check block trackerState instruments match current instruments.');
     return null;
   }
-  if (maxAmp > 0) {
-    const scale = targetPeak / maxAmp;
+
+  let normalizationReferencePeak = maxAmp;
+  const loopTruncatesArrangement = lastLoopIndex >= 0 && lastLoopIndex < rowDescriptors.length - 1;
+  if (
+    !skipGlobalNormalization
+    && renderProfile === ARRANGEMENT_RENDER_PROFILE_LIVE
+    && loopTruncatesArrangement
+  ) {
+    const fullArrangementState = {
+      ...arrangementState,
+      rows: rows.map((row) => ({ ...row, loop: false })),
+    };
+    const fullRendered = renderArrangementStateToMixBuffer(
+      fullArrangementState,
+      trackerStateByFilename,
+      instrumentList,
+      bpm,
+      overrides,
+      mixSettings,
+      renderProfile,
+      { skipGlobalNormalization: true }
+    );
+    const fullPeak = fullRendered?.peakBeforeNormalization;
+    if (typeof fullPeak === 'number' && fullPeak > 0) {
+      normalizationReferencePeak = fullPeak;
+    }
+  }
+
+  if (!skipGlobalNormalization && normalizationReferencePeak > 0) {
+    const scale = targetPeak / normalizationReferencePeak;
     for (let i = 0; i < mixBuffer.length; i++) {
       mixBuffer[i] *= scale;
     }
@@ -3933,6 +3968,7 @@ function renderArrangementStateToMixBuffer(
     totalSteps: totalCycles * 16,
     loopSegment: lastLoopIndex >= 0,
     loopRowIndex: lastLoopIndex >= 0 ? lastLoopIndex : undefined,
+    peakBeforeNormalization: maxAmp,
   };
 }
 

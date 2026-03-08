@@ -683,12 +683,43 @@
           >
             <i data-lucide="settings-2" class="w-4 h-4"></i>
           </button>
-          <button
-            id="exportBtn"
-            class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-3"
-          >
-            <span id="exportBtnLabel">EXPORT ZzFXMicro</span>
-          </button>
+          <div id="exportMenuWrap" class="relative">
+            <button
+              id="exportBtn"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              class="primary inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 font-mono tracking-wide shadow-sm flex items-center gap-2"
+            >
+              <span id="exportBtnLabel">Export</span>
+              <i data-lucide="chevron-down" class="w-4 h-4 shrink-0"></i>
+            </button>
+            <div
+              id="exportMenu"
+              class="hidden absolute bottom-full left-0 mb-2 min-w-[190px] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg z-20"
+              role="menu"
+              aria-labelledby="exportBtn"
+            >
+              <button
+                id="exportJsonBtn"
+                type="button"
+                class="w-full inline-flex items-center justify-between gap-3 px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                role="menuitem"
+              >
+                <span>ZzFXMicro (json)</span>
+                <i data-lucide="file-json" class="w-4 h-4 shrink-0"></i>
+              </button>
+              <button
+                id="exportWavBtn"
+                type="button"
+                class="w-full inline-flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                role="menuitem"
+              >
+                <span>Audio file (wav)</span>
+                <i data-lucide="audio-waveform" class="w-4 h-4 shrink-0"></i>
+              </button>
+            </div>
+          </div>
           <button
             id="previewPlayBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground text-foreground h-9 w-9 p-0 flex items-center justify-center"
@@ -707,13 +738,6 @@
             Song Data
           </button>
           <span aria-hidden="true" class="h-5 w-px shrink-0 bg-border/80"></span>
-          <button
-            id="exportWavBtn"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 flex items-center gap-3"
-          >
-            <i data-lucide="download" class="w-4 h-4"></i>
-            <span id="exportWavBtnLabel">Export WAV</span>
-          </button>
           </div>
           <div class="flex items-center gap-3 footer-utility-group">
           <span

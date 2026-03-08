@@ -181,8 +181,10 @@ const dom = {
     playBtn: document.getElementById('playBtn'),
     exportBtn: document.getElementById('exportBtn'),
     exportBtnLabel: document.getElementById('exportBtnLabel'),
+    exportMenuWrap: document.getElementById('exportMenuWrap'),
+    exportMenu: document.getElementById('exportMenu'),
+    exportJsonBtn: document.getElementById('exportJsonBtn'),
     exportWavBtn: document.getElementById('exportWavBtn'),
-    exportWavBtnLabel: document.getElementById('exportWavBtnLabel'),
     newPatternBtn: document.getElementById('newPatternBtn'),
     statusMsg: document.getElementById('statusMsg'),
     footerStatusRow: document.getElementById('footerStatusRow'),
@@ -515,21 +517,48 @@ function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFX
 function updateFooterExportActionLabels() {
     const arrangementMode = isArrangementWorkspaceActive();
     if (dom.exportBtnLabel) {
-        dom.exportBtnLabel.textContent = 'EXPORT ZzFXMicro';
+        dom.exportBtnLabel.textContent = 'Export';
     }
     if (dom.exportBtn) {
-        dom.exportBtn.title = arrangementMode ? 'Export arrangement to ZzFXMicro JSON' : 'Export pattern to ZzFXMicro JSON';
+        dom.exportBtn.title = arrangementMode ? 'Export arrangement' : 'Export pattern';
         dom.exportBtn.classList.toggle('export-arrangement-mode', arrangementMode);
     }
-    if (dom.exportWavBtnLabel) {
-        dom.exportWavBtnLabel.textContent = arrangementMode ? 'Export WAV' : 'Export WAV';
+    if (dom.exportJsonBtn) {
+        dom.exportJsonBtn.title = arrangementMode ? 'Export arrangement to ZzFXMicro JSON' : 'Export pattern to ZzFXMicro JSON';
     }
     if (dom.exportWavBtn) {
-        dom.exportWavBtn.title = arrangementMode ? 'Download arrangement mix as WAV' : '';
+        dom.exportWavBtn.title = arrangementMode ? 'Download arrangement mix as WAV' : 'Download pattern mix as WAV';
     }
 }
 
+function closeExportMenu() {
+    if (dom.exportMenu) dom.exportMenu.classList.add('hidden');
+    if (dom.exportBtn) dom.exportBtn.setAttribute('aria-expanded', 'false');
+}
+
+function openExportMenu() {
+    if (!dom.exportMenu || !dom.exportBtn || dom.exportBtn.disabled) return;
+    dom.exportMenu.classList.remove('hidden');
+    dom.exportBtn.setAttribute('aria-expanded', 'true');
+    dom.exportJsonBtn?.focus();
+}
+
+function toggleExportMenu() {
+    if (!dom.exportMenu || !dom.exportBtn || dom.exportBtn.disabled) return;
+    const isOpen = !dom.exportMenu.classList.contains('hidden');
+    if (isOpen) closeExportMenu();
+    else openExportMenu();
+}
+
+function setExportControlsDisabled(disabled) {
+    if (dom.exportBtn) dom.exportBtn.disabled = disabled;
+    if (dom.exportJsonBtn) dom.exportJsonBtn.disabled = disabled;
+    if (dom.exportWavBtn) dom.exportWavBtn.disabled = disabled;
+    if (disabled) closeExportMenu();
+}
+
 function showWelcome() {
+    closeExportMenu();
     undockTrackerModalFromWorkspace();
     dom.welcomeView.style.display = 'flex';
     dom.editorContainer.style.display = 'none';
@@ -540,8 +569,7 @@ function showWelcome() {
         dom.mainFooter.classList.add('footer-intro-mode');
     }
     dom.playBtn.style.visibility = 'hidden';
-    dom.exportBtn.disabled = true;
-    if (dom.exportWavBtn) dom.exportWavBtn.disabled = true;
+    setExportControlsDisabled(true);
     
     updatePatternSelectionState(false);
     dom.previewPlayBtn.style.display = 'none';
@@ -585,6 +613,7 @@ function handleSidebarTitleClick() {
 }
 
 function showIntroduction() {
+    closeExportMenu();
     // If no pattern is loaded, the introduction view is also the "empty" state.
     if (!currentPatternFilename) {
         showWelcome();
@@ -606,8 +635,7 @@ function showIntroduction() {
 
     // Keep controls available so the user can stop playback while reading intro.
     dom.playBtn.style.visibility = 'visible';
-    dom.exportBtn.disabled = false;
-    if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
+    setExportControlsDisabled(false);
 
     renderPlayButton();
     updatePatternListVisualizer();
@@ -629,6 +657,7 @@ function isTrackerDocked() {
 }
 
 function showEditor() {
+    closeExportMenu();
     // When switching to pattern editor, do not undock the tracker if it is docked and playing.
     // Playback should only stop when the user clicks Play on the pattern (togglePlay → stopAllPlaybackForSelectionChange).
     if (!isTrackerDocked()) {
@@ -644,8 +673,7 @@ function showEditor() {
     }
     updateArrangementSelectionState(false);
     dom.playBtn.style.visibility = 'visible';
-    dom.exportBtn.disabled = false;
-    if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
+    setExportControlsDisabled(false);
     dom.patternNameInput.classList.remove('hidden');
     updatePatternSelectionState(!!currentPatternFilename);
     refreshZzfxmPreviewControlsVisibility();
@@ -655,6 +683,7 @@ function showEditor() {
 }
 
 function showArrangementWorkspace() {
+    closeExportMenu();
     dom.welcomeView.style.display = 'none';
     dom.editorContainer.style.display = 'none';
     if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'flex';
@@ -668,8 +697,7 @@ function showArrangementWorkspace() {
     updatePatternSelectionState(false);
     updateArrangementSelectionState(!!currentArrangementFilename);
     updateArrangementInstrumentUsage();
-    dom.exportBtn.disabled = false;
-    if (dom.exportWavBtn) dom.exportWavBtn.disabled = false;
+    setExportControlsDisabled(false);
     refreshZzfxmPreviewControlsVisibility();
     updateAdvancedSettingsButtonsVisibility();
     updateFooterExportActionLabels();
@@ -3915,7 +3943,7 @@ async function loadPattern(filename) {
             dom.repl.setAttribute('code', editorCode);
         }
         
-        dom.exportBtn.disabled = false;
+        setExportControlsDisabled(false);
         
         // Clear ZzFXMicro Player export preview until this pattern/arrangement is exported again.
         clearZzfxmPreviewData();
@@ -5755,15 +5783,23 @@ function closeModal() {
 
 // Event Listeners ---
 
-dom.exportBtn.addEventListener('click', () => {
-    if (isArrangementWorkspaceActive()) {
-        exportCurrentArrangement();
-        return;
-    }
-    exportCurrentPattern();
+dom.exportBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleExportMenu();
 });
+if (dom.exportJsonBtn) {
+    dom.exportJsonBtn.addEventListener('click', () => {
+        closeExportMenu();
+        if (isArrangementWorkspaceActive()) {
+            exportCurrentArrangement();
+            return;
+        }
+        exportCurrentPattern();
+    });
+}
 if (dom.exportWavBtn) {
     dom.exportWavBtn.addEventListener('click', () => {
+        closeExportMenu();
         if (isArrangementWorkspaceActive()) {
             exportCurrentArrangementWav();
             return;
@@ -5771,6 +5807,14 @@ if (dom.exportWavBtn) {
         exportCurrentPatternWav();
     });
 }
+document.addEventListener('click', (e) => {
+    if (!dom.exportMenuWrap?.contains(e.target)) {
+        closeExportMenu();
+    }
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeExportMenu();
+});
 if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadPatternsAndInstruments);
 if (dom.uploadProjectBtn) dom.uploadProjectBtn.addEventListener('click', openUploadProjectModal);
 if (dom.uploadProjectInput) {
