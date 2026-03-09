@@ -112,7 +112,8 @@ export function applyArrangementPreviewAfterBlockRemoved(removedFilename) {
         instrumentList: nextContext.instrumentList,
         bpm: nextContext.bpm,
         mixSettings: nextContext.mixSettings,
-        keepPosition: false,
+        // Preserve transport position when removing blocks during live preview.
+        keepPosition: true,
     });
     updateArrangementPlaybackInstrumentAliases(deps.getArrangementWorkspacePlayhead());
 }

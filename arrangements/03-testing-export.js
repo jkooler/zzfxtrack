@@ -9,9 +9,9 @@ export const arrangementState = {
   "bpm": 120,
   "rows": [
     {
-      "repeats": 1,
+      "repeats": 4,
       "blocks": [
-        "untitled-1.js"
+        "bass.js"
       ],
       "loop": false
     }

@@ -8,4 +8,4 @@ export const bpm = 140;
 // Then export this song and listen if the output matches 1:1 with the ZzFXTrack Player exported song.
 
 
-export const pattern = note("c3").s("test-minimal");
+export const pattern = note("c3").s("sys-minimal");

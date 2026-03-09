@@ -16,13 +16,6 @@ export const arrangementState = {
         "143-synths.js"
       ],
       "loop": false
-    },
-    {
-      "repeats": 1,
-      "blocks": [
-        "143-synths.js"
-      ],
-      "loop": false
     }
   ]
 };

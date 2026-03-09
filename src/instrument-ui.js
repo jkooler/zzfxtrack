@@ -1221,7 +1221,11 @@ export function updateArrangementSelectionState(isLoaded) {
 function switchView(view) {
     currentView = view;
 
-    document.getElementById('sidebarTitle')?.classList.remove('active');
+    // Keep introduction highlight when switching back to Strudel view.
+    // The intro page uses the sidebar title as the selected state.
+    if (view !== 'strudel') {
+        document.getElementById('sidebarTitle')?.classList.remove('active');
+    }
     if (view === 'strudel') {
         refreshPatternListActiveState();
     }

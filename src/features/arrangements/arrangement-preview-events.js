@@ -80,7 +80,6 @@ export function installArrangementPreviewEventListeners() {
             const wantedBlockFiles = Array.from(new Set((arrangementState.rows || []).flatMap((r) => Array.isArray(r.blocks) ? r.blocks : [])));
             const trackerStateByFilename = {};
             const previewBlocks = [];
-            const resolvedFilenames = new Set();
             let playable = 0;
             const isPlayableTrackerState = (ts) => {
                 if (!ts || !Array.isArray(ts.grid) || !Array.isArray(ts.channelInstruments)) return false;
@@ -105,41 +104,35 @@ export function installArrangementPreviewEventListeners() {
                     .filter((block) => block?.filename)
                     .map((block) => [block.filename, block])
             );
-            for (const filename of wantedBlockFiles) {
-                const cached = cachedBlocksByFilename.get(filename);
-                if (!cached) continue;
-                resolvedFilenames.add(filename);
-                registerTrackerState(filename, cached.trackerState);
-            }
-            const missingBlocks = wantedBlockFiles.filter((filename) => !trackerStateByFilename[filename]);
-            const fetchedBlocks = await Promise.all(missingBlocks.map(async (filename) => {
+            const fetchedBlocks = await Promise.all(wantedBlockFiles.map(async (filename) => {
                 try {
                     const block = await deps.getBlockDetailOrNull(filename);
-                    if (!block) return null;
-                    return { filename, block };
+                    return { filename, block: block || null };
                 } catch (_err) {
-                    return null;
+                    return { filename, block: null };
                 }
             }));
             const cache = deps.getBlocksLibraryCache().slice();
             fetchedBlocks.forEach((result) => {
-                if (!result?.block) return;
+                if (!result) return;
                 const { filename, block } = result;
-                resolvedFilenames.add(filename);
-                registerTrackerState(filename, block.trackerState);
+                const cached = cachedBlocksByFilename.get(filename);
+                // Prefer in-memory tracker state when available. It can be fresher than API
+                // immediately after tracker saves in modal flows.
+                const effective = cached?.trackerState
+                    ? { ...(block || {}), ...cached }
+                    : (block || cached || null);
+                if (!effective) return;
+                registerTrackerState(filename, effective.trackerState);
                 const idx = cache.findIndex((entry) => entry?.filename === filename);
-                if (idx !== -1) cache[idx] = { ...cache[idx], ...block };
-                else cache.push({ filename, ...block });
+                if (idx !== -1) cache[idx] = { ...cache[idx], ...effective };
+                else cache.push({ filename, ...effective });
             });
             deps.setBlocksLibraryCache(cache);
 
             const unresolvedBlocks = wantedBlockFiles.filter((filename) => !trackerStateByFilename[filename]);
             if (unresolvedBlocks.length > 0) {
                 deps.setStatus(`Arrangement preview failed: missing blocks (${unresolvedBlocks.length}).`, 'error');
-                return;
-            }
-            if (wantedBlockFiles.length > 0 && resolvedFilenames.size === 0) {
-                deps.setStatus('Arrangement preview failed: could not load blocks.', 'error');
                 return;
             }
             if (wantedBlockFiles.length > 0 && playable === 0) {
@@ -204,7 +197,8 @@ export function installArrangementPreviewEventListeners() {
             instrumentList: nextContext.instrumentList,
             bpm: nextContext.bpm,
             mixSettings: nextContext.mixSettings,
-            keepPosition: !removedFilename,
+            // Keep playback position stable for row/block removal edits.
+            keepPosition: true,
         });
         deps.updateArrangementPlaybackInstrumentAliases(deps.getArrangementWorkspacePlayhead());
     });
