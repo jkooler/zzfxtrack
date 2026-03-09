@@ -20,15 +20,29 @@ import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mi
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
 import { confirmDialog, alertDialog } from './dialog.js';
 import { dom } from './app/dom.js';
-import { createArrangement, deleteArrangementByFilename, deletePatternByFilename, getArrangement, getArrangementOrNull, getPatternMetaOrNull, getPatternSource, getPatternSourceOrEmpty, listArrangements, listArrangementsOrEmpty, listBlocksOrEmpty, listPatterns, renameArrangementFile, renamePatternFile, saveArrangement, savePatternMetaRecord, savePatternSource } from './app/api.js';
+import { createArrangement, deleteArrangementByFilename, deleteBlockByFilenameWithConflictInfo, deletePatternByFilename, getArrangement, getArrangementOrNull, getBlockDetailOrNull, getPatternMetaTextOrNull, getPatternSource, getPatternSourceOrEmpty, listArrangements, listArrangementsOrEmpty, listBlocksOrEmpty, listPatterns, renameArrangementFile, renamePatternFile, saveArrangement, saveArrangementKeepalive, saveBlockDetail, saveBlockDetailKeepalive, saveExportedJsFile, saveExportedJsonFile, savePatternSource, savePatternSourceKeepalive, sendPatternSourceBeacon, updateInstrumentsSourceFile } from './app/api.js';
 import { appState } from './app/state.js';
 import { reloadInstruments } from './features/instruments/instrument-runtime.js';
 import { configureInstrumentReferenceSync } from './features/instruments/instrument-reference-sync.js';
-import { configurePatternList, refreshPatternListActiveState } from './features/patterns/pattern-list.js';
+import { configurePatternList, getPatternEntry, normalizePatternEntries, refreshPatternList, refreshPatternListActiveState, updatePatternListVisualizer } from './features/patterns/pattern-list.js';
+import { configurePatternController, createNewPattern, deletePattern, loadPattern, renamePattern, saveCurrentPattern } from './features/patterns/pattern-controller.js';
+import { configurePatternEditor, editorToFile, fileToEditor, setupPatternEditorAutosave, validateCodeForExport } from './features/patterns/pattern-editor.js';
+import { configurePatternMeta, loadPatternMeta, normalizePatternBaseName, savePatternMeta, updatePatternScope } from './features/patterns/pattern-meta.js';
+import { configureArrangementList, getArrangementEntry, refreshArrangementList, refreshArrangementListActiveState, updateArrangementListScopeVisualizer } from './features/arrangements/arrangement-list.js';
+import { buildArrangementStatePayload, canRecoverUnsavedForScope, cloneArrangementState, configureArrangementPersistence, emitArrangementStateChanged, getArrangementReadonly, readUnsavedArrangementState, saveCurrentArrangement, scheduleArrangementAutoSave } from './features/arrangements/arrangement-persistence.js';
+import { configureArrangementPreview, scheduleArrangementPreviewPrime } from './features/arrangements/arrangement-preview.js';
+import { closeNewArrangementModal, configureArrangementController, createNewArrangement, createUntitledBlock, deleteArrangement, loadArrangement, openNewArrangementModal, renameArrangement } from './features/arrangements/arrangement-controller.js';
+import { buildArrangementExportContext, configureArrangementExportContext, getArrangementInstrumentList, updateArrangementInstrumentUsage } from './features/arrangements/arrangement-export-context.js';
+import { configureArrangementPreviewEvents, installArrangementPreviewEventListeners } from './features/arrangements/arrangement-preview-events.js';
+import { applyArrangementPreviewAfterBlockRemoved, clearArrangementPlaybackInstrumentAliases, configureArrangementPreviewRuntime, updateArrangementPlaybackInstrumentAliases } from './features/arrangements/arrangement-preview-runtime.js';
+import { applyArrangementWorkspacePlayhead, clearArrangementWorkspacePlayheadVisuals, configureArrangementWorkspace, renderArrangementWorkspace, showArrangementWorkspace, updateArrangementWorkspaceChipSteps, updateArrangementWorkspacePreviewButtonState } from './features/arrangements/arrangement-workspace.js';
+import { buildExportLengthWarningMessage, estimateExportSizeBytes, formatExportSize, getExportDurationSeconds, inferArrangeCyclesFromCode, shouldWarnExportLength } from './features/playback/export-actions.js';
 import { configurePlaybackController } from './features/playback/playback-controller.js';
 import { configureDevMode, getDeveloperModeHeaders, isDeveloperModeEnabled, setDeveloperModeEnabled, updateAdvancedSettingsButtonsVisibility, updateDevModeToolbarLabelVisibility } from './features/settings/dev-mode.js';
 import { setStatus, clearStatusAfter, configureStatusBar, installStatusEventListener } from './features/ui/status-bar.js';
 import { setupListTouchActivation } from './features/ui/touch-activation.js';
+import { ensureArrangementsSection, ensureBlocksSection, nextAvailableVarName, normalizePatternStack as normalizePatternStackShared, slugify, upsertPatternLayer as upsertPatternLayerShared } from './shared/code-transform-utils.js';
+import { escapeHtml } from './shared/formatters.js';
 import JSZip from 'jszip';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
@@ -132,6 +146,450 @@ configurePlaybackController({
 configurePatternList({
     getCurrentPatternFilename: () => appState.currentPatternFilename,
     getPatternListElement: () => dom.patternList,
+    getPatternEntriesCache: () => appState.patternEntriesCache,
+    normalizeScope,
+    isDemoMode: () => DEMO_MODE,
+    getDemoPatternFiles: () => Array.from(demoPatternSourceByFile.keys()),
+    listPatterns,
+    setPatternEntriesCache: (entries) => { appState.patternEntriesCache = entries; },
+    isDeveloperModeEnabled,
+    getWelcomeViewVisible: () => dom.welcomeView?.style?.display === 'flex',
+    loadPattern,
+    showDeleteConfirmation,
+    getPatternFolderState: () => patternFolderState,
+    setPatternFolderState: (nextState) => { patternFolderState = nextState; },
+    savePatternFolderState: (state) => saveFolderState(PATTERN_FOLDER_STATE_KEY, state),
+    createIcons,
+    icons,
+    setStatus,
+    getPlayingPatternFilename: () => playingPatternFilename,
+    attachVisualizer,
+});
+
+configurePatternMeta({
+    isDemoMode: () => DEMO_MODE,
+    getCurrentPatternFilename: () => appState.currentPatternFilename,
+    setCurrentPatternScope: (scope) => { appState.currentPatternScope = scope; },
+    updatePatternNameReadOnly: () => {
+        dom.patternNameInput.readOnly = DEMO_MODE || (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled());
+    },
+    sanitizePlaybackMixSettings,
+    applyPlaybackMixSettingsToInputs,
+    normalizePlaybackPresetId,
+    inferPlaybackPresetId,
+    setPlaybackPresetControl,
+    applyWavSettings: (sampleRateRaw, bitDepthRaw) => {
+        const wavSampleRate = parseInt(sampleRateRaw, 10);
+        if (dom.wavSampleRate && [8000, 11025, 16000, 22050, 32000, 44100, 48000].includes(wavSampleRate)) {
+            dom.wavSampleRate.value = String(wavSampleRate);
+        }
+        const wavBitDepth = parseInt(bitDepthRaw, 10);
+        if (dom.wavBitDepth && [8, 16, 24].includes(wavBitDepth)) {
+            dom.wavBitDepth.value = String(wavBitDepth);
+        }
+    },
+    applyExportResolutionRowsPerCycle: (rowsPerCycle) => {
+        const resolutionInputs = document.querySelectorAll('input[name="exportResolution"]');
+        const isPreset = rowsPerCycle === 48 || rowsPerCycle === 96;
+        resolutionInputs.forEach(input => {
+            input.checked = input.value === String(isPreset ? rowsPerCycle : 'custom');
+        });
+        if (!isPreset && dom.exportResolutionCustom) {
+            dom.exportResolutionCustom.value = String(rowsPerCycle);
+        }
+        const event = new Event('change', { bubbles: true });
+        document.querySelector('input[name="exportResolution"]:checked')?.dispatchEvent(event);
+    },
+    getRowsPerCycle: () => {
+        const resolutionInput = document.querySelector('input[name="exportResolution"]:checked');
+        if (resolutionInput?.value === '48') return 48;
+        if (resolutionInput?.value === 'custom') {
+            const parsed = parseInt(dom.exportResolutionCustom?.value, 10);
+            if (parsed && !Number.isNaN(parsed)) return parsed;
+        }
+        return 96;
+    },
+    getPlaybackMixSettings,
+    getPlaybackPresetValue: () => dom.playbackLoudnessPreset?.value,
+    getWavExportSettings,
+    warn: (message, err) => console.warn(message, err),
+});
+
+configurePatternEditor({
+    isDemoMode: () => DEMO_MODE,
+    getReplEditor: () => dom.repl?.editor || null,
+    getCurrentPatternFilename: () => appState.currentPatternFilename,
+    getCurrentPatternScope: () => appState.currentPatternScope,
+    isDeveloperModeEnabled,
+    updateInstrumentUsage,
+    getAutoSaveTimeout: () => autoSaveTimeout,
+    setAutoSaveTimeout: (timeout) => { autoSaveTimeout = timeout; },
+    saveCurrentPattern,
+    persistUnsavedPattern: (filename, code) => {
+        try { localStorage.setItem(`unsaved_${filename}`, code); } catch (_e) {}
+    },
+    clearUnsavedPattern: (filename) => {
+        try { localStorage.removeItem(`unsaved_${filename}`); } catch (_e) {}
+    },
+    isReplPlaying: () => Boolean(dom.repl?.editor?.repl?.scheduler?.started),
+    evaluateRepl: () => dom.repl?.editor?.evaluate(),
+    logInfo: (...args) => console.log(...args),
+    logError: (...args) => console.error(...args),
+});
+
+configurePatternController({
+    isDemoMode: () => DEMO_MODE,
+    getCurrentPatternFilename: () => appState.currentPatternFilename,
+    getCurrentPatternScope: () => appState.currentPatternScope,
+    setCurrentPatternFilename: (filename) => { appState.currentPatternFilename = filename; },
+    getCurrentPatternDisplayName: () => currentPatternDisplayName,
+    setCurrentPatternDisplayName: (name) => { currentPatternDisplayName = name; },
+    getOriginalPatternName: () => originalPatternName,
+    setOriginalPatternName: (name) => { originalPatternName = name; },
+    isDeveloperModeEnabled,
+    getEditorCode: () => dom.repl?.editor?.code || '',
+    getPatternNameInputValue: () => dom.patternNameInput?.value || '',
+    editorToFile,
+    savePatternSource,
+    renamePatternFile,
+    deletePatternByFilename,
+    listPatterns,
+    normalizePatternEntries,
+    getPatternEntry,
+    normalizeScope,
+    getDeveloperModeHeaders,
+    getPatternSource,
+    fileToEditor,
+    normalizeScope,
+    getPatternEntry,
+    getDemoPatternSource: (filename) => demoPatternSourceByFile.get(filename),
+    getUnsavedPatternCode: (filename) => localStorage.getItem(`unsaved_${filename}`),
+    clearUnsavedPatternCode: (filename) => localStorage.removeItem(`unsaved_${filename}`),
+    saveCurrentPattern,
+    setCurrentPatternSelection: (filename, scope) => {
+        appState.currentPatternFilename = filename;
+        appState.currentPatternScope = scope;
+    },
+    setPatternDisplayNames: (displayName, originalName) => {
+        currentPatternDisplayName = displayName;
+        originalPatternName = originalName;
+    },
+    showEditor,
+    refreshArrangementListActiveState,
+    renderArrangementWorkspace,
+    setPatternNameInputValue: (value) => { dom.patternNameInput.value = value; },
+    setPatternNameInputReadOnly: (value) => { dom.patternNameInput.readOnly = value; },
+    setPatternNameInputPlaceholder: (value) => { dom.patternNameInput.placeholder = value; },
+    updateAdvancedSettingsButtonsVisibility,
+    refreshPatternListDomActiveState: (filename) => {
+        Array.from(dom.patternList.querySelectorAll('.list-item')).forEach((li) => {
+            const isActive = li.dataset.filename === filename;
+            li.classList.toggle('active', Boolean(isActive));
+        });
+    },
+    updatePatternListVisualizer,
+    setEditorCodeWithHighlightSync: (editorCode, filename, playingFilename) => {
+        if (dom.repl.editor) {
+            dom.repl.editor.setCode(editorCode);
+            const view = dom.repl.editor.editor;
+            if (view) {
+                view.dispatch({});
+                const locations = (filename === playingFilename && dom.repl.editor.miniLocations)
+                    ? dom.repl.editor.miniLocations
+                    : [];
+                updateMiniLocations(view, locations);
+            }
+        } else {
+            dom.repl.setAttribute('code', editorCode);
+        }
+    },
+    getPlayingPatternFilename: () => playingPatternFilename,
+    setPlayingPatternFilename: (filename) => { playingPatternFilename = filename; },
+    stopEditorPlayback: () => { if (dom.repl.editor) dom.repl.editor.stop(); },
+    updatePlayState,
+    showWelcome,
+    clearRenameDebounceTimeout: () => { renameDebounceTimeout = null; },
+    setExportControlsDisabled,
+    clearZzfxmPreviewData,
+    renderPlayButton,
+    loadPatternMeta,
+    updateInstrumentUsage,
+    updatePatternSelectionState,
+    clearPatternTimers: () => {
+        if (autoSaveTimeout) {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = null;
+        }
+        if (renameDebounceTimeout) {
+            clearTimeout(renameDebounceTimeout);
+            renameDebounceTimeout = null;
+        }
+    },
+    setStatus,
+    closeModal,
+    refreshPatternList,
+    logError: (err) => console.error(err),
+});
+
+configureArrangementList({
+    getListElement: () => dom.arrangementList,
+    getEntriesCache: () => appState.arrangementEntriesCache,
+    setEntriesCache: (entries) => { appState.arrangementEntriesCache = entries; },
+    normalizeScope,
+    isDemoMode: () => DEMO_MODE,
+    getDemoArrangementFiles: () => Array.from(demoArrangementSourceByFile.keys()),
+    listArrangements,
+    getFolderState: () => arrangementFolderState,
+    setFolderState: (nextState) => { arrangementFolderState = nextState; },
+    saveFolderState: (state) => saveFolderState(ARRANGEMENT_FOLDER_STATE_KEY, state),
+    isDeveloperModeEnabled,
+    getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    loadArrangement: (filename) => loadArrangement(filename),
+    deleteArrangement: (filename) => deleteArrangement(filename),
+    createIcons,
+    icons,
+    escapeHtml,
+    setStatus,
+    logError: (...args) => console.error(...args),
+    isArrangementPreviewPlaying,
+    getArrangementPreviewPlayingFilename: () => arrangementPreviewPlayingFilename,
+    attachVisualizer,
+});
+
+configureArrangementPersistence({
+    isDemoMode: () => DEMO_MODE,
+    getCurrentArrangementScope: () => appState.currentArrangementScope,
+    isDeveloperModeEnabled,
+    normalizeScope,
+    getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    getArrangementDraftState: () => appState.arrangementDraftState,
+    getArrangementEntry,
+    saveArrangement,
+    getDeveloperModeHeaders,
+    getEntriesCache: () => appState.arrangementEntriesCache,
+    setStatus,
+    logError: (...args) => console.error(...args),
+    getAutoSaveTimeout: () => arrangementAutoSaveTimeout,
+    setAutoSaveTimeout: (timeout) => { arrangementAutoSaveTimeout = timeout; },
+    dispatchStateChanged: (detail) => {
+        document.dispatchEvent(new CustomEvent('arrangements:stateChanged', { detail }));
+    },
+});
+
+configureArrangementPreview({
+    getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    buildArrangementStatePayload,
+    getBlocksLibraryCache: () => appState.blocksLibraryCache,
+    resolveTrackerStateChannelInstruments,
+    getArrangementInstrumentList,
+    primeArrangementPreviewBuffer,
+    getPlaybackMixSettings,
+    getPrimeTimeoutId: () => arrangementPreviewPrimeTimeoutId,
+    setPrimeTimeoutId: (timeoutId) => { arrangementPreviewPrimeTimeoutId = timeoutId; },
+});
+
+configureArrangementController({
+    isDemoMode: () => DEMO_MODE,
+    setStatus,
+    logError: (...args) => console.error(...args),
+    logWarn: (...args) => console.warn(...args),
+    normalizeScope,
+    getArrangementEntry,
+    isDeveloperModeEnabled,
+    confirmDialog,
+    deleteArrangementByFilename,
+    getDeveloperModeHeaders,
+    getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    setCurrentArrangementFilename: (filename) => { appState.currentArrangementFilename = filename; },
+    setCurrentArrangementScope: (scope) => { appState.currentArrangementScope = scope; },
+    setArrangementDraftState: (state) => { appState.arrangementDraftState = state; },
+    setActiveArrangementBlockFilename: (filename) => { appState.activeArrangementBlockFilename = filename; },
+    showWelcome,
+    refreshArrangementList,
+    refreshBlocksLibrary,
+    listArrangementsOrEmpty,
+    createArrangement,
+    saveBlock,
+    getBlocksLibraryCache: () => appState.blocksLibraryCache,
+    setSelectedBlockForArrangement: (filename, blockFilename) => { arrangementSelectedBlockByArrangement[filename] = blockFilename; },
+    renderArrangementWorkspace,
+    renderTrackerWorkspace,
+    buildArrangementStatePayload,
+    scheduleArrangementAutoSave,
+    emitArrangementStateChanged,
+    setTrackerWorkspaceLoadedFilename: (filename) => { trackerWorkspaceLoadedFilename = filename; },
+    stopAllPlaybackForSelectionChange,
+    dispatchArrangementPreview: (detail) => {
+        document.dispatchEvent(new CustomEvent('arrangements:preview', { detail }));
+    },
+    getArrangementReadonly,
+    listArrangements,
+    renameArrangementFile,
+    saveCurrentArrangement,
+    getArrangementPreviewPlayingFilename: () => arrangementPreviewPlayingFilename,
+    setArrangementPreviewPlayingFilename: (filename) => { arrangementPreviewPlayingFilename = filename; },
+    getSelectedBlockForArrangement: (filename) => arrangementSelectedBlockByArrangement[filename],
+    moveSelectedBlockForArrangement: (oldFilename, newFilename) => {
+        arrangementSelectedBlockByArrangement[newFilename] = arrangementSelectedBlockByArrangement[oldFilename];
+        delete arrangementSelectedBlockByArrangement[oldFilename];
+    },
+    clearArrangementRenameDebounceTimeout: () => { arrangementRenameDebounceTimeout = null; },
+    getArrangementWorkspaceNameInput: () => document.getElementById('arrangementWorkspaceName'),
+    getArrangementOrNull,
+    readUnsavedArrangementState,
+    cloneArrangementState,
+    clearArrangementWorkspacePlayheadVisuals,
+    refreshArrangementListActiveState,
+    updateArrangementWorkspacePreviewButtonState,
+    showArrangementWorkspace,
+    scheduleArrangementPreviewPrime,
+    normalizePatternBaseName,
+    getArrangementEntriesCache: () => appState.arrangementEntriesCache,
+    getCurrentArrangementDraftState: () => appState.arrangementDraftState,
+    getCurrentArrangementScope: () => appState.currentArrangementScope,
+    getNewArrangementNameInput: () => dom.newArrangementName,
+    getNewArrangementModal: () => dom.newArrangementModal,
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    clearArrangementAutoSaveTimeout: () => {
+        if (arrangementAutoSaveTimeout) {
+            clearTimeout(arrangementAutoSaveTimeout);
+            arrangementAutoSaveTimeout = null;
+        }
+    },
+});
+
+configureArrangementWorkspace({
+    closeExportMenu,
+    getWelcomeView: () => dom.welcomeView,
+    getEditorContainer: () => dom.editorContainer,
+    getArrangementWorkspace: () => dom.arrangementWorkspace,
+    getMainHeader: () => dom.mainHeader,
+    getMainFooter: () => dom.mainFooter,
+    getSidebarTitle: () => dom.sidebarTitle,
+    getPatternNameInput: () => dom.patternNameInput,
+    updatePatternSelectionState,
+    updateArrangementSelectionState,
+    getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    updateArrangementInstrumentUsage,
+    setExportControlsDisabled,
+    refreshZzfxmPreviewControlsVisibility,
+    updateAdvancedSettingsButtonsVisibility,
+    updateFooterExportActionLabels,
+    updateArrangementListScopeVisualizer,
+    createIcons,
+    icons,
+    getArrangementWorkspacePane: () => dom.arrangementWorkspacePane,
+    isArrangementPreviewPlaying,
+    getArrangementPreviewPlayingFilename: () => arrangementPreviewPlayingFilename,
+    getArrangementWorkspacePlayingRowIndex: () => arrangementWorkspacePlayingRowIndex,
+    setArrangementWorkspacePlayingRowIndex: (value) => { arrangementWorkspacePlayingRowIndex = value; },
+    getArrangementWorkspacePlayhead: () => arrangementWorkspacePlayhead,
+    setArrangementWorkspacePlayhead: (value) => { arrangementWorkspacePlayhead = value; },
+    getAppState: () => appState,
+    getArrangementReadonly,
+    normalizeScope,
+    escapeHtml,
+    isDemoMode: () => DEMO_MODE,
+    setStatus,
+    updateArrangementDisplayName,
+    scheduleArrangementAutoSave,
+    emitArrangementStateChanged,
+    saveCurrentArrangement,
+    renameArrangement,
+    setupScrubInteraction,
+    getRenameDebounceTimeout: () => arrangementRenameDebounceTimeout,
+    setRenameDebounceTimeout: (timeout) => { arrangementRenameDebounceTimeout = timeout; },
+    getCurrentArrangementScope: () => appState.currentArrangementScope,
+    dispatchResourceScopeOpen: (detail) => {
+        document.dispatchEvent(new CustomEvent('resource-scope:open', { detail }));
+    },
+    renderTrackerWorkspace,
+    confirmDialog,
+    applyArrangementPreviewAfterBlockRemoved,
+    stopArrangementPreview,
+    dispatchArrangementPreviewState: (detail) => {
+        document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail }));
+    },
+    stopAllPlaybackForSelectionChange,
+    buildArrangementStatePayload,
+    dispatchArrangementPreview: (detail) => {
+        document.dispatchEvent(new CustomEvent('arrangements:preview', { detail }));
+    },
+    createUntitledBlock,
+    setActiveArrangementBlockFilename: (filename) => { appState.activeArrangementBlockFilename = filename; },
+    getActiveArrangementBlockFilename: () => appState.activeArrangementBlockFilename,
+    getSelectedBlockForArrangement: (filename) => arrangementSelectedBlockByArrangement[filename],
+    setSelectedBlockForArrangement: (filename, blockFilename) => { arrangementSelectedBlockByArrangement[filename] = blockFilename; },
+    getBlockByFilename,
+    getArrangementDraftState: () => appState.arrangementDraftState,
+    getBlocksLibraryCache: () => appState.blocksLibraryCache,
+    setBlocksLibraryCache: (nextCache) => { appState.blocksLibraryCache = nextCache; },
+    matchMedia: (query) => window.matchMedia(query),
+});
+
+configureArrangementExportContext({
+    getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    getArrangementDraftState: () => appState.arrangementDraftState,
+    buildArrangementStatePayload,
+    getBlocksLibraryCache: () => appState.blocksLibraryCache,
+    isDemoMode: () => DEMO_MODE,
+    getDemoBlockSource: (filename) => demoBlockSourceByFile.get(filename),
+    parseBlockSource,
+    normalizeScope,
+    getBlockDetailOrNull,
+    resolveTrackerStateChannelInstruments,
+    updateInstrumentUsage,
+    getDefragmentedInstruments: async () => {
+        const { getDefragmentedInstruments } = await import('./instrument-manager.js');
+        return getDefragmentedInstruments();
+    },
+});
+
+configureArrangementPreviewRuntime({
+    isArrangementPreviewPlaying,
+    getArrangementPreviewPlayingFilename: () => arrangementPreviewPlayingFilename,
+    getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    getArrangementPreviewContext: () => arrangementPreviewContext,
+    setArrangementPreviewContext: (value) => { arrangementPreviewContext = value; },
+    clearArrangementLiveOverride,
+    clearArrangementPendingLiveSwap,
+    buildArrangementStatePayload,
+    getPlaybackMixSettings,
+    updateArrangementPreview,
+    clearPlaybackInstrumentAliases,
+    setPlaybackInstrumentAliases,
+    getLastArrangementPlaybackInstrumentSignature: () => lastArrangementPlaybackInstrumentSignature,
+    setLastArrangementPlaybackInstrumentSignature: (value) => { lastArrangementPlaybackInstrumentSignature = value; },
+    getArrangementWorkspacePlayhead: () => arrangementWorkspacePlayhead,
+});
+
+configureArrangementPreviewEvents({
+    getArrangementPreviewPlayingFilename: () => arrangementPreviewPlayingFilename,
+    setArrangementPreviewPlayingFilename: (value) => { arrangementPreviewPlayingFilename = value; },
+    getArrangementPreviewContext: () => arrangementPreviewContext,
+    setArrangementPreviewContext: (value) => { arrangementPreviewContext = value; },
+    getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    buildArrangementStatePayload,
+    getPlaybackMixSettings,
+    getArrangementInstrumentList,
+    resolveTrackerStateChannelInstruments,
+    getBlocksLibraryCache: () => appState.blocksLibraryCache,
+    setBlocksLibraryCache: (nextCache) => { appState.blocksLibraryCache = nextCache; },
+    getBlockDetailOrNull,
+    setStatus,
+    startArrangementPreview,
+    stopArrangementPreview,
+    isArrangementPreviewPlaying,
+    updateArrangementPreview,
+    clearArrangementLiveOverride,
+    updateArrangementPlaybackInstrumentAliases,
+    getArrangementWorkspacePlayhead: () => arrangementWorkspacePlayhead,
+    updateArrangementWorkspaceChipSteps,
+    applyArrangementWorkspacePlayhead,
+    updateArrangementListScopeVisualizer,
+    updateArrangementWorkspacePreviewButtonState,
+    clearArrangementWorkspacePlayheadVisuals,
+    clearArrangementPlaybackInstrumentAliases,
 });
 
 configureInstrumentReferenceSync({
@@ -214,53 +672,6 @@ function saveFolderState(key, value) {
     } catch (_e) {
         // Ignore localStorage failures.
     }
-}
-
-function normalizePatternEntries(payload) {
-    if (!Array.isArray(payload)) return [];
-    return payload
-        .map((item) => {
-            if (typeof item === 'string') {
-                return { filename: item, scope: 'user' };
-            }
-            if (!item || typeof item !== 'object' || typeof item.filename !== 'string') {
-                return null;
-            }
-            return {
-                filename: item.filename,
-                scope: normalizeScope(item.scope),
-            };
-        })
-        .filter(Boolean);
-}
-
-function getPatternEntry(filename) {
-    return appState.patternEntriesCache.find((entry) => entry.filename === filename) || null;
-}
-
-function normalizeArrangementEntries(payload) {
-    if (!Array.isArray(payload)) return [];
-    return payload
-        .map((item) => {
-            if (typeof item === 'string') {
-                return { filename: item, name: item.replace(/\.js$/i, ''), scope: 'user', bpm: 120, arrangementState: null };
-            }
-            if (!item || typeof item !== 'object' || typeof item.filename !== 'string') {
-                return null;
-            }
-            return {
-                filename: item.filename,
-                name: item.filename.replace(/\.js$/i, ''),
-                scope: normalizeScope(item.scope),
-                bpm: Number.isFinite(Number(item.bpm)) ? Number(item.bpm) : 120,
-                arrangementState: item.arrangementState ?? null,
-            };
-        })
-        .filter(Boolean);
-}
-
-function getArrangementEntry(filename) {
-    return appState.arrangementEntriesCache.find((entry) => entry.filename === filename) || null;
 }
 
 // --- View State Helpers ---
@@ -511,29 +922,6 @@ function showEditor() {
     updateFooterExportActionLabels();
 }
 
-function showArrangementWorkspace() {
-    closeExportMenu();
-    dom.welcomeView.style.display = 'none';
-    dom.editorContainer.style.display = 'none';
-    if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'flex';
-    if (dom.mainHeader) dom.mainHeader.classList.add('hidden');
-    if (dom.mainFooter) {
-        dom.mainFooter.classList.remove('hidden');
-        dom.mainFooter.classList.remove('footer-intro-mode');
-    }
-    dom.sidebarTitle?.classList.remove('active');
-    dom.patternNameInput.classList.add('hidden');
-    updatePatternSelectionState(false);
-    updateArrangementSelectionState(!!appState.currentArrangementFilename);
-    updateArrangementInstrumentUsage();
-    setExportControlsDisabled(false);
-    refreshZzfxmPreviewControlsVisibility();
-    updateAdvancedSettingsButtonsVisibility();
-    updateFooterExportActionLabels();
-    updateArrangementListScopeVisualizer();
-    updateArrangementWorkspacePreviewButtonState();
-}
-
 /** True when the arrangement workspace is the currently visible main content (footer/export reflect arrangement context). */
 function isArrangementWorkspaceActive() {
     return Boolean(dom.arrangementWorkspace && dom.arrangementWorkspace.style.display === 'flex');
@@ -612,7 +1000,7 @@ async function init() {
     await reloadInstruments();
     
     // 6. Setup auto-save on input
-    setupAutoSave();
+    setupPatternEditorAutosave();
     
     // 6b. Intercept external links
     setupExternalLinkInterception();
@@ -698,101 +1086,6 @@ function syncThemeColors() {
     }
 }
 
-// --- Auto-Save and Hot-Reload Setup ---
-let hotReloadTimeout = null;
-
-function setupAutoSave() {
-    if (DEMO_MODE) {
-        console.log('ℹ️ Demo mode: auto-save disabled');
-        return;
-    }
-    console.log('setupAutoSave() called');
-    let checkCount = 0;
-    
-    // Wait for editor to be ready
-    const checkEditor = setInterval(() => {
-        checkCount++;
-        
-        // dom.repl.editor.editor IS the CodeMirror EditorView
-        if (dom.repl.editor && dom.repl.editor.editor) {
-            clearInterval(checkEditor);
-            console.log('✅ Editor found! Setting up auto-save and hot-reload...');
-            
-            const view = dom.repl.editor.editor; // This IS the EditorView
-            
-            // Use CodeMirror's update listener - this is event-driven, not polling!
-            // We'll add a listener to the view's DOM that triggers on updates
-            let lastCode = view.state.doc.toString();
-            
-            // Listen to the view's update events via DOM observation
-            // CodeMirror updates the DOM on every change, so we can detect that
-            const observer = new MutationObserver(() => {
-                // Only process if editor is focused and a pattern is loaded
-                if (!appState.currentPatternFilename || !view.hasFocus) return;
-                
-                const currentCode = view.state.doc.toString();
-                
-                // Check if code actually changed
-                if (currentCode !== lastCode) {
-                    lastCode = currentCode;
-                    
-                    // Update indicators in sidebar
-                    updateInstrumentUsage(currentCode);
-                    
-                    if (appState.currentPatternScope !== 'system' || isDeveloperModeEnabled()) {
-                        // IMMEDIATELY save to localStorage as backup
-                        localStorage.setItem(`unsaved_${appState.currentPatternFilename}`, currentCode);
-                        
-                        // Clear existing auto-save timeout
-                        if (autoSaveTimeout) {
-                            clearTimeout(autoSaveTimeout);
-                        }
-                        
-                        // Set new timeout for 1 second (debounced server save)
-                        autoSaveTimeout = setTimeout(() => {
-                            saveCurrentPattern();
-                            // Clear localStorage after successful server save
-                            localStorage.removeItem(`unsaved_${appState.currentPatternFilename}`);
-                        }, 1000);
-                    }
-                    
-                    // HOT-RELOAD: Auto-evaluate if REPL is playing
-                    if (dom.repl.editor.repl.scheduler.started) {
-                        // Clear existing hot-reload timeout
-                        if (hotReloadTimeout) {
-                            clearTimeout(hotReloadTimeout);
-                        }
-                        
-                        // Debounce hot-reload to 500ms (faster than save for responsive live coding)
-                        hotReloadTimeout = setTimeout(() => {
-                            try {
-                                dom.repl.editor.evaluate();
-                                console.log('🔥 Hot-reloaded code changes');
-                            } catch (e) {
-                                console.error('Hot-reload evaluation error:', e);
-                            }
-                        }, 500);
-                    }
-                }
-            });
-            
-            // Observe the content area for changes
-            observer.observe(view.contentDOM, {
-                childList: true,
-                subtree: true,
-                characterData: true,
-                characterDataOldValue: false
-            });
-            
-            console.log('✅ Auto-save enabled with 1s debounce (event-driven via MutationObserver)');
-        } else if (checkCount > 50) {
-            // Stop checking after 5 seconds (50 * 100ms)
-            clearInterval(checkEditor);
-            console.error('❌ Editor not found after 5 seconds. Auto-save disabled.');
-        }
-    }, 100);
-}
-
 registerBeforeUnloadConfirmer(() => {
     if (DEMO_MODE) return false;
     if (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled()) return false;
@@ -814,15 +1107,9 @@ registerBeforeUnloadFlusher(() => {
     // Note: sendBeacon cannot send custom headers, so for developer mode (which needs a header)
     // we use fetch({ keepalive: true }) instead.
     if (appState.currentPatternScope === 'system' && isDeveloperModeEnabled()) {
-        fetch(`/api/pattern/${appState.currentPatternFilename}`, {
-            method: 'POST',
-            headers: getDeveloperModeHeaders(),
-            body: fileCode,
-            keepalive: true,
-        }).catch(() => {});
+        savePatternSourceKeepalive(appState.currentPatternFilename, fileCode, getDeveloperModeHeaders()).catch(() => {});
     } else {
-        const blob = new Blob([fileCode], { type: 'text/plain' });
-        navigator.sendBeacon(`/api/pattern/${appState.currentPatternFilename}`, blob);
+        sendPatternSourceBeacon(appState.currentPatternFilename, fileCode);
     }
 
     // Also keep in localStorage as backup
@@ -846,17 +1133,12 @@ registerBeforeUnloadFlusher(() => {
         clearTimeout(arrangementAutoSaveTimeout);
         arrangementAutoSaveTimeout = null;
         const arrangementState = buildArrangementStatePayload();
-        const body = JSON.stringify({
+        const payload = {
             name: arrangementState.name,
             arrangementState,
             scope: appState.currentArrangementScope,
-        });
-        fetch(`/api/arrangements/${encodeURIComponent(appState.currentArrangementFilename)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
-            body,
-            keepalive: true,
-        }).catch(() => {});
+        };
+        saveArrangementKeepalive(appState.currentArrangementFilename, payload, getDeveloperModeHeaders()).catch(() => {});
         try {
             localStorage.setItem(`unsaved_arrangement_${appState.currentArrangementFilename}`, JSON.stringify(arrangementState));
         } catch (_e) {
@@ -869,12 +1151,7 @@ registerBeforeUnloadFlusher(() => {
         trackerAutoSaveTimeout = null;
         const payload = pendingTrackerSavePayload;
         pendingTrackerSavePayload = null;
-        fetch(`/api/blocks/${encodeURIComponent(payload.filename)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
-            body: JSON.stringify(payload),
-            keepalive: true,
-        }).catch(() => {});
+        saveBlockDetailKeepalive(payload.filename, payload, getDeveloperModeHeaders()).catch(() => {});
         try {
             localStorage.setItem(`unsaved_block_${payload.filename}`, JSON.stringify(payload.trackerState || {}));
         } catch (_e) {
@@ -884,574 +1161,6 @@ registerBeforeUnloadFlusher(() => {
 });
 
 // --- API Interactions ---
-
-async function refreshPatternList() {
-    try {
-        const entries = DEMO_MODE
-            ? Array.from(demoPatternSourceByFile.keys())
-                .sort()
-                .map((filename) => ({ filename, scope: 'system' }))
-            : await (async () => {
-                const payload = await listPatterns();
-                const collator = typeof Intl !== 'undefined' && Intl.Collator
-                    ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-                    : null;
-                const sorted = normalizePatternEntries(payload).sort((a, b) =>
-                    collator ? collator.compare(a.filename, b.filename) : a.filename.localeCompare(b.filename)
-                );
-                return sorted;
-            })();
-
-        appState.patternEntriesCache = entries;
-        dom.patternList.innerHTML = '';
-
-        if (!entries.length) {
-            dom.patternList.innerHTML = `
-                <li class="text-xs text-muted-foreground px-3 py-2">No patterns available.</li>
-            `;
-            updatePatternListVisualizer();
-            createIcons({ icons });
-            return;
-        }
-
-        const appendFolder = (scope, label, items) => {
-            const isEmpty = items.length === 0;
-            const expanded = isEmpty
-                ? true
-                : (scope === 'system' ? patternFolderState.system : patternFolderState.user);
-            const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
-            const highlightIcon = expanded && (scope !== 'user' || items.length > 0);
-
-            const folderLi = document.createElement('li');
-            folderLi.className = 'mt-1 pb-1 border-b border-border/40';
-            folderLi.innerHTML = `
-                <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-pattern-folder="${scope}">
-                    <span class="inline-flex items-center gap-1.5">
-                        <i data-lucide="${folderIcon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground'}"></i>
-                        ${label}
-                    </span>
-                    <span class="opacity-70">${items.length}</span>
-                </button>
-                <ul class="list-none m-0 p-0 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-pattern-folder-items="${scope}"></ul>
-            `;
-            const list = folderLi.querySelector(`[data-pattern-folder-items="${scope}"]`);
-            folderLi.querySelector(`[data-pattern-folder="${scope}"]`)?.addEventListener('click', () => {
-                if (isEmpty) return;
-                if (scope === 'system') {
-                    patternFolderState.system = !patternFolderState.system;
-                } else {
-                    patternFolderState.user = !patternFolderState.user;
-                }
-                saveFolderState(PATTERN_FOLDER_STATE_KEY, patternFolderState);
-                refreshPatternList();
-            });
-
-            if (items.length === 0) {
-                const empty = document.createElement('li');
-                empty.className = 'text-xs text-muted-foreground px-2 py-1';
-                empty.textContent = scope === 'user'
-                    ? 'Create a new pattern to get started.'
-                    : 'No system patterns available.';
-                list?.appendChild(empty);
-            }
-
-            items.forEach((entry) => {
-                const file = entry.filename;
-                const fileName = decodeURIComponent(file.replace('.js', ''));
-                const isSystem = normalizeScope(entry.scope) === 'system';
-                const devMode = isDeveloperModeEnabled();
-                const isImmutable = isSystem && !devMode;
-                const li = document.createElement('li');
-                const isIntroductionVisible = dom.welcomeView?.style?.display === 'flex';
-                li.className = `list-item ${file === appState.currentPatternFilename && !isIntroductionVisible ? 'active' : ''}`;
-                li.dataset.scope = normalizeScope(entry.scope);
-                li.dataset.filename = file;
-
-                li.innerHTML = (DEMO_MODE || isImmutable)
-                    ? `<span class="font-medium">${fileName}</span>`
-                    : `
-                        <span class="font-medium">${fileName}</span>
-                        <div class="list-item-actions">
-                            <button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                        </div>
-                    `;
-
-                li.querySelector('span').onclick = (e) => {
-                    e.stopPropagation();
-                    loadPattern(file);
-                };
-                li.onclick = () => loadPattern(file);
-
-                if (!DEMO_MODE && !isImmutable) {
-                    li.querySelector('.sidebar-del-btn').onclick = (e) => {
-                        e.stopPropagation();
-                        showDeleteConfirmation(file);
-                    };
-                }
-
-                list?.appendChild(li);
-            });
-
-            dom.patternList.appendChild(folderLi);
-        };
-
-        const userEntries = entries.filter((entry) => normalizeScope(entry.scope) !== 'system');
-        const systemEntries = entries.filter((entry) => normalizeScope(entry.scope) === 'system');
-        appendFolder('user', 'Your patterns', userEntries);
-        appendFolder('system', 'System', systemEntries);
-        
-        updatePatternListVisualizer();
-        createIcons({ icons });
-    } catch (e) {
-        console.error(e);
-        setStatus('Error loading patterns', 'error');
-    }
-}
-
-function isPatternListVisible() {
-    return Boolean(dom.patternList && !dom.patternList.classList.contains('hidden'));
-}
-
-function isArrangementListVisible() {
-    return Boolean(dom.arrangementList && !dom.arrangementList.classList.contains('hidden'));
-}
-
-function updatePatternListVisualizer() {
-    if (!isPatternListVisible()) return;
-
-    const playingEntry = appState.patternEntriesCache.find((e) => e.filename === playingPatternFilename);
-    const playingScope = playingEntry ? normalizeScope(playingEntry.scope) : null;
-    let visualizerAttached = false;
-
-    // When the playing pattern's folder is collapsed, show the scope visualizer on the folder row
-    const folderRows = Array.from(dom.patternList.children).filter((li) =>
-        li.querySelector('[data-pattern-folder]')
-    );
-    folderRows.forEach((folderLi) => {
-        const folderButton = folderLi.querySelector('[data-pattern-folder]');
-        const scope = folderButton?.getAttribute('data-pattern-folder');
-        const itemsUl = folderLi.querySelector('[data-pattern-folder-items]');
-        const isCollapsed = itemsUl?.classList.contains('hidden');
-        const isPlayingInThisFolder = playingScope === scope && playingPatternFilename;
-
-        if (isCollapsed && isPlayingInThisFolder) {
-            let canvas = folderLi.querySelector('canvas.list-item-visualizer');
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-                canvas.className = 'list-item-visualizer';
-                folderLi.classList.add('relative', 'overflow-hidden');
-                folderLi.insertBefore(canvas, folderLi.firstChild);
-            }
-            canvas.width = folderLi.clientWidth;
-            canvas.height = folderLi.clientHeight;
-            attachVisualizer(canvas);
-            visualizerAttached = true;
-        } else {
-            const canvas = folderLi.querySelector('canvas.list-item-visualizer');
-            if (canvas) canvas.remove();
-            folderLi.classList.remove('relative', 'overflow-hidden');
-        }
-    });
-
-    const listItems = Array.from(dom.patternList.querySelectorAll('.list-item'));
-    listItems.forEach((li) => {
-        const span = li.querySelector('span');
-        // Visualizer should track the PLAYING pattern, not necessarily the selected one
-        const isPlayingTarget =
-            span &&
-            playingPatternFilename &&
-            span.innerText === decodeURIComponent(playingPatternFilename.replace('.js', ''));
-        
-        let canvas = li.querySelector('canvas.list-item-visualizer');
-
-        if (isPlayingTarget && !visualizerAttached) {
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-                canvas.className = 'list-item-visualizer';
-                // Set internal resolution to match element size
-                canvas.width = li.clientWidth;
-                canvas.height = li.clientHeight;
-                
-                // Insert as first child to be behind everything (z-index handles it properly though)
-                li.insertBefore(canvas, li.firstChild);
-            }
-            attachVisualizer(canvas);
-            visualizerAttached = true;
-        } else {
-            if (canvas) {
-                canvas.remove();
-            }
-        }
-    });
-    
-    if (!visualizerAttached) {
-        attachVisualizer(null);
-    }
-}
-
-function updateArrangementListScopeVisualizer() {
-    if (!isArrangementListVisible()) return;
-
-    const playingFilename = isArrangementPreviewPlaying()
-        ? (arrangementPreviewPlayingFilename ?? appState.currentArrangementFilename)
-        : null;
-    const playingEntry = appState.arrangementEntriesCache.find((e) => e.filename === playingFilename);
-    const playingScope = playingEntry ? normalizeScope(playingEntry.scope) : null;
-    let visualizerAttached = false;
-
-    // When the playing arrangement's folder is collapsed, show the scope visualizer on the folder row
-    const folderRows = Array.from(dom.arrangementList.children).filter((li) =>
-        li.querySelector('[data-arrangement-folder]')
-    );
-    folderRows.forEach((folderLi) => {
-        const folderButton = folderLi.querySelector('[data-arrangement-folder]');
-        const scope = folderButton?.getAttribute('data-arrangement-folder');
-        const itemsUl = folderLi.querySelector('[data-arrangement-folder-items]');
-        const isCollapsed = itemsUl?.classList.contains('hidden');
-        const isPlayingInThisFolder = playingScope === scope && playingFilename;
-
-        if (isCollapsed && isPlayingInThisFolder) {
-            let canvas = folderLi.querySelector('canvas.list-item-visualizer');
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-                canvas.className = 'list-item-visualizer';
-                folderLi.classList.add('relative', 'overflow-hidden');
-                folderLi.insertBefore(canvas, folderLi.firstChild);
-            }
-            canvas.width = folderLi.clientWidth;
-            canvas.height = folderLi.clientHeight;
-            attachVisualizer(canvas);
-            visualizerAttached = true;
-        } else {
-            const canvas = folderLi.querySelector('canvas.list-item-visualizer');
-            if (canvas) canvas.remove();
-            folderLi.classList.remove('relative', 'overflow-hidden');
-        }
-    });
-
-    const listItems = Array.from(dom.arrangementList.querySelectorAll('.list-item'));
-    const target = playingFilename
-        ? listItems.find((item) => item.dataset.filename === playingFilename) || null
-        : null;
-
-    listItems.forEach((item) => {
-        if (item !== target) {
-            item.classList.remove('relative', 'overflow-hidden');
-            item.querySelector('canvas.list-item-visualizer')?.remove();
-        }
-    });
-
-    if (target && !visualizerAttached) {
-        target.classList.add('relative', 'overflow-hidden');
-        let canvas = target.querySelector('canvas.list-item-visualizer');
-        if (!canvas) {
-            canvas = document.createElement('canvas');
-            canvas.className = 'list-item-visualizer';
-            target.insertBefore(canvas, target.firstChild);
-        }
-        canvas.width = target.clientWidth;
-        canvas.height = target.clientHeight;
-        attachVisualizer(canvas);
-        visualizerAttached = true;
-    }
-
-    if (!visualizerAttached) {
-        attachVisualizer(null);
-    }
-}
-
-function normalizeArrangementBaseName(input) {
-    return String(input || '')
-        .trim()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-zA-Z0-9_-]/g, '');
-}
-
-async function refreshArrangementList() {
-    if (!dom.arrangementList) return;
-
-    try {
-        const sortByLeadingNumber = (a, b) => {
-            const padNum = (s) => {
-                const m = (s || '').match(/^(\d+)/);
-                return m ? m[1].padStart(8, '0') + s : '\x00' + s;
-            };
-            const aKey = padNum(a.filename || '');
-            const bKey = padNum(b.filename || '');
-            return aKey.localeCompare(bKey);
-        };
-        const entries = DEMO_MODE
-            ? Array.from(demoArrangementSourceByFile.keys())
-                .map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'system' }))
-                .sort(sortByLeadingNumber)
-            : await (async () => {
-                const payload = await listArrangements();
-                const entries = normalizeArrangementEntries(payload);
-                entries.sort(sortByLeadingNumber);
-                return entries;
-            })();
-
-        appState.arrangementEntriesCache = entries;
-        dom.arrangementList.innerHTML = '';
-
-        const appendFolder = (scope, label, items) => {
-            const isEmpty = items.length === 0;
-            const expanded = isEmpty
-                ? true
-                : (scope === 'system' ? arrangementFolderState.system : arrangementFolderState.user);
-            const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
-            const folderLi = document.createElement('li');
-            folderLi.className = 'mt-1 pb-1 border-b border-border/40';
-            folderLi.innerHTML = `
-                <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-arrangement-folder="${scope}">
-                    <span class="inline-flex items-center gap-1.5">
-                        <i data-lucide="${folderIcon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground'}"></i>
-                        ${label}
-                    </span>
-                    <span class="opacity-70">${items.length}</span>
-                </button>
-                <ul class="list-none m-0 p-0 space-y-1 mt-1 ${expanded ? '' : 'hidden'}" data-arrangement-folder-items="${scope}"></ul>
-            `;
-            const list = folderLi.querySelector(`[data-arrangement-folder-items="${scope}"]`);
-            folderLi.querySelector(`[data-arrangement-folder="${scope}"]`)?.addEventListener('click', () => {
-                if (isEmpty) return;
-                if (scope === 'system') {
-                    arrangementFolderState.system = !arrangementFolderState.system;
-                } else {
-                    arrangementFolderState.user = !arrangementFolderState.user;
-                }
-                saveFolderState(ARRANGEMENT_FOLDER_STATE_KEY, arrangementFolderState);
-                refreshArrangementList();
-            });
-
-            if (isEmpty) {
-                const empty = document.createElement('li');
-                empty.className = 'text-xs text-muted-foreground px-2 py-1';
-                empty.textContent = scope === 'user'
-                    ? 'Create a new arrangement to get started.'
-                    : 'No system arrangements available.';
-                list?.appendChild(empty);
-            }
-
-            items.forEach((entry) => {
-                const isSystem = normalizeScope(entry.scope) === 'system';
-                const devMode = isDeveloperModeEnabled();
-                const isImmutable = isSystem && !devMode;
-                const li = document.createElement('li');
-                li.className = `list-item ${entry.filename === appState.currentArrangementFilename ? 'active' : ''}`;
-                li.dataset.scope = normalizeScope(entry.scope);
-                li.dataset.filename = entry.filename;
-
-                const displayName = decodeURIComponent((entry.filename || '').replace(/\.js$/i, ''));
-                li.innerHTML = (DEMO_MODE || isImmutable)
-                    ? `<span class="font-medium">${escapeHtml(displayName)}</span>`
-                    : `
-                        <span class="font-medium">${escapeHtml(displayName)}</span>
-                        <div class="list-item-actions">
-                            <button class="sidebar-del-btn" title="Delete ${escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                        </div>
-                    `;
-
-                li.querySelector('span')?.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    loadArrangement(entry.filename);
-                });
-                li.addEventListener('click', () => loadArrangement(entry.filename));
-
-                if (!DEMO_MODE && !isImmutable) {
-                    li.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        deleteArrangement(entry.filename);
-                    });
-                }
-
-                list?.appendChild(li);
-            });
-
-            dom.arrangementList.appendChild(folderLi);
-        };
-
-        const userItems = [...entries.filter((entry) => normalizeScope(entry.scope) === 'user')].sort(sortByLeadingNumber);
-        const systemItems = [...entries.filter((entry) => normalizeScope(entry.scope) === 'system')].sort(sortByLeadingNumber);
-        appendFolder('user', 'Your arrangements', userItems);
-        appendFolder('system', 'System', systemItems);
-        createIcons({ icons });
-        updateArrangementListScopeVisualizer();
-    } catch (err) {
-        console.error('[Arrangements] Failed to refresh list:', err);
-        appState.arrangementEntriesCache = [];
-        dom.arrangementList.innerHTML = '<li class="text-xs text-destructive px-3 py-2">Failed to load arrangements.</li>';
-    }
-}
-
-function refreshArrangementListActiveState() {
-    if (!dom.arrangementList) return;
-    Array.from(dom.arrangementList.querySelectorAll('.list-item')).forEach((li) => {
-        li.classList.toggle('active', li.dataset.filename === appState.currentArrangementFilename);
-    });
-    updateArrangementListScopeVisualizer();
-}
-
-async function deleteArrangement(filename) {
-    if (!filename || DEMO_MODE) return;
-    const scope = normalizeScope(getArrangementEntry(filename)?.scope);
-    if (scope === 'system' && !isDeveloperModeEnabled()) {
-        setStatus('System arrangements are immutable', 'normal');
-        return;
-    }
-    const displayName = decodeURIComponent(filename.replace(/\.js$/i, ''));
-    const confirmed = await confirmDialog({
-        title: 'Delete Arrangement?',
-        message: `Delete arrangement "${displayName}"? This cannot be undone.`,
-        confirmLabel: 'Delete',
-        variant: 'danger',
-    });
-    if (!confirmed) return;
-
-    try {
-        await deleteArrangementByFilename(filename, getDeveloperModeHeaders());
-
-        if (appState.currentArrangementFilename === filename) {
-            appState.currentArrangementFilename = null;
-            appState.currentArrangementScope = 'user';
-            appState.arrangementDraftState = null;
-            appState.activeArrangementBlockFilename = null;
-            showWelcome();
-        }
-        await refreshArrangementList();
-        await refreshBlocksLibrary();
-        setStatus('Arrangement deleted', 'success');
-    } catch (err) {
-        console.error('[Arrangements] Delete failed:', err);
-        setStatus('Failed to delete arrangement', 'error');
-    }
-}
-
-async function createNewArrangement(name) {
-    if (DEMO_MODE) {
-        setStatus('Demo mode: creating arrangements is disabled', 'normal');
-        return;
-    }
-
-    const normalizedBase = normalizeArrangementBaseName(name);
-    if (!normalizedBase) {
-        setStatus('Invalid arrangement name', 'error');
-        return;
-    }
-
-    try {
-        const existing = await listArrangementsOrEmpty();
-        const existingFilenames = new Set((existing || []).map((item) => String(item?.filename || '').toLowerCase()));
-        let baseSlug = normalizedBase;
-        let slug = baseSlug;
-        let suffix = 1;
-        while (existingFilenames.has(`${slug}.js`.toLowerCase())) {
-            suffix += 1;
-            slug = `${baseSlug}-${suffix}`;
-        }
-        const filename = `${slug}.js`;
-
-        // Create a starter block for the new arrangement: 1 channel, 16 steps, hh-closed on steps 1, 5, 9 (1-based).
-        let initialBlockFilename = null;
-        try {
-            const steps = 16;
-            const grid = [Array(steps).fill(null)];
-            // Rows 1, 5, 9 -> indices 0, 4, 8
-            grid[0][0] = 'c4';
-            grid[0][4] = 'c4';
-            grid[0][8] = 'c4';
-            const emptyRow = Array(steps).fill(null);
-            const trackerState = {
-                version: 1,
-                channels: 1,
-                steps,
-                bpm: 120,
-                grid,
-                vol: [emptyRow.slice()],
-                reps: [emptyRow.slice()],
-                nd: [emptyRow.slice()],
-                channelInstruments: ['hh-closed'],
-            };
-            const pattern = 'note("c4 ~ ~ ~ c4 ~ ~ ~ c4 ~ ~ ~ ~ ~ ~ ~").s("hh-closed")';
-            // Use the same Untitled-n naming scheme as other auto-created blocks.
-            await refreshBlocksLibrary();
-            const starterName = getNextUntitledBlockName();
-            const blockResult = await saveBlock(starterName, '', pattern, trackerState, 'user');
-            if (blockResult && blockResult.ok !== false && blockResult.block?.filename) {
-                initialBlockFilename = blockResult.block.filename;
-            }
-        } catch (e) {
-            console.warn('[Arrangements] Failed to create starter block for new arrangement:', e);
-        }
-
-        const arrangementState = {
-            version: 1,
-            name: normalizedBase,
-            bpm: 120,
-            rows: [{
-                repeats: 1,
-                blocks: initialBlockFilename ? [initialBlockFilename] : [],
-                loop: false,
-            }],
-        };
-
-        await createArrangement({ filename, name: normalizedBase, arrangementState, scope: 'user' });
-
-        await refreshArrangementList();
-        await loadArrangement(filename);
-        closeNewArrangementModal();
-
-        // If we successfully created a starter block, select it and start arrangement playback immediately.
-        if (initialBlockFilename) {
-            appState.activeArrangementBlockFilename = initialBlockFilename;
-            arrangementSelectedBlockByArrangement[filename] = initialBlockFilename;
-            await refreshBlocksLibrary();
-            renderArrangementWorkspace();
-            renderTrackerWorkspace();
-
-            const payload = buildArrangementStatePayload();
-            // Stop any other playback before starting the new arrangement.
-            stopAllPlaybackForSelectionChange();
-            document.dispatchEvent(new CustomEvent('arrangements:preview', {
-                detail: {
-                    arrangement: { name: appState.arrangementDraftState.name, arrangementState: payload },
-                    filename,
-                },
-            }));
-        }
-    } catch (err) {
-        console.error('[Arrangements] Create failed:', err);
-        setStatus('Failed to create arrangement', 'error');
-    }
-}
-
-function getArrangementReadonly() {
-    return DEMO_MODE || (appState.currentArrangementScope === 'system' && !isDeveloperModeEnabled());
-}
-
-function canRecoverUnsavedForScope(scope) {
-    const normalizedScope = normalizeScope(scope);
-    return normalizedScope !== 'system' || isDeveloperModeEnabled();
-}
-
-function readUnsavedArrangementState(filename, scope) {
-    if (!filename || !canRecoverUnsavedForScope(scope)) return null;
-    const storageKey = `unsaved_arrangement_${filename}`;
-    try {
-        const raw = localStorage.getItem(storageKey);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') return null;
-        return cloneArrangementState(parsed);
-    } catch (_e) {
-        try {
-            localStorage.removeItem(storageKey);
-        } catch (_err) {
-            // Ignore storage failures.
-        }
-        return null;
-    }
-}
 
 function readUnsavedBlockTrackerState(filename, scope) {
     if (!filename || !canRecoverUnsavedForScope(scope)) return null;
@@ -1472,348 +1181,10 @@ function readUnsavedBlockTrackerState(filename, scope) {
     }
 }
 
-function cloneArrangementState(value) {
-    const rows = Array.isArray(value?.rows) ? value.rows : [];
-    const outRows = rows.length ? rows.map((row) => ({
-        repeats: Number.isFinite(Number(row?.repeats)) ? Math.max(1, Math.min(16, Number(row.repeats))) : 1,
-        blocks: Array.isArray(row?.blocks) ? row.blocks.filter(Boolean).map(String) : [],
-        loop: Boolean(row?.loop),
-    })) : [{ repeats: 1, blocks: [], loop: false }];
-    const loopIndices = outRows.map((r, i) => (r.loop ? i : -1)).filter((i) => i >= 0);
-    if (loopIndices.length > 1) {
-        const keepIndex = loopIndices[loopIndices.length - 1];
-        outRows.forEach((r, i) => { r.loop = i === keepIndex; });
-    }
-    return {
-        version: 1,
-        name: String(value?.name || 'Arrangement').trim() || 'Arrangement',
-        bpm: Number.isFinite(Number(value?.bpm)) ? Math.max(20, Math.min(300, Number(value.bpm))) : 120,
-        rows: outRows,
-    };
-}
-
 function getBlockByFilename(filename) {
     return appState.blocksLibraryCache.find((block) => block.filename === filename) || null;
 }
 
-function isPlayableTrackerNote(note) {
-    return Boolean(note && note !== '-' && note !== '~');
-}
-
-function getTrackerStateSteps(trackerState) {
-    if (Number.isInteger(trackerState?.steps) && trackerState.steps > 0) return trackerState.steps;
-    if (!Array.isArray(trackerState?.grid)) return 16;
-    const firstChannel = trackerState.grid.find((channel) => Array.isArray(channel));
-    if (!firstChannel) return 16;
-    return Math.max(1, firstChannel.length || 16);
-}
-
-function collectInstrumentAliasesFromRowStep(rowIndex, rowStep, blockFilenames = []) {
-    const aliases = new Set();
-    const files = Array.isArray(blockFilenames) ? blockFilenames : [];
-    files.forEach((filename) => {
-        const trackerState = arrangementPreviewContext?.trackerStateByFilename?.[filename];
-        if (!trackerState || !Array.isArray(trackerState.grid) || !Array.isArray(trackerState.channelInstruments)) return;
-        const blockSteps = getTrackerStateSteps(trackerState);
-        const localStep = ((rowStep % blockSteps) + blockSteps) % blockSteps;
-        trackerState.grid.forEach((channel, channelIndex) => {
-            const alias = trackerState.channelInstruments[channelIndex];
-            if (!alias || !Array.isArray(channel)) return;
-            const cell = channel[localStep];
-            const note = typeof cell === 'object' ? cell?.note : cell;
-            if (isPlayableTrackerNote(note)) {
-                aliases.add(alias);
-            }
-        });
-    });
-    return Array.from(aliases).sort();
-}
-
-function clearArrangementPlaybackInstrumentAliases() {
-    lastArrangementPlaybackInstrumentSignature = '';
-    clearPlaybackInstrumentAliases('arrangement-preview');
-}
-
-function updateArrangementPlaybackInstrumentAliases(detail = {}) {
-    if (!isArrangementPreviewPlaying()) {
-        clearArrangementPlaybackInstrumentAliases();
-        return;
-    }
-
-    const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
-    const row = rowIndex == null ? null : arrangementPreviewContext?.arrangementState?.rows?.[rowIndex];
-    const blocks = Array.isArray(detail.blocks) && detail.blocks.length
-        ? detail.blocks
-        : (Array.isArray(row?.blocks) ? row.blocks : []);
-    if (rowIndex == null || !blocks.length) {
-        if (lastArrangementPlaybackInstrumentSignature !== 'empty') {
-            lastArrangementPlaybackInstrumentSignature = 'empty';
-            clearPlaybackInstrumentAliases('arrangement-preview');
-        }
-        return;
-    }
-
-    const rowSteps = Number.isInteger(detail.rowSteps) && detail.rowSteps > 0
-        ? detail.rowSteps
-        : (Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) * 16 : 16);
-    const progress = typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0;
-    const rowStep = Math.floor(progress * rowSteps);
-    const sortedAliases = collectInstrumentAliasesFromRowStep(rowIndex, rowStep, blocks);
-    const signature = `${rowIndex}|${rowStep}|${sortedAliases.join('|')}`;
-    if (signature === lastArrangementPlaybackInstrumentSignature) return;
-    lastArrangementPlaybackInstrumentSignature = signature;
-
-    if (sortedAliases.length) {
-        setPlaybackInstrumentAliases('arrangement-preview', sortedAliases);
-    } else {
-        clearPlaybackInstrumentAliases('arrangement-preview');
-    }
-}
-
-async function getArrangementInstrumentList() {
-    const { getDefragmentedInstruments } = await import('./instrument-manager.js');
-    const instruments = getDefragmentedInstruments();
-    return instruments.map((inst) => ({
-        id: inst.strudelAlias,
-        name: inst.strudelAlias,
-        params: inst.params,
-    }));
-}
-
-async function resolveBlockDetailForArrangement(filename) {
-    if (!filename) return null;
-    const cached = getBlockByFilename(filename);
-    const hasTrackerState = Boolean(cached?.trackerState);
-    const hasPattern = typeof cached?.pattern === 'string';
-    const hasDescription = typeof cached?.description === 'string';
-    if (hasTrackerState && hasPattern && hasDescription) return cached;
-
-    if (DEMO_MODE) {
-        const source = demoBlockSourceByFile.get(filename);
-        if (!source) return cached || null;
-        const parsed = parseBlockSource(source);
-        return {
-            filename,
-            name: parsed?.name || cached?.name || filename.replace(/\.js$/i, ''),
-            description: parsed?.description || cached?.description || '',
-            pattern: parsed?.pattern || cached?.pattern || '',
-            trackerState: parsed?.trackerState || cached?.trackerState || null,
-            scope: normalizeScope(parsed?.scope || cached?.scope),
-        };
-    }
-
-    try {
-        const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
-        if (!res.ok) return cached || null;
-        const detail = await res.json();
-        return {
-            filename,
-            name: detail?.name || cached?.name || filename.replace(/\.js$/i, ''),
-            description: detail?.description || cached?.description || '',
-            pattern: detail?.pattern || cached?.pattern || '',
-            trackerState: detail?.trackerState || cached?.trackerState || null,
-            scope: normalizeScope(detail?.scope || cached?.scope),
-        };
-    } catch (_e) {
-        return cached || null;
-    }
-}
-
-/**
- * Gather block patterns from the current arrangement and update instrument usage for "List used instruments".
- * Fire-and-forget; called when arrangement is loaded or when blocks change.
- */
-async function updateArrangementInstrumentUsage() {
-    if (!appState.currentArrangementFilename || !appState.arrangementDraftState) return;
-    const arrangementState = buildArrangementStatePayload();
-    const blockFiles = Array.from(new Set(
-        (arrangementState.rows || []).flatMap((row) => Array.isArray(row?.blocks) ? row.blocks : []).filter(Boolean)
-    ));
-    const patterns = [];
-    for (const filename of blockFiles) {
-        const block = await resolveBlockDetailForArrangement(filename);
-        if (block?.pattern) patterns.push(block.pattern);
-    }
-    const combinedCode = patterns.join('\n');
-    updateInstrumentUsage(combinedCode);
-}
-
-async function buildArrangementExportContext() {
-    if (!appState.currentArrangementFilename || !appState.arrangementDraftState) return null;
-
-    const arrangementState = buildArrangementStatePayload();
-    const blockFiles = Array.from(new Set(
-        (arrangementState.rows || []).flatMap((row) => Array.isArray(row?.blocks) ? row.blocks : []).filter(Boolean)
-    ));
-
-    const blocks = [];
-    const trackerStateByFilename = {};
-    for (const filename of blockFiles) {
-        const block = await resolveBlockDetailForArrangement(filename);
-        if (!block) continue;
-        blocks.push({
-            filename,
-            name: block.name || filename.replace(/\.js$/i, ''),
-            description: block.description || '',
-            scope: normalizeScope(block.scope),
-            pattern: block.pattern || '',
-            trackerState: block.trackerState || null,
-        });
-        if (block.trackerState) {
-            trackerStateByFilename[filename] = resolveTrackerStateChannelInstruments(block.trackerState);
-        }
-    }
-
-    const instrumentList = await getArrangementInstrumentList();
-    const bpm = arrangementState.bpm || 120;
-    return { arrangementState, blocks, trackerStateByFilename, instrumentList, bpm };
-}
-
-function getNextUntitledBlockName() {
-    let maxSuffix = 0;
-    appState.blocksLibraryCache.forEach((block) => {
-        const name = String(block?.name || '').trim();
-        const match = /^Untitled-(\d+)$/i.exec(name);
-        if (!match) return;
-        const suffix = parseInt(match[1], 10);
-        if (Number.isFinite(suffix)) {
-            maxSuffix = Math.max(maxSuffix, suffix);
-        }
-    });
-    return `Untitled-${maxSuffix + 1}`;
-}
-
-async function createUntitledBlock({ rowIndex = null } = {}) {
-    if (DEMO_MODE) {
-        setStatus('Demo mode: creating blocks is disabled', 'normal');
-        return null;
-    }
-
-    await refreshBlocksLibrary();
-    const name = getNextUntitledBlockName();
-    const result = await saveBlock(name, 'Created from arrangement workspace', 'silence', null, 'user');
-    if (!result?.ok || !result?.block?.filename) {
-        setStatus('Failed to create block', 'error');
-        return null;
-    }
-
-    const filename = result.block.filename;
-    await refreshBlocksLibrary();
-    appState.activeArrangementBlockFilename = filename;
-    trackerWorkspaceLoadedFilename = null;
-
-    if (Number.isInteger(rowIndex) && appState.arrangementDraftState?.rows?.[rowIndex]) {
-        const row = appState.arrangementDraftState.rows[rowIndex];
-        if (!Array.isArray(row.blocks)) row.blocks = [];
-        row.blocks.push(filename);
-        scheduleArrangementAutoSave();
-        emitArrangementStateChanged({ addedRowIndex: rowIndex, addedFilename: filename });
-    }
-
-    renderArrangementWorkspace();
-    renderTrackerWorkspace();
-    return filename;
-}
-
-function buildArrangementStatePayload() {
-    return cloneArrangementState(appState.arrangementDraftState || {
-        name: getArrangementEntry(appState.currentArrangementFilename)?.name || 'Arrangement',
-        bpm: 120,
-        rows: [{ repeats: 1, blocks: [], loop: false }],
-    });
-}
-
-/** Same as buildArrangementStatePayload but with loop stripped from every row so loop is not persisted. */
-function buildArrangementStatePayloadForSave() {
-    const state = buildArrangementStatePayload();
-    if (!state || !Array.isArray(state.rows)) return state;
-    state.rows = state.rows.map((r) => ({ ...r, loop: false }));
-    return state;
-}
-
-function emitArrangementStateChanged(extraDetail = {}) {
-    const arrangementState = buildArrangementStatePayload();
-    document.dispatchEvent(new CustomEvent('arrangements:stateChanged', {
-        detail: {
-            arrangementState,
-            name: arrangementState.name,
-            bpm: arrangementState.bpm,
-            ...extraDetail,
-        }
-    }));
-}
-
-function applyArrangementPreviewAfterBlockRemoved(removedFilename) {
-    if (!isArrangementPreviewPlaying()) return;
-    if (arrangementPreviewPlayingFilename !== appState.currentArrangementFilename) return;
-    if (!arrangementPreviewContext?.trackerStateByFilename || !arrangementPreviewContext?.instrumentList) return;
-    clearArrangementLiveOverride({ filename: removedFilename, scheduleUpdate: false });
-    clearArrangementPendingLiveSwap();
-    const arrangementState = buildArrangementStatePayload();
-    arrangementPreviewContext = {
-        ...arrangementPreviewContext,
-        arrangementState,
-        bpm: arrangementState.bpm || arrangementPreviewContext.bpm,
-        mixSettings: getPlaybackMixSettings(),
-    };
-    updateArrangementPreview({
-        arrangementState,
-        trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
-        instrumentList: arrangementPreviewContext.instrumentList,
-        bpm: arrangementPreviewContext.bpm,
-        mixSettings: arrangementPreviewContext.mixSettings,
-        keepPosition: false,
-    });
-    updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
-}
-
-function scheduleArrangementAutoSave() {
-    if (arrangementAutoSaveTimeout) {
-        clearTimeout(arrangementAutoSaveTimeout);
-    }
-    arrangementAutoSaveTimeout = setTimeout(() => {
-        saveCurrentArrangement();
-    }, 180);
-}
-
-async function saveCurrentArrangement() {
-    if (!appState.currentArrangementFilename || !appState.arrangementDraftState) return;
-    if (getArrangementReadonly()) return;
-
-    if (arrangementAutoSaveTimeout) {
-        clearTimeout(arrangementAutoSaveTimeout);
-        arrangementAutoSaveTimeout = null;
-    }
-
-    const arrangementState = buildArrangementStatePayloadForSave();
-    const storageKey = `unsaved_arrangement_${appState.currentArrangementFilename}`;
-    try {
-        localStorage.setItem(storageKey, JSON.stringify(arrangementState));
-    } catch (_e) {
-        // Ignore localStorage failures.
-    }
-
-    try {
-        await saveArrangement(appState.currentArrangementFilename, {
-            name: arrangementState.name,
-            arrangementState,
-            scope: appState.currentArrangementScope,
-        }, getDeveloperModeHeaders());
-        try {
-            localStorage.removeItem(storageKey);
-        } catch (_e) {
-            // Ignore localStorage failures.
-        }
-        const entry = appState.arrangementEntriesCache.find((e) => e.filename === appState.currentArrangementFilename);
-        if (entry) {
-            entry.arrangementState = arrangementState;
-        }
-        setStatus('Saved arrangement', 'success');
-    } catch (err) {
-        console.error('[Arrangements] Autosave failed:', err);
-        setStatus('Failed to save arrangement', 'error');
-    }
-}
 
 function scheduleTrackerAutoSave({ filename, trackerState, name: nameOverride, pattern: patternOverride, immediate }) {
     if (!filename || !trackerState || DEMO_MODE) return;
@@ -1967,972 +1338,6 @@ function renderTrackerWorkspace() {
     });
 }
 
-function renderArrangementWorkspace() {
-    if (!dom.arrangementWorkspacePane) return;
-    if (!appState.arrangementDraftState) {
-        dom.arrangementWorkspacePane.innerHTML = `
-            <div class="h-full p-4 text-sm text-muted-foreground" id="arrangementWorkspacePlaceholder">
-                Select an arrangement from the Blocks list to open the arranger workspace.
-            </div>
-        `;
-        renderTrackerWorkspace();
-        return;
-    }
-
-    const readonly = getArrangementReadonly();
-    const isPreviewPlaying = isArrangementPreviewPlaying();
-    const blocksAvailableForPicker = readonly
-        ? appState.blocksLibraryCache
-        : appState.blocksLibraryCache.filter((block) => normalizeScope(block.scope) !== 'system');
-
-    const sortBlocksForPicker = (blocks) => {
-        const collator = typeof Intl !== 'undefined' && Intl.Collator
-            ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-            : null;
-        const groupKey = (name) => {
-            const s = String(name || '').trim().toLowerCase();
-            const first = s[0] || '';
-            if (first >= '0' && first <= '9') return `0${s}`;
-            if (first >= 'a' && first <= 'z') return `1${s}`;
-            return `2${s}`;
-        };
-        return (blocks || []).slice().sort((a, b) => {
-            const aKey = groupKey(a?.name);
-            const bKey = groupKey(b?.name);
-            if (collator) {
-                const byKey = collator.compare(aKey, bKey);
-                if (byKey) return byKey;
-            } else {
-                if (aKey < bKey) return -1;
-                if (aKey > bKey) return 1;
-            }
-            const aFile = String(a?.filename || '');
-            const bFile = String(b?.filename || '');
-            return collator ? collator.compare(aFile, bFile) : aFile.localeCompare(bFile);
-        });
-    };
-    const blocksForPicker = sortBlocksForPicker(blocksAvailableForPicker);
-    const blockByFilename = new Map(appState.blocksLibraryCache.map((b) => [b.filename, b]));
-    const compareRowBlockFilenames = (aFilename, bFilename) => {
-        const aBlock = blockByFilename.get(aFilename);
-        const bBlock = blockByFilename.get(bFilename);
-        const aKey = aBlock ? aBlock.name : aFilename;
-        const bKey = bBlock ? bBlock.name : bFilename;
-        const collator = typeof Intl !== 'undefined' && Intl.Collator
-            ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-            : null;
-        const groupKey = (name) => {
-            const s = String(name || '').trim().toLowerCase();
-            const first = s[0] || '';
-            if (first >= '0' && first <= '9') return `0${s}`;
-            if (first >= 'a' && first <= 'z') return `1${s}`;
-            return `2${s}`;
-        };
-        const aGroup = groupKey(aKey);
-        const bGroup = groupKey(bKey);
-        if (collator) {
-            const byGroup = collator.compare(aGroup, bGroup);
-            if (byGroup) return byGroup;
-            return collator.compare(String(aFilename || ''), String(bFilename || ''));
-        }
-        if (aGroup < bGroup) return -1;
-        if (aGroup > bGroup) return 1;
-        return String(aFilename || '').localeCompare(String(bFilename || ''));
-    };
-    const isMac = (() => {
-        try {
-            const platform = String(navigator?.platform || '');
-            const ua = String(navigator?.userAgent || '');
-            return /Mac/i.test(platform) || /Mac OS X/i.test(ua);
-        } catch (_e) {
-            return false;
-        }
-    })();
-    const isCopyModifier = (event) => (isMac ? !!event.altKey : !!event.ctrlKey);
-    const cssEscape = (value) => {
-        try {
-            return window.CSS && typeof window.CSS.escape === 'function'
-                ? window.CSS.escape(String(value))
-                : String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
-        } catch (_e) {
-            return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
-        }
-    };
-    const shakeChip = (rowEl, filename) => {
-        if (!rowEl || !filename) return;
-        const selector = `.arr-chip[data-filename="${cssEscape(filename)}"]`;
-        const chip = rowEl.querySelector(selector);
-        if (!chip) return;
-        chip.classList.remove('shake');
-        void chip.offsetWidth;
-        chip.classList.add('shake');
-        chip.addEventListener('animationend', () => chip.classList.remove('shake'), { once: true });
-    };
-    const handleBlockDrop = ({ filename, fromRowIndex, toRowIndex, copy }, targetRowEl, exitTransitionMs = 0) => {
-        if (!filename || !Number.isInteger(toRowIndex)) return;
-        const targetRow = appState.arrangementDraftState.rows?.[toRowIndex];
-        if (!targetRow) return;
-        if (!Array.isArray(targetRow.blocks)) targetRow.blocks = [];
-
-        const normalizedFrom = Number.isInteger(fromRowIndex) ? fromRowIndex : null;
-        const normalizedTo = toRowIndex;
-        const shouldCopy = Boolean(copy);
-
-        if (normalizedFrom === normalizedTo) {
-            if (targetRow.blocks.includes(filename)) {
-                shakeChip(targetRowEl, filename);
-            }
-            return;
-        }
-
-        if (targetRow.blocks.includes(filename)) {
-            shakeChip(targetRowEl, filename);
-            return;
-        }
-
-        if (!shouldCopy && normalizedFrom != null) {
-            const srcRow = appState.arrangementDraftState.rows?.[normalizedFrom];
-            if (srcRow && Array.isArray(srcRow.blocks)) {
-                const idx = srcRow.blocks.indexOf(filename);
-                if (idx >= 0) srcRow.blocks.splice(idx, 1);
-            }
-        }
-
-        targetRow.blocks.push(filename);
-        appState.activeArrangementBlockFilename = filename;
-        const doRender = () => {
-            renderArrangementWorkspace();
-            scheduleArrangementAutoSave();
-            emitArrangementStateChanged({ addedRowIndex: normalizedTo, addedFilename: filename });
-        };
-        if (exitTransitionMs > 0) {
-            setTimeout(doRender, exitTransitionMs);
-        } else {
-            doRender();
-        }
-    };
-
-    dom.arrangementWorkspacePane.innerHTML = `
-        <div class="h-full flex flex-col p-0">
-            <div class="flex flex-col xl:flex-row xl:items-center gap-2 px-2 py-2">
-                <div class="flex gap-2 items-center min-w-0 flex-1">
-                    <button
-                        id="arrangementWorkspacePreviewBtn"
-                        type="button"
-                        class="inline-flex items-center justify-center shrink-0 whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-0 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 w-10 h-10 p-0 shadow-sm"
-                        title="${isPreviewPlaying ? 'Stop arrangement preview' : 'Preview arrangement'}"
-                    >
-                        <i data-lucide="${isPreviewPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>
-                    </button>
-                    <label for="arrangementWorkspaceName" class="hidden lg:inline text-xs font-bold text-muted-foreground uppercase shrink-0">Arrang.</label>
-                    <input
-                        type="text"
-                        id="arrangementWorkspaceName"
-                        value="${escapeHtml(appState.arrangementDraftState.name)}"
-                        placeholder="Arrangement Name"
-                        class="min-w-0 flex-1 h-8 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        ${readonly ? 'readonly' : ''}
-                    >
-                </div>
-                <div class="flex gap-2 items-center shrink-0">
-                    <label for="arrangementWorkspaceBpm" class="text-xs font-bold text-muted-foreground uppercase">BPM</label>
-                    <input
-                        type="number"
-                        id="arrangementWorkspaceBpm"
-                        min="20"
-                        max="300"
-                        step="1"
-                        value="${appState.arrangementDraftState.bpm}"
-                        class="bpm-input w-12 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        ${readonly ? 'readonly' : ''}
-                    >
-                    <button
-                        id="arrangementWorkspaceAdvancedSettingsBtn"
-                        type="button"
-                        class="dev-only-hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
-                        title="Advanced settings"
-                    >
-                        <i data-lucide="settings" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-
-            <div class="flex-1 min-h-0 overflow-auto rounded-md p-0 bg-card/30">
-                <div class="arr-rows-header">
-                    <span class="arr-rows-header-spacer" aria-hidden="true"></span>
-                    <span class="arr-rows-header-repeat" title="1 repeat = 16 steps" aria-hidden="true"></span>
-                    <span class="arr-rows-header-blocks" aria-hidden="true"></span>
-                </div>
-                <div id="arrangementWorkspaceRows" class="flex flex-col"></div>
-            </div>
-            <footer class="flex items-center justify-between border-t border-border p-2 shrink-0 bg-card/30">
-                <button
-                    id="arrangementWorkspaceAddRowBtn"
-                    type="button"
-                    class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 ${readonly ? 'opacity-40 cursor-not-allowed' : ''}"
-                    ${readonly ? 'disabled' : ''}
-                >
-                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Row
-                </button>
-                <div class="arr-trash-dropzone-wrap relative inline-flex shrink-0">
-                    <span id="arrangementWorkspaceTrashTooltip" class="arr-trash-tooltip" role="tooltip" aria-hidden="true">Drag blocks here to remove</span>
-                    <div
-                        id="arrangementWorkspaceTrashDropzone"
-                        class="arr-trash-dropzone inline-flex items-center justify-center rounded-md border border-transparent text-muted-foreground hover:text-destructive h-9 w-9 ${readonly ? 'opacity-40 pointer-events-none' : ''}"
-                        role="img"
-                        aria-label="Drag blocks here to remove"
-                        aria-describedby="arrangementWorkspaceTrashTooltip"
-                    >
-                        <i data-lucide="trash" class="w-4 h-4"></i>
-                    </div>
-                </div>
-            </footer>
-        </div>
-    `;
-
-    const nameInput = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceName');
-    const bpmInput = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceBpm');
-    const addRowBtn = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceAddRowBtn');
-    const previewBtn = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspacePreviewBtn');
-    const advancedSettingsBtn = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceAdvancedSettingsBtn');
-    const rowsRoot = dom.arrangementWorkspacePane.querySelector('#arrangementWorkspaceRows');
-
-    if (advancedSettingsBtn) {
-        advancedSettingsBtn.addEventListener('click', () => {
-            if (DEMO_MODE) return;
-            const name = (nameInput?.value ?? appState.arrangementDraftState?.name ?? '').trim();
-            document.dispatchEvent(new CustomEvent('resource-scope:open', {
-                detail: {
-                    type: 'arrangement',
-                    filename: appState.currentArrangementFilename,
-                    name,
-                    scope: normalizeScope(appState.currentArrangementScope),
-                },
-            }));
-        });
-    }
-
-    if (nameInput) {
-        nameInput.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; });
-        nameInput.addEventListener('drop', (e) => { e.preventDefault(); });
-    }
-    nameInput?.addEventListener('input', () => {
-        appState.arrangementDraftState.name = String(nameInput.value || '').trim() || appState.arrangementDraftState.name;
-    });
-    nameInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (arrangementRenameDebounceTimeout) {
-                clearTimeout(arrangementRenameDebounceTimeout);
-                arrangementRenameDebounceTimeout = null;
-            }
-            nameInput.blur();
-        }
-    });
-    nameInput?.addEventListener('blur', () => {
-        const newName = String(nameInput?.value ?? '').trim() || appState.arrangementDraftState.name;
-        appState.arrangementDraftState.name = newName;
-        if (arrangementRenameDebounceTimeout) {
-            clearTimeout(arrangementRenameDebounceTimeout);
-            arrangementRenameDebounceTimeout = null;
-        }
-        if (appState.currentArrangementFilename && !getArrangementReadonly()) {
-            void saveCurrentArrangement();
-            void renameArrangement({ quiet: true });
-        } else if (appState.currentArrangementFilename && appState.currentArrangementScope === 'system') {
-            setStatus('System arrangements cannot be renamed', 'normal');
-            updateArrangementDisplayName(appState.currentArrangementFilename, newName);
-        } else if (appState.currentArrangementFilename) {
-            updateArrangementDisplayName(appState.currentArrangementFilename, newName);
-        }
-    });
-    bpmInput?.addEventListener('input', () => {
-        const bpm = parseInt(bpmInput.value || '120', 10);
-        appState.arrangementDraftState.bpm = Number.isFinite(bpm) ? Math.max(20, Math.min(300, bpm)) : 120;
-        scheduleArrangementAutoSave();
-        emitArrangementStateChanged();
-    });
-    bpmInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            bpmInput.blur();
-        }
-    });
-    bpmInput?.addEventListener('blur', () => {
-        if (appState.currentArrangementFilename && !getArrangementReadonly()) {
-            void saveCurrentArrangement();
-        }
-    });
-    if (bpmInput) setupScrubInteraction(bpmInput);
-    addRowBtn?.addEventListener('click', () => {
-        appState.arrangementDraftState.rows.push({ repeats: 1, blocks: [], loop: false });
-        renderArrangementWorkspace();
-        scheduleArrangementAutoSave();
-        emitArrangementStateChanged({ addedRowIndex: appState.arrangementDraftState.rows.length - 1 });
-    });
-
-    const trashDropzone = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceTrashDropzone');
-    const trashTooltip = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceTrashTooltip');
-    if (trashDropzone && !readonly) {
-        trashDropzone.addEventListener('click', (event) => {
-            event.preventDefault();
-            const wrap = trashDropzone.closest('.arr-trash-dropzone-wrap');
-            let portal = document.getElementById('arrangementWorkspaceTrashTooltipPortal');
-            const isShowing = portal && portal.isConnected;
-            if (isShowing && portal) {
-                portal.remove();
-                if (trashTooltip?._arrTrashTooltipHide) {
-                    document.removeEventListener('click', trashTooltip._arrTrashTooltipHide);
-                    trashTooltip._arrTrashTooltipHide = null;
-                }
-                return;
-            }
-            const rect = trashDropzone.getBoundingClientRect();
-            portal = document.createElement('div');
-            portal.id = 'arrangementWorkspaceTrashTooltipPortal';
-            portal.className = 'arr-trash-tooltip-portal';
-            portal.setAttribute('role', 'tooltip');
-            portal.textContent = 'Drag blocks here to remove';
-            document.body.appendChild(portal);
-            const tw = portal.offsetWidth;
-            const th = portal.offsetHeight;
-            const gap = 8;
-            portal.style.left = `${rect.left + rect.width / 2 - tw / 2}px`;
-            portal.style.top = `${rect.top - th - gap}px`;
-            const hide = () => {
-                const p = document.getElementById('arrangementWorkspaceTrashTooltipPortal');
-                if (p) p.remove();
-                if (trashTooltip?._arrTrashTooltipHide) {
-                    document.removeEventListener('click', trashTooltip._arrTrashTooltipHide);
-                    trashTooltip._arrTrashTooltipHide = null;
-                }
-            };
-            const onDocClick = (e) => {
-                if (wrap && wrap.contains(e.target)) return;
-                hide();
-            };
-            if (trashTooltip) trashTooltip._arrTrashTooltipHide = onDocClick;
-            requestAnimationFrame(() => document.addEventListener('click', onDocClick));
-            setTimeout(hide, 4000);
-        });
-        trashDropzone.addEventListener('dragover', (event) => {
-            const types = event.dataTransfer?.types;
-            const isChip = types?.includes('application/x-zzfxm-arr-chip');
-            const isRow = types?.includes('application/x-zzfxm-arr-row');
-            if (!isChip && !isRow) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-            trashDropzone.classList.add('arr-trash-dropzone-dragover');
-        });
-        trashDropzone.addEventListener('dragleave', (event) => {
-            const related = event.relatedTarget;
-            if (related && related instanceof Node && trashDropzone.contains(related)) return;
-            trashDropzone.classList.remove('arr-trash-dropzone-dragover');
-        });
-        trashDropzone.addEventListener('drop', async (event) => {
-            if (!event.dataTransfer || readonly) return;
-            event.preventDefault();
-            trashDropzone.classList.remove('arr-trash-dropzone-dragover');
-            window.__arrRowDragFromIndex = undefined;
-
-            let rowPayload = null;
-            try {
-                rowPayload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-row') || 'null');
-            } catch (_e) {
-                rowPayload = null;
-            }
-            const fromRowIndex = Number.isInteger(rowPayload?.fromRowIndex) ? rowPayload.fromRowIndex : null;
-            if (fromRowIndex != null) {
-                if (appState.arrangementDraftState.rows.length === 1) return;
-                const confirmed = await confirmDialog({
-                    title: 'Delete row?',
-                    message: 'Delete this row? This cannot be undone.',
-                    cancelLabel: 'No! Abort.',
-                    confirmLabel: 'Delete',
-                    confirmIcon: 'trash-2',
-                    variant: 'danger',
-                    overlayLight: true,
-                });
-                if (!confirmed) return;
-                if (appState.arrangementDraftState.rows.length === 1) {
-                    appState.arrangementDraftState.rows[0] = { repeats: 1, blocks: [], loop: false };
-                } else {
-                    appState.arrangementDraftState.rows.splice(fromRowIndex, 1);
-                }
-                renderArrangementWorkspace();
-                scheduleArrangementAutoSave();
-                emitArrangementStateChanged();
-                // Persist immediately so block usage on disk matches the UI.
-                await saveCurrentArrangement();
-                return;
-            }
-
-            let payload = null;
-            try {
-                payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null');
-            } catch (_e) {
-                payload = null;
-            }
-            const filename = payload?.filename || event.dataTransfer.getData('text/plain') || '';
-            const fromRowIndexChip = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
-            if (filename && fromRowIndexChip != null) {
-                const row = appState.arrangementDraftState.rows?.[fromRowIndexChip];
-                if (row?.blocks) {
-                    const idx = row.blocks.indexOf(filename);
-                    if (idx >= 0) row.blocks.splice(idx, 1);
-                    if (appState.activeArrangementBlockFilename === filename) {
-                        appState.activeArrangementBlockFilename = null;
-                    }
-                    renderArrangementWorkspace();
-                    renderTrackerWorkspace();
-                    scheduleArrangementAutoSave();
-                    emitArrangementStateChanged({ removedFilename: filename });
-                    applyArrangementPreviewAfterBlockRemoved(filename);
-                    // Persist immediately so block usage on disk matches the UI (e.g. when row emptied, block can be deleted from library).
-                    await saveCurrentArrangement();
-                }
-            }
-        });
-    }
-
-    previewBtn?.addEventListener('click', () => {
-        const selectedIsPlaying = isArrangementPreviewPlaying() && arrangementPreviewPlayingFilename === appState.currentArrangementFilename;
-        if (selectedIsPlaying) {
-            stopArrangementPreview();
-            document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: false } }));
-            return;
-        }
-        // Stop any other playback (Strudel pattern, ZzFXTrack Player preview, tracker, or another arrangement) before starting this arrangement's preview.
-        stopAllPlaybackForSelectionChange();
-        document.dispatchEvent(new CustomEvent('arrangements:preview', {
-            detail: { arrangement: { name: appState.arrangementDraftState.name, arrangementState: buildArrangementStatePayload() }, filename: appState.currentArrangementFilename }
-        }));
-    });
-
-    if (rowsRoot) {
-        appState.arrangementDraftState.rows.forEach((row, rowIndex) => {
-            const rowEl = document.createElement('div');
-            rowEl.className = 'arr-row';
-            rowEl.dataset.rowIndex = String(rowIndex);
-            const rowDragOver = (event) => {
-                if (!event.dataTransfer || readonly) return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = isCopyModifier(event) ? 'copy' : 'move';
-                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
-                const isRowDrag = event.dataTransfer.types.includes('application/x-zzfxm-arr-row');
-                const fromIndex = isRowDrag ? window.__arrRowDragFromIndex : undefined;
-                if (typeof fromIndex === 'number') {
-                    if (fromIndex > rowIndex) rowEl.classList.add('arr-row-drop-target-above');
-                    else if (fromIndex < rowIndex) rowEl.classList.add('arr-row-drop-target-below');
-                } else {
-                    rowEl.classList.add('arr-row-block-drop-target');
-                }
-            };
-            rowEl.addEventListener('dragenter', (event) => {
-                if (!event.dataTransfer || readonly) return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = isCopyModifier(event) ? 'copy' : 'move';
-            });
-            rowEl.addEventListener('dragover', rowDragOver);
-            rowEl.addEventListener('dragleave', (event) => {
-                const related = event.relatedTarget;
-                if (related && related instanceof Node && rowEl.contains(related)) return;
-                const hadBlock = rowEl.classList.contains('arr-row-block-drop-target');
-                const hadAbove = rowEl.classList.contains('arr-row-drop-target-above');
-                const hadBelow = rowEl.classList.contains('arr-row-drop-target-below');
-                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
-                if (hadBlock) rowEl.classList.add('arr-row-drop-target-exit-block');
-                if (hadAbove) rowEl.classList.add('arr-row-drop-target-exit-above');
-                if (hadBelow) rowEl.classList.add('arr-row-drop-target-exit-below');
-                const exitDurationMs = 220;
-                setTimeout(() => {
-                    rowEl.classList.remove('arr-row-drop-target-exit-block', 'arr-row-drop-target-exit-above', 'arr-row-drop-target-exit-below');
-                }, exitDurationMs);
-            });
-            const ARR_ROW_DROP_EXIT_MS = 200;
-            const removeDropTargetAndAfter = (afterMs, run) => {
-                const hadBlock = rowEl.classList.contains('arr-row-block-drop-target');
-                const hadAbove = rowEl.classList.contains('arr-row-drop-target-above');
-                const hadBelow = rowEl.classList.contains('arr-row-drop-target-below');
-                rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
-                if (hadBlock) rowEl.classList.add('arr-row-drop-target-exit-block');
-                if (hadAbove) rowEl.classList.add('arr-row-drop-target-exit-above');
-                if (hadBelow) rowEl.classList.add('arr-row-drop-target-exit-below');
-                const exitDurationMs = afterMs + 20;
-                setTimeout(() => {
-                    rowEl.classList.remove('arr-row-drop-target-exit-block', 'arr-row-drop-target-exit-above', 'arr-row-drop-target-exit-below');
-                    run();
-                }, exitDurationMs);
-            };
-            rowEl.addEventListener('drop', (event) => {
-                if (!event.dataTransfer || readonly) return;
-                event.preventDefault();
-                window.__arrRowDragFromIndex = undefined;
-                let rowPayload = null;
-                try {
-                    rowPayload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-row') || 'null');
-                } catch (_e) {
-                    rowPayload = null;
-                }
-                const fromRowIndex = Number.isInteger(rowPayload?.fromRowIndex) ? rowPayload.fromRowIndex : null;
-                if (fromRowIndex != null && fromRowIndex !== rowIndex) {
-                    removeDropTargetAndAfter(ARR_ROW_DROP_EXIT_MS, () => {
-                        const moved = appState.arrangementDraftState.rows.splice(fromRowIndex, 1)[0];
-                        if (moved) {
-                            appState.arrangementDraftState.rows.splice(rowIndex, 0, moved);
-                            renderArrangementWorkspace();
-                            scheduleArrangementAutoSave();
-                            emitArrangementStateChanged();
-                        }
-                    });
-                    return;
-                }
-                let payload = null;
-                try {
-                    payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null');
-                } catch (_e) {
-                    payload = null;
-                }
-                const filename = payload?.filename || event.dataTransfer.getData('text/plain') || '';
-                const fromRowIndexChip = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
-                removeDropTargetAndAfter(ARR_ROW_DROP_EXIT_MS, () => {
-                    handleBlockDrop({
-                        filename,
-                        fromRowIndex: fromRowIndexChip,
-                        toRowIndex: rowIndex,
-                        copy: isCopyModifier(event),
-                    }, rowEl, 0);
-                });
-            });
-
-            const rowNumberEl = document.createElement('span');
-            rowNumberEl.className = 'arr-row-number';
-            rowNumberEl.setAttribute('aria-label', 'Row ' + (rowIndex + 1) + ' (click to play from here, drag to reorder)');
-            rowNumberEl.title = 'Click to play from this row';
-            if (!readonly) {
-                rowNumberEl.draggable = appState.arrangementDraftState.rows.length > 1;
-                rowNumberEl.addEventListener('dragstart', (e) => {
-                    if (appState.arrangementDraftState.rows.length === 1) {
-                        e.preventDefault();
-                        return;
-                    }
-                    if (!e.dataTransfer) return;
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('application/x-zzfxm-arr-row', JSON.stringify({ fromRowIndex: rowIndex }));
-                    window.__arrRowDragFromIndex = rowIndex;
-                });
-                rowNumberEl.addEventListener('dragend', () => {
-                    window.__arrRowDragFromIndex = undefined;
-                    window.__arrRowDragJustEnded = true;
-                    setTimeout(() => { window.__arrRowDragJustEnded = false; }, 100);
-                    rowsRoot.querySelectorAll('.arr-row').forEach((el) => {
-                        el.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
-                    });
-                });
-            }
-            rowNumberEl.addEventListener('click', () => {
-                if (window.__arrRowDragJustEnded) return;
-                // When only changing start row on the same arrangement, defer stop until we're ready to start (reduces pause)
-                const sameArrangementAlreadyPlaying = isArrangementPreviewPlaying() && arrangementPreviewPlayingFilename === appState.currentArrangementFilename;
-                if (!sameArrangementAlreadyPlaying) {
-                    stopAllPlaybackForSelectionChange();
-                } else {
-                    stopTrackerPreviewPlayback();
-                    try {
-                        if (dom.repl.editor?.repl?.scheduler?.started) {
-                            dom.repl.editor.stop();
-                            updatePlayState(false);
-                        }
-                    } catch (_e) {}
-                    if (isPreviewPlaying) {
-                        stopZzfxmSong();
-                        updatePreviewPlayButton(false);
-                    }
-                }
-                const payload = buildArrangementStatePayload();
-                console.log('[Arranger] dispatch arrangements:preview (from row click):', {
-                    startRowIndex: rowIndex,
-                    payloadRowLoops: (payload?.rows || []).map((r, i) => ({ i, loop: Boolean(r?.loop) })),
-                    draftRowLoops: (appState.arrangementDraftState?.rows || []).map((r, i) => ({ i, loop: Boolean(r?.loop) })),
-                });
-                document.dispatchEvent(new CustomEvent('arrangements:preview', {
-                    detail: {
-                        arrangement: { name: appState.arrangementDraftState.name, arrangementState: payload },
-                        startRowIndex: rowIndex,
-                        filename: appState.currentArrangementFilename,
-                    },
-                }));
-            });
-            rowNumberEl.innerHTML = `
-                <span class="arr-row-number-value">${rowIndex + 1}</span>
-                <i data-lucide="play" class="arr-row-play-icon hidden w-2.5 h-2.5 fill-current"></i>
-            `;
-
-            const rowNumberWrap = document.createElement('div');
-            rowNumberWrap.className = 'arr-row-number-wrap';
-            rowNumberWrap.appendChild(rowNumberEl);
-            const loopRowBtn = document.createElement('button');
-            loopRowBtn.type = 'button';
-            loopRowBtn.className = 'arr-loop-row-btn';
-            loopRowBtn.setAttribute('aria-label', row.loop ? 'Loop row (on)' : 'Loop row (off)');
-            loopRowBtn.title = row.loop ? 'Loop row (on)' : 'Loop row (off)';
-            loopRowBtn.dataset.loop = row.loop ? 'true' : 'false';
-            loopRowBtn.innerHTML = '<i data-lucide="repeat-2" class="w-4 h-4"></i>';
-            if (readonly) loopRowBtn.disabled = true;
-            loopRowBtn.addEventListener('click', () => {
-                if (readonly) return;
-                if (row.loop) {
-                    row.loop = false;
-                } else {
-                    appState.arrangementDraftState.rows.forEach((r) => { r.loop = false; });
-                    row.loop = true;
-                }
-                loopRowBtn.dataset.loop = row.loop ? 'true' : 'false';
-                loopRowBtn.setAttribute('aria-label', row.loop ? 'Loop row (on)' : 'Loop row (off)');
-                loopRowBtn.title = loopRowBtn.getAttribute('aria-label');
-                rowsRoot.querySelectorAll('.arr-row').forEach((rowEl) => {
-                    const i = parseInt(rowEl.dataset.rowIndex, 10);
-                    const r = appState.arrangementDraftState.rows?.[i];
-                    const btn = rowEl.querySelector('.arr-loop-row-btn');
-                    if (btn && r != null) {
-                        btn.dataset.loop = r.loop ? 'true' : 'false';
-                        btn.setAttribute('aria-label', r.loop ? 'Loop row (on)' : 'Loop row (off)');
-                        btn.title = btn.getAttribute('aria-label');
-                    }
-                });
-                if (window.lucide?.createIcons) window.lucide.createIcons();
-                // Loop is runtime-only: notify tracker for loop-row switch at end of cycle, without triggering save
-                document.dispatchEvent(new CustomEvent('arrangements:previewLoopChanged', {
-                    detail: { arrangementState: buildArrangementStatePayload() },
-                }));
-            });
-            rowNumberWrap.appendChild(loopRowBtn);
-
-            const repeatsEl = document.createElement('input');
-            repeatsEl.type = 'number';
-            repeatsEl.min = '1';
-            repeatsEl.max = '16';
-            repeatsEl.step = '1';
-            repeatsEl.value = String(row.repeats || 1);
-            repeatsEl.className = 'arr-repeats';
-            if (readonly) repeatsEl.readOnly = true;
-            repeatsEl.addEventListener('input', () => {
-                const val = parseInt(repeatsEl.value, 10);
-                row.repeats = Number.isFinite(val) ? Math.min(Math.max(val, 1), 16) : 1;
-                scheduleArrangementAutoSave();
-                emitArrangementStateChanged();
-            });
-            const repeatsWrap = document.createElement('div');
-            repeatsWrap.className = 'arr-repeats-wrap';
-            repeatsWrap.appendChild(repeatsEl);
-            const chipsEl = document.createElement('div');
-            chipsEl.className = 'arr-chips';
-
-            const updateSelectDisabled = (selectEl) => {
-                if (!selectEl) return;
-                const options = Array.from(selectEl.querySelectorAll('option'));
-                for (const opt of options) {
-                    if (!opt.value || opt.value === '__create__') continue;
-                    opt.disabled = row.blocks.includes(opt.value);
-                }
-            };
-
-            const selectEl = document.createElement('select');
-            selectEl.className = 'arr-block-select';
-            selectEl.setAttribute('aria-label', 'Add block');
-            selectEl.title = 'Add block';
-            if (readonly) selectEl.disabled = true;
-            selectEl.innerHTML = `<option value="" selected></option><option value="__create__">+ New block</option>` + blocksForPicker
-                .map((block) => {
-                    const disabled = row.blocks.includes(block.filename) ? ' disabled' : '';
-                    return `<option value="${escapeHtml(block.filename)}"${disabled}>${escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</option>`;
-                })
-                .join('');
-            selectEl.addEventListener('change', () => {
-                if (readonly) return;
-                const val = selectEl.value;
-                if (!val) return;
-                if (val === '__create__') {
-                    selectEl.selectedIndex = 0;
-                    void createUntitledBlock({ rowIndex });
-                    return;
-                }
-                if (!row.blocks.includes(val)) {
-                    row.blocks.push(val);
-                }
-                appState.activeArrangementBlockFilename = val;
-                if (appState.currentArrangementFilename) arrangementSelectedBlockByArrangement[appState.currentArrangementFilename] = val;
-                selectEl.selectedIndex = 0;
-                renderArrangementWorkspace();
-                scheduleArrangementAutoSave();
-                emitArrangementStateChanged({ addedRowIndex: rowIndex, addedFilename: val });
-            });
-
-            const selectWrap = document.createElement('div');
-            selectWrap.className = 'arr-block-select-wrap';
-            selectWrap.innerHTML = '<span class="arr-block-select-plus-label" aria-hidden="true">+</span>';
-            selectWrap.appendChild(selectEl);
-
-            const duplicateRowBtn = document.createElement('button');
-            duplicateRowBtn.type = 'button';
-            duplicateRowBtn.className = 'arr-row-del arr-row-dup';
-            duplicateRowBtn.title = 'Duplicate row';
-            duplicateRowBtn.innerHTML = '<i data-lucide="copy-plus" class="w-4 h-4"></i>';
-            duplicateRowBtn.disabled = readonly;
-            duplicateRowBtn.classList.toggle('opacity-40', readonly);
-            duplicateRowBtn.classList.toggle('cursor-not-allowed', readonly);
-            duplicateRowBtn.addEventListener('click', () => {
-                if (readonly) return;
-                const sourceRow = appState.arrangementDraftState.rows?.[rowIndex];
-                if (!sourceRow) return;
-                const duplicatedRow = {
-                    repeats: Number.isInteger(sourceRow.repeats) ? sourceRow.repeats : 1,
-                    blocks: Array.isArray(sourceRow.blocks) ? sourceRow.blocks.slice() : [],
-                    loop: Boolean(sourceRow.loop),
-                };
-                appState.arrangementDraftState.rows.splice(rowIndex + 1, 0, duplicatedRow);
-                renderArrangementWorkspace();
-                scheduleArrangementAutoSave();
-                emitArrangementStateChanged();
-            });
-
-            const removeRowBtn = document.createElement('button');
-            removeRowBtn.type = 'button';
-            removeRowBtn.className = 'arr-row-del';
-            removeRowBtn.title = appState.arrangementDraftState.rows.length === 1 ? 'Cannot remove the only row' : 'Remove row';
-            removeRowBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
-            const cannotRemoveRow = appState.arrangementDraftState.rows.length === 1;
-            removeRowBtn.disabled = readonly || cannotRemoveRow;
-            removeRowBtn.classList.toggle('opacity-40', readonly || cannotRemoveRow);
-            removeRowBtn.classList.toggle('cursor-not-allowed', readonly || cannotRemoveRow);
-            removeRowBtn.addEventListener('click', async () => {
-                if (readonly) return;
-                const confirmed = await confirmDialog({
-                    title: 'Delete row?',
-                    message: 'Delete this row? This cannot be undone.',
-                    cancelLabel: 'No! Abort.',
-                    confirmLabel: 'Delete',
-                    confirmIcon: 'trash-2',
-                    variant: 'danger',
-                    overlayLight: true,
-                });
-                if (!confirmed) return;
-                if (appState.arrangementDraftState.rows.length === 1) {
-                    appState.arrangementDraftState.rows[0] = { repeats: 1, blocks: [], loop: false };
-                } else {
-                    appState.arrangementDraftState.rows.splice(rowIndex, 1);
-                }
-                renderArrangementWorkspace();
-                scheduleArrangementAutoSave();
-                emitArrangementStateChanged();
-            });
-
-            const renderChips = () => {
-                chipsEl.innerHTML = '';
-                row.blocks
-                    .slice()
-                    .sort(compareRowBlockFilenames)
-                    .forEach((filename) => {
-                        const block = getBlockByFilename(filename);
-                        const chip = document.createElement('div');
-                        chip.className = `arr-chip ${filename === appState.activeArrangementBlockFilename ? 'ring-1 ring-primary' : ''}`;
-                        chip.dataset.filename = filename;
-                        chip.dataset.blockSteps = String(getBlockSteps(block));
-                        chip.draggable = !readonly;
-                        chip.addEventListener('dragstart', (event) => {
-                            if (!event.dataTransfer || readonly) return;
-                            const payload = { filename, fromRowIndex: rowIndex };
-                            event.dataTransfer.effectAllowed = 'copyMove';
-                            event.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify(payload));
-                            event.dataTransfer.setData('text/plain', filename);
-                        });
-                        chip.innerHTML = `
-                            <span class="arr-chip-label">${escapeHtml(block?.name || filename)}</span>
-                            <button type="button" class="arr-chip-del" title="Remove"><i data-lucide="x" class="w-3 h-3"></i></button>
-                        `;
-                        chip.addEventListener('click', (event) => {
-                            if (event.target?.closest('.arr-chip-del')) return;
-                            appState.activeArrangementBlockFilename = filename;
-                            if (appState.currentArrangementFilename) arrangementSelectedBlockByArrangement[appState.currentArrangementFilename] = filename;
-                            renderArrangementWorkspace();
-                            renderTrackerWorkspace();
-                        });
-                        chip.querySelector('.arr-chip-del')?.addEventListener('click', async (event) => {
-                            event.stopPropagation();
-                            if (readonly) return;
-                            const idx = row.blocks.indexOf(filename);
-                            if (idx >= 0) row.blocks.splice(idx, 1);
-                            if (appState.activeArrangementBlockFilename === filename) {
-                                appState.activeArrangementBlockFilename = null;
-                                if (appState.currentArrangementFilename) arrangementSelectedBlockByArrangement[appState.currentArrangementFilename] = null;
-                            }
-                            renderArrangementWorkspace();
-                            renderTrackerWorkspace();
-                            scheduleArrangementAutoSave();
-                            emitArrangementStateChanged({ removedFilename: filename });
-                            applyArrangementPreviewAfterBlockRemoved(filename);
-                            // Persist immediately so block usage on disk matches the UI (e.g. when row emptied, block can be deleted from library).
-                            await saveCurrentArrangement();
-                        });
-                        chipsEl.appendChild(chip);
-                    });
-            };
-
-            const rowActionsGroup = document.createElement('div');
-            rowActionsGroup.className = 'arr-row-btn-group';
-            rowActionsGroup.appendChild(selectWrap);
-            rowActionsGroup.appendChild(duplicateRowBtn);
-            rowActionsGroup.appendChild(removeRowBtn);
-
-            const rowMain = document.createElement('div');
-            rowMain.className = 'arr-row-main';
-            rowMain.appendChild(rowNumberWrap);
-            rowMain.appendChild(repeatsWrap);
-            rowMain.appendChild(chipsEl);
-
-            const rowActions = document.createElement('div');
-            rowActions.className = 'arr-row-actions';
-            rowActions.appendChild(rowActionsGroup);
-
-            rowEl.appendChild(rowMain);
-            rowEl.appendChild(rowActions);
-            rowsRoot.appendChild(rowEl);
-
-            renderChips();
-            updateSelectDisabled(selectEl);
-        });
-    }
-
-    createIcons({ icons });
-    updateAdvancedSettingsButtonsVisibility();
-    if (isArrangementPreviewPlaying()) {
-        applyArrangementWorkspacePlayhead(arrangementWorkspacePlayhead);
-    } else {
-        clearArrangementWorkspacePlayheadVisuals();
-    }
-    renderTrackerWorkspace();
-    updateArrangementInstrumentUsage();
-}
-
-function updateArrangementWorkspacePreviewButtonState() {
-    const previewBtn = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspacePreviewBtn');
-    if (!previewBtn) return;
-    const selectedIsPlaying = isArrangementPreviewPlaying() && arrangementPreviewPlayingFilename === appState.currentArrangementFilename;
-    previewBtn.title = selectedIsPlaying ? 'Stop arrangement preview' : 'Preview arrangement';
-    previewBtn.innerHTML = `<i data-lucide="${selectedIsPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>`;
-    createIcons({ icons });
-}
-
-function getBlockSteps(block) {
-    const steps = Number.isInteger(block?.trackerState?.steps)
-        ? block.trackerState.steps
-        : (Array.isArray(block?.trackerState?.grid?.[0]) ? block.trackerState.grid[0].length : null);
-    if (Number.isInteger(steps) && steps > 0) return steps;
-    return 16;
-}
-
-function setArrangementWorkspaceRowPlayingVisual(rowEl, isPlaying) {
-    if (!rowEl) return;
-    const iconEl = rowEl.querySelector('.arr-row-play-icon');
-    iconEl?.classList.add('hidden');
-}
-
-function clearArrangementWorkspacePlayheadVisuals() {
-    const rowsRoot = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceRows');
-    if (rowsRoot) {
-        const rows = rowsRoot.querySelectorAll('.arr-row');
-        rows.forEach((rowEl) => {
-            rowEl.classList.remove('playing');
-            setArrangementWorkspaceRowPlayingVisual(rowEl, false);
-            rowEl.style.removeProperty('--arr-row-play-progress');
-            rowEl.querySelectorAll('.arr-chip').forEach((chip) => {
-                chip.style.removeProperty('--arr-chip-play-progress');
-            });
-        });
-    }
-    arrangementWorkspacePlayingRowIndex = null;
-    arrangementWorkspacePlayhead = { rowIndex: null, progress: 0, blocks: [] };
-}
-
-function updateArrangementWorkspaceChipSteps(blocks = []) {
-    if (!Array.isArray(blocks) || !blocks.length) return;
-    const blockByFilename = new Map(blocks.map((block) => [block.filename, block]));
-    appState.blocksLibraryCache = appState.blocksLibraryCache.map((block) => {
-        const update = blockByFilename.get(block.filename);
-        return update?.trackerState ? { ...block, trackerState: update.trackerState } : block;
-    });
-
-    const chips = dom.arrangementWorkspacePane?.querySelectorAll('.arr-chip[data-filename]') || [];
-    chips.forEach((chip) => {
-        const filename = chip.dataset.filename;
-        const update = blockByFilename.get(filename);
-        if (!update?.trackerState) return;
-        chip.dataset.blockSteps = String(getBlockSteps(update));
-    });
-}
-
-function applyArrangementWorkspacePlayhead(detail = {}) {
-    const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
-    const progress = typeof detail.progress === 'number' ? detail.progress : 0;
-    arrangementWorkspacePlayhead = {
-        rowIndex,
-        progress,
-        blocks: Array.isArray(detail.blocks) ? detail.blocks : [],
-    };
-
-    const rowsRoot = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceRows');
-    if (!rowsRoot) {
-        arrangementWorkspacePlayingRowIndex = rowIndex;
-        return;
-    }
-
-    if (arrangementWorkspacePlayingRowIndex != null && arrangementWorkspacePlayingRowIndex !== rowIndex) {
-        const prevEl = rowsRoot.querySelector(`.arr-row[data-row-index="${arrangementWorkspacePlayingRowIndex}"]`);
-        if (prevEl) {
-            prevEl.classList.remove('playing');
-            setArrangementWorkspaceRowPlayingVisual(prevEl, false);
-            prevEl.style.removeProperty('--arr-row-play-progress');
-            prevEl.querySelectorAll('.arr-chip').forEach((chip) => {
-                chip.style.removeProperty('--arr-chip-play-progress');
-            });
-        }
-    }
-
-    if (rowIndex == null) {
-        arrangementWorkspacePlayingRowIndex = null;
-        return;
-    }
-
-    const rowEl = rowsRoot.querySelector(`.arr-row[data-row-index="${rowIndex}"]`);
-    if (!rowEl) {
-        arrangementWorkspacePlayingRowIndex = rowIndex;
-        return;
-    }
-
-    rowEl.classList.add('playing');
-    setArrangementWorkspaceRowPlayingVisual(rowEl, true);
-    const pct = Math.max(0, Math.min(progress, 1)) * 100;
-    rowEl.style.setProperty('--arr-row-play-progress', `${pct.toFixed(2)}%`);
-
-    const rowChanged = arrangementWorkspacePlayingRowIndex !== rowIndex;
-    if (rowChanged && window.matchMedia('(max-width: 1023px)').matches) {
-        rowEl.scrollIntoView({ block: 'center', behavior: 'smooth', inline: 'nearest' });
-    }
-
-    const row = appState.arrangementDraftState?.rows?.[rowIndex];
-    const rowSteps = Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) * 16 : 16;
-    const progressSteps = Math.max(0, Math.min(progress, 1)) * rowSteps;
-    rowEl.querySelectorAll('.arr-chip').forEach((chip) => {
-        const blockSteps = parseInt(chip.dataset.blockSteps || '16', 10);
-        const steps = Number.isInteger(blockSteps) && blockSteps > 0 ? blockSteps : 16;
-        const local = steps > 0 ? (progressSteps % steps) / steps : 0;
-        const localPct = Math.max(0, Math.min(local, 1)) * 100;
-        chip.style.setProperty('--arr-chip-play-progress', `${localPct.toFixed(2)}%`);
-    });
-
-    arrangementWorkspacePlayingRowIndex = rowIndex;
-}
-
 function renderBlocksLibraryFromCache() {
     if (!dom.blocksLibraryList) return;
     dom.blocksLibraryList.innerHTML = '';
@@ -3060,62 +1465,6 @@ async function refreshBlocksLibrary() {
     }
 }
 
-function sanitizeArrangementBaseName(input) {
-    return normalizePatternBaseName(input) || 'arrangement';
-}
-
-async function renameArrangement(options = {}) {
-    const { quiet = false } = options;
-    if (!appState.currentArrangementFilename || !appState.arrangementDraftState) return;
-    if (getArrangementReadonly()) return;
-
-    const rawName = document.getElementById('arrangementWorkspaceName')?.value?.trim() || appState.arrangementDraftState.name || '';
-    const baseName = sanitizeArrangementBaseName(rawName);
-    const newFilename = `${baseName}.js`;
-
-    if (newFilename === appState.currentArrangementFilename) return;
-
-    try {
-        const list = await listArrangements();
-        const existing = (list || []).map((a) => String(a?.filename || '').toLowerCase());
-        if (existing.includes(newFilename.toLowerCase()) && newFilename.toLowerCase() !== appState.currentArrangementFilename.toLowerCase()) {
-            if (!quiet) setStatus('An arrangement with that name already exists', 'error');
-            return;
-        }
-    } catch (e) {
-        console.error(e);
-        if (!quiet) setStatus('Error checking arrangement names', 'error');
-        return;
-    }
-
-    if (!quiet) setStatus('Renaming...');
-
-    try {
-        await saveCurrentArrangement();
-        await renameArrangementFile(appState.currentArrangementFilename, newFilename, getDeveloperModeHeaders());
-
-        const wasPlaying = arrangementPreviewPlayingFilename === appState.currentArrangementFilename;
-        const oldFilename = appState.currentArrangementFilename;
-        appState.currentArrangementFilename = newFilename;
-        appState.arrangementDraftState.name = baseName;
-        if (wasPlaying) arrangementPreviewPlayingFilename = newFilename;
-        if (oldFilename && arrangementSelectedBlockByArrangement[oldFilename] != null) {
-            arrangementSelectedBlockByArrangement[newFilename] = arrangementSelectedBlockByArrangement[oldFilename];
-            delete arrangementSelectedBlockByArrangement[oldFilename];
-        }
-        arrangementRenameDebounceTimeout = null;
-
-        await refreshArrangementList();
-        const nameInput = document.getElementById('arrangementWorkspaceName');
-        if (nameInput) nameInput.value = baseName;
-        setStatus('Arrangement renamed', 'success');
-        if (!quiet) setStatus('Renamed successfully', 'success');
-    } catch (e) {
-        console.error(e);
-        if (!quiet) setStatus('Error renaming arrangement', 'error');
-    }
-}
-
 /**
  * Update arrangement display name in cache and sidebar list (no save). Only updates if name changed.
  */
@@ -3210,29 +1559,16 @@ async function deleteBlockFromLibrary(filename, displayName) {
     if (!confirmed) return;
 
     try {
-        const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
-            method: 'DELETE',
-            headers: getDeveloperModeHeaders(),
-        });
-        if (!res.ok) {
-            if (res.status === 409) {
-                let usedBy = [];
-                try {
-                    const payload = await res.json();
-                    usedBy = Array.isArray(payload?.usedBy) ? payload.usedBy : [];
-                } catch (_e) {
-                    usedBy = [];
-                }
-                const list = usedBy.length
-                    ? usedBy.map((entry) => `${entry.name || entry.filename} (${entry.filename})`).join(', ')
-                    : 'one or more arrangements';
-                await alertDialog({
-                    title: 'Cannot Delete Block',
-                    message: `This block is used in arrangements:\n${list}`,
-                });
-                return;
-            }
-            throw new Error('Failed to delete block');
+        const deleteResult = await deleteBlockByFilenameWithConflictInfo(filename, getDeveloperModeHeaders());
+        if (!deleteResult.ok && deleteResult.status === 409) {
+            const list = deleteResult.usedBy.length
+                ? deleteResult.usedBy.map((entry) => `${entry.name || entry.filename} (${entry.filename})`).join(', ')
+                : 'one or more arrangements';
+            await alertDialog({
+                title: 'Cannot Delete Block',
+                message: `This block is used in arrangements:\n${list}`,
+            });
+            return;
         }
         if (appState.activeArrangementBlockFilename === filename) {
             appState.activeArrangementBlockFilename = null;
@@ -3243,408 +1579,6 @@ async function deleteBlockFromLibrary(filename, displayName) {
     } catch (err) {
         console.error('[Blocks] Delete failed:', err);
         setStatus('Failed to delete block', 'error');
-    }
-}
-
-async function runArrangementPreviewPrime(filename) {
-  if (appState.currentArrangementFilename !== filename) return;
-  const state = buildArrangementStatePayload();
-  if (!state?.rows?.length) return;
-  const wantedBlockFiles = Array.from(new Set((state.rows || []).flatMap((r) => Array.isArray(r?.blocks) ? r.blocks : [])));
-  if (!wantedBlockFiles.length) return;
-  const trackerStateByFilename = {};
-  const cachedBlocks = Array.isArray(appState.blocksLibraryCache) ? appState.blocksLibraryCache : [];
-  for (const f of wantedBlockFiles) {
-    const block = cachedBlocks.find((b) => b?.filename === f);
-    if (block?.trackerState) trackerStateByFilename[f] = resolveTrackerStateChannelInstruments(block.trackerState);
-  }
-  if (Object.keys(trackerStateByFilename).length === 0) return;
-  const instrumentList = await getArrangementInstrumentList();
-  if (!instrumentList?.length) return;
-  primeArrangementPreviewBuffer(state, trackerStateByFilename, instrumentList, state.bpm || 120, getPlaybackMixSettings());
-  const hasLoopRow = (state.rows || []).some((r) => Boolean(r?.loop));
-  if (hasLoopRow) {
-    primeArrangementPreviewBuffer(state, trackerStateByFilename, instrumentList, state.bpm || 120, getPlaybackMixSettings(), true);
-  }
-}
-
-function scheduleArrangementPreviewPrime(filename) {
-  if (arrangementPreviewPrimeTimeoutId) {
-    clearTimeout(arrangementPreviewPrimeTimeoutId);
-    arrangementPreviewPrimeTimeoutId = null;
-  }
-  if (!filename) return;
-  arrangementPreviewPrimeTimeoutId = setTimeout(() => {
-    arrangementPreviewPrimeTimeoutId = null;
-    runArrangementPreviewPrime(filename).catch(() => {});
-  }, 350);
-}
-
-async function loadArrangement(filename) {
-    if (!filename) return;
-    if (arrangementAutoSaveTimeout) {
-        clearTimeout(arrangementAutoSaveTimeout);
-        arrangementAutoSaveTimeout = null;
-    }
-
-    const isSwitching = appState.currentArrangementFilename !== null && appState.currentArrangementFilename !== filename;
-    if (isSwitching) {
-        clearArrangementWorkspacePlayheadVisuals();
-    }
-
-    try {
-        // Do not stop playback when switching: like patterns, only the Play button stops current and starts the selected resource.
-        const loadedScope = DEMO_MODE ? 'system' : normalizeScope(getArrangementEntry(filename)?.scope);
-        const detail = DEMO_MODE
-            ? null
-            : await getArrangementOrNull(filename);
-        let arrangementState = cloneArrangementState(detail?.arrangementState || {
-            name: decodeURIComponent(filename.replace(/\.js$/i, '')),
-            bpm: 120,
-            rows: [{ repeats: 1, blocks: [], loop: false }],
-        });
-        const recoveredArrangementState = readUnsavedArrangementState(filename, loadedScope);
-        const recoveredFromCache = Boolean(recoveredArrangementState);
-        if (recoveredArrangementState) {
-            arrangementState = recoveredArrangementState;
-            setStatus('⚠️ Recovered unsaved arrangement from cache', 'error');
-        }
-
-        appState.currentArrangementFilename = filename;
-        appState.currentArrangementScope = loadedScope;
-        appState.arrangementDraftState = arrangementState;
-        appState.arrangementDraftState.name = (filename || '').replace(/\.js$/i, '');
-        if (Array.isArray(appState.arrangementDraftState.rows)) {
-            appState.arrangementDraftState.rows.forEach((r) => { if (r && typeof r === 'object') r.loop = false; });
-        }
-        const savedBlock = arrangementSelectedBlockByArrangement[filename];
-        const blockInArrangement = savedBlock && (arrangementState.rows || []).some((row) => Array.isArray(row?.blocks) && row.blocks.includes(savedBlock));
-        appState.activeArrangementBlockFilename = blockInArrangement ? savedBlock : null;
-        // Keep appState.currentPatternFilename so pattern selection is remembered when switching back to Strudel tab.
-
-        refreshArrangementListActiveState();
-        await refreshBlocksLibrary();
-        renderArrangementWorkspace();
-        updateArrangementWorkspacePreviewButtonState();
-        showArrangementWorkspace();
-        scheduleArrangementPreviewPrime(filename);
-        if (recoveredFromCache) {
-            setTimeout(() => {
-                if (appState.currentArrangementFilename !== filename) return;
-                saveCurrentArrangement();
-            }, 500);
-        }
-    } catch (err) {
-        console.error('[Arrangements] Failed to load arrangement:', err);
-        setStatus('Failed to load arrangement', 'error');
-    }
-}
-
-// --- Code Transformation Helpers ---
-
-function fileToEditor(code) {
-    let text = code;
-    
-    // 1. Remove imports (multiline safeish)
-    text = text.replace(/^import .*?;\s*$/gm, '');
-    
-    // 2. Transform "export const bpm = ..." -> "const bpm = ..." AND Add setcps
-    // We assume bfs is on a single line
-    // Dividing by 240 because Strudel cycles are usually 4 beats. 
-    // BPM / 60 = BeatsPerSec. / 4 = CyclesPerSec.
-    text = text.replace(/export const bpm\s*=\s*(\d+);?/g, (match, val) => {
-        return `const bpm = ${val};\nsetcps(bpm/240);`;
-    });
-    
-    // 3. Transform "export const pattern =" -> remove, leaving expression
-    text = text.replace(/export const pattern =\s*/, '');
-    
-    // 4. Remove trailing semicolon/whitespace at the very end
-    text = text.replace(/;\s*$/, '');
-    
-    return text.trim();
-}
-
-function editorToFile(code) {
-    const lines = code.split('\n');
-    // Find bpm decl (could be 'bpm =' or 'const bpm =')
-    let bpmLine = lines.find(l => l.trim().match(/^(const\s+)?bpm\s*=/));
-    let bpmVal = 120;
-    
-    if (bpmLine) {
-        // Extract val
-        const match = bpmLine.match(/bpm\s*=\s*(\d+)/);
-        if (match) bpmVal = match[1];
-    }
-    
-    // Remove bpm line AND setcps line from pattern logic
-    let cleanCode = lines
-        .filter(l => !l.trim().match(/^(const\s+)?bpm\s*=/))
-        .filter(l => !l.trim().startsWith('setcps('))
-        .join('\n').trim();
-
-    const extractBlocksAndArrangementsSetup = (codeText) => {
-        const blocksStart = '// BLOCKS START';
-        const blocksEnd = '// BLOCKS END';
-        const arrStart = '// ARRANGEMENTS START';
-        const arrEnd = '// ARRANGEMENTS END';
-
-        const blocksStartIdx = codeText.indexOf(blocksStart);
-        const blocksEndIdx = codeText.indexOf(blocksEnd);
-        const arrStartIdx = codeText.indexOf(arrStart);
-        const arrEndIdx = codeText.indexOf(arrEnd);
-
-        // Nothing to extract.
-        if (blocksStartIdx === -1 || blocksEndIdx === -1 || blocksEndIdx <= blocksStartIdx) return null;
-
-        let setupEndIdx = blocksEndIdx + blocksEnd.length;
-        if (arrStartIdx !== -1 && arrEndIdx !== -1 && arrEndIdx > arrStartIdx) {
-            // If arrangements section exists, include it in setup so const declarations don't end up in pattern expr.
-            setupEndIdx = arrEndIdx + arrEnd.length;
-        }
-
-        const setup = codeText.slice(0, setupEndIdx).trim();
-        const expr = codeText.slice(setupEndIdx).trim();
-        return { setup, expr };
-    };
-
-    const splitSetupAndExpr = (codeText) => {
-        const rawLines = codeText.split('\n');
-        // Find the smallest suffix that parses as an expression (supporting multiline expressions).
-        for (let split = rawLines.length - 1; split >= 0; split--) {
-            const setup = rawLines.slice(0, split).join('\n').trim();
-            const expr = rawLines.slice(split).join('\n').trim();
-            if (!expr) continue;
-            const wrapped = `${setup}\nreturn (\n${expr}\n);`;
-            try {
-                // Parse-only; never executed.
-                // eslint-disable-next-line no-new-func
-                new Function(wrapped);
-                return { setup, expr };
-            } catch (_) {
-                // keep searching
-            }
-        }
-        return { setup: '', expr: codeText.trim() };
-    };
-
-    const extracted = extractBlocksAndArrangementsSetup(cleanCode);
-    const { setup, expr } = extracted && extracted.expr ? extracted : splitSetupAndExpr(cleanCode);
-    const finalExpr = expr && expr.trim() ? expr.trim() : 'stack()';
-    
-    // Identify used strudel functions for import
-    const commonFuncs = ['stack', 'arrange', 'silence', 'note', 's', 'slow', 'fast', 'rev', 'jux', 'every', 'chunk', 'scale', 'gain', 'lpf', 'room', 'clip', 'sine', 'add', 'sub', 'mul', 'div', 'choose', 'rand', 'saw', 'square', 'tri', 'cat', 'seq', 'mini', 'tidal', 'pure', 'orbit', 'delay', 'shifto', 'shape', 'cps'];
-    const usedImports = commonFuncs.filter(f => cleanCode.includes(f + '(') || cleanCode.includes(f + '.'));
-    // Always include basics
-    if (!usedImports.includes('note')) usedImports.push('note');
-    if (!usedImports.includes('s')) usedImports.push('s');
-    // We may insert blocks that rely on these even if the user's editor code doesn't.
-    if (!usedImports.includes('stack')) usedImports.push('stack');
-    if (!usedImports.includes('arrange')) usedImports.push('arrange');
-    if (!usedImports.includes('silence')) usedImports.push('silence');
-    if (!usedImports.includes('slow')) usedImports.push('slow');
-    if (!usedImports.includes('gain')) usedImports.push('gain');
-    
-    const importStmt = `import { ${usedImports.join(', ')} } from "@strudel/core";`;
-    
-    const setupBlock = setup ? `\n${setup}\n` : '';
-
-    return `${importStmt}
-
-export const bpm = ${bpmVal};
-${setupBlock}
-
-export const pattern = ${finalExpr};
-`;
-}
-
-async function loadPattern(filename) {
-    // IMPORTANT: Clear any pending auto-save from the previous pattern
-    // This prevents saving the new pattern's content to the old pattern's file
-    if (autoSaveTimeout) {
-        clearTimeout(autoSaveTimeout);
-        autoSaveTimeout = null;
-    }
-    if (renameDebounceTimeout) {
-        clearTimeout(renameDebounceTimeout);
-        renameDebounceTimeout = null;
-    }
-    
-    try {
-        // Do not stop playback here: let the Strudel play button stop arrangement (etc.) and start pattern when user presses play.
-        let fileCode = '';
-        const loadedPatternScope = DEMO_MODE
-            ? 'system'
-            : normalizeScope(getPatternEntry(filename)?.scope);
-        if (DEMO_MODE) {
-            fileCode = demoPatternSourceByFile.get(filename);
-            if (typeof fileCode !== 'string') throw new Error('Pattern not available in demo bundle');
-        } else {
-            fileCode = await getPatternSource(filename);
-        }
-        
-        // Transform for Editor
-        let editorCode = fileToEditor(fileCode);
-        
-        // Check if there's an unsaved version in localStorage
-        if (loadedPatternScope !== 'system' || isDeveloperModeEnabled()) {
-            const unsavedCode = localStorage.getItem(`unsaved_${filename}`);
-            if (unsavedCode) {
-                // Recover from localStorage
-                editorCode = unsavedCode;
-                setStatus('⚠️ Recovered unsaved changes from cache', 'error');
-                setTimeout(() => {
-                    // Auto-save the recovered content
-                    saveCurrentPattern();
-                    localStorage.removeItem(`unsaved_${filename}`);
-                }, 500);
-            }
-        }
-        
-        // Keep appState.currentArrangementFilename and appState.arrangementDraftState so arrangement selection is remembered when switching back to Blocks tab.
-
-        appState.currentPatternFilename = filename;
-        appState.currentPatternScope = loadedPatternScope;
-
-        showEditor();
-        refreshArrangementListActiveState();
-        renderArrangementWorkspace();
-        currentPatternDisplayName = decodeURIComponent(filename.replace('.js', '')); // Store without extension
-        originalPatternName = currentPatternDisplayName; // Track for rename detection
-        dom.patternNameInput.value = currentPatternDisplayName;
-        dom.patternNameInput.readOnly = DEMO_MODE || (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled());
-        dom.patternNameInput.placeholder = '';
-        if (dom.openPatternAdvancedSettingsBtn) {
-            updateAdvancedSettingsButtonsVisibility();
-        }
-        
-        Array.from(dom.patternList.querySelectorAll('.list-item')).forEach(li => {
-            const isActive = li.dataset.filename === filename;
-            li.classList.toggle('active', Boolean(isActive));
-        });
-        
-        updatePatternListVisualizer();
-        
-        if (dom.repl.editor) {
-            dom.repl.editor.setCode(editorCode);
-            const view = dom.repl.editor.editor;
-            if (view) {
-                // Force CodeMirror to refresh syntax highlighting after document replace
-                // (fixes highlighting breaking when switching away and back to the playing pattern)
-                view.dispatch({});
-                // Restore playback highlights when returning to the pattern that is playing;
-                // clear them when loading a different pattern so we don't show stale/wrong ranges
-                const locations = (filename === playingPatternFilename && dom.repl.editor.miniLocations)
-                    ? dom.repl.editor.miniLocations
-                    : [];
-                updateMiniLocations(view, locations);
-            }
-        } else {
-            dom.repl.setAttribute('code', editorCode);
-        }
-        
-        setExportControlsDisabled(false);
-        
-        // Clear ZzFXTrack Player export preview until this pattern/arrangement is exported again.
-        clearZzfxmPreviewData();
-        setStatus('');
-        
-        renderPlayButton(); // Update play button context (Stop vs Play)
-
-        await loadPatternMeta(filename);
-        
-        // Update indicators in sidebar
-        updateInstrumentUsage(editorCode);
-        updatePatternSelectionState(true);
-
-        setStatus('');
-    } catch (e) {
-        console.error(e);
-        setStatus(`Error loading ${filename}`, 'error');
-    }
-}
-
-async function loadPatternMeta(filename) {
-    if (DEMO_MODE) return;
-    try {
-        const data = await getPatternMetaOrNull(filename);
-        if (!data) return;
-        if (typeof data?.scope === 'string') {
-            appState.currentPatternScope = normalizeScope(data.scope);
-            dom.patternNameInput.readOnly = DEMO_MODE || (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled());
-        }
-        const mixSettings = sanitizePlaybackMixSettings({
-            targetPeak: data?.playbackTargetPeak,
-            masterGainDb: data?.playbackMasterGainDb,
-            softClipDrive: data?.playbackSoftClipDrive,
-        });
-        applyPlaybackMixSettingsToInputs(mixSettings);
-        const savedPreset = typeof data?.playbackLoudnessPreset === 'string' ? data.playbackLoudnessPreset : null;
-        const resolvedPreset = normalizePlaybackPresetId(savedPreset) || inferPlaybackPresetId(mixSettings) || 'custom';
-        setPlaybackPresetControl(resolvedPreset);
-        const wavSampleRate = parseInt(data?.wavSampleRate, 10);
-        if (dom.wavSampleRate && [8000, 11025, 16000, 22050, 32000, 44100, 48000].includes(wavSampleRate)) {
-            dom.wavSampleRate.value = String(wavSampleRate);
-        }
-        const wavBitDepth = parseInt(data?.wavBitDepth, 10);
-        if (dom.wavBitDepth && [8, 16, 24].includes(wavBitDepth)) {
-            dom.wavBitDepth.value = String(wavBitDepth);
-        }
-
-        const rowsPerCycle = parseInt(data?.rowsPerCycle, 10);
-        if (!rowsPerCycle || Number.isNaN(rowsPerCycle)) return;
-
-        const resolutionInputs = document.querySelectorAll('input[name="exportResolution"]');
-        const isPreset = rowsPerCycle === 48 || rowsPerCycle === 96;
-        resolutionInputs.forEach(input => {
-            input.checked = input.value === String(isPreset ? rowsPerCycle : 'custom');
-        });
-        if (!isPreset && dom.exportResolutionCustom) {
-            dom.exportResolutionCustom.value = String(rowsPerCycle);
-        }
-        const event = new Event('change', { bubbles: true });
-        document.querySelector('input[name="exportResolution"]:checked')?.dispatchEvent(event);
-    } catch (e) {
-        console.warn('Failed to load pattern meta', e);
-    }
-}
-
-async function savePatternMeta() {
-    if (DEMO_MODE) return;
-    if (!appState.currentPatternFilename) return;
-    const resolutionInput = document.querySelector('input[name="exportResolution"]:checked');
-    let rowsPerCycle = 96;
-    if (resolutionInput?.value === '48') {
-        rowsPerCycle = 48;
-    } else if (resolutionInput?.value === 'custom') {
-        const parsed = parseInt(dom.exportResolutionCustom?.value, 10);
-        if (parsed && !Number.isNaN(parsed)) rowsPerCycle = parsed;
-    }
-
-    const mixSettings = sanitizePlaybackMixSettings({
-        targetPeak: dom.playbackTargetPeak?.value,
-        masterGainDb: dom.playbackMasterGainDb?.value,
-        softClipDrive: dom.playbackSoftClipDrive?.value,
-    });
-    const presetId = normalizePlaybackPresetId(dom.playbackLoudnessPreset?.value)
-        || inferPlaybackPresetId(mixSettings)
-        || 'custom';
-    const wavSettings = getWavExportSettings();
-
-    try {
-        const existing = await getPatternMetaOrNull(appState.currentPatternFilename) || {};
-        await savePatternMetaRecord(appState.currentPatternFilename, {
-            ...(existing || {}),
-            rowsPerCycle,
-            playbackTargetPeak: mixSettings.targetPeak,
-            playbackMasterGainDb: mixSettings.masterGainDb,
-            playbackSoftClipDrive: mixSettings.softClipDrive,
-            playbackLoudnessPreset: presetId,
-            wavSampleRate: wavSettings.sampleRate,
-            wavBitDepth: wavSettings.bitDepth,
-        });
-    } catch (e) {
-        console.warn('Failed to save pattern meta', e);
     }
 }
 
@@ -3771,194 +1705,18 @@ function setPlaybackPresetControl(presetId) {
     dom.playbackLoudnessPreset.value = normalized;
 }
 
-async function saveCurrentPattern() {
-    if (DEMO_MODE) return;
-    if (!appState.currentPatternFilename) return;
-    if (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled()) return;
-    
-    try {
-        const editorCode = dom.repl.editor.code;
-        const fileCode = editorToFile(editorCode);
-
-        await savePatternSource(appState.currentPatternFilename, fileCode, getDeveloperModeHeaders());
-    } catch (e) {
-        console.error(e);
-    }
-}
-
-async function createNewPattern(name) {
-    if (DEMO_MODE) {
-        setStatus('Demo mode: creating patterns is disabled', 'normal');
-        return;
-    }
-    const normalizedBase = normalizePatternBaseName(name);
-    if (!normalizedBase) {
-        setStatus('Invalid name. Use letters, numbers, spaces, hyphens, or underscores.', 'error');
-        return;
-    }
-    if (normalizedBase !== String(name).trim()) {
-        setStatus(`Using normalized name: ${normalizedBase}`, 'normal');
-    }
-    name = `${normalizedBase}.js`;
-    
-    setStatus('Creating...');
-    // Initial file content
-    const template = `import { stack, note } from "@strudel/core";
-
-export const bpm = 120;
-
-    export const pattern = note("c3 e3 g3").s("demo-kickdrum");
-`;
-
-    try {
-        await savePatternSource(name, template);
-        
-        closeModal();
-        await refreshPatternList();
-        await loadPattern(name); // loadPattern will handle the transform
-        
-    } catch (e) {
-        console.error(e);
-        setStatus('Error creating pattern', 'error');
-    }
-}
-
 // async function deleteCurrentPattern() removed for new custom modal implementation below
 
 // --- BAKING LOGIC ---
-
-function stripQuotedStrings(source) {
-    let out = '';
-    let quote = null;
-    let escaped = false;
-    for (let i = 0; i < source.length; i++) {
-        const ch = source[i];
-        if (quote) {
-            out += ' ';
-            if (escaped) {
-                escaped = false;
-            } else if (ch === '\\') {
-                escaped = true;
-            } else if (ch === quote) {
-                quote = null;
-            }
-            continue;
-        }
-        if (ch === '"' || ch === "'" || ch === '`') {
-            quote = ch;
-            out += ' ';
-            continue;
-        }
-        out += ch;
-    }
-    return out;
-}
-
-function inferArrangeCyclesFromCode(code) {
-    if (typeof code !== 'string' || !code.includes('arrange')) return null;
-    const arrangeCallRegex = /\barrange\s*\(/g;
-    let maxCycles = 0;
-    let callMatch;
-
-    while ((callMatch = arrangeCallRegex.exec(code)) !== null) {
-        let i = arrangeCallRegex.lastIndex;
-        let depth = 1;
-        let quote = null;
-        let escaped = false;
-
-        while (i < code.length && depth > 0) {
-            const ch = code[i];
-            if (quote) {
-                if (escaped) {
-                    escaped = false;
-                } else if (ch === '\\') {
-                    escaped = true;
-                } else if (ch === quote) {
-                    quote = null;
-                }
-                i++;
-                continue;
-            }
-            if (ch === '"' || ch === "'" || ch === '`') {
-                quote = ch;
-                i++;
-                continue;
-            }
-            if (ch === '(') depth++;
-            else if (ch === ')') depth--;
-            i++;
-        }
-        if (depth !== 0) continue;
-
-        const argsSource = code.slice(arrangeCallRegex.lastIndex, i - 1);
-        const argsSansStrings = stripQuotedStrings(argsSource);
-        let sum = 0;
-        let tupleMatch;
-        const tupleRegex = /\[\s*(\d+)\s*,/g;
-        while ((tupleMatch = tupleRegex.exec(argsSansStrings)) !== null) {
-            sum += Number(tupleMatch[1]);
-        }
-        if (sum > maxCycles) maxCycles = sum;
-    }
-
-    return maxCycles > 0 ? maxCycles : null;
-}
-
-/** Duration (seconds) above which we show the export length warning (5 min). */
-const EXPORT_LENGTH_WARNING_DURATION_SEC = 300;
-/** Max cycles above which we show the export length warning. */
-const EXPORT_LENGTH_WARNING_CYCLES = 512;
-/** Cycles above which we show "large structure" message; below = "simple structure". */
-const EXPORT_LENGTH_LARGE_STRUCTURE_CYCLES = 256;
-
-function getExportDurationSeconds(cycles, bpm) {
-    if (!Number.isFinite(cycles) || !Number.isFinite(bpm) || bpm <= 0) return 0;
-    return (cycles * 240) / bpm;
-}
-
-function formatExportDuration(seconds) {
-    if (!Number.isFinite(seconds) || seconds < 0) return '0 sec';
-    if (seconds < 60) return `${Math.round(seconds)} sec`;
-    const min = Math.floor(seconds / 60);
-    const sec = Math.round(seconds % 60);
-    if (sec === 0) return `${min} min`;
-    return `${min} min ${sec} sec`;
-}
-
-function shouldWarnExportLength(cycles, bpm) {
-    if (!Number.isFinite(cycles) || cycles <= 0) return false;
-    const durationSec = getExportDurationSeconds(cycles, bpm);
-    return durationSec > EXPORT_LENGTH_WARNING_DURATION_SEC || cycles > EXPORT_LENGTH_WARNING_CYCLES;
-}
-
-/** Rough estimate of ZzFXTrack Player JSON size in bytes (instruments + pattern data). */
-function estimateExportSizeBytes(cycles, rowsPerCycle, instrumentCount, channelCount) {
-    const totalRows = cycles * rowsPerCycle;
-    const instrumentBytes = Math.max(0, instrumentCount) * 280;
-    const patternBytes = Math.max(0, channelCount) * totalRows * 14;
-    return Math.ceil(instrumentBytes + patternBytes + 400);
-}
-
-function formatExportSize(bytes) {
-    if (!Number.isFinite(bytes) || bytes < 0) return '—';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `~${(bytes / 1024).toFixed(1)} KB`;
-    return `~${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-function buildExportLengthWarningMessage({ durationSec, cycles, bpm, estimatedSizeText }) {
-    const durationStr = formatExportDuration(durationSec);
-    const structureLine = cycles >= EXPORT_LENGTH_LARGE_STRUCTURE_CYCLES
-        ? 'The song structure is large and uses lots of cycles. This can attribute to increased file size.'
-        : 'The song structure is simple with a lower set of cycles. This will affect file size positively.';
-    return `Your exported song duration exceeds 5 minutes. It will contribute to file size and can be unoptimal for small games or demos.\n\nTotal play time: about ${durationStr} (at ${bpm} BPM).\nEstimated export file size: ${estimatedSizeText}.\n\n${structureLine}`;
-}
 
 async function exportCurrentPattern(options = {}) {
     const { revealZzfxmPreview = true } = options;
     if (!appState.currentPatternFilename) return;
     
-    validateCode(dom.repl.editor.code);
+    validateCodeForExport(dom.repl.editor.code, {
+        setStatus,
+        getStatusText: () => dom.statusMsg?.innerText || '',
+    });
     if (dom.statusMsg.innerText.startsWith('⚠️')) {
         const confirmed = await confirmDialog({
             title: 'Export With Warnings?',
@@ -4118,74 +1876,16 @@ async function exportCurrentPattern(options = {}) {
 }
 
 
-// --- Validation Logic ---
-
-const UNSAFE_FUNCS = [
-    'delay', 'room', 'reverb', 'lpf', 'hpf', 'bp', 'vowel', 
-    'phaser', 'leslie', 'crush', 'cutoff', 'resonance',
-    'distort', 'saturate', 'chorus', 'flanger', 'tremolo',
-    'fit', 'legato', 'chop' // Timing effects that might not export well?
-];
-
-function validateCode(code) {
-    const findings = [];
-    UNSAFE_FUNCS.forEach(func => {
-        // Simple regex check for function usage .func( or just func(
-        // We use word boundary to avoid false positives
-        const regex = new RegExp(`\\b${func}\\(`, 'g');
-        if (regex.test(code)) {
-            findings.push(func);
-        }
-    });
-
-    if (findings.length > 0) {
-        setStatus(`⚠️ Unsafe for Export: ${findings.join(', ')}`, 'error');
-    } else {
-        if (dom.statusMsg.innerText.startsWith('⚠️')) {
-            setStatus('Ready', 'normal');
-        }
-    }
-}
-
-
-function escapeHtml(value) {
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-function normalizePatternBaseName(input) {
-    return String(input || '')
-        .trim()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-zA-Z0-9_-]/g, '');
-}
-
-async function updatePatternScope(filename, scope) {
-    const existing = await getPatternMetaOrNull(filename) || {};
-    const updated = { ...(existing || {}), scope: normalizeScope(scope) };
-    await savePatternMetaRecord(filename, updated);
-}
-
 async function updateBlockScope(filename, scope) {
-    const detailRes = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
-    if (!detailRes.ok) throw new Error('Failed to load block details');
-    const detail = await detailRes.json();
-    const writeRes = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            name: detail?.name || filename.replace(/\.js$/, ''),
-            description: detail?.description || '',
-            pattern: detail?.pattern || '',
-            trackerState: detail?.trackerState ?? null,
-            scope: normalizeScope(scope),
-        }),
+    const detail = await getBlockDetailOrNull(filename);
+    if (!detail) throw new Error('Failed to load block details');
+    await saveBlockDetail(filename, {
+        name: detail?.name || filename.replace(/\.js$/, ''),
+        description: detail?.description || '',
+        pattern: detail?.pattern || '',
+        trackerState: detail?.trackerState ?? null,
+        scope: normalizeScope(scope),
     });
-    if (!writeRes.ok) throw new Error('Failed to update block scope');
 }
 
 async function updateArrangementScope(filename, scope) {
@@ -4304,22 +2004,6 @@ async function applyAdvancedSettings() {
 function openModal() {
     dom.newPatternModal.classList.add('open');
     dom.newPatternName.focus();
-}
-
-function openNewArrangementModal() {
-    if (DEMO_MODE) {
-        setStatus('Demo mode: creating arrangements is disabled', 'normal');
-        return;
-    }
-    const suggested = `arrangement-${appState.arrangementEntriesCache.filter((entry) => normalizeScope(entry.scope) === 'user').length + 1}`;
-    if (dom.newArrangementName) dom.newArrangementName.value = suggested;
-    dom.newArrangementModal?.classList.add('open');
-    dom.newArrangementName?.focus();
-}
-
-function closeNewArrangementModal() {
-    dom.newArrangementModal?.classList.remove('open');
-    if (dom.newArrangementName) dom.newArrangementName.value = '';
 }
 
 function triggerFileDownload(filename, content, mime = 'text/plain;charset=utf-8') {
@@ -4486,11 +2170,7 @@ async function exportCurrentArrangement() {
             }
         }
 
-        const slugify = (str) => (str || 'x')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '_')
-            .replace(/^_+|_+$/g, '')
-            .slice(0, 40) || 'x';
+        const toVarSlug = (str) => slugify(str, { fallback: 'x', maxLength: 40 });
 
         const blockByFilename = new Map(context.blocks.map((block) => [block.filename, block]));
         const blockVarByFilename = {};
@@ -4513,7 +2193,7 @@ async function exportCurrentArrangement() {
         for (const filename of wantedBlockFiles) {
             const block = blockByFilename.get(filename);
             if (!block) continue;
-            const baseVar = `block_${slugify(filename.replace(/\.js$/i, ''))}`;
+            const baseVar = `block_${toVarSlug(filename.replace(/\.js$/i, ''))}`;
             const varName = nextVar(baseVar);
             blockVarByFilename[filename] = varName;
 
@@ -4779,12 +2459,7 @@ async function downloadPatternsAndInstruments() {
 
         const files = DEMO_MODE
             ? Array.from(demoPatternSourceByFile.keys()).sort()
-            : await (async () => {
-                const res = await fetch('/api/patterns');
-                if (!res.ok) throw new Error('Failed to list patterns');
-                const payload = await res.json();
-                return normalizePatternEntries(payload).map((entry) => entry.filename);
-            })();
+            : normalizePatternEntries(await listPatterns()).map((entry) => entry.filename);
 
         let downloadedPatterns = 0;
         for (const filename of files) {
@@ -4794,9 +2469,8 @@ async function downloadPatternsAndInstruments() {
             } else if (DEMO_MODE) {
                 fileCode = demoPatternSourceByFile.get(filename) || '';
             } else {
-                const res = await fetch(`/api/pattern/${filename}`);
-                if (!res.ok) continue;
-                fileCode = await res.text();
+                fileCode = await getPatternSourceOrEmpty(filename);
+                if (!fileCode.trim()) continue;
             }
 
             if (!fileCode.trim()) continue;
@@ -4807,9 +2481,8 @@ async function downloadPatternsAndInstruments() {
                 const metaFilename = filename.replace(/\.js$/i, '.meta.json');
                 zip.file(`patterns/${decodeURIComponent(metaFilename)}`, JSON.stringify({ scope: 'system' }, null, 2));
             } else {
-                const metaRes = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
-                if (metaRes.ok) {
-                    const metaText = await metaRes.text();
+                const metaText = await getPatternMetaTextOrNull(filename);
+                if (metaText) {
                     const metaFilename = filename.replace(/\.js$/i, '.meta.json');
                     zip.file(`patterns/${decodeURIComponent(metaFilename)}`, metaText);
                 }
@@ -4826,27 +2499,23 @@ async function downloadPatternsAndInstruments() {
                 downloadedBlocks++;
             }
         } else {
-            const listRes = await fetch('/api/blocks');
-            if (listRes.ok) {
-                const blockItems = await listRes.json();
-                for (const item of blockItems || []) {
-                    const filename = item?.filename;
-                    if (!filename) continue;
-                    let code = '';
-                    const rawRes = await fetch(`/blocks/${filename}`);
-                    if (rawRes.ok) {
-                        code = await rawRes.text();
-                    } else {
-                        const detailRes = await fetch(`/api/blocks/${filename}`);
-                        if (detailRes.ok) {
-                            const detail = await detailRes.json();
-                            code = buildBlockSourceFromApi(detail);
-                        }
+            const blockItems = await listBlocksOrEmpty();
+            for (const item of blockItems || []) {
+                const filename = item?.filename;
+                if (!filename) continue;
+                let code = '';
+                const rawRes = await fetch(`/blocks/${filename}`);
+                if (rawRes.ok) {
+                    code = await rawRes.text();
+                } else {
+                    const detail = await getBlockDetailOrNull(filename);
+                    if (detail) {
+                        code = buildBlockSourceFromApi(detail);
                     }
-                    if (!code.trim()) continue;
-                    zip.file(`blocks/${decodeURIComponent(filename)}`, code);
-                    downloadedBlocks++;
                 }
+                if (!code.trim()) continue;
+                zip.file(`blocks/${decodeURIComponent(filename)}`, code);
+                downloadedBlocks++;
             }
         }
 
@@ -4860,27 +2529,23 @@ async function downloadPatternsAndInstruments() {
                 downloadedArrangements++;
             }
         } else {
-            const listRes = await fetch('/api/arrangements');
-            if (listRes.ok) {
-                const arrangementItems = await listRes.json();
-                for (const item of arrangementItems || []) {
-                    const filename = item?.filename;
-                    if (!filename) continue;
-                    let code = '';
-                    const rawRes = await fetch(`/arrangements/${filename}`);
-                    if (rawRes.ok) {
-                        code = await rawRes.text();
-                    } else {
-                        const detailRes = await fetch(`/api/arrangements/${filename}`);
-                        if (detailRes.ok) {
-                            const detail = await detailRes.json();
-                            code = buildArrangementSourceFromApi(detail);
-                        }
+            const arrangementItems = await listArrangementsOrEmpty();
+            for (const item of arrangementItems || []) {
+                const filename = item?.filename;
+                if (!filename) continue;
+                let code = '';
+                const rawRes = await fetch(`/arrangements/${filename}`);
+                if (rawRes.ok) {
+                    code = await rawRes.text();
+                } else {
+                    const detail = await getArrangementOrNull(filename);
+                    if (detail) {
+                        code = buildArrangementSourceFromApi(detail);
                     }
-                    if (!code.trim()) continue;
-                    zip.file(`arrangements/${decodeURIComponent(filename)}`, code);
-                    downloadedArrangements++;
                 }
+                if (!code.trim()) continue;
+                zip.file(`arrangements/${decodeURIComponent(filename)}`, code);
+                downloadedArrangements++;
             }
         }
 
@@ -5095,9 +2760,9 @@ async function getExistingNamesBySection() {
     }
 
     const [patternsList, blocks, arrangements] = await Promise.all([
-        fetch('/api/patterns').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-        fetch('/api/blocks').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-        fetch('/api/arrangements').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+        listPatterns().catch(() => []),
+        listBlocksOrEmpty(),
+        listArrangementsOrEmpty(),
     ]);
 
     return {
@@ -5138,20 +2803,14 @@ async function fetchExistingContent(section, filename) {
     if (section === 'blocks') {
         const res = await fetch(`/blocks/${encodeURIComponent(filename)}`);
         if (res.ok) return res.text();
-        const detailRes = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
-        if (detailRes.ok) {
-            const detail = await detailRes.json();
-            return buildBlockSourceFromApi(detail);
-        }
+        const detail = await getBlockDetailOrNull(filename);
+        if (detail) return buildBlockSourceFromApi(detail);
     }
     if (section === 'arrangements') {
         const res = await fetch(`/arrangements/${encodeURIComponent(filename)}`);
         if (res.ok) return res.text();
-        const detailRes = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`);
-        if (detailRes.ok) {
-            const detail = await detailRes.json();
-            return buildArrangementSourceFromApi(detail);
-        }
+        const detail = await getArrangementOrNull(filename);
+        if (detail) return buildArrangementSourceFromApi(detail);
     }
     return '';
 }
@@ -5174,21 +2833,21 @@ async function writeImportedFile(section, filename, content) {
     }
     if (section === 'blocks') {
         const parsed = parseBlockSource(content);
-        const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
-            body: JSON.stringify(parsed),
-        });
-        return res.ok;
+        try {
+            await saveBlockDetail(filename, parsed, getDeveloperModeHeaders());
+            return true;
+        } catch (_e) {
+            return false;
+        }
     }
     if (section === 'arrangements') {
         const parsed = parseArrangementSource(content);
-        const res = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
-            body: JSON.stringify(parsed),
-        });
-        return res.ok;
+        try {
+            await saveArrangement(filename, parsed, getDeveloperModeHeaders());
+            return true;
+        } catch (_e) {
+            return false;
+        }
     }
     return false;
 }
@@ -5264,11 +2923,12 @@ async function applyUploadProject() {
                 sessionStorage.setItem('instruments-js-content', pendingUploadBundle.instrumentsContent);
                 instrumentsImported = 1;
             } else {
-                const res = await fetch('/api/update-instruments', {
-                    method: 'POST',
-                    body: pendingUploadBundle.instrumentsContent,
-                });
-                if (res.ok) instrumentsImported = 1;
+                try {
+                    await updateInstrumentsSourceFile(pendingUploadBundle.instrumentsContent);
+                    instrumentsImported = 1;
+                } catch (_e) {
+                    instrumentsImported = 0;
+                }
             }
         }
 
@@ -5578,129 +3238,12 @@ dom.patternNameInput.addEventListener('keydown', (e) => {
     }
 });
 
-async function renamePattern(options = {}) {
-    if (DEMO_MODE) return;
-    const { quiet = false } = options;
-    if (!appState.currentPatternFilename) return;
-    if (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled()) {
-        if (!quiet) setStatus('System patterns are immutable', 'normal');
-        return;
-    }
-    
-    const rawName = dom.patternNameInput.value.trim();
-    const newName = normalizePatternBaseName(rawName);
-    if (!newName) {
-        if (!quiet) {
-            setStatus('Invalid name. Use letters, numbers, spaces, hyphens, or underscores.', 'error');
-        }
-        return;
-    }
-    if (dom.patternNameInput.value !== newName) {
-        dom.patternNameInput.value = newName;
-        if (!quiet && rawName !== newName) {
-            setStatus(`Using normalized name: ${newName}`, 'normal');
-        }
-    }
-    if (newName === originalPatternName) {
-        return;
-    }
-    
-    const newFilename = newName + '.js';
-    
-    // Check if name already exists
-    try {
-        const payload = await listPatterns();
-        const files = normalizePatternEntries(payload).map((entry) => entry.filename);
-        
-        if (files.includes(newFilename) && newFilename !== appState.currentPatternFilename) {
-            if (!quiet) {
-                setStatus('A pattern with that name already exists', 'error');
-            }
-            return;
-        }
-    } catch (e) {
-        console.error(e);
-        if (!quiet) {
-            setStatus('Error checking pattern names', 'error');
-        }
-        return;
-    }
-    
-    if (!quiet) {
-        setStatus('Renaming...');
-    }
-    
-    try {
-        // Rename via API
-        await renamePatternFile(appState.currentPatternFilename, newFilename, getDeveloperModeHeaders());
-        
-        // Update local state
-        const wasPlaying = playingPatternFilename === appState.currentPatternFilename;
-        appState.currentPatternFilename = newFilename;
-        currentPatternDisplayName = newName;
-        originalPatternName = newName;
-        if (wasPlaying) playingPatternFilename = newFilename;
-        renameDebounceTimeout = null;
-        
-        // Refresh pattern list
-        await refreshPatternList();
-        
-        // Defer so footer isn't cleared by any same-tick updates from list refresh
-        setTimeout(() => setStatus('Pattern renamed', 'success'), 0);
-        
-    } catch (e) {
-        console.error(e);
-        setStatus('Error renaming pattern', 'error');
-        // Restore original name on error
-        dom.patternNameInput.value = originalPatternName;
-    }
-}
-
 dom.confirmDeleteBtn.addEventListener('click', async () => {
     if (patternToDelete) {
         await deletePattern(patternToDelete);
         closeDeleteModal();
     }
 });
-
-async function deletePattern(filename) {
-    if (DEMO_MODE) {
-        setStatus('Demo mode: deleting patterns is disabled', 'normal');
-        return;
-    }
-    if (normalizeScope(getPatternEntry(filename)?.scope) === 'system' && !isDeveloperModeEnabled()) {
-        setStatus('System patterns cannot be deleted', 'normal');
-        return;
-    }
-    setStatus('Deleting...');
-    try {
-        await deletePatternByFilename(filename, getDeveloperModeHeaders());
-        
-        if (filename === playingPatternFilename) {
-             if (dom.repl.editor) dom.repl.editor.stop();
-             updatePlayState(false);
-        }
-
-        const wasCurrentPattern = (filename === appState.currentPatternFilename);
-        
-        if (wasCurrentPattern) {
-            showWelcome();
-        }
-        
-        await refreshPatternList();
-        
-        // Clear status after a moment if we deleted the current pattern
-        if (wasCurrentPattern) {
-            setTimeout(() => setStatus(''), 1500);
-        } else {
-            setStatus('Deleted', 'success');
-            setTimeout(() => setStatus(''), 2000);
-        }
-    } catch (e) {
-        console.error(e);
-        setStatus('Error deleting pattern', 'error');
-    }
-}
 
 // Preview Panel Listeners
 dom.previewPlayBtn.addEventListener('click', () => {
@@ -5751,7 +3294,10 @@ async function togglePlay(e) {
     const editor = dom.repl.editor;
     if (!editor) return;
 
-    validateCode(editor.code);
+    validateCodeForExport(editor.code, {
+        setStatus,
+        getStatusText: () => dom.statusMsg?.innerText || '',
+    });
 
     const scheduler = editor.repl.scheduler;
     const isRunning = scheduler.started;
@@ -5900,24 +3446,13 @@ function setSongDataViewMode(mode) {
 
 async function saveExportedSongFiles(jsonFilename, songData) {
     if (DEMO_MODE) return;
-    const encodedJson = encodeURIComponent(jsonFilename);
-    const jsonRes = await fetch(`/api/save-exported/${encodedJson}`, {
-        method: 'POST',
-        body: JSON.stringify(songData)
-    });
-    if (!jsonRes.ok) throw new Error('Server failed to save JSON');
+    await saveExportedJsonFile(jsonFilename, songData);
 
     const baseName = jsonFilename.replace(/\.json$/i, '');
     const jsFilename = `${baseName}.js`;
     try {
         const moduleText = buildZzfxmSongJsModule(songData);
-        const jsRes = await fetch(`/api/save-exported-js/${encodeURIComponent(jsFilename)}`, {
-            method: 'POST',
-            body: moduleText
-        });
-        if (!jsRes.ok) {
-            console.warn('Server failed to save JS song module');
-        }
+        await saveExportedJsFile(jsFilename, moduleText);
     } catch (e) {
         console.warn('Failed to save JS song module', e);
     }
@@ -6884,9 +4419,8 @@ async function openTrackerModalForEdit(block, trackerState, options = {}) {
     let resolvedBlock = { ...block };
     if (block?.filename) {
         try {
-            const response = await fetch(`/api/blocks/${block.filename}`);
-            if (response.ok) {
-                const fullBlock = await response.json();
+            const fullBlock = await getBlockDetailOrNull(block.filename);
+            if (fullBlock) {
                 resolvedBlock = {
                     ...resolvedBlock,
                     scope: fullBlock?.scope ?? resolvedBlock.scope,
@@ -6993,346 +4527,11 @@ function setupBlocksEventListeners() {
             // Get the current code and convert it to file format (with exports)
             let fileCode = editorToFile(dom.repl.editor.code || '');
 
-            const slugify = (str) => (str || 'block')
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '_')
-                .replace(/^_+|_+$/g, '')
-                .slice(0, 32) || 'block';
-
-            const ensureBlocksSection = (code) => {
-                if (code.includes('// BLOCKS START') && code.includes('// BLOCKS END')) return code;
-                return code.replace(
-                    /(export const bpm\s*=\s*\d+;\s*)/m,
-                    `$1\n\n// BLOCKS START\n// BLOCKS END\n`
-                );
-            };
-
-            const nextAvailableVarName = (code, base) => {
-                let candidate = base;
-                let n = 2;
-                while (new RegExp(`\\bconst\\s+${candidate}\\b`).test(code) || new RegExp(`\\b${candidate}\\b`).test(code)) {
-                    candidate = `${base}_${n}`;
-                    n++;
-                }
-                return candidate;
-            };
-
-            const upsertPatternLayer = (code, layerVar) => {
-                const match = code.match(/export const pattern\s*=\s*([\s\S]*?);\s*$/);
-                if (!match) {
-                    return `${code.trim()}\n\nexport const pattern = ${layerVar};\n`;
-                }
-                const existing = match[1].trim();
-                if (!existing) {
-                    return code.replace(match[0], `export const pattern = ${layerVar};\n`);
-                }
-
-                try {
-                    // Parse-only guard so we don't persist a broken pattern.
-                    // eslint-disable-next-line no-new-func
-                    new Function(`return (\n${existing}\n);`);
-                } catch (_) {
-                    return code.replace(match[0], `export const pattern = ${layerVar};\n`);
-                }
-
-                const findMatchingParen = (text, openIdx) => {
-                    let depth = 0;
-                    let inSingle = false;
-                    let inDouble = false;
-                    let inTemplate = false;
-                    let inLineComment = false;
-                    let inBlockComment = false;
-                    for (let i = openIdx; i < text.length; i++) {
-                        const ch = text[i];
-                        const next = text[i + 1];
-
-                        if (inLineComment) {
-                            if (ch === '\n') inLineComment = false;
-                            continue;
-                        }
-                        if (inBlockComment) {
-                            if (ch === '*' && next === '/') {
-                                inBlockComment = false;
-                                i++;
-                            }
-                            continue;
-                        }
-
-                        if (inSingle) {
-                            if (ch === '\\') {
-                                i++;
-                                continue;
-                            }
-                            if (ch === '\'') inSingle = false;
-                            continue;
-                        }
-                        if (inDouble) {
-                            if (ch === '\\') {
-                                i++;
-                                continue;
-                            }
-                            if (ch === '"') inDouble = false;
-                            continue;
-                        }
-                        if (inTemplate) {
-                            if (ch === '\\') {
-                                i++;
-                                continue;
-                            }
-                            if (ch === '`') inTemplate = false;
-                            continue;
-                        }
-
-                        if (ch === '/' && next === '/') {
-                            inLineComment = true;
-                            i++;
-                            continue;
-                        }
-                        if (ch === '/' && next === '*') {
-                            inBlockComment = true;
-                            i++;
-                            continue;
-                        }
-
-                        if (ch === '\'') {
-                            inSingle = true;
-                            continue;
-                        }
-                        if (ch === '"') {
-                            inDouble = true;
-                            continue;
-                        }
-                        if (ch === '`') {
-                            inTemplate = true;
-                            continue;
-                        }
-
-                        if (ch === '(') depth++;
-                        if (ch === ')') {
-                            depth--;
-                            if (depth === 0) return i;
-                        }
-                    }
-                    return -1;
-                };
-
-                const tryAppendToTopLevelStack = (expr, arg) => {
-                    const trimmed = expr.trimStart();
-                    if (!trimmed.startsWith('stack')) return null;
-                    const stackIdx = expr.indexOf('stack');
-                    let i = stackIdx + 5;
-                    while (i < expr.length && /\s/.test(expr[i])) i++;
-                    if (expr[i] !== '(') return null;
-                    const openIdx = i;
-                    const closeIdx = findMatchingParen(expr, openIdx);
-                    if (closeIdx === -1) return null;
-
-                    const argsText = expr.slice(openIdx + 1, closeIdx);
-                    const hasArgs = argsText.trim().length > 0;
-                    const multiline = expr.includes('\n');
-
-                    let insert;
-                    if (hasArgs) {
-                        insert = multiline ? `,\n  ${arg}` : `, ${arg}`;
-                    } else {
-                        insert = multiline ? `\n  ${arg}\n` : `${arg}`;
-                    }
-
-                    let insertPos = closeIdx;
-                    if (hasArgs) {
-                        while (insertPos > openIdx + 1 && /\s/.test(expr[insertPos - 1])) insertPos--;
-                    }
-                    return expr.slice(0, insertPos) + insert + expr.slice(insertPos);
-                };
-
-                const flattened = tryAppendToTopLevelStack(existing, layerVar);
-                if (flattened) {
-                    return code.replace(match[0], `export const pattern = ${flattened};\n`);
-                }
-
-                const next = `stack(\n  ${existing},\n  ${layerVar}\n)`;
-                return code.replace(match[0], `export const pattern = ${next};\n`);
-            };
-
-            const normalizePatternStack = (code) => {
-                const match = code.match(/export const pattern\s*=\s*([\s\S]*?);\s*$/);
-                if (!match) return code;
-                const expr = match[1].trim();
-                const trimmed = expr.trimStart();
-                if (!trimmed.startsWith('stack')) return code;
-
-                const findMatchingParen = (text, openIdx) => {
-                    let depth = 0;
-                    let inSingle = false;
-                    let inDouble = false;
-                    let inTemplate = false;
-                    let inLineComment = false;
-                    let inBlockComment = false;
-                    for (let i = openIdx; i < text.length; i++) {
-                        const ch = text[i];
-                        const next = text[i + 1];
-
-                        if (inLineComment) {
-                            if (ch === '\n') inLineComment = false;
-                            continue;
-                        }
-                        if (inBlockComment) {
-                            if (ch === '*' && next === '/') {
-                                inBlockComment = false;
-                                i++;
-                            }
-                            continue;
-                        }
-
-                        if (inSingle) {
-                            if (ch === '\\') { i++; continue; }
-                            if (ch === '\'') inSingle = false;
-                            continue;
-                        }
-                        if (inDouble) {
-                            if (ch === '\\') { i++; continue; }
-                            if (ch === '"') inDouble = false;
-                            continue;
-                        }
-                        if (inTemplate) {
-                            if (ch === '\\') { i++; continue; }
-                            if (ch === '`') inTemplate = false;
-                            continue;
-                        }
-
-                        if (ch === '/' && next === '/') { inLineComment = true; i++; continue; }
-                        if (ch === '/' && next === '*') { inBlockComment = true; i++; continue; }
-                        if (ch === '\'') { inSingle = true; continue; }
-                        if (ch === '"') { inDouble = true; continue; }
-                        if (ch === '`') { inTemplate = true; continue; }
-
-                        if (ch === '(') depth++;
-                        if (ch === ')') {
-                            depth--;
-                            if (depth === 0) return i;
-                        }
-                    }
-                    return -1;
-                };
-
-                const parseTopLevelArgs = (text) => {
-                    const args = [];
-                    let current = '';
-                    let depth = 0;
-                    let inSingle = false;
-                    let inDouble = false;
-                    let inTemplate = false;
-                    let inLineComment = false;
-                    let inBlockComment = false;
-                    for (let i = 0; i < text.length; i++) {
-                        const ch = text[i];
-                        const next = text[i + 1];
-
-                        if (inLineComment) {
-                            current += ch;
-                            if (ch === '\n') inLineComment = false;
-                            continue;
-                        }
-                        if (inBlockComment) {
-                            current += ch;
-                            if (ch === '*' && next === '/') {
-                                current += next;
-                                inBlockComment = false;
-                                i++;
-                            }
-                            continue;
-                        }
-
-                        if (inSingle) {
-                            current += ch;
-                            if (ch === '\\') { current += next; i++; continue; }
-                            if (ch === '\'') inSingle = false;
-                            continue;
-                        }
-                        if (inDouble) {
-                            current += ch;
-                            if (ch === '\\') { current += next; i++; continue; }
-                            if (ch === '"') inDouble = false;
-                            continue;
-                        }
-                        if (inTemplate) {
-                            current += ch;
-                            if (ch === '\\') { current += next; i++; continue; }
-                            if (ch === '`') inTemplate = false;
-                            continue;
-                        }
-
-                        if (ch === '/' && next === '/') { inLineComment = true; current += ch; continue; }
-                        if (ch === '/' && next === '*') { inBlockComment = true; current += ch; continue; }
-                        if (ch === '\'') { inSingle = true; current += ch; continue; }
-                        if (ch === '"') { inDouble = true; current += ch; continue; }
-                        if (ch === '`') { inTemplate = true; current += ch; continue; }
-
-                        if (ch === '(') depth++;
-                        if (ch === ')') depth--;
-
-                        if (ch === ',' && depth === 0) {
-                            args.push(current.trim());
-                            current = '';
-                            continue;
-                        }
-
-                        current += ch;
-                    }
-                    if (current.trim()) args.push(current.trim());
-                    return args;
-                };
-
-                const stackIdx = expr.indexOf('stack');
-                let i = stackIdx + 5;
-                while (i < expr.length && /\s/.test(expr[i])) i++;
-                if (expr[i] !== '(') return code;
-                const openIdx = i;
-                const closeIdx = findMatchingParen(expr, openIdx);
-                if (closeIdx === -1) return code;
-
-                const inner = expr.slice(openIdx + 1, closeIdx);
-                const args = parseTopLevelArgs(inner);
-                if (!args.length) return code;
-
-                let flattened = [];
-                let didFlatten = false;
-                for (const arg of args) {
-                    const argTrim = arg.trimStart();
-                    if (argTrim.startsWith('stack')) {
-                        const localIdx = arg.indexOf('stack');
-                        let j = localIdx + 5;
-                        while (j < arg.length && /\s/.test(arg[j])) j++;
-                        if (arg[j] === '(') {
-                            const close = findMatchingParen(arg, j);
-                            if (close !== -1) {
-                                const innerArg = arg.slice(j + 1, close);
-                                const innerArgs = parseTopLevelArgs(innerArg);
-                                if (innerArgs.length) {
-                                    flattened = flattened.concat(innerArgs);
-                                    didFlatten = true;
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                    flattened.push(arg);
-                }
-
-                if (!didFlatten) return code;
-
-                const multiline = expr.includes('\n');
-                const joiner = multiline ? ',\n  ' : ', ';
-                const rebuilt = multiline
-                    ? `stack(\n  ${flattened.join(joiner)}\n)`
-                    : `stack(${flattened.join(joiner)})`;
-
-                return code.replace(match[0], `export const pattern = ${rebuilt};\n`);
-            };
+            const toBlockSlug = (str) => slugify(str, { fallback: 'block', maxLength: 32 });
 
             fileCode = ensureBlocksSection(fileCode);
 
-            const baseVar = `block_${slugify(name)}`;
+            const baseVar = `block_${toBlockSlug(name)}`;
             const varName = nextAvailableVarName(fileCode, baseVar);
 
             let scaledPattern = pattern;
@@ -7361,19 +4560,15 @@ function setupBlocksEventListeners() {
                 `const ${varName} = ${scaledPattern};\n// BLOCKS END`
             );
 
-            fileCode = upsertPatternLayer(fileCode, varName);
-            fileCode = normalizePatternStack(fileCode);
+            fileCode = upsertPatternLayerShared(fileCode, varName, { validateExistingExpression: true });
+            fileCode = normalizePatternStackShared(fileCode);
             
             // Convert back to editor format and set
             const editorCode = fileToEditor(fileCode);
             dom.repl.editor.setCode(editorCode);
             
             // Also save to server
-            fetch(`/api/pattern/${appState.currentPatternFilename}`, {
-                method: 'POST',
-                headers: getDeveloperModeHeaders(),
-                body: fileCode
-            });
+            savePatternSource(appState.currentPatternFilename, fileCode, getDeveloperModeHeaders()).catch(() => {});
             
             setStatus(`Block "${name}" inserted into pattern`, 'success');
         }
@@ -7386,252 +4581,7 @@ function setupBlocksEventListeners() {
 
         let fileCode = editorToFile(dom.repl.editor.code || '');
 
-        const slugify = (str) => (str || 'x')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '_')
-            .replace(/^_+|_+$/g, '')
-            .slice(0, 32) || 'x';
-
-        const ensureBlocksSection = (code) => {
-            if (code.includes('// BLOCKS START') && code.includes('// BLOCKS END')) return code;
-            return code.replace(
-                /(export const bpm\s*=\s*\d+;\s*)/m,
-                `$1\n\n// BLOCKS START\n// BLOCKS END\n`
-            );
-        };
-
-	        const ensureArrangementsSection = (code) => {
-	            if (code.includes('// ARRANGEMENTS START') && code.includes('// ARRANGEMENTS END')) return code;
-	            if (code.includes('// BLOCKS END')) {
-	                return code.replace(
-	                    /\/\/ BLOCKS END\s*\n/,
-	                    `// BLOCKS END\n\n// ARRANGEMENTS START\n// ARRANGEMENTS END\n`
-	                );
-	            }
-	            return code.replace(
-	                /(export const bpm\s*=\s*\d+;\s*)/m,
-	                `$1\n\n// ARRANGEMENTS START\n// ARRANGEMENTS END\n`
-	            );
-	        };
-
-	        const nextAvailableVarName = (code, base) => {
-	            let candidate = base;
-	            let n = 2;
-	            while (new RegExp(`\\bconst\\s+${candidate}\\b`).test(code) || new RegExp(`\\b${candidate}\\b`).test(code)) {
-	                candidate = `${base}_${n}`;
-	                n++;
-	            }
-	            return candidate;
-	        };
-
-	        const findMatchingParen = (text, openIdx) => {
-	            let depth = 0;
-	            let inSingle = false;
-	            let inDouble = false;
-	            let inTemplate = false;
-            let inLineComment = false;
-            let inBlockComment = false;
-            for (let i = openIdx; i < text.length; i++) {
-                const ch = text[i];
-                const next = text[i + 1];
-
-                if (inLineComment) {
-                    if (ch === '\n') inLineComment = false;
-                    continue;
-                }
-                if (inBlockComment) {
-                    if (ch === '*' && next === '/') {
-                        inBlockComment = false;
-                        i++;
-                    }
-                    continue;
-                }
-
-                if (inSingle) {
-                    if (ch === '\\\\') { i++; continue; }
-                    if (ch === '\'') inSingle = false;
-                    continue;
-                }
-                if (inDouble) {
-                    if (ch === '\\\\') { i++; continue; }
-                    if (ch === '"') inDouble = false;
-                    continue;
-                }
-                if (inTemplate) {
-                    if (ch === '\\\\') { i++; continue; }
-                    if (ch === '`') inTemplate = false;
-                    continue;
-                }
-
-                if (ch === '/' && next === '/') { inLineComment = true; i++; continue; }
-                if (ch === '/' && next === '*') { inBlockComment = true; i++; continue; }
-                if (ch === '\'') { inSingle = true; continue; }
-                if (ch === '"') { inDouble = true; continue; }
-                if (ch === '`') { inTemplate = true; continue; }
-
-                if (ch === '(') depth++;
-                if (ch === ')') {
-                    depth--;
-                    if (depth === 0) return i;
-                }
-            }
-            return -1;
-        };
-
-        const appendToTopLevelStackExpr = (expr, arg) => {
-            const trimmed = expr.trimStart();
-            if (!trimmed.startsWith('stack')) return null;
-            const stackIdx = expr.indexOf('stack');
-            let i = stackIdx + 5;
-            while (i < expr.length && /\s/.test(expr[i])) i++;
-            if (expr[i] !== '(') return null;
-            const openIdx = i;
-            const closeIdx = findMatchingParen(expr, openIdx);
-            if (closeIdx === -1) return null;
-
-            const argsText = expr.slice(openIdx + 1, closeIdx);
-            const hasArgs = argsText.trim().length > 0;
-            const multiline = expr.includes('\n');
-            const insert = hasArgs ? (multiline ? `,\n  ${arg}` : `, ${arg}`) : (multiline ? `\n  ${arg}\n` : `${arg}`);
-
-            let insertPos = closeIdx;
-            if (hasArgs) {
-                while (insertPos > openIdx + 1 && /\s/.test(expr[insertPos - 1])) insertPos--;
-            }
-            return expr.slice(0, insertPos) + insert + expr.slice(insertPos);
-        };
-
-	        const upsertPatternLayer = (code, layerVar) => {
-	            const match = code.match(/export const pattern\s*=\s*([\s\S]*?);\s*$/);
-	            if (!match) return `${code.trim()}\n\nexport const pattern = ${layerVar};\n`;
-	            const existing = match[1].trim();
-	            if (!existing) return code.replace(match[0], `export const pattern = ${layerVar};\n`);
-	            const appended = appendToTopLevelStackExpr(existing, layerVar);
-	            if (appended) return code.replace(match[0], `export const pattern = ${appended};\n`);
-	            return code.replace(match[0], `export const pattern = stack(\n  ${existing},\n  ${layerVar}\n);\n`);
-	        };
-
-	        const normalizePatternStack = (code) => {
-	            const match = code.match(/export const pattern\s*=\s*([\s\S]*?);\s*$/);
-	            if (!match) return code;
-	            const expr = match[1].trim();
-	            const trimmed = expr.trimStart();
-	            if (!trimmed.startsWith('stack')) return code;
-
-	            const parseTopLevelArgs = (text) => {
-	                const args = [];
-	                let current = '';
-	                let depth = 0;
-	                let inSingle = false;
-	                let inDouble = false;
-	                let inTemplate = false;
-	                let inLineComment = false;
-	                let inBlockComment = false;
-	                for (let i = 0; i < text.length; i++) {
-	                    const ch = text[i];
-	                    const next = text[i + 1];
-
-	                    if (inLineComment) {
-	                        current += ch;
-	                        if (ch === '\n') inLineComment = false;
-	                        continue;
-	                    }
-	                    if (inBlockComment) {
-	                        current += ch;
-	                        if (ch === '*' && next === '/') {
-	                            inBlockComment = false;
-	                            current += next;
-	                            i++;
-	                        }
-	                        continue;
-	                    }
-
-	                    if (inSingle) {
-	                        current += ch;
-	                        if (ch === '\\\\') { current += next; i++; continue; }
-	                        if (ch === '\'') inSingle = false;
-	                        continue;
-	                    }
-	                    if (inDouble) {
-	                        current += ch;
-	                        if (ch === '\\\\') { current += next; i++; continue; }
-	                        if (ch === '"') inDouble = false;
-	                        continue;
-	                    }
-	                    if (inTemplate) {
-	                        current += ch;
-	                        if (ch === '\\\\') { current += next; i++; continue; }
-	                        if (ch === '`') inTemplate = false;
-	                        continue;
-	                    }
-
-	                    if (ch === '/' && next === '/') { inLineComment = true; current += ch; continue; }
-	                    if (ch === '/' && next === '*') { inBlockComment = true; current += ch; continue; }
-	                    if (ch === '\'') { inSingle = true; current += ch; continue; }
-	                    if (ch === '"') { inDouble = true; current += ch; continue; }
-	                    if (ch === '`') { inTemplate = true; current += ch; continue; }
-
-	                    if (ch === '(') depth++;
-	                    if (ch === ')') depth--;
-
-	                    if (ch === ',' && depth === 0) {
-	                        args.push(current.trim());
-	                        current = '';
-	                        continue;
-	                    }
-
-	                    current += ch;
-	                }
-	                if (current.trim()) args.push(current.trim());
-	                return args;
-	            };
-
-	            const stackIdx = expr.indexOf('stack');
-	            let i = stackIdx + 5;
-	            while (i < expr.length && /\\s/.test(expr[i])) i++;
-	            if (expr[i] !== '(') return code;
-	            const openIdx = i;
-	            const closeIdx = findMatchingParen(expr, openIdx);
-	            if (closeIdx === -1) return code;
-
-	            const inner = expr.slice(openIdx + 1, closeIdx);
-	            const args = parseTopLevelArgs(inner);
-	            if (!args.length) return code;
-
-	            let flattened = [];
-	            let didFlatten = false;
-	            for (const arg of args) {
-	                const argTrim = arg.trimStart();
-	                if (argTrim.startsWith('stack')) {
-	                    const localIdx = arg.indexOf('stack');
-	                    let j = localIdx + 5;
-	                    while (j < arg.length && /\\s/.test(arg[j])) j++;
-	                    if (arg[j] === '(') {
-	                        const close = findMatchingParen(arg, j);
-	                        if (close !== -1) {
-	                            const innerArg = arg.slice(j + 1, close);
-	                            const innerArgs = parseTopLevelArgs(innerArg);
-	                            if (innerArgs.length) {
-	                                flattened = flattened.concat(innerArgs);
-	                                didFlatten = true;
-	                                continue;
-	                            }
-	                        }
-	                    }
-	                }
-	                flattened.push(arg);
-	            }
-
-	            if (!didFlatten) return code;
-
-	            const multiline = expr.includes('\\n');
-	            const joiner = multiline ? ',\\n  ' : ', ';
-	            const rebuilt = multiline
-	                ? `stack(\\n  ${flattened.join(joiner)}\\n)`
-	                : `stack(${flattened.join(joiner)})`;
-
-	            return code.replace(match[0], `export const pattern = ${rebuilt};\\n`);
-	        };
+        const toVarSlug = (str) => slugify(str, { fallback: 'x', maxLength: 32 });
 
 	        fileCode = ensureBlocksSection(fileCode);
 	        fileCode = ensureArrangementsSection(fileCode);
@@ -7645,11 +4595,10 @@ function setupBlocksEventListeners() {
 	        const usedBlockVars = new Set();
 	        for (const filename of wantedBlockFiles) {
 	            try {
-	                const res = await fetch(`/api/blocks/${filename}`);
-	                if (!res.ok) continue;
-	                const block = await res.json();
+	                const block = await getBlockDetailOrNull(filename);
+	                if (!block) continue;
 	                // Use filename-derived var names to avoid name collisions between blocks.
-	                const baseVar = `block_${slugify(filename.replace(/\\.js$/, ''))}`;
+	                const baseVar = `block_${toVarSlug(filename.replace(/\\.js$/, ''))}`;
 	                const varName = usedBlockVars.has(baseVar) ? nextAvailableVarName(fileCode, baseVar) : baseVar;
 	                blockVarByFilename[filename] = varName;
 	                usedBlockVars.add(varName);
@@ -7677,7 +4626,7 @@ function setupBlocksEventListeners() {
 	        }
 
 	        const arrName = arrangement.name || arrangement.arrangementState?.name || 'arrangement';
-	        const baseArrVar = `arr_${slugify(arrName)}`;
+	        const baseArrVar = `arr_${toVarSlug(arrName)}`;
 	        const arrVar = new RegExp(`\\bconst\\s+${baseArrVar}\\b`).test(fileCode) ? nextAvailableVarName(fileCode, baseArrVar) : baseArrVar;
 	        {
 	            const arrangeLines = rows.map(r => {
@@ -7698,17 +4647,13 @@ function setupBlocksEventListeners() {
 	            );
 	        }
 
-	        fileCode = upsertPatternLayer(fileCode, arrVar);
-	        fileCode = normalizePatternStack(fileCode);
+	        fileCode = upsertPatternLayerShared(fileCode, arrVar);
+	        fileCode = normalizePatternStackShared(fileCode);
 
         const editorCode = fileToEditor(fileCode);
         dom.repl.editor.setCode(editorCode);
 
-        fetch(`/api/pattern/${appState.currentPatternFilename}`, {
-            method: 'POST',
-            headers: getDeveloperModeHeaders(),
-            body: fileCode
-        });
+        savePatternSource(appState.currentPatternFilename, fileCode, getDeveloperModeHeaders()).catch(() => {});
 
         setStatus(`Arrangement "${arrName}" inserted into pattern`, 'success');
     });
@@ -7730,272 +4675,7 @@ function setupBlocksEventListeners() {
 	        previewTrackerStateOnce(resolved, instrumentList, (resolved || trackerState).bpm || 120, getPlaybackMixSettings());
 	    });
 
-	    // Listen for arrangements:preview event
-	    document.addEventListener('arrangements:preview', async (e) => {
-	        const { arrangement, startRowIndex, filename: previewFilename } = e.detail || {};
-	        const arrangementState = arrangement?.arrangementState;
-	        if (!arrangementState) return;
-
-	        // Fast path: same arrangement already playing, just changing start row — use cached context to avoid async work and minimize pause
-	        if (Number.isInteger(startRowIndex) && startRowIndex >= 0 &&
-	            arrangementPreviewPlayingFilename === previewFilename &&
-	            arrangementPreviewContext?.trackerStateByFilename != null &&
-	            Array.isArray(arrangementPreviewContext?.instrumentList)) {
-	            const stateToPlay = (appState.currentArrangementFilename === previewFilename)
-	                ? buildArrangementStatePayload()
-	                : arrangementState;
-	            arrangementPreviewContext = {
-	                ...arrangementPreviewContext,
-	                arrangementState: stateToPlay,
-	                mixSettings: getPlaybackMixSettings(),
-	            };
-	            arrangementPreviewPlayingFilename = previewFilename ?? null;
-	            stopArrangementPreview();
-	            const started = startArrangementPreview(
-	                stateToPlay,
-	                arrangementPreviewContext.trackerStateByFilename,
-	                arrangementPreviewContext.instrumentList,
-	                arrangementPreviewContext.bpm ?? 120,
-	                {
-	                    keepPosition: false,
-	                    mixSettings: arrangementPreviewContext.mixSettings,
-	                    startRowIndex,
-	                }
-	            );
-	            if (!started) {
-	                setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
-	                arrangementPreviewPlayingFilename = null;
-	            }
-	            document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: started } }));
-	            return;
-	        }
-
-	        console.log('[Arranger] preview listener received:', {
-	            startRowIndex,
-	            receivedRowLoops: (arrangementState?.rows || []).map((r, i) => ({ i, loop: Boolean(r?.loop) })),
-	        });
-
-	        try {
-	            console.log('[Arranger] Preview start:', arrangementState);
-		            const instrumentList = await getArrangementInstrumentList();
-		            const instrumentIdSet = new Set(instrumentList.map(i => i.id));
-
-	            const wantedBlockFiles = Array.from(new Set(
-	                (arrangementState.rows || []).flatMap(r => Array.isArray(r.blocks) ? r.blocks : [])
-	            ));
-
-	            const isPlayableTrackerState = (ts) => {
-	                if (!ts) return false;
-	                if (!Array.isArray(ts.grid) || !Array.isArray(ts.channelInstruments)) return false;
-	                return ts.grid.some((channel, ch) => {
-	                    const instId = ts.channelInstruments[ch];
-	                    if (!instId || !instrumentIdSet.has(instId)) return false;
-	                    const hasPlayableNote = (cell) => {
-	                        const n = cell && typeof cell === 'object' ? cell.note : cell;
-	                        return n && n !== '~' && n !== '-';
-	                    };
-	                    return Array.isArray(channel) && channel.some(hasPlayableNote);
-	                });
-	            };
-
-	            const trackerStateByFilename = {};
-	            const previewBlocks = [];
-	            const resolvedFilenames = new Set();
-	            let playable = 0;
-	            const registerTrackerState = (filename, trackerState) => {
-	                if (!filename || !trackerState || trackerStateByFilename[filename]) return;
-	                const resolved = resolveTrackerStateChannelInstruments(trackerState);
-	                trackerStateByFilename[filename] = resolved;
-	                previewBlocks.push({ filename, trackerState });
-	                if (isPlayableTrackerState(resolved)) playable++;
-	            };
-
-	            const cachedBlocksByFilename = new Map(
-	                (Array.isArray(appState.blocksLibraryCache) ? appState.blocksLibraryCache : [])
-	                    .filter((block) => block?.filename)
-	                    .map((block) => [block.filename, block])
-	            );
-
-	            for (const filename of wantedBlockFiles) {
-	                const cached = cachedBlocksByFilename.get(filename);
-	                if (!cached) continue;
-	                resolvedFilenames.add(filename);
-	                registerTrackerState(filename, cached.trackerState);
-	            }
-
-	            const missingBlocks = wantedBlockFiles.filter((filename) => !trackerStateByFilename[filename]);
-	            const mergeFetchedBlocks = (fetchedBlocks = []) => {
-	                fetchedBlocks.forEach((result) => {
-	                    if (!result?.block) return;
-	                    const { filename, block } = result;
-	                    resolvedFilenames.add(filename);
-	                    registerTrackerState(filename, block.trackerState);
-
-	                    const cacheIndex = appState.blocksLibraryCache.findIndex((entry) => entry?.filename === filename);
-	                    if (cacheIndex !== -1) {
-	                        appState.blocksLibraryCache[cacheIndex] = { ...appState.blocksLibraryCache[cacheIndex], ...block };
-	                    } else {
-	                        appState.blocksLibraryCache.push({ filename, ...block });
-	                    }
-	                });
-	            };
-	            const fetchMissingBlocks = async (filenames = []) => Promise.all(
-	                filenames.map(async (filename) => {
-	                    try {
-	                        const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
-	                        if (!res.ok) return null;
-	                        const block = await res.json();
-	                        return { filename, block };
-	                    } catch (err) {
-	                        console.warn('[Arranger] Failed to fetch block for preview:', filename, err);
-	                        return null;
-	                    }
-	                })
-	            );
-	            const startPreviewWithCurrentStates = () => {
-	                const bpm = arrangementState.bpm || 120;
-	                const mixSettings = getPlaybackMixSettings();
-	                console.log('[Arranger] Preview rendering. bpm:', bpm, 'blocks:', Object.keys(trackerStateByFilename).length);
-	                // Use fresh payload from current draft when still on same arrangement so loop (and other) flags are never stale
-	                const stateToPlay = (appState.currentArrangementFilename === previewFilename)
-	                    ? buildArrangementStatePayload()
-	                    : arrangementState;
-	                console.log('[Arranger] startPreviewWithCurrentStates passing to tracker:', {
-	                    arrangementStateRowLoops: (stateToPlay?.rows || []).map((r, i) => ({ i, loop: Boolean(r?.loop) })),
-	                    startRowIndex,
-	                });
-	                arrangementPreviewContext = {
-	                    arrangementState: stateToPlay,
-	                    trackerStateByFilename: { ...trackerStateByFilename },
-	                    instrumentList,
-	                    bpm,
-	                    mixSettings,
-	                };
-	                if (previewBlocks.length) {
-	                    document.dispatchEvent(new CustomEvent('arrangements:blocksLoaded', { detail: { blocks: previewBlocks } }));
-	                }
-	                // Set playing filename before start so synchronous playhead emit (e.g. start-from-row) is applied
-	                arrangementPreviewPlayingFilename = previewFilename ?? null;
-	                stopArrangementPreview();
-	                const started = startArrangementPreview(stateToPlay, trackerStateByFilename, instrumentList, bpm, {
-	                    keepPosition: false,
-	                    mixSettings,
-	                    startRowIndex: Number.isInteger(startRowIndex) ? startRowIndex : undefined,
-	                });
-	                if (!started) {
-	                    setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
-	                    arrangementPreviewPlayingFilename = null;
-	                }
-	                document.dispatchEvent(new CustomEvent('arrangements:previewState', { detail: { playing: started } }));
-	                return started;
-	            };
-
-	            // Ensure all referenced blocks are loaded before first playback so loudness/render
-	            // matches export behavior (full arrangement pass, no partial early start).
-	            if (missingBlocks.length) {
-	                setStatus('Preparing arrangement preview...', 'normal');
-	                const fetchedBlocks = await fetchMissingBlocks(missingBlocks);
-	                mergeFetchedBlocks(fetchedBlocks);
-	            }
-
-	            const unresolvedBlocks = wantedBlockFiles.filter((filename) => !trackerStateByFilename[filename]);
-	            if (unresolvedBlocks.length > 0) {
-	                setStatus(`Arrangement preview failed: missing blocks (${unresolvedBlocks.length}).`, 'error');
-	                return;
-	            }
-
-		            if (wantedBlockFiles.length > 0 && resolvedFilenames.size === 0) {
-		                setStatus('Arrangement preview failed: could not load blocks.', 'error');
-		                return;
-		            }
-		            if (wantedBlockFiles.length > 0 && playable === 0) {
-		                setStatus('Arrangement preview unavailable: blocks have no playable tracker data.', 'error');
-		                return;
-		            }
-	            startPreviewWithCurrentStates();
-        } catch (err) {
-            console.error('[Arranger] Preview failed:', err);
-            setStatus('Arrangement preview failed (see console).', 'error');
-        }
-    });
-
-	        document.addEventListener('arrangements:stateChanged', (e) => {
-            if (!isArrangementPreviewPlaying()) return;
-            if (arrangementPreviewPlayingFilename !== appState.currentArrangementFilename) return;
-            const arrangementState = e?.detail?.arrangementState;
-            if (!arrangementState) return;
-	            arrangementPreviewContext = {
-	                ...arrangementPreviewContext,
-	                arrangementState,
-	                bpm: arrangementState.bpm || arrangementPreviewContext.bpm,
-                    mixSettings: getPlaybackMixSettings(),
-	            };
-            const addedRowIndex = e?.detail?.addedRowIndex;
-            const addedFilename = e?.detail?.addedFilename;
-            const removedFilename = e?.detail?.removedFilename;
-            if (Number.isInteger(addedRowIndex)) {
-                clearArrangementLiveOverride({ rowIndex: addedRowIndex, scheduleUpdate: false });
-            }
-            if (addedFilename) {
-                clearArrangementLiveOverride({ filename: addedFilename, scheduleUpdate: false });
-            }
-            if (removedFilename) {
-                clearArrangementLiveOverride({ filename: removedFilename, scheduleUpdate: false });
-            }
-            const keepPosition = !removedFilename;
-	            updateArrangementPreview({
-		                arrangementState,
-		                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
-		                instrumentList: arrangementPreviewContext.instrumentList,
-		                bpm: arrangementPreviewContext.bpm,
-	                    mixSettings: arrangementPreviewContext.mixSettings,
-		                keepPosition,
-				            });
-                updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
-        });
-
-        document.addEventListener('arrangements:previewLoopChanged', (e) => {
-            if (!isArrangementPreviewPlaying()) return;
-            const arrangementState = e?.detail?.arrangementState;
-            if (!arrangementState) return;
-            updateArrangementPreview({
-                arrangementState,
-                trackerStateByFilename: arrangementPreviewContext.trackerStateByFilename,
-                instrumentList: arrangementPreviewContext.instrumentList,
-                bpm: arrangementPreviewContext.bpm,
-                mixSettings: arrangementPreviewContext.mixSettings,
-                keepPosition: true,
-            });
-        });
-
-        document.addEventListener('arrangements:blocksLoaded', (e) => {
-            const blocks = e?.detail?.blocks || [];
-            updateArrangementWorkspaceChipSteps(blocks);
-            updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
-        });
-
-        document.addEventListener('arrangements:playhead', (e) => {
-            const detail = e?.detail || {};
-            if (arrangementPreviewPlayingFilename === appState.currentArrangementFilename) {
-                applyArrangementWorkspacePlayhead(detail);
-            }
-            updateArrangementPlaybackInstrumentAliases(detail);
-            updateArrangementListScopeVisualizer();
-        });
-
-        document.addEventListener('arrangements:previewState', (e) => {
-            updateArrangementWorkspacePreviewButtonState();
-            const playing = e?.detail?.playing ?? isArrangementPreviewPlaying();
-            if (!playing) {
-                arrangementPreviewPlayingFilename = null;
-                clearArrangementWorkspacePlayheadVisuals();
-                clearArrangementPlaybackInstrumentAliases();
-                updateArrangementListScopeVisualizer();
-                return;
-            }
-            updateArrangementPlaybackInstrumentAliases(arrangementWorkspacePlayhead);
-            updateArrangementListScopeVisualizer();
-        });
+        installArrangementPreviewEventListeners();
 
         document.addEventListener('tracker:stateChanged', (e) => {
             const { filename, trackerState, arrangementInsertRowIndex, name, pattern, immediate } = e.detail || {};
@@ -8175,8 +4855,7 @@ document.addEventListener('tracker:duplicateBlock', async (e) => {
 
     let existing = [];
     try {
-        const res = await fetch('/api/blocks');
-        if (res.ok) existing = await res.json();
+        existing = await listBlocksOrEmpty();
     } catch (_) {}
     const existingNames = new Set((existing || []).map((b) => String(b?.name ?? '').toLowerCase()));
 

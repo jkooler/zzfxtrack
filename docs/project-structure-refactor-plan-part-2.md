@@ -29,6 +29,23 @@ Open constraints:
 - `src/app/state.js` currently tracks only a subset of global state.
 - Large logic duplication remains in insertion and source-transform flows.
 
+Agent's comment:
+
+Added remaining-step doc: project-structure-refactor-plan-part-2.md.
+Expanded appState and migrated these fields out of main locals:
+currentPatternScope, currentArrangementScope
+patternEntriesCache, arrangementEntriesCache
+arrangementDraftState, blocksLibraryCache, activeArrangementBlockFilename
+Added API layer file: api.js and migrated a larger first+second batch of calls in main.js:
+list/get/create/save/delete/rename for arrangements
+list/get/save/delete/rename + meta read/write for patterns
+list blocks (safe read path)
+Validation:
+
+npx vite build passes after each migration batch.
+
+You should continue next with the remaining direct /api/* calls in main.js and then start extracting shared code-transform helpers unless you want to reprioritize.
+
 ## Remaining Refactor Steps
 
 ## Phase A: Finish Core App Foundations
