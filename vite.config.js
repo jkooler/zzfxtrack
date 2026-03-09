@@ -151,13 +151,8 @@ const apiPlugin = () => ({
              return;
         }
         
-        // POST - Save pattern content
+        // POST - Save pattern content (system patterns are editable; only delete is restricted)
         if (req.method === 'POST') {
-            if (readPatternScope(resolvedPatternName) === 'system' && !isDeveloperModeRequest(req)) {
-                res.statusCode = 403;
-                res.end('System patterns are immutable');
-                return;
-            }
             let body = '';
             req.on('data', chunk => body += chunk);
             req.on('end', () => {
@@ -353,11 +348,6 @@ const apiPlugin = () => ({
                res.end('Pattern not found');
                return;
              }
-	             if (readPatternScope(oldName) === 'system' && !isDeveloperModeRequest(req)) {
-	               res.statusCode = 403;
-	               res.end('System patterns are immutable');
-	               return;
-	             }
              
              // Check if new name already exists
              if (fs.existsSync(newPath) && oldPath !== newPath) {

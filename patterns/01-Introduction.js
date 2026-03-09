@@ -8,13 +8,13 @@ export const bpm = 120;
 // https://patterns.slab.org/learn/getting-started/
 
 const pattern = stack(
-  note("bb2 bb2(-1,2) bb2 [bb2(2,8) d4] bb2 bb2(-1,2) bb2(3,8) [[bb2 bb4] bb2 d4 bb2]").s("sys-kickdrum").slow(4),
-  note("c2 a1(3,8) c2(2,8) g1 bb1 g1(3,8) c2(2,8) [- g1]").slow(4).s("sys-bass"),
-  sound("sys-hh-closed(16,16), [- sys-hh-open]*4"),
-  sound("- - - - - - - [sys-cowbell] - - - - - - [- sys-cowbell] [sys-cowbell]").slow(4),
-  note("[- c2]*2").s("sys-snare"),
-  note("[d4|f4|g4] [bb3 c4] f3 [f4 eb4]").s("sys-synth-stab"),
-  note("<c2 [eb2 g2]> <[c4,f4,bb3]@2 [c3,eb4,bb4] [d4,f4,a4]>*2").s("sys-pad").slow(2)
+  note("bb2 bb2(-1,2) bb2 [bb2(2,8) d4] bb2 bb2(-1,2) bb2(3,8) [[bb2 bb4] bb2 d4 bb2]").s("kickdrum-s").slow(4),
+  note("c2 a1(3,8) c2(2,8) g1 bb1 g1(3,8) c2(2,8) [- g1]").slow(4).s("bass-s"),
+  sound("hh-closed-s(16,16), [- hh-open-s]*4"),
+  sound("- - - - - - - [cowbell-s] - - - - - - [- cowbell-s] [cowbell-s]").slow(4),
+  note("[- c2]*2").s("snare-s"),
+  note("[d4|f4|g4] [bb3 c4] f3 [f4 eb4]").s("synth-stab-s"),
+  note("<c2 [eb2 g2]> <[c4,f4,bb3]@2 [c3,eb4,bb4] [d4,f4,a4]>*2").s("pad-s").slow(2)
 )
 
 
@@ -26,4 +26,4 @@ export const pattern = arrange([16, pattern])
 // 1. Audio processing effects will not carry over to exported .json file.
 // 2. Some more advanced Strudel pattern logic may also be only partially compatible.
 // 3. Make sure to use the "Instruments" instead of the synthesis provided by Strudel.
-// 4. Sounds produced by Strudel's inherit sound engines will not carry to ZzFXTrack Player export.
+// 4. Sounds produced by Strudel's inherit sound engines will not carry to ZzFXTrack Player export.;
