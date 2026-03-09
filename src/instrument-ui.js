@@ -17,7 +17,10 @@ import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { getAudioContext } from '@strudel/webaudio';
 
-import { reloadInstruments, isStrudelPlaybackActive, refreshPatternListActiveState, updateInstrumentReferencesInPatternsAndBlocks } from './repl-app.js';
+import { reloadInstruments } from './features/instruments/instrument-runtime.js';
+import { updateInstrumentReferencesInPatternsAndBlocks } from './features/instruments/instrument-reference-sync.js';
+import { refreshPatternListActiveState } from './features/patterns/pattern-list.js';
+import { isStrudelPlaybackActive } from './features/playback/playback-controller.js';
 import { isTrackerOpen, applyInstrumentRenameToChannelInstruments, isArrangementPreviewPlaying, isTrackerPreviewPlaying } from './tracker.js';
 import { addRenameMapping } from './instrument-rename-map.js';
 import { createIcons, icons } from 'lucide';
@@ -1975,7 +1978,7 @@ function handleConfirmImport() {
 
 /**
  * Get current instruments for exporter
- * Called by repl-app.js when exporting
+ * Called by main.js when exporting
  */
 export async function getInstrumentsForExporter() {
     const { getInstrumentMapping, getInstrumentArray, getMonophonicArray } = await import('./instrument-manager.js');
