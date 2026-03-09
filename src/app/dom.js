@@ -9,6 +9,7 @@ export const dom = {
     patternList: document.getElementById('patternList'),
     arrangementList: document.getElementById('arrangementList'),
     blocksTab: document.getElementById('blocksTab'),
+    strudelTab: document.getElementById('strudelTab'),
     newArrangementBtn: document.getElementById('newArrangementBtn'),
     patternNameInput: document.getElementById('patternNameInput'),
     openPatternAdvancedSettingsBtn: document.getElementById('openPatternAdvancedSettingsBtn'),

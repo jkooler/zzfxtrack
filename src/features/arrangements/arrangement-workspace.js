@@ -66,6 +66,7 @@ let deps = {
     updateArrangementDisplayName: () => {},
     updateArrangementInstrumentUsage: () => {},
     updateArrangementListScopeVisualizer: () => {},
+    updatePatternListVisualizer: () => {},
     updateAdvancedSettingsButtonsVisibility: () => {},
     updateFooterExportActionLabels: () => {},
     updatePatternSelectionState: () => {},
@@ -107,6 +108,7 @@ export function showArrangementWorkspace() {
     deps.updateAdvancedSettingsButtonsVisibility();
     deps.updateFooterExportActionLabels();
     deps.updateArrangementListScopeVisualizer();
+    deps.updatePatternListVisualizer();
     updateArrangementWorkspacePreviewButtonState();
 }
 

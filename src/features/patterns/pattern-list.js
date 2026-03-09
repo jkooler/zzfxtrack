@@ -22,6 +22,7 @@ let createIcons = () => {};
 let icons = {};
 let setStatus = () => {};
 let getPlayingPatternFilename = () => null;
+let getStrudelTabElement = () => null;
 let attachVisualizer = () => {};
 
 export function configurePatternList(options = {}) {
@@ -52,6 +53,7 @@ export function configurePatternList(options = {}) {
     if (options.icons) icons = options.icons;
     if (typeof options.setStatus === 'function') setStatus = options.setStatus;
     if (typeof options.getPlayingPatternFilename === 'function') getPlayingPatternFilename = options.getPlayingPatternFilename;
+    if (typeof options.getStrudelTabElement === 'function') getStrudelTabElement = options.getStrudelTabElement;
     if (typeof options.attachVisualizer === 'function') attachVisualizer = options.attachVisualizer;
 }
 
@@ -123,11 +125,11 @@ export async function refreshPatternList() {
             const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
 
             const folderLi = document.createElement('li');
-            folderLi.className = 'mt-1 pb-1 border-b border-border/40';
+            folderLi.className = 'mt-1 pb-1';
             folderLi.innerHTML = `
                 <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-pattern-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
-                        <i data-lucide="${folderIcon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground'}"></i>
+                        <i data-lucide="${folderIcon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground opacity-70'}"></i>
                         ${label}
                     </span>
                     <span class="opacity-70">${items.length}</span>
@@ -198,11 +200,46 @@ export async function refreshPatternList() {
     }
 }
 
+const TAB_VISUALIZER_CLASS = 'list-item-visualizer';
+
 export function updatePatternListVisualizer() {
     const patternList = getPatternListElement();
-    if (!patternList || patternList.classList.contains('hidden')) return;
-
     const playingPatternFilename = getPlayingPatternFilename();
+    const listVisible = patternList && !patternList.classList.contains('hidden');
+
+    if (!listVisible && playingPatternFilename) {
+        const strudelTab = getStrudelTabElement();
+        if (strudelTab) {
+            let canvas = strudelTab.querySelector(`canvas.${TAB_VISUALIZER_CLASS}`);
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.className = TAB_VISUALIZER_CLASS;
+                canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
+                strudelTab.classList.add('relative');
+                strudelTab.insertBefore(canvas, strudelTab.firstChild);
+            }
+            canvas.width = strudelTab.clientWidth;
+            canvas.height = strudelTab.clientHeight;
+            attachVisualizer(canvas);
+            return;
+        }
+    }
+
+    const strudelTab = getStrudelTabElement();
+    if (strudelTab) {
+        const tabCanvas = strudelTab.querySelector(`canvas.${TAB_VISUALIZER_CLASS}`);
+        if (tabCanvas) {
+            tabCanvas.remove();
+            strudelTab.classList.remove('relative');
+        }
+    }
+
+    if (!patternList) return;
+    if (patternList.classList.contains('hidden')) {
+        attachVisualizer(null);
+        return;
+    }
+
     const playingEntry = getPatternEntriesCache().find((e) => e.filename === playingPatternFilename);
     const playingScope = playingEntry ? normalizeScope(playingEntry.scope) : null;
     let visualizerAttached = false;

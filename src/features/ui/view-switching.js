@@ -23,6 +23,7 @@ let deps = {
     setPlayingPatternFilename: () => {},
     undockTrackerModalFromWorkspace: () => {},
     updateAdvancedSettingsButtonsVisibility: () => {},
+    updateArrangementListScopeVisualizer: () => {},
     updateArrangementSelectionState: () => {},
     updatePatternListVisualizer: () => {},
     updatePatternSelectionState: () => {},
@@ -72,7 +73,7 @@ export function updateFooterExportActionLabels() {
     const arrangementMode = isArrangementWorkspaceActive();
     if (dom.exportBtnLabel) dom.exportBtnLabel.textContent = 'Export';
     if (dom.exportMenuTitle) {
-        dom.exportMenuTitle.textContent = arrangementMode ? 'Export Arrangement to...' : 'Export Pattern to...';
+        dom.exportMenuTitle.textContent = arrangementMode ? 'Export format' : 'Export Pattern to...';
     }
     if (dom.exportBtn) {
         dom.exportBtn.title = arrangementMode ? 'Export arrangement' : 'Export pattern';
@@ -217,5 +218,7 @@ export function showEditor() {
     refreshZzfxmPreviewControlsVisibility();
     deps.updateAdvancedSettingsButtonsVisibility();
     dom.sidebarTitle?.classList.remove('active');
+    deps.updatePatternListVisualizer();
+    deps.updateArrangementListScopeVisualizer();
     updateFooterExportActionLabels();
 }

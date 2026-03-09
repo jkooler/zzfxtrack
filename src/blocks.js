@@ -685,7 +685,7 @@ function renderArrangementsList() {
     folder.innerHTML = `
       <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-arr-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground'}"></i>
+          <i data-lucide="${icon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground opacity-70'}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>
@@ -1635,7 +1635,7 @@ function renderBlocksList() {
     folder.innerHTML = `
       <button type="button" class="w-full flex items-center justify-between px-0 py-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40 ${expanded ? '' : 'border-b border-border'}" data-block-folder="${scope}">
         <span class="inline-flex items-center gap-1.5">
-          <i data-lucide="${icon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground'}"></i>
+          <i data-lucide="${icon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground opacity-70'}"></i>
           ${label}
         </span>
         <span class="opacity-70">${entries.length}</span>

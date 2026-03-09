@@ -396,7 +396,7 @@ input[readonly]:focus-visible {
 
 #patternList,
 #arrangementList {
-  @apply pt-2 pb-2;
+  @apply p-2;
 }
 
 .instrument-list {
@@ -440,7 +440,7 @@ input[readonly]:focus-visible {
   touch-action: manipulation; /* iPad: single tap to select/activate, no double-tap */
 }
 .list-item {
-  @apply flex items-center justify-between py-0 px-1.5 mb-0 min-h-9 rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative overflow-hidden text-sm font-medium;
+  @apply flex items-center justify-between p-1 mb-0 rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative overflow-hidden font-medium text-sm;
 }
 .list-item.active {
   @apply bg-accent text-accent-foreground;
@@ -475,7 +475,8 @@ input[readonly]:focus-visible {
 }
 
 .instrument-item {
-  @apply flex items-center justify-between rounded-md hover:bg-accent/50 cursor-pointer transition-colors text-sm relative py-0.5 px-1;
+  @apply flex items-center justify-between rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative py-0 px-1;
+  min-height: min-content; /* height defined by content only */
 }
 .instrument-item.active {
   background-color: color-mix(in srgb, var(--tertiary), transparent 50%);
@@ -513,7 +514,7 @@ input[readonly]:focus-visible {
   @apply flex-1 min-w-0 mr-2;
 }
 .instrument-name {
-  @apply font-medium truncate text-foreground text-sm block;
+  @apply font-medium truncate text-foreground block text-sm;
 }
 .instrument-alias {
   @apply text-xs text-muted-foreground truncate block;
@@ -523,13 +524,13 @@ input[readonly]:focus-visible {
 }
 
 .sidebar-del-btn {
-  @apply text-muted-foreground hover:text-destructive focus-visible:text-destructive transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none;
+  @apply text-muted-foreground hover:text-destructive focus-visible:text-destructive transition-colors p-0.5 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none;
 }
 .list-item .sidebar-del-btn {
-  @apply p-1;
+  @apply p-0.5;
 }
 .sidebar-edit-btn {
-  @apply text-muted-foreground hover:text-primary focus-visible:text-primary transition-colors p-2 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none inline-flex items-center gap-3 text-xs;
+  @apply text-muted-foreground hover:text-primary focus-visible:text-primary transition-colors p-0.5 bg-transparent border border-transparent cursor-pointer rounded-md focus-visible:outline-none inline-flex items-center gap-3 text-xs;
 }
 .sidebar-del-btn:hover,
 .sidebar-del-btn:focus-visible,
@@ -1162,7 +1163,7 @@ strudel-editor {
 }
 
 .block-item {
-  @apply pt-2 pb-2 px-3 rounded-md border border-border bg-card cursor-pointer transition-all hover:border-primary/50 hover:bg-accent/10 flex items-center justify-between gap-3;
+  @apply py-1 px-1.5 rounded-md border border-border bg-card cursor-pointer transition-all hover:border-primary/50 hover:bg-accent/10 flex items-center justify-between gap-3;
 }
 
 .block-item.selected {

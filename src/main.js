@@ -205,6 +205,7 @@ configureViewSwitching({
     updatePatternSelectionState,
     updateArrangementSelectionState,
     updateAdvancedSettingsButtonsVisibility,
+    updateArrangementListScopeVisualizer,
     renderPlayButton,
     updatePatternListVisualizer,
     clearZzfxmPreviewData,
@@ -232,6 +233,7 @@ configurePatternList({
     icons,
     setStatus,
     getPlayingPatternFilename: () => playingPatternFilename,
+    getStrudelTabElement: () => dom.strudelTab,
     attachVisualizer,
 });
 
@@ -420,6 +422,7 @@ configureArrangementList({
     logError: (...args) => console.error(...args),
     isArrangementPreviewPlaying,
     getArrangementPreviewPlayingFilename: () => arrangementPreviewPlayingFilename,
+    getBlocksTabElement: () => dom.blocksTab,
     attachVisualizer,
 });
 
@@ -543,6 +546,7 @@ configureArrangementWorkspace({
     updateAdvancedSettingsButtonsVisibility,
     updateFooterExportActionLabels,
     updateArrangementListScopeVisualizer,
+    updatePatternListVisualizer,
     createIcons,
     icons,
     getArrangementWorkspacePane: () => dom.arrangementWorkspacePane,
@@ -1663,12 +1667,12 @@ document.addEventListener('sidebar:viewChanged', async (e) => {
             showWelcome();
         }
     }
-    updatePatternListVisualizer();
     updateArrangementListScopeVisualizer();
+    updatePatternListVisualizer();
 });
 document.addEventListener('visualizer:ready', () => {
-    updatePatternListVisualizer();
     updateArrangementListScopeVisualizer();
+    updatePatternListVisualizer();
 });
 dom.newPatternName.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
@@ -1834,6 +1838,7 @@ function updatePlayState(isPlaying) {
     } else {
         playingPatternFilename = null;
     }
+    updateArrangementListScopeVisualizer();
     updatePatternListVisualizer();
     renderPlayButton();
 }

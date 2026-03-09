@@ -4,10 +4,13 @@
  * Deps keys: alphabetical.
  */
 
+const TAB_VISUALIZER_CLASS = 'list-item-visualizer';
+
 let deps = {
     attachVisualizer: () => {},
     createIcons: () => {},
     deleteArrangement: () => {},
+    getBlocksTabElement: () => null,
     escapeHtml: (value) => String(value),
     getArrangementPreviewPlayingFilename: () => null,
     getCurrentArrangementFilename: () => null,
@@ -64,13 +67,44 @@ function isArrangementListVisible() {
 }
 
 export function updateArrangementListScopeVisualizer() {
-    if (!isArrangementListVisible()) return;
     const arrangementList = deps.getListElement();
-    if (!arrangementList) return;
-
+    const listVisible = arrangementList && isArrangementListVisible();
     const playingFilename = deps.isArrangementPreviewPlaying()
         ? (deps.getArrangementPreviewPlayingFilename() ?? deps.getCurrentArrangementFilename())
         : null;
+
+    if (!listVisible && playingFilename) {
+        const blocksTab = deps.getBlocksTabElement();
+        if (blocksTab) {
+            let canvas = blocksTab.querySelector(`canvas.${TAB_VISUALIZER_CLASS}`);
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.className = TAB_VISUALIZER_CLASS;
+                canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
+                blocksTab.classList.add('relative');
+                blocksTab.insertBefore(canvas, blocksTab.firstChild);
+            }
+            canvas.width = blocksTab.clientWidth;
+            canvas.height = blocksTab.clientHeight;
+            deps.attachVisualizer(canvas);
+            return;
+        }
+    }
+
+    const blocksTab = deps.getBlocksTabElement();
+    if (blocksTab) {
+        const tabCanvas = blocksTab.querySelector(`canvas.${TAB_VISUALIZER_CLASS}`);
+        if (tabCanvas) {
+            tabCanvas.remove();
+            blocksTab.classList.remove('relative');
+        }
+    }
+
+    if (!arrangementList || !isArrangementListVisible()) {
+        if (!playingFilename) deps.attachVisualizer(null);
+        return;
+    }
+
     const playingEntry = deps.getEntriesCache().find((e) => e.filename === playingFilename);
     const playingScope = playingEntry ? deps.normalizeScope(playingEntry.scope) : null;
     let visualizerAttached = false;
@@ -174,11 +208,11 @@ export async function refreshArrangementList() {
             const expanded = isEmpty ? true : (scope === 'system' ? folderState.system : folderState.user);
             const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
             const folderLi = document.createElement('li');
-            folderLi.className = 'mt-1 pb-1 border-b border-border/40';
+            folderLi.className = 'mt-1 pb-1';
             folderLi.innerHTML = `
                 <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-arrangement-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
-                        <i data-lucide="${folderIcon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground'}"></i>
+                        <i data-lucide="${folderIcon}" class="w-5 h-5 shrink-0 ${expanded ? 'text-primary' : 'text-muted-foreground opacity-70'}"></i>
                         ${label}
                     </span>
                     <span class="opacity-70">${items.length}</span>
