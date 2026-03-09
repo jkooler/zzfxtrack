@@ -1,14 +1,33 @@
 # Project Structure Refactor Plan Part 2
 
-Status: In progress  
+Status: Completed  
 Created: 2026-03-09  
 Depends on: `docs/project-structure-refactor-plan.md`
+
+## Refactor Complete Checklist
+
+- [x] Entrypoint is `src/main.js` (legacy `src/repl-app.js` is no longer used).
+- [x] Feature ownership extracted into modules under `src/features/*`.
+- [x] `src/main.js` is composition/orchestration focused (no longer monolithic feature implementation).
+- [x] Shared app surfaces are modularized:
+  - `src/app/dom.js`
+  - `src/app/state.js`
+  - `src/app/api.js`
+  - `src/shared/code-transform-utils.js`
+- [x] Playback/export/project I/O moved out of entrypoint (`src/features/playback/*`, `src/features/project/*`).
+- [x] Settings/shell UI moved out of entrypoint (`src/features/settings/*`, `src/features/ui/*`).
+- [x] Documentation references refreshed from `repl-app.js` to `main.js` where applicable.
+- [x] Build validation passes (`npx vite build`).
+
+Deferred product bugs are tracked separately in:
+
+- `bugfixes-after-project-structure-refactor.md`
 
 ## Current State Snapshot
 
 Completed so far:
 
-1. `src/repl-app.js` renamed to `src/main.js`.
+1. Entrypoint now uses `src/main.js` (legacy `src/repl-app.js` no longer used).
 2. `index.html` entry script updated to `/src/main.js`.
 3. `instrument-ui` dependency on entrypoint removed.
 4. Extracted modules:

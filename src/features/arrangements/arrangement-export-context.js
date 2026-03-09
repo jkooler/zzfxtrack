@@ -1,3 +1,8 @@
+/**
+ * Module: features/arrangements/arrangement-export-context
+ * Purpose: Builds arrangement export context and arrangement-scoped instrument usage data.
+ */
+
 let deps = {
     getCurrentArrangementFilename: () => null,
     getArrangementDraftState: () => null,

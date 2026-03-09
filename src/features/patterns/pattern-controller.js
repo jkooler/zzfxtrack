@@ -1,3 +1,8 @@
+/**
+ * Module: features/patterns/pattern-controller
+ * Purpose: Pattern lifecycle orchestration (create/load/save/rename/delete) and selection flow.
+ */
+
 import { normalizePatternBaseName } from './pattern-meta.js';
 
 let deps = null;

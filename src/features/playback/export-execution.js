@@ -1,3 +1,8 @@
+/**
+ * Module: features/playback/export-execution
+ * Purpose: Pattern/arrangement export execution orchestration for JSON and JS song output.
+ */
+
 import { exportPattern } from '../../export-logic.js';
 
 let deps = {

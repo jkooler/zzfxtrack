@@ -1,3 +1,8 @@
+/**
+ * Module: features/settings/advanced-settings
+ * Purpose: Advanced-settings modal orchestration and scope-update actions.
+ */
+
 let deps = {
     isDemoMode: () => false,
     getDom: () => ({}),

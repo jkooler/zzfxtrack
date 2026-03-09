@@ -1,3 +1,8 @@
+/**
+ * Module: features/project/project-import
+ * Purpose: Project bundle upload/import flow and import modal orchestration.
+ */
+
 import JSZip from 'jszip';
 import { buildArrangementSourceFromApi, buildBlockSourceFromApi, describeUploadBundle, getFilenameFromSection, normalizeZipEntryPath, parseArrangementSource, parseBlockSource, validateUploadBundle } from './bundle-utils.js';
 

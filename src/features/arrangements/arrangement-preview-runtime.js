@@ -1,3 +1,8 @@
+/**
+ * Module: features/arrangements/arrangement-preview-runtime
+ * Purpose: Runtime arrangement-preview context updates and playback instrument alias synchronization.
+ */
+
 let deps = {
     isArrangementPreviewPlaying: () => false,
     getArrangementPreviewPlayingFilename: () => null,

@@ -1,3 +1,8 @@
+/**
+ * Module: features/playback/playback-controller
+ * Purpose: Shared playback-state helpers for entrypoint and playback features.
+ */
+
 let getEditor = () => document.getElementById('repl')?.editor || null;
 
 export function configurePlaybackController(options = {}) {

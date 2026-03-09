@@ -1,3 +1,8 @@
+/**
+ * Module: app/dom
+ * Purpose: Centralized DOM element registry used by feature modules and main composition.
+ */
+
 export const dom = {
     repl: document.getElementById('repl'),
     sidebarTitle: document.getElementById('sidebarTitle'),
@@ -79,8 +84,6 @@ export const dom = {
 
     // Delete Confirmation
     deleteConfirmModal: document.getElementById('deleteConfirmModal'),
-    deleteConfirmText: document.getElementById('deleteConfirmText'),
-    confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
     deleteConfirmText: document.getElementById('deleteConfirmText'),
     confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
     cancelDeleteBtn: document.getElementById('cancelDeleteBtn'),

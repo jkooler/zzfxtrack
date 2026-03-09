@@ -1,3 +1,8 @@
+/**
+ * Module: features/arrangements/arrangement-list
+ * Purpose: Arrangement list loading, grouping, rendering, and active-state handling.
+ */
+
 let deps = {
     getListElement: () => document.getElementById('arrangementList'),
     getEntriesCache: () => [],

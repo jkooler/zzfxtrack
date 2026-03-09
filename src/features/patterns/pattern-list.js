@@ -1,3 +1,8 @@
+/**
+ * Module: features/patterns/pattern-list
+ * Purpose: Pattern list loading, grouping, rendering, and active-state behavior.
+ */
+
 let getCurrentPatternFilename = () => null;
 let getPatternListElement = () => document.getElementById('patternList');
 let getPatternEntriesCache = () => [];

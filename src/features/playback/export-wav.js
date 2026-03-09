@@ -1,3 +1,8 @@
+/**
+ * Module: features/playback/export-wav
+ * Purpose: WAV encoding utilities and pattern/arrangement WAV export flows.
+ */
+
 let deps = {
     buildSong: () => new Float32Array(),
     triggerFileDownload: () => {},

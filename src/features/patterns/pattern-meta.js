@@ -1,3 +1,8 @@
+/**
+ * Module: features/patterns/pattern-meta
+ * Purpose: Pattern metadata persistence and scope/name normalization helpers.
+ */
+
 import { getPatternMetaOrNull, savePatternMetaRecord } from '../../app/api.js';
 
 let metaDeps = {

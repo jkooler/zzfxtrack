@@ -2135,7 +2135,7 @@ export const trackerState = {
   ],
   "channelInstruments": [
     "bass",
-    "",
+    "sys-tri",
     "",
     "",
     "",

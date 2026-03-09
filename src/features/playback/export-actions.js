@@ -1,3 +1,8 @@
+/**
+ * Module: features/playback/export-actions
+ * Purpose: Export duration/size estimation and warning-message helper utilities.
+ */
+
 import { stripQuotedStrings } from '../../shared/code-transform-utils.js';
 
 /** Duration (seconds) above which we show the export length warning (5 min). */

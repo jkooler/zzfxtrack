@@ -1,3 +1,8 @@
+/**
+ * Module: features/tracker/tracker-controller
+ * Purpose: Tracker open/edit/save flows and tracker autosave orchestration.
+ */
+
 import { syncTrackerPreviewReferenceContext } from './tracker-preview-sync.js';
 
 let deps = {

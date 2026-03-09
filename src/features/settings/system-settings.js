@@ -1,3 +1,8 @@
+/**
+ * Module: features/settings/system-settings
+ * Purpose: System-settings modal, theme controls, and REPL theme synchronization.
+ */
+
 import Coloris from '@melloware/coloris';
 import { COLOR_THEME_KEY } from './theme-controller.js';
 

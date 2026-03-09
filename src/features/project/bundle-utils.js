@@ -1,3 +1,8 @@
+/**
+ * Module: features/project/bundle-utils
+ * Purpose: Project bundle parsing, validation, and source conversion helper utilities.
+ */
+
 function normalizeScope(value) {
     return value === 'system' ? 'system' : 'user';
 }

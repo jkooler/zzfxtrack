@@ -1,3 +1,8 @@
+/**
+ * Module: features/ui/touch-activation
+ * Purpose: Touch-specific single-tap activation behavior for list-driven UI controls.
+ */
+
 /** Selector for touch activation: list items + instrument drawer close (single-tap on iPad). */
 const LIST_ITEM_SELECTOR = '.list-item, .instrument-item, .block-item, #closeDrawerBtn';
 /** If touch started on one of these, we do not synthesize click (let the button handle it). */

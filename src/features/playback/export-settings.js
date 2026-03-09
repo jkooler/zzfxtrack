@@ -1,3 +1,8 @@
+/**
+ * Module: features/playback/export-settings
+ * Purpose: Export settings modal behavior and playback/WAV settings normalization.
+ */
+
 let deps = {
     getDom: () => ({}),
     sanitizePlaybackMixSettings: (value) => value,

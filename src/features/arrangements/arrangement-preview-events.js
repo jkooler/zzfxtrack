@@ -1,3 +1,8 @@
+/**
+ * Module: features/arrangements/arrangement-preview-events
+ * Purpose: Event-driven orchestration for arrangement preview start/stop/update flows.
+ */
+
 let deps = {
     getArrangementPreviewPlayingFilename: () => null,
     setArrangementPreviewPlayingFilename: () => {},

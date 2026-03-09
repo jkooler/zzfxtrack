@@ -1,3 +1,8 @@
+/**
+ * Module: features/patterns/pattern-editor
+ * Purpose: Pattern editor/file transforms, autosave behavior, and export validation helpers.
+ */
+
 export function fileToEditor(code) {
     let text = code;
 

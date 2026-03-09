@@ -1,3 +1,8 @@
+/**
+ * Module: shared/formatters
+ * Purpose: Small shared string-formatting helpers.
+ */
+
 export function escapeHtml(value) {
     return String(value)
         .replace(/&/g, '&amp;')

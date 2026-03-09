@@ -1,3 +1,8 @@
+/**
+ * Module: features/playback/export-preview
+ * Purpose: Exported song preview rendering and JSON/JS preview modal controls.
+ */
+
 let deps = {
     getDom: () => ({}),
     getLastExportedData: () => null,

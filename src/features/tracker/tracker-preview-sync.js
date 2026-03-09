@@ -1,3 +1,8 @@
+/**
+ * Module: features/tracker/tracker-preview-sync
+ * Purpose: Tracker preview reference context and instrument-refresh synchronization.
+ */
+
 let deps = {
     getAppState: () => ({}),
     isArrangementWorkspaceActive: () => false,

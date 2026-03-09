@@ -1,3 +1,8 @@
+/**
+ * Module: features/instruments/instrument-reference-sync
+ * Purpose: Keeps pattern/block/arrangement source references consistent across instrument renames.
+ */
+
 import { confirmDialog } from '../../dialog.js';
 
 let getDeveloperModeHeaders = () => ({});

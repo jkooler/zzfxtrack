@@ -5,9 +5,9 @@ Created: 2026-03-09
 
 ## Context
 
-`src/repl-app.js` currently acts as the entrypoint, feature controller, state container, DOM registry, event bus wiring layer, and a large amount of feature implementation. The file is now large enough that simple changes carry unnecessary risk because unrelated concerns are tightly coupled.
+`src/main.js` (formerly `src/repl-app.js`) currently acts as the entrypoint, feature controller, state container, DOM registry, event bus wiring layer, and a large amount of feature implementation. The file is now large enough that simple changes carry unnecessary risk because unrelated concerns are tightly coupled.
 
-The goal of this refactor is to reduce `repl-app.js` into a thin composition root, rename it to `src/main.js`, and move feature-owned logic into dedicated modules without changing product behavior.
+The goal of this refactor is to reduce `main.js` into a thin composition root and move feature-owned logic into dedicated modules without changing product behavior.
 
 ## Goals
 
@@ -120,7 +120,7 @@ After the refactor, `src/main.js` should own:
 
 ## Existing Dependency Breaks To Resolve Early
 
-`src/instrument-ui.js` currently imports app functionality directly from `./repl-app.js`. That dependency must be removed as part of the rename.
+`src/instrument-ui.js` currently imports app functionality directly from `./main.js` (formerly `./repl-app.js`). That dependency must be removed as part of the rename.
 
 Current imported functions:
 
@@ -140,7 +140,7 @@ Target destinations:
 
 ### `src/app/dom.js`
 
-Owns the centralized DOM lookup object currently defined in `src/repl-app.js`.
+Owns the centralized DOM lookup object currently defined in `src/main.js`.
 
 Responsibilities:
 
@@ -150,7 +150,7 @@ Responsibilities:
 
 ### `src/app/state.js`
 
-Owns app-wide mutable state currently defined near the top of `src/repl-app.js`.
+Owns app-wide mutable state currently defined near the top of `src/main.js`.
 
 Responsibilities:
 
@@ -320,7 +320,7 @@ Responsibilities:
 
 - untitled block creation flow
 - block deletion support
-- block save/duplicate listeners now defined at the bottom of `repl-app.js`
+- block save/duplicate listeners now defined at the bottom of `main.js`
 
 ### `src/features/tracker/tracker-controller.js`
 
@@ -448,7 +448,7 @@ Responsibilities:
 Acceptance criteria:
 
 - app boots from `src/main.js`
-- no module still imports `./repl-app.js`
+- no module still imports `./repl-app.js` (legacy path)
 
 ### Phase 2: Shared Foundations
 

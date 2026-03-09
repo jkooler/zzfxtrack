@@ -1,3 +1,8 @@
+/**
+ * Module: features/ui/static-modals
+ * Purpose: Wiring for static informational modals (about/license/changelog/demo/etc.).
+ */
+
 let deps = {
     getDom: () => ({}),
     createIcons: () => {},

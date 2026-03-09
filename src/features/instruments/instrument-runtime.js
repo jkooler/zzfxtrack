@@ -1,3 +1,8 @@
+/**
+ * Module: features/instruments/instrument-runtime
+ * Purpose: Runtime instrument reload helpers bridging static and dynamic instrument sources.
+ */
+
 import { instruments as staticInstruments, instrumentMonophonic as staticMonophonic } from '../../../instruments.js';
 import { getDefragmentedInstruments } from '../../instrument-manager.js';
 import { loadZzFXInstruments } from '../../zzfx-loader.js';

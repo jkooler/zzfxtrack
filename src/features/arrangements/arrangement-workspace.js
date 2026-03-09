@@ -1,3 +1,8 @@
+/**
+ * Module: features/arrangements/arrangement-workspace
+ * Purpose: Arrangement workspace rendering, playhead visuals, and row/chip interactions.
+ */
+
 let deps = {
     closeExportMenu: () => {},
     getWelcomeView: () => null,

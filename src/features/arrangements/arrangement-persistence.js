@@ -1,3 +1,8 @@
+/**
+ * Module: features/arrangements/arrangement-persistence
+ * Purpose: Arrangement state cloning/payload building, autosave scheduling, and unsaved-state helpers.
+ */
+
 let deps = {
     isDemoMode: () => false,
     getCurrentArrangementScope: () => 'user',

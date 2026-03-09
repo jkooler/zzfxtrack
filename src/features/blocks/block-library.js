@@ -1,3 +1,8 @@
+/**
+ * Module: features/blocks/block-library
+ * Purpose: Block library rendering, cache updates, and list refresh behavior.
+ */
+
 let deps = {
     getBlocksLibraryList: () => null,
     getBlocksLibraryCache: () => [],

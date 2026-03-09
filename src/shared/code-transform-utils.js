@@ -1,3 +1,8 @@
+/**
+ * Module: shared/code-transform-utils
+ * Purpose: Reusable source-transformation helpers for pattern, block, and arrangement code edits.
+ */
+
 export function slugify(value, { fallback = 'x', maxLength = 32 } = {}) {
     return (value || fallback)
         .toLowerCase()

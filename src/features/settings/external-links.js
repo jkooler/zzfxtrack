@@ -1,3 +1,8 @@
+/**
+ * Module: features/settings/external-links
+ * Purpose: External-link interception and confirmation-modal behavior.
+ */
+
 let deps = {
     getDocument: () => document,
     getWindow: () => window,

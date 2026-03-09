@@ -1,3 +1,8 @@
+/**
+ * Module: features/ui/view-switching
+ * Purpose: Main-view switching and export-menu visibility/control behavior.
+ */
+
 let deps = {
     getDom: () => ({}),
     getLastExportedData: () => null,

@@ -1,3 +1,8 @@
+/**
+ * Module: app/state
+ * Purpose: Shared mutable app state consumed by feature modules.
+ */
+
 export const appState = {
     currentPatternFilename: null,
     currentArrangementFilename: null,

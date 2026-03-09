@@ -1,3 +1,8 @@
+/**
+ * Module: features/ui/status-bar
+ * Purpose: Footer status message rendering and timed expand/collapse behavior.
+ */
+
 const STATUS_ROW_COLLAPSE_MS = 3000;
 const STATUS_ROW_TRANSITION_MS = 300;
 

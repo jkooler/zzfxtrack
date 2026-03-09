@@ -10,7 +10,7 @@ Historically, exports could lose notes when multiple events landed on the same r
 
 The export format is monophonic per channel, so exporting chords requires expanding a single Strudel instrument into multiple ZzFXTrack Player channels ("voices") when multiple notes land on the same row.
 
-This repo implements voice expansion in `src/export-logic.js` and exposes controls in the UI (`src/repl-app.js`) to limit voices and optionally force specific instruments to be monophonic.
+This repo implements voice expansion in `src/export-logic.js` and exposes controls in the UI (`src/main.js`) to limit voices and optionally force specific instruments to be monophonic.
 
 ---
 
@@ -91,7 +91,7 @@ When building final `patternData`:
 ## Where To Look In This Repo
 
 - `src/export-logic.js`: `getAvailableVoice()` + voice-aware track flattening, plus stats like `channelCount` and `droppedNotes`.
-- `src/repl-app.js`: export UI that wires:
+- `src/main.js`: export UI that wires:
   - `maxVoicesPerInstrument` (via "Limit channels")
   - `normalizeUnisonLayers`
   - `rowsPerCycle` (export resolution)

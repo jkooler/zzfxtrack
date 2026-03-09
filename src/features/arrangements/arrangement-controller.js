@@ -1,3 +1,8 @@
+/**
+ * Module: features/arrangements/arrangement-controller
+ * Purpose: Arrangement lifecycle actions (create/load/rename/delete) and arrangement modal flows.
+ */
+
 let deps = {
     isDemoMode: () => false,
     setStatus: () => {},

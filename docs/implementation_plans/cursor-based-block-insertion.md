@@ -55,7 +55,7 @@ Inserting this at arbitrary cursor positions could break the syntax if not handl
 ### Phase 1: Cursor Position Tracking
 
 **Files to modify:**
-- `src/repl-app.js`
+- `src/main.js`
 
 **Changes:**
 1. Add function to get current cursor position from CodeMirror editor
@@ -77,7 +77,7 @@ function getCursorPosition() {
 
 **Files to modify:**
 - `src/blocks.js` - `insertSelectedBlock()`
-- `src/repl-app.js` - `setupBlocksEventListeners()`
+- `src/main.js` - `setupBlocksEventListeners()`
 
 **Changes:**
 1. Detect if cursor is within a pattern expression
@@ -209,7 +209,7 @@ This provides immediate value while keeping complexity manageable. Phases 3-5 ca
 
 **Modified files:**
 - `src/blocks.js` - Update `insertSelectedBlock()` with cursor-aware logic
-- `src/repl-app.js` - Update event handlers, add cursor tracking
+- `src/main.js` - Update event handlers, add cursor tracking
 - `index.html` - Add insertion mode UI to blocks modal
 - `style.css` - Styles for insertion mode controls
 

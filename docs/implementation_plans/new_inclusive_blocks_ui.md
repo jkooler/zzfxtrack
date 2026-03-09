@@ -199,7 +199,7 @@ To ship incrementally and keep risk low:
 - Add unload-flush registration for arrangements and blocks (parallel to patterns).
 
 Likely files:
-- `src/repl-app.js` (selection, playback stop, autosave flush registration)
+- `src/main.js` (selection, playback stop, autosave flush registration)
 - `src/unload.js` (already exists; extend usage)
 
 ### Phase 1 — Left sidebar: arrangements list (Blocks tab)
@@ -213,7 +213,7 @@ Likely files:
 
 Likely files:
 - `index.html` (sidebar tabs and list containers)
-- `src/repl-app.js` (render + events)
+- `src/main.js` (render + events)
 - `style.css` (minor tab layout updates)
 
 ### Phase 2 — Arrangements workspace container (main view)
@@ -226,7 +226,7 @@ Likely files:
 Likely files:
 - `index.html` (workspace DOM)
 - `style.css` (grid/split layout)
-- `src/repl-app.js` (view switching)
+- `src/main.js` (view switching)
 
 ### Phase 3 — Arranger pane (reuse existing arranger editor)
 

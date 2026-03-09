@@ -1,3 +1,8 @@
+/**
+ * Module: features/project/project-export
+ * Purpose: Project bundle download/export flow.
+ */
+
 import JSZip from 'jszip';
 
 let deps = {

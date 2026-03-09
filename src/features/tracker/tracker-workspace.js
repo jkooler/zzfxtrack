@@ -1,3 +1,8 @@
+/**
+ * Module: features/tracker/tracker-workspace
+ * Purpose: Tracker workspace docking and workspace-pane render behavior.
+ */
+
 let deps = {
     getTrackerWorkspacePane: () => null,
     getActiveArrangementBlockFilename: () => null,

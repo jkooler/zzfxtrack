@@ -1,3 +1,8 @@
+/**
+ * Module: features/arrangements/arrangement-preview
+ * Purpose: Arrangement preview prime/update scheduling helpers.
+ */
+
 let deps = {
     getCurrentArrangementFilename: () => null,
     buildArrangementStatePayload: () => ({ rows: [], bpm: 120 }),

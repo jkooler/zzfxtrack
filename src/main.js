@@ -1,3 +1,8 @@
+/**
+ * Module: main (composition root)
+ * Purpose: App bootstrap and dependency wiring across feature modules.
+ */
+
 import '@strudel/repl/index.mjs';
 import { codemirrorSettings, themes as strudelReplThemes, updateMiniLocations } from '@strudel/codemirror';
 import '@melloware/coloris/dist/coloris.css';
@@ -295,8 +300,6 @@ configurePatternController({
     getDeveloperModeHeaders,
     getPatternSource,
     fileToEditor,
-    normalizeScope,
-    getPatternEntry,
     getDemoPatternSource: (filename) => demoPatternSourceByFile.get(filename),
     getUnsavedPatternCode: (filename) => localStorage.getItem(`unsaved_${filename}`),
     clearUnsavedPatternCode: (filename) => localStorage.removeItem(`unsaved_${filename}`),
@@ -1133,7 +1136,6 @@ async function init() {
     // Clear status - no pattern loaded yet
     setStatus('');
 
-    // 7. Initialize Icons
     // 7. Initialize Icons
     createIcons({ icons });
 

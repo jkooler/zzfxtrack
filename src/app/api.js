@@ -1,3 +1,8 @@
+/**
+ * Module: app/api
+ * Purpose: Central API wrapper layer for patterns, blocks, arrangements, and export persistence.
+ */
+
 function buildApiError(action, response) {
     return new Error(`${action} (HTTP ${response.status})`);
 }

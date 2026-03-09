@@ -1,3 +1,8 @@
+/**
+ * Module: features/blocks/block-controller
+ * Purpose: Block lifecycle operations, safeguards, and block-related UI event orchestration.
+ */
+
 let deps = {
     isDemoMode: () => false,
     getBlockByFilename: () => null,
