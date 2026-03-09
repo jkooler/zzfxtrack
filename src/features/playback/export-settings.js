@@ -1,17 +1,18 @@
 /**
  * Module: features/playback/export-settings
  * Purpose: Export settings modal behavior and playback/WAV settings normalization.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getDom: () => ({}),
-    sanitizePlaybackMixSettings: (value) => value,
-    getPlaybackLoudnessPresets: () => ({}),
     getDefaultPlaybackPresetId: () => 'balanced',
-    savePatternMeta: async () => {},
-    updateArrangementPreview: () => {},
+    getDom: () => ({}),
+    getPlaybackLoudnessPresets: () => ({}),
     isTrackerPreviewPlaying: () => false,
     refreshTrackerPreview: () => {},
+    sanitizePlaybackMixSettings: (value) => value,
+    savePatternMeta: async () => {},
+    updateArrangementPreview: () => {},
 };
 
 let exportSettingsSnapshot = null;

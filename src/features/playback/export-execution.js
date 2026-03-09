@@ -1,42 +1,43 @@
 /**
  * Module: features/playback/export-execution
  * Purpose: Pattern/arrangement export execution orchestration for JSON and JS song output.
+ * Deps keys: alphabetical.
  */
 
 import { exportPattern } from '../../export-logic.js';
 
 let deps = {
-    getDom: () => ({}),
-    isDemoMode: () => false,
-    getCurrentPatternFilename: () => null,
-    getCurrentArrangementFilename: () => null,
-    getCurrentArrangementDraftState: () => null,
-    saveCurrentPattern: async () => {},
-    saveCurrentArrangement: async () => {},
-    validateCodeForExport: () => {},
-    confirmDialog: async () => false,
-    setStatus: () => {},
+    buildArrangementExportContext: async () => null,
+    buildExportLengthWarningMessage: () => '',
+    buildZzfxmSongJsModule: () => '',
     clearStatusAfter: () => {},
-    inferArrangeCyclesFromCode: () => null,
-    shouldWarnExportLength: () => false,
-    getExportDurationSeconds: () => 0,
+    confirmDialog: async () => false,
+    escapeHtml: (value) => String(value || ''),
     estimateExportSizeBytes: () => 0,
     formatExportSize: () => '',
-    buildExportLengthWarningMessage: () => '',
-    getInstrumentsForExporter: async () => ({ array: [], mapping: {}, monophonicByIndex: [] }),
+    getCurrentArrangementDraftState: () => null,
+    getCurrentArrangementFilename: () => null,
+    getCurrentPatternFilename: () => null,
     getDefragmentedInstruments: () => [],
-    buildArrangementExportContext: async () => null,
+    getDom: () => ({}),
+    getExportDurationSeconds: () => 0,
+    getInstrumentsForExporter: async () => ({ array: [], mapping: {}, monophonicByIndex: [] }),
     getPlaybackMixSettings: () => ({}),
-    setZzfxmPreviewData: () => {},
-    buildZzfxmSongJsModule: () => '',
-    saveExportedJsonFile: async () => {},
+    inferArrangeCyclesFromCode: () => null,
+    isDemoMode: () => false,
+    logError: () => {},
+    saveCurrentArrangement: async () => {},
+    saveCurrentPattern: async () => {},
     saveExportedJsFile: async () => {},
+    saveExportedJsonFile: async () => {},
+    setStatus: () => {},
+    setZzfxmPreviewData: () => {},
+    shouldWarnExportLength: () => false,
     slugify: (value) => String(value || '')
         .trim()
         .replace(/\s+/g, '-')
         .replace(/[^a-zA-Z0-9_-]/g, ''),
-    escapeHtml: (value) => String(value || ''),
-    logError: () => {},
+    validateCodeForExport: () => {},
 };
 
 export function configureExportExecution(options = {}) {

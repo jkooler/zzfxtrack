@@ -1,36 +1,50 @@
 /**
  * Module: main (composition root)
  * Purpose: App bootstrap and dependency wiring across feature modules.
+ *
+ * Import groups: Strudel/audio → app shell → legacy modules → features (by area) → shared.
+ * Feature deps objects use alphabetical key order for consistency (see feature module headers).
  */
 
+// --- Strudel, audio, and core runtime ---
 import '@strudel/repl/index.mjs';
 import { codemirrorSettings, themes as strudelReplThemes, updateMiniLocations } from '@strudel/codemirror';
+import { getAudioContext } from '@strudel/webaudio';
 import '@melloware/coloris/dist/coloris.css';
 import { instruments as staticInstruments } from '../instruments.js';
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
 import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxtrack-player.js';
 import { attachVisualizer } from './visualizer.js';
-import { getAudioContext } from '@strudel/webaudio';
+
+// --- App shell (dom, state, API) ---
+import { dom } from './app/dom.js';
+import { appState } from './app/state.js';
+import { createArrangement, deleteArrangementByFilename, deleteBlockByFilenameWithConflictInfo, deletePatternByFilename, getArrangement, getArrangementOrNull, getBlockDetailOrNull, getPatternMetaTextOrNull, getPatternSource, getPatternSourceOrEmpty, listArrangements, listArrangementsOrEmpty, listBlocksOrEmpty, listPatterns, renameArrangementFile, renamePatternFile, saveArrangement, saveArrangementKeepalive, saveBlockDetail, saveBlockDetailKeepalive, saveExportedJsFile, saveExportedJsonFile, savePatternSource, savePatternSourceKeepalive, sendPatternSourceBeacon, updateInstrumentsSourceFile } from './app/api.js';
+
+// --- Legacy / shared app modules (instruments, tracker, blocks, mix, unload, dialog) ---
 import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
 import { setInstrumentScope, getDefragmentedInstruments } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
-import { createIcons, icons } from 'lucide';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate, setTrackerPreviewReferenceContext, clearTrackerPreviewReferenceContext } from './tracker.js';
 import { resolveTrackerStateChannelInstruments } from './instrument-rename-map.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, BLOCKS_FOLDER_STATE_KEY, restoreSuspendedBlocksModals } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
 import { confirmDialog, alertDialog } from './dialog.js';
-import { dom } from './app/dom.js';
-import { createArrangement, deleteArrangementByFilename, deleteBlockByFilenameWithConflictInfo, deletePatternByFilename, getArrangement, getArrangementOrNull, getBlockDetailOrNull, getPatternMetaTextOrNull, getPatternSource, getPatternSourceOrEmpty, listArrangements, listArrangementsOrEmpty, listBlocksOrEmpty, listPatterns, renameArrangementFile, renamePatternFile, saveArrangement, saveArrangementKeepalive, saveBlockDetail, saveBlockDetailKeepalive, saveExportedJsFile, saveExportedJsonFile, savePatternSource, savePatternSourceKeepalive, sendPatternSourceBeacon, updateInstrumentsSourceFile } from './app/api.js';
-import { appState } from './app/state.js';
+import { createIcons, icons } from 'lucide';
+
+// --- Features: instruments ---
 import { reloadInstruments } from './features/instruments/instrument-runtime.js';
 import { configureInstrumentReferenceSync } from './features/instruments/instrument-reference-sync.js';
+
+// --- Features: patterns ---
 import { configurePatternList, getPatternEntry, normalizePatternEntries, refreshPatternList, refreshPatternListActiveState, updatePatternListVisualizer } from './features/patterns/pattern-list.js';
 import { configurePatternController, createNewPattern, deletePattern, loadPattern, renamePattern, saveCurrentPattern } from './features/patterns/pattern-controller.js';
 import { configurePatternEditor, editorToFile, fileToEditor, setupPatternEditorAutosave, validateCodeForExport } from './features/patterns/pattern-editor.js';
 import { configurePatternMeta, loadPatternMeta, normalizePatternBaseName, savePatternMeta, updatePatternScope } from './features/patterns/pattern-meta.js';
+
+// --- Features: arrangements ---
 import { configureArrangementList, getArrangementEntry, refreshArrangementList, refreshArrangementListActiveState, updateArrangementListScopeVisualizer } from './features/arrangements/arrangement-list.js';
 import { buildArrangementStatePayload, canRecoverUnsavedForScope, cloneArrangementState, configureArrangementPersistence, emitArrangementStateChanged, getArrangementReadonly, readUnsavedArrangementState, saveCurrentArrangement, scheduleArrangementAutoSave } from './features/arrangements/arrangement-persistence.js';
 import { configureArrangementPreview, scheduleArrangementPreviewPrime } from './features/arrangements/arrangement-preview.js';
@@ -39,29 +53,43 @@ import { buildArrangementExportContext, configureArrangementExportContext, getAr
 import { configureArrangementPreviewEvents, installArrangementPreviewEventListeners } from './features/arrangements/arrangement-preview-events.js';
 import { applyArrangementPreviewAfterBlockRemoved, clearArrangementPlaybackInstrumentAliases, configureArrangementPreviewRuntime, updateArrangementPlaybackInstrumentAliases } from './features/arrangements/arrangement-preview-runtime.js';
 import { applyArrangementWorkspacePlayhead, clearArrangementWorkspacePlayheadVisuals, configureArrangementWorkspace, renderArrangementWorkspace, showArrangementWorkspace, updateArrangementWorkspaceChipSteps, updateArrangementWorkspacePreviewButtonState } from './features/arrangements/arrangement-workspace.js';
+
+// --- Features: tracker ---
 import { configureTrackerController, openTrackerModal, openTrackerModalForEdit, scheduleTrackerAutoSave } from './features/tracker/tracker-controller.js';
 import { configureTrackerPreviewSync, scheduleTrackerPreviewInstrumentRefresh } from './features/tracker/tracker-preview-sync.js';
 import { configureTrackerWorkspace, renderTrackerWorkspace, undockTrackerModalFromWorkspace } from './features/tracker/tracker-workspace.js';
+
+// --- Features: blocks ---
 import { configureBlockLibrary, refreshBlocksLibrary } from './features/blocks/block-library.js';
 import { configureBlockController, deleteBlockFromLibrary, setupBlocksEventListeners as setupBlocksFeatureEventListeners } from './features/blocks/block-controller.js';
+
+// --- Features: playback & export ---
 import { buildExportLengthWarningMessage, estimateExportSizeBytes, formatExportSize, getExportDurationSeconds, inferArrangeCyclesFromCode, shouldWarnExportLength } from './features/playback/export-actions.js';
 import { configurePlaybackController } from './features/playback/playback-controller.js';
 import { buildZzfxmSongJsModule, configureExportPreview, installExportPreviewHandlers, renderSongDataPreview, updatePreviewPlayButton } from './features/playback/export-preview.js';
 import { configureExportExecution, exportCurrentArrangement as runExportCurrentArrangement, exportCurrentPattern as runExportCurrentPattern } from './features/playback/export-execution.js';
 import { applyPlaybackMixSettingsToInputs, configureExportSettings, getPlaybackMixSettings, getWavExportSettings, inferPlaybackPresetId, normalizePlaybackPresetId, setPlaybackPresetControl, setupExportSettingsModal } from './features/playback/export-settings.js';
 import { configureExportWav, exportArrangementWav, exportPatternWav } from './features/playback/export-wav.js';
+
+// --- Features: project (import/export bundle) ---
 import { buildArrangementSourceFromApi, buildBlockSourceFromApi, parseBlockSource } from './features/project/bundle-utils.js';
 import { configureProjectExport, downloadProjectBundle } from './features/project/project-export.js';
 import { configureProjectImport, installProjectImportHandlers } from './features/project/project-import.js';
+
+// --- Features: settings ---
 import { configureAdvancedSettings, installAdvancedSettingsHandlers, openAdvancedSettingsModal } from './features/settings/advanced-settings.js';
 import { configureDevMode, getDeveloperModeHeaders, isDeveloperModeEnabled, setDeveloperModeEnabled, updateAdvancedSettingsButtonsVisibility, updateDevModeToolbarLabelVisibility } from './features/settings/dev-mode.js';
 import { configureExternalLinks, setupExternalLinkInterception } from './features/settings/external-links.js';
 import { configureSystemSettings, installSystemSettingsHandlers, scopeStrudelThemeVarsToRepl } from './features/settings/system-settings.js';
 import { applyInitialColorTheme } from './features/settings/theme-controller.js';
+
+// --- Features: UI (view switching, status, modals, touch) ---
 import { setStatus, clearStatusAfter, configureStatusBar, installStatusEventListener } from './features/ui/status-bar.js';
 import { configureStaticModals, installStaticModalHandlers } from './features/ui/static-modals.js';
 import { setupListTouchActivation } from './features/ui/touch-activation.js';
 import { closeExportMenu, configureViewSwitching, isArrangementWorkspaceActive, refreshZzfxmPreviewControlsVisibility, setExportControlsDisabled, showEditor, showIntroduction, showWelcome, toggleExportMenu, updateFooterExportActionLabels } from './features/ui/view-switching.js';
+
+// --- Shared utilities ---
 import { ensureArrangementsSection, ensureBlocksSection, nextAvailableVarName, normalizePatternStack as normalizePatternStackShared, slugify, upsertPatternLayer as upsertPatternLayerShared } from './shared/code-transform-utils.js';
 import { escapeHtml } from './shared/formatters.js';
 
@@ -155,6 +183,7 @@ const PLAYBACK_LOUDNESS_PRESETS = Object.freeze({
 });
 const DEFAULT_PLAYBACK_PRESET_ID = 'balanced';
 
+// --- Wiring: configure* calls (order: playback → view → patterns → arrangements → tracker → blocks → instruments → export → project → settings → UI) ---
 configurePlaybackController({
     getEditor: () => dom.repl?.editor || null,
 });

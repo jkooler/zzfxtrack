@@ -1,24 +1,25 @@
 /**
  * Module: features/arrangements/arrangement-preview-runtime
  * Purpose: Runtime arrangement-preview context updates and playback instrument alias synchronization.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    isArrangementPreviewPlaying: () => false,
-    getArrangementPreviewPlayingFilename: () => null,
-    getCurrentArrangementFilename: () => null,
-    getArrangementPreviewContext: () => ({ arrangementState: null, trackerStateByFilename: {}, instrumentList: null, bpm: 120, mixSettings: {} }),
-    setArrangementPreviewContext: () => {},
+    buildArrangementStatePayload: () => ({ rows: [], bpm: 120 }),
     clearArrangementLiveOverride: () => {},
     clearArrangementPendingLiveSwap: () => {},
-    buildArrangementStatePayload: () => ({ rows: [], bpm: 120 }),
-    getPlaybackMixSettings: () => ({}),
-    updateArrangementPreview: () => {},
     clearPlaybackInstrumentAliases: () => {},
-    setPlaybackInstrumentAliases: () => {},
-    getLastArrangementPlaybackInstrumentSignature: () => '',
-    setLastArrangementPlaybackInstrumentSignature: () => {},
+    getArrangementPreviewContext: () => ({ arrangementState: null, trackerStateByFilename: {}, instrumentList: null, bpm: 120, mixSettings: {} }),
+    getArrangementPreviewPlayingFilename: () => null,
     getArrangementWorkspacePlayhead: () => ({ rowIndex: null, progress: 0, blocks: [] }),
+    getCurrentArrangementFilename: () => null,
+    getLastArrangementPlaybackInstrumentSignature: () => '',
+    getPlaybackMixSettings: () => ({}),
+    isArrangementPreviewPlaying: () => false,
+    setArrangementPreviewContext: () => {},
+    setLastArrangementPlaybackInstrumentSignature: () => {},
+    setPlaybackInstrumentAliases: () => {},
+    updateArrangementPreview: () => {},
 };
 
 export function configureArrangementPreviewRuntime(options = {}) {

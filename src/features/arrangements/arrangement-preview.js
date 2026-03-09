@@ -1,17 +1,18 @@
 /**
  * Module: features/arrangements/arrangement-preview
  * Purpose: Arrangement preview prime/update scheduling helpers.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getCurrentArrangementFilename: () => null,
     buildArrangementStatePayload: () => ({ rows: [], bpm: 120 }),
-    getBlocksLibraryCache: () => [],
-    resolveTrackerStateChannelInstruments: (trackerState) => trackerState,
     getArrangementInstrumentList: async () => [],
-    primeArrangementPreviewBuffer: () => {},
+    getBlocksLibraryCache: () => [],
+    getCurrentArrangementFilename: () => null,
     getPlaybackMixSettings: () => ({}),
     getPrimeTimeoutId: () => null,
+    primeArrangementPreviewBuffer: () => {},
+    resolveTrackerStateChannelInstruments: (trackerState) => trackerState,
     setPrimeTimeoutId: () => {},
 };
 

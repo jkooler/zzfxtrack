@@ -1,30 +1,31 @@
 /**
  * Module: features/ui/view-switching
  * Purpose: Main-view switching and export-menu visibility/control behavior.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getDom: () => ({}),
-    getLastExportedData: () => null,
-    getLastExportedContext: () => ({ type: null, filename: null }),
-    getCurrentPatternFilename: () => null,
-    getCurrentArrangementFilename: () => null,
-    setCurrentPatternFilename: () => {},
-    setCurrentPatternScope: () => {},
-    setCurrentArrangementFilename: () => {},
-    setCurrentArrangementScope: () => {},
-    setArrangementDraftState: () => {},
-    setActiveArrangementBlockFilename: () => {},
-    setPlayingPatternFilename: () => {},
-    undockTrackerModalFromWorkspace: () => {},
-    updatePatternSelectionState: () => {},
-    updateArrangementSelectionState: () => {},
-    updateAdvancedSettingsButtonsVisibility: () => {},
-    renderPlayButton: () => {},
-    updatePatternListVisualizer: () => {},
     clearZzfxmPreviewData: () => {},
+    getCurrentArrangementFilename: () => null,
+    getCurrentPatternFilename: () => null,
+    getDom: () => ({}),
+    getLastExportedContext: () => ({ type: null, filename: null }),
+    getLastExportedData: () => null,
     refreshArrangementListActiveState: () => {},
     renderArrangementWorkspace: () => {},
+    renderPlayButton: () => {},
+    setActiveArrangementBlockFilename: () => {},
+    setArrangementDraftState: () => {},
+    setCurrentArrangementFilename: () => {},
+    setCurrentArrangementScope: () => {},
+    setCurrentPatternFilename: () => {},
+    setCurrentPatternScope: () => {},
+    setPlayingPatternFilename: () => {},
+    undockTrackerModalFromWorkspace: () => {},
+    updateAdvancedSettingsButtonsVisibility: () => {},
+    updateArrangementSelectionState: () => {},
+    updatePatternListVisualizer: () => {},
+    updatePatternSelectionState: () => {},
 };
 
 export function configureViewSwitching(options = {}) {

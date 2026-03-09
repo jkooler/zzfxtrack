@@ -1,26 +1,27 @@
 /**
  * Module: features/playback/export-preview
  * Purpose: Exported song preview rendering and JSON/JS preview modal controls.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
+    createIcons: () => {},
+    getAudioContext: () => null,
+    getCurrentArrangementFilename: () => null,
+    getCurrentPatternFilename: () => null,
     getDom: () => ({}),
+    getIsPreviewPlaying: () => false,
+    getLastExportedContext: () => ({ type: null, filename: null }),
     getLastExportedData: () => null,
     getLastExportedMeta: () => null,
-    getLastExportedContext: () => ({ type: null, filename: null }),
-    getCurrentPatternFilename: () => null,
-    getCurrentArrangementFilename: () => null,
     getPlaybackMixSettings: () => ({}),
-    getAudioContext: () => null,
-    stopAllPlaybackForSelectionChange: () => {},
+    icons: {},
     playZzfxmSong: () => {},
+    setStatus: () => {},
+    setIsPreviewPlaying: () => {},
+    stopAllPlaybackForSelectionChange: () => {},
     stopZzfxmSong: () => {},
     triggerFileDownload: () => {},
-    setStatus: () => {},
-    getIsPreviewPlaying: () => false,
-    setIsPreviewPlaying: () => {},
-    createIcons: () => {},
-    icons: {},
 };
 
 let songDataViewMode = 'json';

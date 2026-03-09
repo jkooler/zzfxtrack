@@ -1,35 +1,36 @@
 /**
  * Module: features/arrangements/arrangement-preview-events
  * Purpose: Event-driven orchestration for arrangement preview start/stop/update flows.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getArrangementPreviewPlayingFilename: () => null,
-    setArrangementPreviewPlayingFilename: () => {},
-    getArrangementPreviewContext: () => ({ arrangementState: null, trackerStateByFilename: {}, instrumentList: null, bpm: 120, mixSettings: {} }),
-    setArrangementPreviewContext: () => {},
-    getCurrentArrangementFilename: () => null,
+    applyArrangementWorkspacePlayhead: () => {},
     buildArrangementStatePayload: () => ({ rows: [], bpm: 120 }),
-    getPlaybackMixSettings: () => ({}),
+    clearArrangementLiveOverride: () => {},
+    clearArrangementPlaybackInstrumentAliases: () => {},
+    clearArrangementWorkspacePlayheadVisuals: () => {},
     getArrangementInstrumentList: async () => [],
-    resolveTrackerStateChannelInstruments: (trackerState) => trackerState,
+    getArrangementPreviewContext: () => ({ arrangementState: null, trackerStateByFilename: {}, instrumentList: null, bpm: 120, mixSettings: {} }),
+    getArrangementPreviewPlayingFilename: () => null,
+    getArrangementWorkspacePlayhead: () => ({ rowIndex: null, progress: 0, blocks: [] }),
     getBlocksLibraryCache: () => [],
-    setBlocksLibraryCache: () => {},
     getBlockDetailOrNull: async () => null,
+    getCurrentArrangementFilename: () => null,
+    getPlaybackMixSettings: () => ({}),
+    isArrangementPreviewPlaying: () => false,
+    resolveTrackerStateChannelInstruments: (trackerState) => trackerState,
+    setArrangementPreviewContext: () => {},
+    setArrangementPreviewPlayingFilename: () => {},
+    setBlocksLibraryCache: () => {},
     setStatus: () => {},
     startArrangementPreview: () => false,
     stopArrangementPreview: () => {},
-    isArrangementPreviewPlaying: () => false,
-    updateArrangementPreview: () => {},
-    clearArrangementLiveOverride: () => {},
-    updateArrangementPlaybackInstrumentAliases: () => {},
-    getArrangementWorkspacePlayhead: () => ({ rowIndex: null, progress: 0, blocks: [] }),
-    updateArrangementWorkspaceChipSteps: () => {},
-    applyArrangementWorkspacePlayhead: () => {},
     updateArrangementListScopeVisualizer: () => {},
+    updateArrangementPlaybackInstrumentAliases: () => {},
+    updateArrangementPreview: () => {},
+    updateArrangementWorkspaceChipSteps: () => {},
     updateArrangementWorkspacePreviewButtonState: () => {},
-    clearArrangementWorkspacePlayheadVisuals: () => {},
-    clearArrangementPlaybackInstrumentAliases: () => {},
 };
 
 let listenersInstalled = false;

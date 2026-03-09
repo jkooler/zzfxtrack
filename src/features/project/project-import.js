@@ -1,35 +1,36 @@
 /**
  * Module: features/project/project-import
  * Purpose: Project bundle upload/import flow and import modal orchestration.
+ * Deps keys: alphabetical.
  */
 
 import JSZip from 'jszip';
 import { buildArrangementSourceFromApi, buildBlockSourceFromApi, describeUploadBundle, getFilenameFromSection, normalizeZipEntryPath, parseArrangementSource, parseBlockSource, validateUploadBundle } from './bundle-utils.js';
 
 let deps = {
-    getDom: () => ({}),
-    isDemoMode: () => false,
-    getDemoPatternSourceByFile: () => new Map(),
-    getDemoBlockSourceByFile: () => new Map(),
-    getDemoArrangementSourceByFile: () => new Map(),
-    listPatterns: async () => [],
-    normalizePatternEntries: (list) => list || [],
-    listBlocksOrEmpty: async () => [],
-    listArrangementsOrEmpty: async () => [],
-    getPatternSourceOrEmpty: async () => '',
-    getBlockDetailOrNull: async () => null,
     getArrangementOrNull: async () => null,
-    savePatternSource: async () => {},
-    saveBlockDetail: async () => {},
-    saveArrangement: async () => {},
-    getDeveloperModeHeaders: () => ({}),
-    updateInstrumentsSourceFile: async () => {},
-    reloadInstruments: async () => {},
-    refreshPatternList: async () => {},
-    setStatus: () => {},
-    getBundleManifestName: () => 'strudel-project-bundle.json',
+    getBlockDetailOrNull: async () => null,
     getBundleKind: () => 'strudel-project-bundle',
+    getBundleManifestName: () => 'strudel-project-bundle.json',
+    getDemoArrangementSourceByFile: () => new Map(),
+    getDemoBlockSourceByFile: () => new Map(),
+    getDemoPatternSourceByFile: () => new Map(),
+    getDeveloperModeHeaders: () => ({}),
+    getDom: () => ({}),
+    getPatternSourceOrEmpty: async () => '',
+    isDemoMode: () => false,
+    listArrangementsOrEmpty: async () => [],
+    listBlocksOrEmpty: async () => [],
+    listPatterns: async () => [],
     logError: () => {},
+    normalizePatternEntries: (list) => list || [],
+    refreshPatternList: async () => {},
+    reloadInstruments: async () => {},
+    saveArrangement: async () => {},
+    saveBlockDetail: async () => {},
+    savePatternSource: async () => {},
+    setStatus: () => {},
+    updateInstrumentsSourceFile: async () => {},
 };
 
 let pendingUploadBundle = null;

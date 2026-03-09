@@ -1,31 +1,32 @@
 /**
  * Module: features/arrangements/arrangement-list
  * Purpose: Arrangement list loading, grouping, rendering, and active-state handling.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getListElement: () => document.getElementById('arrangementList'),
-    getEntriesCache: () => [],
-    setEntriesCache: () => {},
-    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
-    isDemoMode: () => false,
-    getDemoArrangementFiles: () => [],
-    listArrangements: async () => [],
-    getFolderState: () => ({ user: true, system: false }),
-    setFolderState: () => {},
-    saveFolderState: () => {},
-    isDeveloperModeEnabled: () => false,
-    getCurrentArrangementFilename: () => null,
-    loadArrangement: () => {},
-    deleteArrangement: () => {},
-    createIcons: () => {},
-    icons: {},
-    escapeHtml: (value) => String(value),
-    setStatus: () => {},
-    logError: () => {},
-    isArrangementPreviewPlaying: () => false,
-    getArrangementPreviewPlayingFilename: () => null,
     attachVisualizer: () => {},
+    createIcons: () => {},
+    deleteArrangement: () => {},
+    escapeHtml: (value) => String(value),
+    getArrangementPreviewPlayingFilename: () => null,
+    getCurrentArrangementFilename: () => null,
+    getDemoArrangementFiles: () => [],
+    getEntriesCache: () => [],
+    getFolderState: () => ({ user: true, system: false }),
+    getListElement: () => document.getElementById('arrangementList'),
+    icons: {},
+    isArrangementPreviewPlaying: () => false,
+    isDemoMode: () => false,
+    isDeveloperModeEnabled: () => false,
+    listArrangements: async () => [],
+    loadArrangement: () => {},
+    logError: () => {},
+    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
+    saveFolderState: () => {},
+    setEntriesCache: () => {},
+    setFolderState: () => {},
+    setStatus: () => {},
 };
 
 export function configureArrangementList(options = {}) {

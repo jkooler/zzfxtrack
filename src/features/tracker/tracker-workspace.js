@@ -1,26 +1,27 @@
 /**
  * Module: features/tracker/tracker-workspace
  * Purpose: Tracker workspace docking and workspace-pane render behavior.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getTrackerWorkspacePane: () => null,
-    getActiveArrangementBlockFilename: () => null,
-    getBlockByFilename: () => null,
-    getTrackerWorkspaceLoadedFilename: () => null,
-    setTrackerWorkspaceLoadedFilename: () => {},
-    getTrackerWorkspaceLoadToken: () => 0,
-    setTrackerWorkspaceLoadToken: () => {},
-    isTrackerOpen: () => false,
     closeTracker: () => {},
+    getActiveArrangementBlockFilename: () => null,
+    getActiveArrangementBlockFilenameForDrag: () => null,
+    getBlockByFilename: () => null,
+    getTrackerDockRestoreNextSibling: () => null,
+    getTrackerDockRestoreParent: () => null,
+    getTrackerWorkspaceLoadedFilename: () => null,
+    getTrackerWorkspaceLoadToken: () => 0,
+    getTrackerWorkspacePane: () => null,
+    isTrackerOpen: () => false,
+    logError: () => {},
     openTrackerModalForEdit: async () => {},
     setStatus: () => {},
-    getActiveArrangementBlockFilenameForDrag: () => null,
-    logError: () => {},
-    getTrackerDockRestoreParent: () => null,
-    setTrackerDockRestoreParent: () => {},
-    getTrackerDockRestoreNextSibling: () => null,
     setTrackerDockRestoreNextSibling: () => {},
+    setTrackerDockRestoreParent: () => {},
+    setTrackerWorkspaceLoadedFilename: () => {},
+    setTrackerWorkspaceLoadToken: () => {},
 };
 
 export function configureTrackerWorkspace(options = {}) {

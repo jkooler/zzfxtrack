@@ -1,31 +1,32 @@
 /**
  * Module: features/blocks/block-library
  * Purpose: Block library rendering, cache updates, and list refresh behavior.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getBlocksLibraryList: () => null,
-    getBlocksLibraryCache: () => [],
-    setBlocksLibraryCache: () => {},
+    createIcons: () => {},
+    deleteBlockFromLibrary: async () => {},
+    escapeHtml: (value) => String(value || ''),
+    flushTrackerSaveForBlockSwitch: () => {},
     getActiveArrangementBlockFilename: () => null,
-    setActiveArrangementBlockFilename: () => {},
+    getBlocksFolderStateKey: () => 'blocks-folder-state',
+    getBlocksLibraryCache: () => [],
+    getBlocksLibraryList: () => null,
     getCurrentArrangementFilename: () => null,
-    setSelectedBlockForArrangement: () => {},
+    getDemoBlockSourceKeys: () => [],
+    icons: {},
+    isDemoMode: () => false,
+    isDeveloperModeEnabled: () => false,
+    listBlocksOrEmpty: async () => [],
+    logError: () => {},
+    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
     renderArrangementWorkspace: () => {},
     renderTrackerWorkspace: () => {},
-    flushTrackerSaveForBlockSwitch: () => {},
-    createIcons: () => {},
-    icons: {},
-    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
-    isDeveloperModeEnabled: () => false,
-    escapeHtml: (value) => String(value || ''),
-    listBlocksOrEmpty: async () => [],
-    isDemoMode: () => false,
-    getDemoBlockSourceKeys: () => [],
-    deleteBlockFromLibrary: async () => {},
-    getBlocksFolderStateKey: () => 'blocks-folder-state',
+    setActiveArrangementBlockFilename: () => {},
+    setBlocksLibraryCache: () => {},
+    setSelectedBlockForArrangement: () => {},
     setStatus: () => {},
-    logError: () => {},
 };
 
 export function configureBlockLibrary(options = {}) {

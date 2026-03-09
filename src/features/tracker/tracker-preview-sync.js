@@ -1,23 +1,24 @@
 /**
  * Module: features/tracker/tracker-preview-sync
  * Purpose: Tracker preview reference context and instrument-refresh synchronization.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getAppState: () => ({}),
-    isArrangementWorkspaceActive: () => false,
     buildArrangementExportContext: async () => null,
-    setTrackerPreviewReferenceContext: () => {},
     clearTrackerPreviewReferenceContext: () => {},
+    getAppState: () => ({}),
     getArrangementLiveEditSession: () => ({ active: false, committed: false }),
+    getTrackerPreviewInstrumentRefreshDebounceMs: () => 120,
     getTrackerPreviewInstrumentRefreshSeq: () => 0,
-    setTrackerPreviewInstrumentRefreshSeq: () => {},
     getTrackerPreviewInstrumentRefreshTimeout: () => null,
-    setTrackerPreviewInstrumentRefreshTimeout: () => {},
+    isArrangementWorkspaceActive: () => false,
     isTrackerOpen: () => false,
     isTrackerPreviewPlaying: () => false,
     refreshTrackerPreview: () => {},
-    getTrackerPreviewInstrumentRefreshDebounceMs: () => 120,
+    setTrackerPreviewInstrumentRefreshSeq: () => {},
+    setTrackerPreviewInstrumentRefreshTimeout: () => {},
+    setTrackerPreviewReferenceContext: () => {},
 };
 
 export function configureTrackerPreviewSync(options = {}) {

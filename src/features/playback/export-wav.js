@@ -1,13 +1,14 @@
 /**
  * Module: features/playback/export-wav
  * Purpose: WAV encoding utilities and pattern/arrangement WAV export flows.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
     buildSong: () => new Float32Array(),
-    triggerFileDownload: () => {},
-    setStatus: () => {},
     logError: () => {},
+    setStatus: () => {},
+    triggerFileDownload: () => {},
 };
 
 export function configureExportWav(options = {}) {

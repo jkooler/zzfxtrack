@@ -1,24 +1,25 @@
 /**
  * Module: features/arrangements/arrangement-persistence
  * Purpose: Arrangement state cloning/payload building, autosave scheduling, and unsaved-state helpers.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    isDemoMode: () => false,
-    getCurrentArrangementScope: () => 'user',
-    isDeveloperModeEnabled: () => false,
-    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
-    getCurrentArrangementFilename: () => null,
+    dispatchStateChanged: () => {},
     getArrangementDraftState: () => null,
     getArrangementEntry: () => null,
-    saveArrangement: async () => {},
+    getAutoSaveTimeout: () => null,
+    getCurrentArrangementFilename: () => null,
+    getCurrentArrangementScope: () => 'user',
     getDeveloperModeHeaders: () => ({}),
     getEntriesCache: () => [],
-    setStatus: () => {},
+    isDemoMode: () => false,
+    isDeveloperModeEnabled: () => false,
     logError: () => {},
-    getAutoSaveTimeout: () => null,
+    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
+    saveArrangement: async () => {},
     setAutoSaveTimeout: () => {},
-    dispatchStateChanged: () => {},
+    setStatus: () => {},
 };
 
 export function configureArrangementPersistence(options = {}) {

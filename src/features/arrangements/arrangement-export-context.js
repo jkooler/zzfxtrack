@@ -1,21 +1,22 @@
 /**
  * Module: features/arrangements/arrangement-export-context
  * Purpose: Builds arrangement export context and arrangement-scoped instrument usage data.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getCurrentArrangementFilename: () => null,
-    getArrangementDraftState: () => null,
     buildArrangementStatePayload: () => ({ rows: [], bpm: 120 }),
-    getBlocksLibraryCache: () => [],
-    isDemoMode: () => false,
-    getDemoBlockSource: () => null,
-    parseBlockSource: () => null,
-    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
+    getArrangementDraftState: () => null,
     getBlockDetailOrNull: async () => null,
+    getBlocksLibraryCache: () => [],
+    getCurrentArrangementFilename: () => null,
+    getDefragmentedInstruments: async () => [],
+    getDemoBlockSource: () => null,
+    isDemoMode: () => false,
+    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
+    parseBlockSource: () => null,
     resolveTrackerStateChannelInstruments: (trackerState) => trackerState,
     updateInstrumentUsage: () => {},
-    getDefragmentedInstruments: async () => [],
 };
 
 export function configureArrangementExportContext(options = {}) {

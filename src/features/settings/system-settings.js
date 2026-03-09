@@ -1,27 +1,28 @@
 /**
  * Module: features/settings/system-settings
  * Purpose: System-settings modal, theme controls, and REPL theme synchronization.
+ * Deps keys: alphabetical.
  */
 
 import Coloris from '@melloware/coloris';
 import { COLOR_THEME_KEY } from './theme-controller.js';
 
 let deps = {
+    createIcons: () => {},
+    getCodemirrorSettings: () => ({ get: () => ({ theme: 'strudelTheme' }), set: () => {} }),
     getDom: () => ({}),
+    getIcons: () => ({}),
+    getStrudelReplThemes: () => ({}),
     isDemoMode: () => false,
     isDeveloperModeEnabled: () => false,
+    logWarning: () => {},
+    refreshInstrumentListUI: () => {},
+    refreshPatternList: async () => {},
     setDeveloperModeEnabled: () => {},
-    createIcons: () => {},
-    getIcons: () => ({}),
-    getCodemirrorSettings: () => ({ get: () => ({ theme: 'strudelTheme' }), set: () => {} }),
-    getStrudelReplThemes: () => ({}),
-    updateReplEditorTheme: () => {},
     setPatternNameReadOnlyForDevMode: () => {},
     updateAdvancedSettingsButtonsVisibility: () => {},
     updateDevModeToolbarLabelVisibility: () => {},
-    refreshPatternList: async () => {},
-    refreshInstrumentListUI: () => {},
-    logWarning: () => {},
+    updateReplEditorTheme: () => {},
 };
 
 const THEME_COLOR_VARS_AND_TAILWIND = [

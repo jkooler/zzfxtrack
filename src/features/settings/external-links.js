@@ -1,14 +1,15 @@
 /**
  * Module: features/settings/external-links
  * Purpose: External-link interception and confirmation-modal behavior.
+ * Deps keys: alphabetical.
  */
 
 let deps = {
-    getDocument: () => document,
-    getWindow: () => window,
-    getExternalLinkModal: () => null,
-    getConfirmExternalLinkButton: () => null,
     getCancelExternalLinkButton: () => null,
+    getConfirmExternalLinkButton: () => null,
+    getDocument: () => document,
+    getExternalLinkModal: () => null,
+    getWindow: () => window,
 };
 
 let pendingExternalUrl = null;

@@ -1,33 +1,34 @@
 /**
  * Module: features/project/project-export
  * Purpose: Project bundle download/export flow.
+ * Deps keys: alphabetical.
  */
 
 import JSZip from 'jszip';
 
 let deps = {
-    isDemoMode: () => false,
-    getDemoPatternSourceByFile: () => new Map(),
-    getDemoBlockSourceByFile: () => new Map(),
-    getDemoArrangementSourceByFile: () => new Map(),
-    normalizePatternEntries: (list) => list || [],
-    listPatterns: async () => [],
-    listBlocksOrEmpty: async () => [],
-    listArrangementsOrEmpty: async () => [],
-    getPatternSourceOrEmpty: async () => '',
-    getPatternMetaTextOrNull: async () => null,
-    getBlockDetailOrNull: async () => null,
-    getArrangementOrNull: async () => null,
-    buildBlockSourceFromApi: () => '',
     buildArrangementSourceFromApi: () => '',
-    getCurrentPatternFilename: () => null,
-    getEditorCode: () => '',
+    buildBlockSourceFromApi: () => '',
     editorToFile: (value) => value,
-    triggerFileDownload: () => {},
-    setStatus: () => {},
-    getBundleManifestName: () => 'strudel-project-bundle.json',
+    getArrangementOrNull: async () => null,
+    getBlockDetailOrNull: async () => null,
     getBundleKind: () => 'strudel-project-bundle',
+    getBundleManifestName: () => 'strudel-project-bundle.json',
+    getCurrentPatternFilename: () => null,
+    getDemoArrangementSourceByFile: () => new Map(),
+    getDemoBlockSourceByFile: () => new Map(),
+    getDemoPatternSourceByFile: () => new Map(),
+    getEditorCode: () => '',
+    getPatternMetaTextOrNull: async () => null,
+    getPatternSourceOrEmpty: async () => '',
+    isDemoMode: () => false,
+    listArrangementsOrEmpty: async () => [],
+    listBlocksOrEmpty: async () => [],
+    listPatterns: async () => [],
     logError: () => {},
+    normalizePatternEntries: (list) => list || [],
+    setStatus: () => {},
+    triggerFileDownload: () => {},
 };
 
 export function configureProjectExport(options = {}) {

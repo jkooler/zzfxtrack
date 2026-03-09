@@ -1,37 +1,38 @@
 /**
  * Module: features/tracker/tracker-controller
  * Purpose: Tracker open/edit/save flows and tracker autosave orchestration.
+ * Deps keys: alphabetical.
  */
 
 import { syncTrackerPreviewReferenceContext } from './tracker-preview-sync.js';
 
 let deps = {
-    isDemoMode: () => false,
-    getBlockByFilename: () => null,
-    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
-    isDeveloperModeEnabled: () => false,
-    updateBlock: async () => ({ ok: false }),
     getAppState: () => ({}),
+    getArrangementLiveEditSession: () => ({ active: false, committed: false }),
+    getBlockByFilename: () => null,
+    getBlockDetailOrNull: async () => null,
     getCurrentArrangementFilename: () => null,
-    setSelectedBlockForArrangement: () => {},
-    setActiveArrangementBlockFilename: () => {},
+    getDefragmentedInstruments: async () => [],
+    getPendingTrackerSavePayload: () => null,
+    getTrackerAutoSaveTimeout: () => null,
+    isArrangementWorkspaceActive: () => false,
+    isDemoMode: () => false,
+    isDeveloperModeEnabled: () => false,
+    logError: () => {},
+    normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
+    openTracker: () => {},
+    openTrackerForEdit: () => {},
+    readUnsavedBlockTrackerState: () => null,
     refreshBlocksLibrary: async () => {},
     renderArrangementWorkspace: () => {},
     renderTrackerWorkspace: () => {},
-    setStatus: () => {},
-    getTrackerAutoSaveTimeout: () => null,
-    setTrackerAutoSaveTimeout: () => {},
-    getPendingTrackerSavePayload: () => null,
-    setPendingTrackerSavePayload: () => {},
-    getArrangementLiveEditSession: () => ({ active: false, committed: false }),
+    setActiveArrangementBlockFilename: () => {},
     setArrangementLiveEditSession: () => {},
-    isArrangementWorkspaceActive: () => false,
-    openTracker: () => {},
-    openTrackerForEdit: () => {},
-    getDefragmentedInstruments: async () => [],
-    getBlockDetailOrNull: async () => null,
-    readUnsavedBlockTrackerState: () => null,
-    logError: () => {},
+    setPendingTrackerSavePayload: () => {},
+    setSelectedBlockForArrangement: () => {},
+    setStatus: () => {},
+    setTrackerAutoSaveTimeout: () => {},
+    updateBlock: async () => ({ ok: false }),
 };
 
 export function configureTrackerController(options = {}) {
