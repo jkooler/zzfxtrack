@@ -242,7 +242,7 @@ configurePatternMeta({
     getCurrentPatternFilename: () => appState.currentPatternFilename,
     setCurrentPatternScope: (scope) => { appState.currentPatternScope = scope; },
     updatePatternNameReadOnly: () => {
-        dom.patternNameInput.readOnly = DEMO_MODE || (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled());
+        dom.patternNameInput.readOnly = DEMO_MODE;
     },
     sanitizePlaybackMixSettings,
     applyPlaybackMixSettingsToInputs,
@@ -948,7 +948,7 @@ configureSystemSettings({
     },
     setPatternNameReadOnlyForDevMode: () => {
         if (dom.patternNameInput) {
-            dom.patternNameInput.readOnly = DEMO_MODE || (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled());
+            dom.patternNameInput.readOnly = DEMO_MODE;
         }
     },
     updateAdvancedSettingsButtonsVisibility,
@@ -971,7 +971,7 @@ configureAdvancedSettings({
     getCurrentPatternFilename: () => appState.currentPatternFilename,
     setCurrentPatternScope: (scope) => { appState.currentPatternScope = scope; },
     setPatternNameReadOnly: () => {
-        dom.patternNameInput.readOnly = DEMO_MODE || (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled());
+        dom.patternNameInput.readOnly = DEMO_MODE;
     },
     refreshPatternList,
     setInstrumentScope,
@@ -1245,13 +1245,11 @@ function syncThemeColors() {
 
 registerBeforeUnloadConfirmer(() => {
     if (DEMO_MODE) return false;
-    if (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled()) return false;
     return Boolean(autoSaveTimeout && appState.currentPatternFilename);
 });
 
 registerBeforeUnloadFlusher(() => {
     if (DEMO_MODE) return;
-    if (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled()) return;
     if (!(autoSaveTimeout && appState.currentPatternFilename)) return;
 
     clearTimeout(autoSaveTimeout);
@@ -1703,7 +1701,7 @@ let patternToDelete = null;
 function showDeleteConfirmation(filename) {
     const scope = normalizeScope(getPatternEntry(filename)?.scope);
     if (scope === 'system' && !isDeveloperModeEnabled()) {
-        setStatus('System patterns cannot be deleted', 'normal');
+        setStatus('System patterns cannot be deleted. Enable developer mode to delete them.', 'normal');
         return;
     }
     patternToDelete = filename;
@@ -1726,14 +1724,14 @@ let originalPatternName = '';
 // Input: do not save; draft is the input value. Save/rename only on blur (or Enter → blur).
 dom.patternNameInput.addEventListener('input', () => {
     if (!appState.currentPatternFilename) return;
-    if (DEMO_MODE || (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled())) return;
+    if (DEMO_MODE) return;
     // No-op: name is saved on blur only.
 });
 
 // Save/rename when leaving the input (only renames if name actually changed).
 dom.patternNameInput.addEventListener('blur', () => {
     if (!appState.currentPatternFilename) return;
-    if (DEMO_MODE || (appState.currentPatternScope === 'system' && !isDeveloperModeEnabled())) return;
+    if (DEMO_MODE) return;
     renamePattern({ quiet: true });
 });
 

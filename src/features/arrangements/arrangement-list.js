@@ -241,16 +241,16 @@ export async function refreshArrangementList() {
 
             items.forEach((entry) => {
                 const isSystem = deps.normalizeScope(entry.scope) === 'system';
-                const isImmutable = isSystem && !deps.isDeveloperModeEnabled();
+                const canDelete = !deps.isDemoMode() && (!isSystem || deps.isDeveloperModeEnabled());
                 const li = document.createElement('li');
                 li.className = `list-item ${entry.filename === deps.getCurrentArrangementFilename() ? 'active' : ''}`;
                 li.dataset.scope = deps.normalizeScope(entry.scope);
                 li.dataset.filename = entry.filename;
 
                 const displayName = decodeURIComponent((entry.filename || '').replace(/\.js$/i, ''));
-                li.innerHTML = (deps.isDemoMode() || isImmutable)
+                li.innerHTML = deps.isDemoMode()
                     ? `<span class="font-medium">${deps.escapeHtml(displayName)}</span>`
-                    : `<span class="font-medium">${deps.escapeHtml(displayName)}</span><div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`;
+                    : `<span class="font-medium">${deps.escapeHtml(displayName)}</span>${canDelete ? `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>` : ''}`;
 
                 li.querySelector('span')?.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -258,7 +258,7 @@ export async function refreshArrangementList() {
                 });
                 li.addEventListener('click', () => deps.loadArrangement(entry.filename));
 
-                if (!deps.isDemoMode() && !isImmutable) {
+                if (canDelete) {
                     li.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
                         e.stopPropagation();
                         deps.deleteArrangement(entry.filename);

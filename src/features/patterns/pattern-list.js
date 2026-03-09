@@ -161,15 +161,15 @@ export async function refreshPatternList() {
                 const fileName = decodeURIComponent(file.replace('.js', ''));
                 const isSystem = normalizeScope(entry.scope) === 'system';
                 const devMode = isDeveloperModeEnabled();
-                const isImmutable = isSystem && !devMode;
+                const canDelete = !isDemoMode() && (!isSystem || devMode);
                 const li = document.createElement('li');
                 li.className = `list-item ${file === getCurrentPatternFilename() && !getWelcomeViewVisible() ? 'active' : ''}`;
                 li.dataset.scope = normalizeScope(entry.scope);
                 li.dataset.filename = file;
 
-                li.innerHTML = (isDemoMode() || isImmutable)
+                li.innerHTML = isDemoMode()
                     ? `<span class="font-medium">${fileName}</span>`
-                    : `<span class="font-medium">${fileName}</span><div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`;
+                    : `<span class="font-medium">${fileName}</span>${canDelete ? `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>` : ''}`;
 
                 li.querySelector('span')?.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -177,7 +177,7 @@ export async function refreshPatternList() {
                 });
                 li.addEventListener('click', () => loadPattern(file));
 
-                if (!isDemoMode() && !isImmutable) {
+                if (canDelete) {
                     li.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
                         e.stopPropagation();
                         showDeleteConfirmation(file);

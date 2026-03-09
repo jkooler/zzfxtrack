@@ -27,12 +27,11 @@ export function configureArrangementPersistence(options = {}) {
 }
 
 export function getArrangementReadonly() {
-    return deps.isDemoMode() || (deps.getCurrentArrangementScope() === 'system' && !deps.isDeveloperModeEnabled());
+    return deps.isDemoMode();
 }
 
 export function canRecoverUnsavedForScope(scope) {
-    const normalizedScope = deps.normalizeScope(scope);
-    return normalizedScope !== 'system' || deps.isDeveloperModeEnabled();
+    return true;
 }
 
 export function cloneArrangementState(value) {

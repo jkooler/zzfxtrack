@@ -99,6 +99,10 @@ Exported JSON from this app is for the **ZzFXTrack Player** (ZzFXMicro 21-param 
 
 The package has no dependencies. See **`packages/zzfxtrack-player/README.md`** in this repo for the full API, song format, and a minimal example. A published package or separate repo may follow later.
 
+## System resources and updates
+
+**System** resources (patterns, blocks, arrangements, and instruments in the "System" folder) are part of the app’s codebase. You can edit and delete them like any other resource. **Your changes may be overwritten when you update the app**—system files are tracked in the repo and can change with new versions. If you want to keep customizations long-term, duplicate or copy content into user resources, or export your work.
+
 ## Project Structure
 
 - `patterns/`: pattern definitions (Strudel modules).

@@ -104,14 +104,15 @@ export function renderBlocksLibraryFromCache() {
         }
 
         entries.forEach((block) => {
+            const isSystem = deps.normalizeScope(block.scope) === 'system';
+            const canDelete = !isSystem || deps.isDeveloperModeEnabled();
             const li = document.createElement('div');
             const isSelected = block.filename === deps.getActiveArrangementBlockFilename();
             li.className = `list-item ${isSelected ? 'active' : ''}`;
             li.dataset.filename = block.filename;
-            const isReadonly = deps.normalizeScope(block.scope) === 'system' && !deps.isDeveloperModeEnabled();
             li.innerHTML = `
                 <span class="font-medium text-xs">${deps.escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
-                ${isReadonly ? '' : `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`}
+                ${canDelete ? `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>` : ''}
             `;
             li.draggable = true;
             li.addEventListener('dragstart', (e) => {
@@ -130,10 +131,13 @@ export function renderBlocksLibraryFromCache() {
                 deps.renderArrangementWorkspace();
                 deps.renderTrackerWorkspace();
             });
-            li.querySelector('.sidebar-del-btn')?.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await deps.deleteBlockFromLibrary(block.filename, block.name || block.filename);
-            });
+            const delBtn = li.querySelector('.sidebar-del-btn');
+            if (delBtn) {
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await deps.deleteBlockFromLibrary(block.filename, block.name || block.filename);
+                });
+            }
             items?.appendChild(li);
         });
 

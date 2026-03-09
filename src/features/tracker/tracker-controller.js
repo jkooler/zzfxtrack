@@ -43,7 +43,6 @@ export function scheduleTrackerAutoSave({ filename, trackerState, name: nameOver
     if (!filename || !trackerState || deps.isDemoMode()) return;
     const block = deps.getBlockByFilename(filename);
     if (!block) return;
-    if (deps.normalizeScope(block.scope) === 'system' && !deps.isDeveloperModeEnabled()) return;
 
     const trackerNameInput = document.getElementById('trackerBlockName');
     const trackerOutput = document.getElementById('trackerOutput');
@@ -74,8 +73,6 @@ export function scheduleTrackerAutoSave({ filename, trackerState, name: nameOver
         deps.setPendingTrackerSavePayload(null);
         deps.setTrackerAutoSaveTimeout(null);
         if (!activePayload) return;
-        const blockNow = deps.getBlockByFilename(activePayload.filename);
-        if (blockNow && deps.normalizeScope(blockNow.scope) === 'system' && !deps.isDeveloperModeEnabled()) return;
         try {
             const result = await deps.updateBlock(
                 activePayload.filename,

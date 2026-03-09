@@ -16,9 +16,7 @@ export async function saveCurrentPattern() {
     if (deps.isDemoMode()) return;
 
     const currentPatternFilename = deps.getCurrentPatternFilename();
-    const currentPatternScope = deps.getCurrentPatternScope();
     if (!currentPatternFilename) return;
-    if (currentPatternScope === 'system' && !deps.isDeveloperModeEnabled()) return;
 
     try {
         const editorCode = deps.getEditorCode();
@@ -85,16 +83,14 @@ export async function loadPattern(filename) {
 
         let editorCode = deps.fileToEditor(fileCode);
 
-        if (loadedPatternScope !== 'system' || deps.isDeveloperModeEnabled()) {
-            const unsavedCode = deps.getUnsavedPatternCode(filename);
-            if (unsavedCode) {
-                editorCode = unsavedCode;
-                deps.setStatus('⚠️ Recovered unsaved changes from cache', 'error');
-                setTimeout(() => {
-                    deps.saveCurrentPattern().catch(() => {});
-                    deps.clearUnsavedPatternCode(filename);
-                }, 500);
-            }
+        const unsavedCode = deps.getUnsavedPatternCode(filename);
+        if (unsavedCode) {
+            editorCode = unsavedCode;
+            deps.setStatus('⚠️ Recovered unsaved changes from cache', 'error');
+            setTimeout(() => {
+                deps.saveCurrentPattern().catch(() => {});
+                deps.clearUnsavedPatternCode(filename);
+            }, 500);
         }
 
         deps.setCurrentPatternSelection(filename, loadedPatternScope);
@@ -105,7 +101,7 @@ export async function loadPattern(filename) {
         const displayName = decodeURIComponent(filename.replace('.js', ''));
         deps.setPatternDisplayNames(displayName, displayName);
         deps.setPatternNameInputValue(displayName);
-        deps.setPatternNameInputReadOnly(deps.isDemoMode() || (loadedPatternScope === 'system' && !deps.isDeveloperModeEnabled()));
+        deps.setPatternNameInputReadOnly(deps.isDemoMode());
         deps.setPatternNameInputPlaceholder('');
         deps.updateAdvancedSettingsButtonsVisibility();
         deps.refreshPatternListDomActiveState(filename);
@@ -135,10 +131,6 @@ export async function renamePattern(options = {}) {
     }
     const currentPatternFilename = deps.getCurrentPatternFilename();
     if (!currentPatternFilename) return;
-    if (deps.getCurrentPatternScope() === 'system' && !deps.isDeveloperModeEnabled()) {
-        if (!quiet) deps.setStatus('System patterns are immutable', 'normal');
-        return;
-    }
 
     const rawName = deps.getPatternNameInputValue().trim();
     const newName = normalizePatternBaseName(rawName);
@@ -191,7 +183,7 @@ export async function deletePattern(filename) {
         return;
     }
     if (deps.normalizeScope(deps.getPatternEntry(filename)?.scope) === 'system' && !deps.isDeveloperModeEnabled()) {
-        deps.setStatus('System patterns cannot be deleted', 'normal');
+        deps.setStatus('System patterns cannot be deleted. Enable developer mode to delete them.', 'normal');
         return;
     }
     deps.setStatus('Deleting...');

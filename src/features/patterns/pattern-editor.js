@@ -177,19 +177,17 @@ export function setupPatternEditorAutosave() {
 
                 editorDeps.updateInstrumentUsage(currentCode);
 
-                if (editorDeps.getCurrentPatternScope() !== 'system' || editorDeps.isDeveloperModeEnabled()) {
-                    editorDeps.persistUnsavedPattern(currentPatternFilename, currentCode);
-                    const autoSaveTimeout = editorDeps.getAutoSaveTimeout();
-                    if (autoSaveTimeout) {
-                        clearTimeout(autoSaveTimeout);
-                    }
-                    const timeout = setTimeout(() => {
-                        const activeFilename = editorDeps.getCurrentPatternFilename();
-                        editorDeps.saveCurrentPattern().catch(() => {});
-                        if (activeFilename) editorDeps.clearUnsavedPattern(activeFilename);
-                    }, 1000);
-                    editorDeps.setAutoSaveTimeout(timeout);
+                editorDeps.persistUnsavedPattern(currentPatternFilename, currentCode);
+                const autoSaveTimeout = editorDeps.getAutoSaveTimeout();
+                if (autoSaveTimeout) {
+                    clearTimeout(autoSaveTimeout);
                 }
+                const timeout = setTimeout(() => {
+                    const activeFilename = editorDeps.getCurrentPatternFilename();
+                    editorDeps.saveCurrentPattern().catch(() => {});
+                    if (activeFilename) editorDeps.clearUnsavedPattern(activeFilename);
+                }, 1000);
+                editorDeps.setAutoSaveTimeout(timeout);
 
                 if (editorDeps.isReplPlaying()) {
                     if (hotReloadTimeout) clearTimeout(hotReloadTimeout);

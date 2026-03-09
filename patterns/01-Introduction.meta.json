@@ -1,9 +1,0 @@
-{
-  "rowsPerCycle": 96,
-  "playbackTargetPeak": 0.5,
-  "playbackMasterGainDb": 3,
-  "playbackSoftClipDrive": 1.4,
-  "playbackLoudnessPreset": "balanced",
-  "wavSampleRate": 44100,
-  "wavBitDepth": 16
-}

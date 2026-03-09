@@ -13,22 +13,32 @@ patterns/*.meta.json
 
 # keep curated user starters tracked
 !patterns/01-Introduction.js
-!patterns/02-Blocks.js
-!patterns/03-Monophonic-Horn.js
+!patterns/03-Blocks.js
+!patterns/02-Monophonic-Horn.js
 
-# keep curated examples tracked
-!patterns/00-Introduction-Demo.js
-!patterns/01-Monophon-Horn-Demo.js
-!patterns/02-Blocks-Demo.js
-!patterns/03-Diagnostic-sound.js
+# keep system resources tracked
+!patterns/01-Introduction-sys.js
+!patterns/02-Monophon-Horn-sys.js
+!patterns/03-Blocks-sys.js
+!patterns/04-Diagnostic-sound-sys.js
 
 # keep curated scope metadata tracked
-!patterns/00-Introduction-Demo.meta.json
-!patterns/01-Monophon-Horn-Demo.meta.json
-!patterns/02-Blocks-Demo.meta.json
-!patterns/03-Diagnostic-sound.meta.json
+!patterns/01-Introduction-sys.meta.json
+!patterns/02-Monophon-Horn-sys.meta.json
+!patterns/03-Blocks-sys.meta.json
+!patterns/04-Diagnostic-sound-sys.meta.json
 
 # Tracker blocks: ignore user-created/duplicated blocks (they live on disk but stay local)
 blocks/*.js
 # keep the blocks index (if present) so the folder is usable
 !blocks/index.js
+
+# Keep curated user arrangements tracked
+!arrangements/01-Introduction.js
+
+# User arrangements: ignore user-created arrangements (they live on disk but stay local)
+arrangements/*.js
+!arrangements/index.js
+
+# User instruments: ignore generated instruments.js (user edits stay local)
+instruments.js

@@ -84,7 +84,7 @@ export async function deleteArrangement(filename) {
     if (!filename || deps.isDemoMode()) return;
     const scope = deps.normalizeScope(deps.getArrangementEntry(filename)?.scope);
     if (scope === 'system' && !deps.isDeveloperModeEnabled()) {
-        deps.setStatus('System arrangements are immutable', 'normal');
+        deps.setStatus('System arrangements cannot be deleted. Enable developer mode to delete them.', 'normal');
         return;
     }
 

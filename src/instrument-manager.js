@@ -139,13 +139,6 @@ export function updateInstrument(id, changes) {
 
   const current = instruments[index];
   const currentScope = normalizeScope(current?.scope, inferLegacyScope(current));
-  const changeKeys = Object.keys(changes || {});
-  const isScopeOnlyChange = changeKeys.length > 0 && changeKeys.every((key) => key === "scope");
-  if (currentScope === "system" && !isDeveloperModeEnabled() && !isScopeOnlyChange) {
-    console.warn("[InstrumentManager] Example instruments are immutable:", id);
-    return current;
-  }
-
   const next = { ...current, ...changes };
   next.scope = normalizeScope(next.scope, currentScope);
 
@@ -168,7 +161,6 @@ export function deleteInstrument(id) {
     normalizeScope(target.scope, inferLegacyScope(target)) === "system" &&
     !isDeveloperModeEnabled()
   ) {
-    console.warn("[InstrumentManager] Example instruments are immutable:", id);
     return false;
   }
   const filtered = instruments.filter((inst) => inst.id !== id);

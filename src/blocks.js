@@ -67,23 +67,20 @@ function updateArrangementAdvancedSettingsVisibility() {
 }
 
 function updateArrangementSaveGuardUI() {
-  const isReadonlySystem = arrangementEditMode.scope === 'system' && !isDeveloperModeEnabled();
   if (elements.arrangementName) {
-    elements.arrangementName.readOnly = isReadonlySystem;
+    elements.arrangementName.readOnly = false;
   }
   if (elements.arrangementBpm) {
-    elements.arrangementBpm.readOnly = isReadonlySystem;
+    elements.arrangementBpm.readOnly = false;
   }
   if (elements.saveArrangementBtn) {
-    elements.saveArrangementBtn.disabled = isReadonlySystem;
-    elements.saveArrangementBtn.title = isReadonlySystem
-      ? 'Enable developer mode to edit system arrangements'
-      : '';
+    elements.saveArrangementBtn.disabled = false;
+    elements.saveArrangementBtn.title = '';
   }
 }
 
 function canInsertIntoCurrentPattern() {
-  return !(normalizeScope(targetPatternScope) === 'system' && !isDeveloperModeEnabled());
+  return true;
 }
 
 function updateInsertButtonsDisabledState() {
@@ -714,14 +711,14 @@ function renderArrangementsList() {
     }
 
     entries.forEach(({ arr, index }) => {
-      const isSystem = normalizeScope(arr.scope) === 'system';
-      const isImmutable = isSystem && !devMode;
       const el = document.createElement('div');
       el.className = 'block-item';
       el.dataset.index = index;
       el.dataset.filename = arr.filename || '';
       el.tabIndex = 0;
       const displayName = decodeURIComponent((arr.filename || '').replace(/\.js$/i, ''));
+      const isSystem = normalizeScope(arr.scope) === 'system';
+      const canDeleteArr = !isSystem || devMode;
       el.innerHTML = `
         <div class="min-w-0">
           <div class="block-name font-medium text-sm text-foreground">${escapeHtml(displayName)}</div>
@@ -729,7 +726,7 @@ function renderArrangementsList() {
         </div>
         <div class="list-item-actions">
           <button class="sidebar-edit-btn" title="Edit ${escapeHtml(displayName)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
-          ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
+          ${canDeleteArr ? `<button class="sidebar-del-btn" title="Delete ${escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
         </div>
       `;
 
@@ -758,7 +755,8 @@ function renderArrangementsList() {
         void openArrangementEditor(arrangementsCache[index]);
       });
 
-      el.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
+      const arrDelBtn = el.querySelector('.sidebar-del-btn');
+      arrDelBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         openDeleteArrangementModal(index);
       });
@@ -820,13 +818,13 @@ function selectArrangement(index, { preview = true } = {}) {
 async function deleteArrangementByIndex(index) {
 		  const arr = arrangementsCache[index];
 		  if (!arr?.filename) return;
-	    if (normalizeScope(arr.scope) === 'system' && !isDeveloperModeEnabled()) {
-	      await alertDialog({
+		  if (normalizeScope(arr.scope) === 'system' && !isDeveloperModeEnabled()) {
+		    await alertDialog({
           title: 'Cannot Delete System Resource',
-          message: 'System arrangements are read-only and cannot be deleted.',
+          message: 'System arrangements cannot be deleted. Enable developer mode to delete them.',
         });
-	      return;
-	    }
+		    return;
+		  }
 		  try {
 	    const res = await fetch(`/api/arrangements/${arr.filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
 	    if (!res.ok) throw new Error('Delete failed');
@@ -893,15 +891,15 @@ async function confirmDeleteArrangement() {
 		    closeDeleteArrangementModal();
 		    return;
 		  }
-  const filename = arrangementToDelete.filename;
   if (normalizeScope(arrangementToDelete.scope) === 'system' && !isDeveloperModeEnabled()) {
     closeDeleteArrangementModal();
     await alertDialog({
       title: 'Cannot Delete System Resource',
-      message: 'System arrangements are read-only and cannot be deleted.',
+      message: 'System arrangements cannot be deleted. Enable developer mode to delete them.',
     });
     return;
   }
+  const filename = arrangementToDelete.filename;
   closeDeleteArrangementModal();
 		  try {
 		    const res = await fetch(`/api/arrangements/${filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
@@ -1025,9 +1023,8 @@ function closeArrangementUnsavedConfirmModal() {
 
 function requestCloseArrangementEditor() {
   if (hasArrangementUnsavedChanges()) {
-    const isReadonlySystem = arrangementEditMode.scope === 'system' && !isDeveloperModeEnabled();
     if (elements.arrangementUnsavedSave) {
-      elements.arrangementUnsavedSave.classList.toggle('hidden', isReadonlySystem);
+      elements.arrangementUnsavedSave.classList.remove('hidden');
     }
     elements.arrangementUnsavedModal?.classList.add('open');
     return;
@@ -1466,10 +1463,6 @@ function renderArrangementRows() {
 	}
 
 async function saveArrangementFromEditor() {
-  if (arrangementEditMode.scope === 'system' && !isDeveloperModeEnabled()) {
-    emitStatus('System arrangements are read-only. Enable developer mode to edit.', 'error');
-    return;
-  }
   const rawName = elements.arrangementName?.value?.trim() || '';
   if (!rawName) {
     await alertDialog({
@@ -1665,7 +1658,7 @@ function renderBlocksList() {
 
     entries.forEach(({ block, index }) => {
       const isSystem = normalizeScope(block.scope) === 'system';
-      const isImmutable = isSystem && !devMode;
+      const canDeleteBlock = !isSystem || devMode;
       const bpm = Number.isFinite(block?.trackerState?.bpm) ? block.trackerState.bpm : null;
       const steps = Number.isFinite(block?.trackerState?.steps)
         ? block.trackerState.steps
@@ -1687,7 +1680,7 @@ function renderBlocksList() {
         </div>
         <div class="list-item-actions">
           <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
-          ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
+          ${canDeleteBlock ? `<button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
         </div>
       `;
 
@@ -1716,10 +1709,12 @@ function renderBlocksList() {
       });
 
       const deleteBtn = blockEl.querySelector('.sidebar-del-btn');
-      deleteBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteBlockByIndex(index);
-      });
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteBlockByIndex(index);
+        });
+      }
 
       list?.appendChild(blockEl);
     });
@@ -1965,7 +1960,7 @@ function showDeleteBlockConfirmation(block) {
   if (normalizeScope(block.scope) === 'system' && !isDeveloperModeEnabled()) {
     void alertDialog({
       title: 'Cannot Delete System Resource',
-      message: 'System blocks are read-only and cannot be deleted.',
+      message: 'System blocks cannot be deleted. Enable developer mode to delete them.',
     });
     return;
   }
@@ -1988,7 +1983,7 @@ async function confirmDeleteBlock() {
     closeDeleteBlockModal();
     await alertDialog({
       title: 'Cannot Delete System Resource',
-      message: 'System blocks are read-only and cannot be deleted.',
+      message: 'System blocks cannot be deleted. Enable developer mode to delete them.',
     });
     return;
   }

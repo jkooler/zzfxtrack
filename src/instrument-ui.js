@@ -357,8 +357,6 @@ function setupEventListeners() {
     // Drawer inputs - alias: commit on blur (like pattern/arrangement/block rename); export name stays derived from alias
     dom.instStrudelAlias.addEventListener('input', () => {
         if (!currentInstrumentId) return;
-        const current = getInstrumentById(currentInstrumentId);
-        if (current && normalizeScope(current.scope) === 'system' && !isDeveloperModeEnabled()) return;
         dom.instExportName.value = generateExportName(sanitizeStrudelAlias(dom.instStrudelAlias.value));
     });
     dom.instStrudelAlias.addEventListener('blur', handleDrawerAliasBlur);
@@ -1329,19 +1327,19 @@ function renderInstrumentList() {
         items.forEach((inst) => {
             const instScope = normalizeScope(inst.scope);
             const isSystem = instScope === 'system';
-            const isImmutable = isSystem && !devMode;
+            const canDelete = !isSystem || devMode;
             const waveShapeLabel = getWaveShapeLabel(inst.params);
 
             const li = document.createElement('li');
             li.className = `instrument-item ${inst.id === currentInstrumentId ? 'active' : ''}`;
-            li.draggable = !isSystem;
+            li.draggable = true;
             li.dataset.instrumentId = inst.id;
             li.dataset.alias = inst.strudelAlias;
             li.dataset.scope = instScope;
 
             li.innerHTML = `
                 <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
-                <div class="instrument-info" style="cursor: ${isSystem ? 'pointer' : 'move'}; display: flex; align-items: center; gap: 8px;">
+                <div class="instrument-info" style="cursor: move; display: flex; align-items: center; gap: 8px;">
                     <canvas class="instrument-scope w-[1.6rem] h-[1.6rem] rounded-full bg-black/20 border border-border/20 opacity-50 transition-opacity shrink-0" width="64" height="64"></canvas>
                     <div class="min-w-0">
                         <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
@@ -1349,7 +1347,7 @@ function renderInstrumentList() {
                     </div>
                 </div>
                 <div class="list-item-actions">
-                    ${isImmutable ? '' : `<button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
+                    ${canDelete ? `<button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
                 </div>
             `;
 
@@ -1372,18 +1370,18 @@ function renderInstrumentList() {
             });
 
             const deleteBtn = li.querySelector('.sidebar-del-btn');
-            deleteBtn?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                showDeleteInstrumentConfirmation(inst.id);
-            });
-
-            if (!isSystem) {
-                li.addEventListener('dragstart', handleDragStart);
-                li.addEventListener('dragover', handleDragOver);
-                li.addEventListener('dragleave', handleDragLeave);
-                li.addEventListener('drop', handleDrop);
-                li.addEventListener('dragend', handleDragEnd);
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showDeleteInstrumentConfirmation(inst.id);
+                });
             }
+
+            li.addEventListener('dragstart', handleDragStart);
+            li.addEventListener('dragover', handleDragOver);
+            li.addEventListener('dragleave', handleDragLeave);
+            li.addEventListener('drop', handleDrop);
+            li.addEventListener('dragend', handleDragEnd);
 
             list?.appendChild(li);
         });
@@ -1561,29 +1559,26 @@ function handleDragEnd(e) {
 function openDrawer(instrumentId) {
     const instrument = getInstrumentById(instrumentId);
     if (!instrument) return;
-    const isSystem = normalizeScope(instrument.scope) === 'system';
-    const isImmutable = isSystem && !isDeveloperModeEnabled();
-    
+
     currentInstrumentId = instrumentId;
-    
+
     // Populate fields
     dom.drawerTitle.textContent = `Edit: ${instrument.strudelAlias}`;
     dom.instExportName.value = instrument.exportName;
     dom.instStrudelAlias.value = instrument.strudelAlias;
     dom.instChannel.value = instrument.channel;
-    dom.instStrudelAlias.readOnly = isImmutable;
-    dom.instStrudelAlias.classList.toggle('opacity-60', isImmutable);
-    dom.instStrudelAlias.classList.toggle('cursor-not-allowed', isImmutable);
+    dom.instStrudelAlias.readOnly = false;
+    dom.instStrudelAlias.classList.remove('opacity-60', 'cursor-not-allowed');
     if (dom.instMonophonic) {
         dom.instMonophonic.checked = Boolean(instrument.monophonic);
-        dom.instMonophonic.disabled = isImmutable;
+        dom.instMonophonic.disabled = false;
     }
 
     // Populate parameters
     instrument.params.forEach((value, index) => {
         if (paramInputs[index]) {
             paramInputs[index].value = value;
-            paramInputs[index].disabled = isImmutable;
+            paramInputs[index].disabled = false;
         }
     });
     if (dom.openInstrumentAdvancedSettingsBtn) {
@@ -1630,7 +1625,7 @@ function closeDrawer() {
 function handleDrawerAliasBlur() {
     if (!currentInstrumentId) return;
     const current = getInstrumentById(currentInstrumentId);
-    if (current && normalizeScope(current.scope) === 'system' && !isDeveloperModeEnabled()) return;
+    if (!current) return;
 
     const rawAlias = String(dom.instStrudelAlias.value || '').trim();
     if (rawAlias === '') {
@@ -1665,7 +1660,7 @@ function handleDrawerAliasBlur() {
 function handleDrawerChange() {
     if (!currentInstrumentId) return;
     const current = getInstrumentById(currentInstrumentId);
-    if (current && normalizeScope(current.scope) === 'system' && !isDeveloperModeEnabled()) return;
+    if (!current) return;
 
     const rawAlias = dom.instStrudelAlias.value;
     const strudelAlias = sanitizeStrudelAlias(rawAlias);
@@ -1680,8 +1675,6 @@ function handleDrawerChange() {
 
 function handleMonophonicChange() {
     if (!currentInstrumentId) return;
-    const current = getInstrumentById(currentInstrumentId);
-    if (current && normalizeScope(current.scope) === 'system' && !isDeveloperModeEnabled()) return;
     updateInstrument(currentInstrumentId, { monophonic: Boolean(dom.instMonophonic.checked) });
     renderInstrumentList();
     autoUpdateInstrumentsFile();
@@ -1726,11 +1719,10 @@ function ensureMonophonicControl() {
  */
 function handleParamChange(paramIndex) {
     if (!currentInstrumentId) return;
-    
+
     const instrument = getInstrumentById(currentInstrumentId);
     if (!instrument) return;
-    if (normalizeScope(instrument.scope) === 'system' && !isDeveloperModeEnabled()) return;
-    
+
     // Update parameter
     const newParams = [...instrument.params];
     newParams[paramIndex] = parseFloat(paramInputs[paramIndex].value) || 0;
@@ -1825,10 +1817,10 @@ function showDeleteInstrumentConfirmation(instrumentId) {
     const instrument = getInstrumentById(instrumentId);
     if (!instrument) return;
     if (normalizeScope(instrument.scope) === 'system' && !isDeveloperModeEnabled()) {
-        alert('System instruments cannot be deleted.');
+        alert('System instruments cannot be deleted. Enable developer mode to delete them.');
         return;
     }
-    
+
     instrumentToDelete = instrumentId;
     dom.deleteInstrumentText.innerHTML = `Instrument: <strong>${instrument.exportName}</strong><br>This action is irreversible.`;
     dom.deleteInstrumentModal.classList.add('open');

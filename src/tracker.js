@@ -5124,9 +5124,6 @@ function resetEditMode() {
  * Update UI based on edit mode state
  */
 function updateEditModeUI() {
-  const isReadonlySystem = editMode.isEditing
-    && editMode.blockScope === 'system'
-    && !isDeveloperModeEnabled();
   const usesAutoSave = editMode.isEditing && editMode.autoSaveOnInput;
 
   // Update title
@@ -5147,7 +5144,7 @@ function updateEditModeUI() {
       elements.blockPropsRow2.classList.remove('hidden');
       if (elements.blockNameInput) {
         elements.blockNameInput.value = editMode.blockName || '';
-        elements.blockNameInput.readOnly = isReadonlySystem;
+        elements.blockNameInput.readOnly = false;
       }
       if (elements.blockBpmInput) {
         elements.blockBpmInput.value = String(state.bpm || 120);
@@ -5187,10 +5184,8 @@ function updateEditModeUI() {
   if (elements.saveBtn) {
     if (editMode.isEditing && !usesAutoSave) {
       elements.saveBtn.classList.remove('hidden');
-      elements.saveBtn.disabled = isReadonlySystem;
-      elements.saveBtn.title = isReadonlySystem
-        ? 'Enable developer mode to edit system blocks'
-        : '';
+      elements.saveBtn.disabled = false;
+      elements.saveBtn.title = '';
     } else {
       elements.saveBtn.classList.add('hidden');
       elements.saveBtn.disabled = false;
@@ -5200,10 +5195,8 @@ function updateEditModeUI() {
   if (elements.duplicateBlockBtn) {
     if (editMode.isEditing) {
       elements.duplicateBlockBtn.classList.remove('hidden');
-      elements.duplicateBlockBtn.disabled = isReadonlySystem;
-      elements.duplicateBlockBtn.title = isReadonlySystem
-        ? 'Enable developer mode to duplicate system blocks'
-        : 'Duplicate this block (new name with suffix -2, -3, …)';
+      elements.duplicateBlockBtn.disabled = false;
+      elements.duplicateBlockBtn.title = 'Duplicate this block (new name with suffix -2, -3, …)';
     } else {
       elements.duplicateBlockBtn.classList.add('hidden');
       elements.duplicateBlockBtn.disabled = false;
@@ -5217,8 +5210,7 @@ function updateEditModeUI() {
  */
 function handleSaveBlock() {
   if (!editMode.isEditing) return;
-  if (editMode.blockScope === 'system' && !isDeveloperModeEnabled()) return;
-  
+
   // Get and validate name
   let name = editMode.blockName;
   if (elements.blockNameInput) {
@@ -5294,9 +5286,8 @@ function closeUnsavedConfirmModal() {
  */
 function requestCloseTracker() {
   if (hasUnsavedChanges()) {
-    const isReadonlySystem = editMode.blockScope === 'system' && !isDeveloperModeEnabled();
     if (elements.unsavedSave) {
-      elements.unsavedSave.classList.toggle('hidden', isReadonlySystem);
+      elements.unsavedSave.classList.remove('hidden');
     }
     elements.unsavedConfirmModal?.classList.add('open');
     return;

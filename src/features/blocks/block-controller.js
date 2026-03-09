@@ -78,8 +78,9 @@ export function getArrangementReferencesForBlock(filename) {
 export async function deleteBlockFromLibrary(filename, displayName) {
     if (!filename || deps.isDemoMode()) return;
     const block = deps.getBlockByFilename(filename);
+    if (!block) return;
     if (deps.normalizeScope(block?.scope) === 'system' && !deps.isDeveloperModeEnabled()) {
-        deps.setStatus('System blocks are immutable', 'normal');
+        deps.setStatus('System blocks cannot be deleted. Enable developer mode to delete them.', 'normal');
         return;
     }
 
