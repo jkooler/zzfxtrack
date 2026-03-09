@@ -11,34 +11,37 @@ patterns/*.meta.json
 # keep required file tracked
 !patterns/index.js
 
-# keep curated user starters tracked
+# System patterns (tracked as part of codebase)
 !patterns/01-Introduction.js
-!patterns/03-Blocks.js
+!patterns/01-Introduction.meta.json
 !patterns/02-Monophonic-Horn.js
+!patterns/02-Monophonic-Horn.meta.json
+!patterns/03-Blocks.js
+!patterns/03-Blocks.meta.json
+!patterns/04-Diagnostic-sound.js
+!patterns/04-Diagnostic-sound.meta.json
 
-# keep system resources tracked
-!patterns/01-Introduction-sys.js
-!patterns/02-Monophon-Horn-sys.js
-!patterns/03-Blocks-sys.js
-!patterns/04-Diagnostic-sound-sys.js
-
-# keep curated scope metadata tracked
-!patterns/01-Introduction-sys.meta.json
-!patterns/02-Monophon-Horn-sys.meta.json
-!patterns/03-Blocks-sys.meta.json
-!patterns/04-Diagnostic-sound-sys.meta.json
-
-# Tracker blocks: ignore user-created/duplicated blocks (they live on disk but stay local)
+# Tracker blocks: ignore user-created blocks by default
 blocks/*.js
-# keep the blocks index (if present) so the folder is usable
 !blocks/index.js
 
-# Keep curated user arrangements tracked
-!arrangements/01-Introduction.js
+# System blocks (tracked as part of codebase)
+!blocks/drums.js
+!blocks/bass.js
+!blocks/chords.js
+!blocks/synths.js
+!blocks/cowbell.js
+!blocks/simple-drums.js
+!blocks/simple-chords.js
+!blcoks/simple-synths.js
 
-# User arrangements: ignore user-created arrangements (they live on disk but stay local)
+# Arrangements: ignore user-created by default
 arrangements/*.js
 !arrangements/index.js
+
+# System arrangements (tracked as part of codebase)
+!arrangements/01-Introduction.js
+!arrangements/02-Simple.js
 
 # User instruments: ignore generated instruments.js (user edits stay local)
 instruments.js
