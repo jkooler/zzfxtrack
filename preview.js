@@ -1,6 +1,6 @@
 import { getAudioContext, initAudio, webaudioRepl, drawTimeScope, getAnalyserById } from "@strudel/webaudio"; 
 import { patterns } from "./patterns/index.js";
-import { instruments, instruments as instrumentMap } from "./instruments.js";
+import { instruments, instruments as instrumentMap } from "./instruments.system.js";
 import { exportPattern } from "./src/export-logic.js";
 import { initStrudel } from "./src/init.js";
 import { loadZzFXInstruments } from "./src/zzfx-loader.js";

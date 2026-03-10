@@ -1,11 +1,17 @@
 /**
  * Instrument Manager
- * Manages the global instrument pool with localStorage persistence
+ * Manages the global instrument pool: system instruments (from instruments.system.js, tracked)
+ * plus user instruments (localStorage + instruments.js file, gitignored).
  */
 
+import * as systemModule from "../instruments.system.js";
+
 const STORAGE_KEY = "zzfxm-instruments";
+const SYSTEM_OVERRIDES_KEY = "zzfxm-instruments-system-overrides";
 const VALID_SCOPES = new Set(["user", "system"]);
 const DEVELOPER_MODE_KEY = "zzfxm-developer-mode";
+
+const SYSTEM_ID_PREFIX = "system:";
 
 function isDeveloperModeEnabled() {
   try {
@@ -53,9 +59,74 @@ function generateId() {
   return `inst_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+function aliasToExportName(alias) {
+  const safe = String(alias || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9-]/g, "-")
+    .replace(/-+/g, "_")
+    .replace(/^_|_$/g, "");
+  return `zzfxm_${safe || "untitled"}`;
+}
+
 /**
- * Load instruments from localStorage
- * @returns {Array} Array of instrument objects
+ * Load system parameter overrides from localStorage (user edits to system instruments)
+ * @returns {Object} Map of strudelAlias -> { params?, monophonic? }
+ */
+function loadSystemOverrides() {
+  try {
+    const data = localStorage.getItem(SYSTEM_OVERRIDES_KEY);
+    if (!data) return {};
+    const parsed = JSON.parse(data);
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveSystemOverrides(overrides) {
+  try {
+    localStorage.setItem(SYSTEM_OVERRIDES_KEY, JSON.stringify(overrides));
+    return true;
+  } catch (e) {
+    console.error("[InstrumentManager] Failed to save system overrides:", e);
+    return false;
+  }
+}
+
+/**
+ * Build system instrument records from instruments.system.js and apply overrides
+ * @returns {Array} Array of instrument objects with id "system:alias"
+ */
+function getSystemInstrumentRecords() {
+  const mapping = systemModule.instrumentMapping || {};
+  const instruments = systemModule.instruments || {};
+  const monophonic = systemModule.instrumentMonophonic || {};
+  const overrides = loadSystemOverrides();
+
+  return Object.entries(mapping).map(([alias, channel]) => {
+    let params = instruments[alias];
+    if (!params || !Array.isArray(params)) params = [];
+    let monophonicFlag = Boolean(monophonic[alias]);
+    const override = overrides[alias];
+    if (override) {
+      if (Array.isArray(override.params) && override.params.length === 21) params = override.params;
+      if (typeof override.monophonic === "boolean") monophonicFlag = override.monophonic;
+    }
+    return {
+      id: SYSTEM_ID_PREFIX + alias,
+      exportName: aliasToExportName(alias),
+      strudelAlias: alias,
+      channel: Number(channel),
+      params,
+      monophonic: monophonicFlag,
+      scope: "system",
+    };
+  });
+}
+
+/**
+ * Load user instruments from localStorage
+ * @returns {Array} Array of instrument objects (user only)
  */
 export function loadInstruments() {
   try {
@@ -71,13 +142,13 @@ export function loadInstruments() {
 }
 
 /**
- * Save instruments to localStorage
- * @param {Array} instruments - Array of instrument objects
+ * Save user instruments to localStorage (user only; system instruments are in instruments.system.js)
+ * @param {Array} instruments - Array of user instrument objects
  */
 export function saveInstruments(instruments) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(instruments));
-    console.log("[InstrumentManager] Saved", instruments.length, "instruments");
+    console.log("[InstrumentManager] Saved", instruments.length, "user instruments");
     return true;
   } catch (e) {
     console.error("[InstrumentManager] Failed to save instruments:", e);
@@ -99,9 +170,8 @@ export function createInstrument(
   channel,
   params = [],
 ) {
-  const instruments = loadInstruments();
-
-  // Default params if not provided (sine wave at 440Hz)
+  const userInstruments = loadInstruments();
+  const systemCount = getSystemInstrumentRecords().length;
   const defaultParams = [
     0.2, 0, 440, 0.01, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
   ];
@@ -110,25 +180,41 @@ export function createInstrument(
     id: generateId(),
     exportName: exportName || "INST_UNTITLED",
     strudelAlias: strudelAlias || "z-untitled",
-    channel: channel ?? instruments.length,
+    channel: channel ?? systemCount + userInstruments.length,
     params: params.length === 21 ? params : defaultParams,
     monophonic: false,
     scope: "user",
   };
 
-  instruments.push(instrument);
-  saveInstruments(instruments);
+  userInstruments.push(instrument);
+  saveInstruments(userInstruments);
 
   return instrument;
 }
 
 /**
- * Update an existing instrument
- * @param {string} id - Instrument ID
+ * Update an existing instrument (user: in localStorage; system: in overrides only)
+ * @param {string} id - Instrument ID (user id or "system:alias")
  * @param {Object} changes - Object with fields to update
  * @returns {Object|null} Updated instrument or null if not found
  */
 export function updateInstrument(id, changes) {
+  if (typeof id === "string" && id.startsWith(SYSTEM_ID_PREFIX)) {
+    const alias = id.slice(SYSTEM_ID_PREFIX.length);
+    const overrides = loadSystemOverrides();
+    const systemRecords = getSystemInstrumentRecords();
+    const base = systemRecords.find((r) => r.strudelAlias === alias);
+    if (!base) return null;
+    const currentOverride = overrides[alias] || {};
+    const nextParams = changes.params && Array.isArray(changes.params) && changes.params.length === 21
+      ? changes.params
+      : base.params;
+    const nextMonophonic = typeof changes.monophonic === "boolean" ? changes.monophonic : base.monophonic;
+    overrides[alias] = { params: nextParams, monophonic: nextMonophonic };
+    saveSystemOverrides(overrides);
+    return { ...base, params: nextParams, monophonic: nextMonophonic };
+  }
+
   const instruments = loadInstruments();
   const index = instruments.findIndex((inst) => inst.id === id);
 
@@ -154,6 +240,15 @@ export function updateInstrument(id, changes) {
  * @returns {boolean} Success status
  */
 export function deleteInstrument(id) {
+  if (typeof id === "string" && id.startsWith(SYSTEM_ID_PREFIX)) {
+    if (!isDeveloperModeEnabled()) return false;
+    const alias = id.slice(SYSTEM_ID_PREFIX.length);
+    const overrides = loadSystemOverrides();
+    delete overrides[alias];
+    saveSystemOverrides(overrides);
+    return true;
+  }
+
   const instruments = loadInstruments();
   const target = instruments.find((inst) => inst.id === id);
   if (
@@ -179,10 +274,10 @@ export function setInstrumentScope(id, scope) {
 }
 
 /**
- * Reorder instruments (changes channel assignments)
- * @param {number} fromIndex - Source index
- * @param {number} toIndex - Destination index
- * @returns {Array} Reordered instruments
+ * Reorder user instruments (changes channel assignments). System instruments stay fixed.
+ * @param {number} fromIndex - Source index within user list
+ * @param {number} toIndex - Destination index within user list
+ * @returns {Array} Reordered user instruments
  */
 export function reorderInstruments(fromIndex, toIndex) {
   const instruments = loadInstruments();
@@ -205,21 +300,23 @@ export function reorderInstruments(fromIndex, toIndex) {
 }
 
 /**
- * Get defragmented instruments (compact sparse channels to sequential)
- * Example: channels [1, 23, 132, 501] → [0, 1, 2, 3]
- * @returns {Array} Instruments with compacted channel indices
+ * Get defragmented instruments: system first (from instruments.system.js + overrides), then user (localStorage).
+ * Channels are sequential: 0..systemCount-1 for system, systemCount.. for user.
+ * @returns {Array} Merged instruments with defragmentedChannel
  */
 export function getDefragmentedInstruments() {
-  const instruments = loadInstruments();
-
-  // Sort by channel number
-  const sorted = [...instruments].sort((a, b) => a.channel - b.channel);
-
-  // Reassign to sequential indices
-  return sorted.map((inst, index) => ({
+  const systemRecords = getSystemInstrumentRecords();
+  const userRecords = loadInstruments();
+  const systemCount = systemRecords.length;
+  const userWithChannels = userRecords.map((inst, i) => ({
     ...inst,
-    defragmentedChannel: index,
+    channel: systemCount + i,
   }));
+  const merged = [
+    ...systemRecords.map((inst, i) => ({ ...inst, defragmentedChannel: i })),
+    ...userWithChannels.map((inst, i) => ({ ...inst, defragmentedChannel: systemCount + i })),
+  ];
+  return merged;
 }
 
 /**
@@ -256,22 +353,23 @@ export function getMonophonicArray() {
 }
 
 /**
- * Get instrument by ID
- * @param {string} id - Instrument ID
+ * Get instrument by ID (searches merged system + user list)
+ * @param {string} id - Instrument ID (user id or "system:alias")
  * @returns {Object|null} Instrument object or null
  */
 export function getInstrumentById(id) {
-  const instruments = loadInstruments();
-  return instruments.find((inst) => inst.id === id) || null;
+  const merged = getDefragmentedInstruments();
+  return merged.find((inst) => inst.id === id) || null;
 }
 
 /**
- * Migrate instruments from existing instruments.js file
- * @param {Object} importedData - Object with instrument exports
- * @returns {Array} Migrated instruments
+ * Migrate user instruments from file data (e.g. instruments.js user file).
+ * Only records with scope "user" are saved to localStorage; system instruments are in instruments.system.js.
+ * @param {Object} importedData - Object with instrument exports (instruments, instrumentMapping, instrumentMonophonic, instrumentScope)
+ * @returns {Array} Migrated user instruments
  */
 export function migrateFromFile(importedData) {
-  console.log("[InstrumentManager] Starting migration from instruments.js");
+  console.log("[InstrumentManager] Migrating user instruments from file");
 
   const existing = loadInstruments();
   const existingByAlias = new Map(
@@ -285,84 +383,55 @@ export function migrateFromFile(importedData) {
       .map((inst) => [inst.strudelAlias.toLowerCase(), inst]),
   );
   const monophonicFromFile = importedData?.instrumentMonophonic || {};
-  // Optional: file/API can provide scope per alias (e.g. instrumentScope: { "z-piano": "system" })
   const scopeFromFile = importedData?.instrumentScope || {};
+  const systemCount = getSystemInstrumentRecords().length;
 
-  const instruments = [];
-  let channel = 0;
-
-  // Extract from instrumentMapping if available
+  const allFromFile = [];
   if (importedData.instrumentMapping) {
-    Object.entries(importedData.instrumentMapping).forEach(([alias, ch]) => {
-      // Generate export name using the same convention as instrument creation
-      // Remove any existing z- prefix before adding zzfxm- prefix
+    Object.entries(importedData.instrumentMapping).forEach(([alias, ch], idx) => {
+      let params = importedData.instruments?.[alias];
+      if (!params && importedData.instruments) {
+        params =
+          importedData.instruments[alias.toLowerCase()] ||
+          importedData.instruments[alias.toUpperCase()];
+      }
+      if (!params || !Array.isArray(params)) return;
+
+      const prev = existingByAlias.get(alias) || existingByAliasLower.get(alias.toLowerCase());
+      const monoFromFile =
+        monophonicFromFile[alias] ?? monophonicFromFile[alias.toLowerCase()] ?? monophonicFromFile[alias.toUpperCase()];
+      const fileScope = scopeFromFile[alias] ?? scopeFromFile[alias.toLowerCase()] ?? scopeFromFile[alias.toUpperCase()];
+      const scope = normalizeScope(
+        typeof fileScope === "string" ? fileScope : prev?.scope,
+        "user",
+      );
       const cleanAlias = alias.toLowerCase().replace(/^z-/, "");
-      // Convert to safe variable name
-      let safeName = cleanAlias.replace(/[^a-zA-Z0-9]/g, '_');
-      if (/^[0-9]/.test(safeName)) safeName = '_' + safeName;
+      let safeName = cleanAlias.replace(/[^a-zA-Z0-9]/g, "_");
+      if (/^[0-9]/.test(safeName)) safeName = "_" + safeName;
       const exportName = `zzfxm_${safeName}`;
 
-      // Try to find the instrument params
-      // First try exact match
-      let params = importedData.instruments?.[alias];
-
-      // If not found, try case variations (e.g., z-KICKDRUM vs z-kickdrum)
-      if (!params) {
-        const aliasUpper = alias.toUpperCase();
-        const aliasLower = alias.toLowerCase();
-        params =
-          importedData.instruments?.[aliasUpper] ||
-          importedData.instruments?.[aliasLower];
-      }
-
-      if (params && Array.isArray(params)) {
-        const prev =
-          existingByAlias.get(alias) || existingByAliasLower.get(alias.toLowerCase());
-        const monoFromFile =
-          monophonicFromFile?.[alias] ??
-          monophonicFromFile?.[alias.toLowerCase()] ??
-          monophonicFromFile?.[alias.toUpperCase()];
-        // Scope: prefer file if provided, else preserve local (prev), else safe default "user".
-        // We do not infer "system" from alias (e.g. demo-/test-) when prev is missing — that would misclassify
-        // user instruments and miss system instruments with other names. Only use "system" when file sends it
-        // or when we had it locally (prev).
-        const fileScope =
-          scopeFromFile[alias] ??
-          scopeFromFile[alias.toLowerCase()] ??
-          scopeFromFile[alias.toUpperCase()];
-        const scopeFallback = prev
-          ? inferLegacyScope(prev)
-          : "user";
-        const scopeSource = typeof fileScope === "string"
-          ? fileScope
-          : prev?.scope;
-        instruments.push({
-          id: prev?.id || generateId(),
-          exportName,
-          strudelAlias: alias,
-          channel: ch,
-          params,
-          monophonic: parseMonophonicFlag(monoFromFile, parseMonophonicFlag(prev?.monophonic, false)),
-          scope: normalizeScope(scopeSource, scopeFallback),
-        });
-      } else {
-        console.warn(`[InstrumentManager] Could not find params for ${alias}`);
-      }
+      allFromFile.push({
+        id: prev?.id || generateId(),
+        exportName,
+        strudelAlias: alias,
+        channel: systemCount + idx,
+        params,
+        monophonic: parseMonophonicFlag(monoFromFile, parseMonophonicFlag(prev?.monophonic, false)),
+        scope,
+      });
     });
   }
 
-  saveInstruments(instruments);
-  console.log(
-    "[InstrumentManager] Migrated",
-    instruments.length,
-    "instruments",
-  );
-
-  return instruments;
+  const userOnly = allFromFile
+    .filter((inst) => normalizeScope(inst.scope) === "user")
+    .map((inst, i) => ({ ...inst, channel: systemCount + i }));
+  saveInstruments(userOnly);
+  console.log("[InstrumentManager] Migrated", userOnly.length, "user instruments");
+  return userOnly;
 }
 
 /**
- * Check if migration is needed (no instruments in localStorage)
+ * Check if migration is needed (no user instruments in localStorage)
  * @returns {boolean}
  */
 export function needsMigration() {

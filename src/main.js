@@ -11,7 +11,6 @@ import '@strudel/repl/index.mjs';
 import { codemirrorSettings, themes as strudelReplThemes, updateMiniLocations } from '@strudel/codemirror';
 import { getAudioContext } from '@strudel/webaudio';
 import '@melloware/coloris/dist/coloris.css';
-import { instruments as staticInstruments } from '../instruments.js';
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
 import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxtrack-player.js';
@@ -1128,14 +1127,14 @@ async function init() {
     dom.repl.prelude = `
 // ZzFXTrack
 // Default samples are disabled.
-// Only ZzFX instruments defined in instruments.js are available.
+// Only ZzFX instruments (system + user) are available.
 `;
     
     // 1. Initialize Strudel Core
     await initStrudel();
     
-    // 2. Load ZzFX Instruments into Strudel Registry
-    loadZzFXInstruments(staticInstruments);
+    // 2. Load instruments (system from instruments.system.js + user from localStorage) into Strudel
+    await reloadInstruments();
     
     // 3. Load Pattern List
     await refreshPatternList();
@@ -1154,7 +1153,7 @@ async function init() {
     // 4. Initialize Instrument UI
     await initInstrumentUI();
     
-    // 5. Reload instruments from localStorage (in case they differ from static file)
+    // 5. Reload instruments again after UI init (sync may have loaded user file)
     await reloadInstruments();
     
     // 6. Setup auto-save on input

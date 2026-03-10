@@ -5,6 +5,7 @@
 
 import {
     loadInstruments,
+    getDefragmentedInstruments,
     saveInstruments,
     createInstrument,
     updateInstrument,
@@ -663,20 +664,6 @@ async function syncInstrumentSources() {
     const serverData = await fetchServerInstruments();
 
     if (!serverData) {
-        if (needsMigration()) {
-            console.log('[InstrumentUI] Migration needed, importing from instruments.js');
-            try {
-                const cacheBust = `?t=${Date.now()}`;
-                const {
-                    instruments: instrumentsObj,
-                    instrumentMapping,
-                    instrumentMonophonic
-                } = await import(`../instruments.js${cacheBust}`);
-                migrateFromFile({ instruments: instrumentsObj, instrumentMapping, instrumentMonophonic });
-            } catch (e) {
-                console.error('[InstrumentUI] Migration failed:', e);
-            }
-        }
         return;
     }
 
@@ -1265,13 +1252,13 @@ function renderInstrumentList() {
     activeVisualizers.forEach(v => v.attach(null));
     activeVisualizers = [];
 
-    const instruments = loadInstruments();
+    const instruments = getDefragmentedInstruments();
     dom.instrumentList.innerHTML = '';
     const devMode = isDeveloperModeEnabled();
     
     const filterUsed = dom.usedInstrumentsOnly && dom.usedInstrumentsOnly.checked;
     
-    // Reverse order so newest (highest channel) appears first
+    // Reverse order so newest (highest channel) appears first (within system and user groups)
     const filtered = [...instruments].reverse().filter((inst) => {
         if (!filterUsed || !lastKnownCode) return true;
         const regex = new RegExp(`["']${inst.strudelAlias}["']|\\b${inst.strudelAlias}\\b`, 'g');
@@ -1510,9 +1497,8 @@ function handleDrop(e) {
         const draggedId = draggedElement.dataset.instrumentId;
         const targetId = target.dataset.instrumentId;
         
-        // Get all instruments
-        const instruments = loadInstruments();
-
+        // Get merged list (system + user); only user instruments can be reordered
+        const instruments = getDefragmentedInstruments();
         const systemInstruments = instruments.filter((inst) => normalizeScope(inst.scope) === 'system');
         const users = instruments.filter((inst) => normalizeScope(inst.scope) !== 'system');
         const displayedUsers = [...users].reverse();
@@ -1523,13 +1509,12 @@ function handleDrop(e) {
         const [moved] = displayedUsers.splice(draggedIndex, 1);
         displayedUsers.splice(targetIndex, 0, moved);
         const reorderedUsers = [...displayedUsers].reverse();
-        const reordered = [...systemInstruments, ...reorderedUsers];
-        reordered.forEach((inst, index) => {
-            inst.channel = index;
+        reorderedUsers.forEach((inst, i) => {
+            inst.channel = systemInstruments.length + i;
         });
 
         import('./instrument-manager.js').then(({ saveInstruments }) => {
-            saveInstruments(reordered);
+            saveInstruments(reorderedUsers);
             renderInstrumentList();
             autoUpdateInstrumentsFile();
             reloadInstruments(); // Reload instruments into Strudel

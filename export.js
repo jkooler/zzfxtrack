@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
-import * as instrumentModule from './instruments.js';
+import * as instrumentModule from './instruments.system.js';
 import { exportPattern } from './src/export-logic.js';
 import { initStrudel } from './src/init.js';
 
