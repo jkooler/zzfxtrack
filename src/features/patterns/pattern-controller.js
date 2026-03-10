@@ -109,7 +109,7 @@ export async function loadPattern(filename) {
 
         deps.setEditorCodeWithHighlightSync(editorCode, filename, deps.getPlayingPatternFilename());
         deps.setExportControlsDisabled(false);
-        deps.clearZzfxmPreviewData();
+        deps.clearZzFXTrackPreviewData();
         deps.setStatus('');
         deps.renderPlayButton();
         await deps.loadPatternMeta(filename);

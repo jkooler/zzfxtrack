@@ -44,7 +44,7 @@ let deps = {
     isPreviewPlaying: () => false,
     matchMedia: (query) => window.matchMedia(query),
     normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
-    refreshZzfxmPreviewControlsVisibility: () => {},
+    refreshZzFXTrackPreviewControlsVisibility: () => {},
     renameArrangement: () => {},
     renderTrackerWorkspace: () => {},
     saveCurrentArrangement: () => {},
@@ -62,7 +62,6 @@ let deps = {
     stopArrangementPreview: () => {},
     stopEditorPlayback: () => {},
     stopTrackerPreviewPlayback: () => {},
-    stopZzfxmSong: () => {},
     updateArrangementDisplayName: () => {},
     updateArrangementInstrumentUsage: () => {},
     updateArrangementListScopeVisualizer: () => {},
@@ -104,7 +103,7 @@ export function showArrangementWorkspace() {
     deps.updateArrangementSelectionState(Boolean(deps.getCurrentArrangementFilename()));
     deps.updateArrangementInstrumentUsage();
     deps.setExportControlsDisabled(false);
-    deps.refreshZzfxmPreviewControlsVisibility();
+    deps.refreshZzFXTrackPreviewControlsVisibility();
     deps.updateAdvancedSettingsButtonsVisibility();
     deps.updateFooterExportActionLabels();
     deps.updateArrangementListScopeVisualizer();
@@ -696,8 +695,8 @@ export function renderArrangementWorkspace() {
         });
         trashDropzone.addEventListener('dragover', (event) => {
             const types = event.dataTransfer?.types;
-            const isChip = types?.includes('application/x-zzfxm-arr-chip');
-            const isRow = types?.includes('application/x-zzfxm-arr-row');
+            const isChip = types?.includes('application/x-zzfxtrack-arr-chip');
+            const isRow = types?.includes('application/x-zzfxtrack-arr-row');
             if (!isChip && !isRow) return;
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
@@ -714,7 +713,7 @@ export function renderArrangementWorkspace() {
             trashDropzone.classList.remove('arr-trash-dropzone-dragover');
             window.__arrRowDragFromIndex = undefined;
             let rowPayload = null;
-            try { rowPayload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-row') || 'null'); } catch (_e) {}
+            try { rowPayload = JSON.parse(event.dataTransfer.getData('application/x-zzfxtrack-arr-row') || 'null'); } catch (_e) {}
             const fromRowIndex = Number.isInteger(rowPayload?.fromRowIndex) ? rowPayload.fromRowIndex : null;
             if (fromRowIndex != null) {
                 if (appState.arrangementDraftState.rows.length === 1) return;
@@ -737,7 +736,7 @@ export function renderArrangementWorkspace() {
                 return;
             }
             let payload = null;
-            try { payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null'); } catch (_e) {}
+            try { payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxtrack-arr-chip') || 'null'); } catch (_e) {}
             const filename = payload?.filename || event.dataTransfer.getData('text/plain') || '';
             const fromRowIndexChip = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
             if (filename && fromRowIndexChip != null) {
@@ -781,7 +780,7 @@ export function renderArrangementWorkspace() {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = isCopyModifier(event) ? 'copy' : 'move';
                 rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below', 'arr-row-block-drop-target');
-                const isRowDrag = event.dataTransfer.types.includes('application/x-zzfxm-arr-row');
+                const isRowDrag = event.dataTransfer.types.includes('application/x-zzfxtrack-arr-row');
                 const fromIndex = isRowDrag ? window.__arrRowDragFromIndex : undefined;
                 if (typeof fromIndex === 'number') {
                     if (fromIndex > rowIndex) rowEl.classList.add('arr-row-drop-target-above');
@@ -825,7 +824,7 @@ export function renderArrangementWorkspace() {
                 event.preventDefault();
                 window.__arrRowDragFromIndex = undefined;
                 let rowPayload = null;
-                try { rowPayload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-row') || 'null'); } catch (_e) {}
+                try { rowPayload = JSON.parse(event.dataTransfer.getData('application/x-zzfxtrack-arr-row') || 'null'); } catch (_e) {}
                 const fromRowIndex = Number.isInteger(rowPayload?.fromRowIndex) ? rowPayload.fromRowIndex : null;
                 if (fromRowIndex != null && fromRowIndex !== rowIndex) {
                     removeDropTargetAndAfter(ARR_ROW_DROP_EXIT_MS, () => {
@@ -840,7 +839,7 @@ export function renderArrangementWorkspace() {
                     return;
                 }
                 let payload = null;
-                try { payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null'); } catch (_e) {}
+                try { payload = JSON.parse(event.dataTransfer.getData('application/x-zzfxtrack-arr-chip') || 'null'); } catch (_e) {}
                 const filename = payload?.filename || event.dataTransfer.getData('text/plain') || '';
                 const fromRowIndexChip = Number.isInteger(payload?.fromRowIndex) ? payload.fromRowIndex : null;
                 removeDropTargetAndAfter(ARR_ROW_DROP_EXIT_MS, () => {
@@ -873,7 +872,7 @@ export function renderArrangementWorkspace() {
                     }
                     if (!e.dataTransfer) return;
                     e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('application/x-zzfxm-arr-row', JSON.stringify({ fromRowIndex: rowIndex }));
+                    e.dataTransfer.setData('application/x-zzfxtrack-arr-row', JSON.stringify({ fromRowIndex: rowIndex }));
                     window.__arrRowDragFromIndex = rowIndex;
                 });
                 rowNumberEl.addEventListener('dragend', () => {
@@ -1054,7 +1053,7 @@ export function renderArrangementWorkspace() {
                     chip.addEventListener('dragstart', (event) => {
                         if (!event.dataTransfer || readonly) return;
                         event.dataTransfer.effectAllowed = 'copyMove';
-                        event.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({ filename, fromRowIndex: rowIndex }));
+                        event.dataTransfer.setData('application/x-zzfxtrack-arr-chip', JSON.stringify({ filename, fromRowIndex: rowIndex }));
                         event.dataTransfer.setData('text/plain', filename);
                     });
                     chip.innerHTML = `<span class="arr-chip-label">${deps.escapeHtml(block?.name || filename)}</span><button type="button" class="arr-chip-del" title="Remove"><i data-lucide="x" class="w-3 h-3"></i></button>`;

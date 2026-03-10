@@ -6,7 +6,7 @@
     <title>ZzFXTrack</title>
     <script>
       (function() {
-        var key = 'zzfxm-color-theme';
+        var key = 'zzfxtrack-color-theme';
         try {
           var saved = localStorage.getItem(key);
           if (saved === 'legacy') { saved = 'jester'; localStorage.setItem(key, 'jester'); }
@@ -865,19 +865,21 @@
           <p class="text-foreground/90 leading-relaxed">
             <strong>ZzFXTrack</strong> is an authoring/export tool for the bundled <strong>ZzFXTrack Player</strong> that embeds <strong>Strudel</strong> for its REPL workflow and <strong>Arranger</strong>. It focuses on exporting engine-friendly song data and making it fast to iterate on patterns and instruments.
           </p>
-          <p class="text-muted-foreground/90 text-xs leading-relaxed">
-            ZzFXTrack is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
+          <p class="text-foreground text-xs leading-relaxed">
+            ZzFXTrack is not affiliated with or endorsed by creators of Strudel, creator of ZzFX (Frank Force) and ZzFXM (Keith Clark & Frank Force). It's made for my personal projects, but I'm always open to expand the idea and collaborate.
           </p>
 
           <div class="space-y-2">
             <h3 class="text-foreground font-semibold">Quick start</h3>
             <ol class="list-decimal pl-5 space-y-1">
-              <li>Select <strong>Arrangement</strong> or <strong>Strudel</strong> pattern from the left sidebar and hit play.</li>
-              <li>Choose <strong>instrument</strong> that is playing and change it's parameters.</li>
-              <li>Try to make changes to the Arrangement/Blocks or Strudel pattern.</li>
-              <li>Note: Arrangements/Blocks and Strudel patterns aren't integrated, they are separate resources</li>
-              <li>Click <strong>Export ZzFXTrack</strong> and preview playback.</li>
-              <li>Open <strong>Song Data</strong> to inspect/download JSON, or click <strong>Export WAV</strong> to share/test.</li>
+              <li>Open an <strong>Arrangement</strong> or <strong>Pattern</strong> from the left sidebar and hit play.</li>
+              <li>Select an <strong>Instrument</strong> from the left sidebar that is being used in the playback.</li>
+              <li>Make some changes to the parameters to see how the sound changes.</li>
+              <li>After this you could try to modify <strong>Blocks</strong>, <strong>Arrangements</strong>, or the <strong>Strudel</strong> pattern.</li>
+              <li>You can then click <strong>Export</strong> in the footer and choose <strong>ZzFXTrack Player</strong>.</li>
+              <li>Next you can click the play button to preview ZzFXTrack Player playback.</li>
+              <li>The sound you hear now comes from the exported JSON file and ZzFXTrack Player.</li>
+              <li>Click <strong>Export WAV</strong> if you want a quick audio file to share or test.</li>
             </ol>
           </div>
 
@@ -960,15 +962,15 @@
             ZzFX and ZzFXM are MIT-licensed components adapted for this workflow.
           </p>
           <p>
-            <strong>ZzFXTrack</strong> is an independent project and is not affiliated with or endorsed by Frank Force, KilledByAPixel, or the ZzFXM authors.
+            <strong>ZzFXTrack</strong> is an independent project and is not affiliated with or endorsed by Strudel, Frank Force, KilledByAPixel, or the ZzFXM authors.
           </p>
           <p>
             For full repository-level attribution details, see
             <code>THIRD_PARTY_NOTICES.md</code> in the project root.
           </p>
           <div class="h-px bg-border my-2"></div>
-          <p class="text-xs text-muted-foreground/90 leading-relaxed">
-            Disclaimer: At current state the app is made for my specific needs. -Jarno K
+          <p class="text-sm text-muted-foreground leading-relaxed">
+            Github: Coming soon...
           </p>
         </div>
         <div class="flex justify-end">
@@ -1060,8 +1062,8 @@
             </p>
             <ol class="list-decimal pl-5 space-y-1">
               <li>Copy the <code>packages/zzfxtrack-player/</code> folder from this repo into your project.</li>
-              <li>Import: <code>import { playZzfxmSong, stopZzfxmSong } from './zzfxtrack-player/index.js';</code> (adjust path as needed).</li>
-              <li>Call <code>playZzfxmSong(songData, audioCtx, onEnded?)</code> with your exported <code>[instruments, patterns, sequence, BPM]</code> array and an <code>AudioContext</code>.</li>
+              <li>Import: <code>import { playZzFXTrackSong, stopZzFXTrackSong } from './zzfxtrack-player/index.js';</code> (adjust path as needed).</li>
+              <li>Call <code>playZzFXTrackSong(songData, audioCtx, onEnded?)</code> with your exported <code>[instruments, patterns, sequence, BPM]</code> array and an <code>AudioContext</code>.</li>
             </ol>
             <p class="leading-relaxed">
               The player has no dependencies. See <code>packages/zzfxtrack-player/README.md</code> in the repo for the full API.

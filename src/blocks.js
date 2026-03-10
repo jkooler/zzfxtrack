@@ -36,11 +36,11 @@ let arrangementEditMode = {
 let arrangementToDelete = null;
 let arrangementRowToDeleteIndex = null;
 // v2: default User expanded, System collapsed when first using the app
-export const BLOCKS_FOLDER_STATE_KEY = 'zzfxm-folder-state-blocks-v2';
-const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v2';
+export const BLOCKS_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-blocks-v2';
+const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-arrangements-v2';
 let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, system: false });
 let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, system: false });
-const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 let targetPatternScope = 'user';
 
@@ -1198,7 +1198,7 @@ function renderArrangementRows() {
     rowNumberEl.addEventListener('dragstart', (e) => {
       if (!e.dataTransfer) return;
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('application/x-zzfxm-arr-row', JSON.stringify({ fromRowIndex: rowIndex }));
+      e.dataTransfer.setData('application/x-zzfxtrack-arr-row', JSON.stringify({ fromRowIndex: rowIndex }));
       window.__arrRowDragFromIndex = rowIndex;
     });
     rowNumberEl.addEventListener('dragend', () => {
@@ -1279,7 +1279,7 @@ function renderArrangementRows() {
           e.preventDefault();
           e.dataTransfer.dropEffect = isCopyModifier(e) ? 'copy' : 'move';
           rowEl.classList.remove('arr-row-drop-target-above', 'arr-row-drop-target-below');
-          const isRowDrag = e.dataTransfer.types.includes('application/x-zzfxm-arr-row');
+          const isRowDrag = e.dataTransfer.types.includes('application/x-zzfxtrack-arr-row');
           const fromIndex = isRowDrag ? window.__arrRowDragFromIndex : undefined;
           if (typeof fromIndex === 'number') {
             if (fromIndex > rowIndex) rowEl.classList.add('arr-row-drop-target-above');
@@ -1300,7 +1300,7 @@ function renderArrangementRows() {
           window.__arrRowDragFromIndex = undefined;
           let rowPayload = null;
           try {
-            rowPayload = JSON.parse(e.dataTransfer.getData('application/x-zzfxm-arr-row') || 'null');
+            rowPayload = JSON.parse(e.dataTransfer.getData('application/x-zzfxtrack-arr-row') || 'null');
           } catch (_err) {
             rowPayload = null;
           }
@@ -1316,7 +1316,7 @@ function renderArrangementRows() {
           }
           let payload = null;
           try {
-            payload = JSON.parse(e.dataTransfer.getData('application/x-zzfxm-arr-chip') || 'null');
+            payload = JSON.parse(e.dataTransfer.getData('application/x-zzfxtrack-arr-chip') || 'null');
           } catch (_err) {
             payload = null;
           }
@@ -1354,7 +1354,7 @@ function renderArrangementRows() {
             if (!e.dataTransfer) return;
             const payload = { filename, fromRowIndex: rowIndex };
             e.dataTransfer.effectAllowed = 'copyMove';
-            e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify(payload));
+            e.dataTransfer.setData('application/x-zzfxtrack-arr-chip', JSON.stringify(payload));
             e.dataTransfer.setData('text/plain', filename);
           });
 		        chip.addEventListener('click', (event) => {

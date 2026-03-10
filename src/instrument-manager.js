@@ -6,10 +6,10 @@
 
 import * as systemModule from "../instruments.system.js";
 
-const STORAGE_KEY = "zzfxm-instruments";
-const SYSTEM_OVERRIDES_KEY = "zzfxm-instruments-system-overrides";
+const STORAGE_KEY = "zzfxtrack-instruments";
+const SYSTEM_OVERRIDES_KEY = "zzfxtrack-instruments-system-overrides";
 const VALID_SCOPES = new Set(["user", "system"]);
-const DEVELOPER_MODE_KEY = "zzfxm-developer-mode";
+const DEVELOPER_MODE_KEY = "zzfxtrack-developer-mode";
 
 const SYSTEM_ID_PREFIX = "system:";
 
@@ -65,7 +65,7 @@ function aliasToExportName(alias) {
     .replace(/[^a-zA-Z0-9-]/g, "-")
     .replace(/-+/g, "_")
     .replace(/^_|_$/g, "");
-  return `zzfxm_${safe || "untitled"}`;
+  return `zzfxtrack_${safe || "untitled"}`;
 }
 
 /**
@@ -408,7 +408,7 @@ export function migrateFromFile(importedData) {
       const cleanAlias = alias.toLowerCase().replace(/^z-/, "");
       let safeName = cleanAlias.replace(/[^a-zA-Z0-9]/g, "_");
       if (/^[0-9]/.test(safeName)) safeName = "_" + safeName;
-      const exportName = `zzfxm_${safeName}`;
+      const exportName = `zzfxtrack_${safeName}`;
 
       allFromFile.push({
         id: prev?.id || generateId(),

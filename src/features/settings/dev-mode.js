@@ -3,7 +3,7 @@
  * Purpose: Developer-mode state and UI visibility helpers.
  */
 
-const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
 
 let isDemoMode = () => false;
 let getDom = () => null;

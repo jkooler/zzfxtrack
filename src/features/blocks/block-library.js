@@ -119,7 +119,7 @@ export function renderBlocksLibraryFromCache() {
                 if (e.target.closest('button')) return;
                 if (!e.dataTransfer) return;
                 e.dataTransfer.effectAllowed = 'copyMove';
-                e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({ filename: block.filename }));
+                e.dataTransfer.setData('application/x-zzfxtrack-arr-chip', JSON.stringify({ filename: block.filename }));
                 e.dataTransfer.setData('text/plain', block.filename);
             });
             li.addEventListener('click', () => {

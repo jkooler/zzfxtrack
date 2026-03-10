@@ -15,8 +15,8 @@ import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-set
 import { resolveChannelInstruments } from './instrument-rename-map.js';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
-const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
-const TRACKER_DENSE_ROWS_KEY = 'zzfxm-tracker-dense-rows';
+const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
+const TRACKER_DENSE_ROWS_KEY = 'zzfxtrack-tracker-dense-rows';
 
 function isDeveloperModeEnabled() {
   try {

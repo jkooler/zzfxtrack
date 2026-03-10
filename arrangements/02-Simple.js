@@ -1,4 +1,4 @@
-// Arrangement: 02-Simple-sys
+// Arrangement: 02-Simple
 
 export const name = "02-Simple";
 export const scope = "system";

@@ -5,7 +5,7 @@
  */
 
 let deps = {
-    clearZzfxmPreviewData: () => {},
+    clearZzFXTrackPreviewData: () => {},
     getCurrentArrangementFilename: () => null,
     getCurrentPatternFilename: () => null,
     getDom: () => ({}),
@@ -38,7 +38,7 @@ export function isArrangementWorkspaceActive() {
     return Boolean(dom.arrangementWorkspace && dom.arrangementWorkspace.style.display === 'flex');
 }
 
-export function refreshZzfxmPreviewControlsVisibility() {
+export function refreshZzFXTrackPreviewControlsVisibility() {
     const dom = deps.getDom();
     const lastExportedData = deps.getLastExportedData();
     const lastExportedContext = deps.getLastExportedContext();
@@ -162,7 +162,7 @@ export function showWelcome() {
     if (dom.repl.editor) dom.repl.editor.stop();
     deps.renderPlayButton();
     deps.updatePatternListVisualizer();
-    deps.clearZzfxmPreviewData({ placeholder: '' });
+    deps.clearZzFXTrackPreviewData({ placeholder: '' });
     dom.sidebarTitle?.classList.remove('active');
     deps.refreshArrangementListActiveState();
     deps.renderArrangementWorkspace();
@@ -194,7 +194,7 @@ export function showIntroduction() {
     deps.updatePatternListVisualizer();
     Array.from(dom.patternList.querySelectorAll('.list-item')).forEach((li) => li.classList.remove('active'));
     dom.sidebarTitle?.classList.add('active');
-    refreshZzfxmPreviewControlsVisibility();
+    refreshZzFXTrackPreviewControlsVisibility();
     updateFooterExportActionLabels();
 }
 
@@ -215,7 +215,7 @@ export function showEditor() {
     setExportControlsDisabled(false);
     dom.patternNameInput.classList.remove('hidden');
     deps.updatePatternSelectionState(Boolean(deps.getCurrentPatternFilename()));
-    refreshZzfxmPreviewControlsVisibility();
+    refreshZzFXTrackPreviewControlsVisibility();
     deps.updateAdvancedSettingsButtonsVisibility();
     dom.sidebarTitle?.classList.remove('active');
     deps.updatePatternListVisualizer();

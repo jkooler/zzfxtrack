@@ -4,7 +4,7 @@
  * channel instruments to the current names after renames.
  */
 
-const STORAGE_KEY = 'zzfxm-instrument-rename-map';
+const STORAGE_KEY = 'zzfxtrack-instrument-rename-map';
 
 /**
  * Load the rename map from localStorage

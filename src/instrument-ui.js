@@ -36,9 +36,9 @@ let currentView = 'blocks'; // 'strudel' | 'blocks' — Arranger is default
 let hasSelectedPattern = false;
 let hasSelectedArrangement = false;
 const playbackAliasesBySource = new Map();
-const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-instruments-v1';
+const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-instruments-v1';
 let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, system: false });
-const DEVELOPER_MODE_KEY = 'zzfxm-developer-mode';
+const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
 
 function isDeveloperModeEnabled() {
     try {
@@ -1756,11 +1756,11 @@ function closeNewInstrumentModal() {
 
 /**
  * Generate export name from instrument name
- * e.g., "bass" -> "zzfxm-bass", "fart-01-smelly" -> "zzfxm-fart-01-smelly"
+ * e.g., "bass" -> "zzfxtrack-bass", "fart-01-smelly" -> "zzfxtrack-fart-01-smelly"
  */
 function generateExportName(instrumentName) {
     const safeName = sanitizeExportName(instrumentName);
-    return `zzfxm_${safeName}`;
+    return `zzfxtrack_${safeName}`;
 }
 
 /**
@@ -1776,7 +1776,7 @@ function handleCreateInstrument() {
     
     // The name IS the Strudel alias
     const strudelAlias = sanitizeStrudelAlias(instrumentName);
-    // Auto-generate export name with zzfxm- prefix
+    // Auto-generate export name with zzfxtrack- prefix
     const exportName = generateExportName(strudelAlias);
     
     const instruments = loadInstruments();

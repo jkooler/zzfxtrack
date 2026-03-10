@@ -9,7 +9,7 @@ import { exportPattern } from '../../export-logic.js';
 let deps = {
     buildArrangementExportContext: async () => null,
     buildExportLengthWarningMessage: () => '',
-    buildZzfxmSongJsModule: () => '',
+    buildZzFXTrackSongJsModule: () => '',
     clearStatusAfter: () => {},
     confirmDialog: async () => false,
     escapeHtml: (value) => String(value || ''),
@@ -31,7 +31,7 @@ let deps = {
     saveExportedJsFile: async () => {},
     saveExportedJsonFile: async () => {},
     setStatus: () => {},
-    setZzfxmPreviewData: () => {},
+    setZzFXTrackPreviewData: () => {},
     shouldWarnExportLength: () => false,
     slugify: (value) => String(value || '')
         .trim()
@@ -60,7 +60,7 @@ async function saveExportedSongFiles(jsonFilename, songData) {
     const baseName = jsonFilename.replace(/\.json$/i, '');
     const jsFilename = `${baseName}.js`;
     try {
-        const moduleText = deps.buildZzfxmSongJsModule(songData);
+        const moduleText = deps.buildZzFXTrackSongJsModule(songData);
         await deps.saveExportedJsFile(jsFilename, moduleText);
     } catch (e) {
         deps.logError('Failed to save JS song module', e);
@@ -68,7 +68,7 @@ async function saveExportedSongFiles(jsonFilename, songData) {
 }
 
 export async function exportCurrentPattern(options = {}) {
-    const { revealZzfxmPreview = true } = options;
+    const { revealZzFXTrackPreview = true } = options;
     const dom = deps.getDom();
     if (!deps.getCurrentPatternFilename()) return;
 
@@ -148,10 +148,10 @@ export async function exportCurrentPattern(options = {}) {
         const exportData = { song: result.song, mix: deps.getPlaybackMixSettings() };
         const { channelCount, droppedNotes, unknownInstrumentNotes, unknownInstrumentAliases = [] } = result.stats;
 
-        deps.setZzfxmPreviewData(exportData, { monophonicByInstrumentIndex: monophonicByIndex }, {
+        deps.setZzFXTrackPreviewData(exportData, { monophonicByInstrumentIndex: monophonicByIndex }, {
             type: 'pattern',
             filename: deps.getCurrentPatternFilename(),
-            reveal: revealZzfxmPreview,
+            reveal: revealZzFXTrackPreview,
         });
 
         const jsonFilename = deps.getCurrentPatternFilename().replace('.js', '.json');
@@ -329,7 +329,7 @@ export async function exportCurrentArrangement() {
         const exportData = { song: result.song, mix: deps.getPlaybackMixSettings() };
         const { channelCount, droppedNotes, unknownInstrumentNotes, unknownInstrumentAliases = [] } = result.stats;
 
-        deps.setZzfxmPreviewData(exportData, { monophonicByInstrumentIndex: monophonicByIndex }, {
+        deps.setZzFXTrackPreviewData(exportData, { monophonicByInstrumentIndex: monophonicByIndex }, {
             type: 'arrangement',
             filename: deps.getCurrentArrangementFilename(),
             reveal: true,

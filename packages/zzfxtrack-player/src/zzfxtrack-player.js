@@ -215,8 +215,8 @@ export const buildSong = (song, options = {}) => {
 // Playback State
 let playingSource = null;
 
-export function playZzfxmSong(songData, audioCtx, onEnded, options = {}) {
-    stopZzfxmSong();
+export function playZzFXTrackSong(songData, audioCtx, onEnded, options = {}) {
+    stopZzFXTrackSong();
     
     console.log("[ZzFXTrack Player] Building song...", songData);
     const pcm = buildSong(songData, options);
@@ -247,7 +247,7 @@ export function playZzfxmSong(songData, audioCtx, onEnded, options = {}) {
     };
 }
 
-export function stopZzfxmSong() {
+export function stopZzFXTrackSong() {
     if (playingSource) {
         try { playingSource.stop(); } catch(e){}
         playingSource = null;

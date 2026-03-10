@@ -13,7 +13,7 @@ import { getAudioContext } from '@strudel/webaudio';
 import '@melloware/coloris/dist/coloris.css';
 import { loadZzFXInstruments } from './zzfx-loader.js';
 import { initStrudel } from './init.js';
-import { buildSong, playZzfxmSong, stopZzfxmSong } from './zzfxtrack-player.js';
+import { buildSong, playZzFXTrackSong, stopZzFXTrackSong } from './zzfxtrack-player.js';
 import { attachVisualizer } from './visualizer.js';
 
 // --- App shell (dom, state, API) ---
@@ -65,7 +65,7 @@ import { configureBlockController, deleteBlockFromLibrary, setupBlocksEventListe
 // --- Features: playback & export ---
 import { buildExportLengthWarningMessage, estimateExportSizeBytes, formatExportSize, getExportDurationSeconds, inferArrangeCyclesFromCode, shouldWarnExportLength } from './features/playback/export-actions.js';
 import { configurePlaybackController } from './features/playback/playback-controller.js';
-import { buildZzfxmSongJsModule, configureExportPreview, installExportPreviewHandlers, renderSongDataPreview, updatePreviewPlayButton } from './features/playback/export-preview.js';
+import { buildZzFXTrackSongJsModule, configureExportPreview, installExportPreviewHandlers, renderSongDataPreview, updatePreviewPlayButton } from './features/playback/export-preview.js';
 import { configureExportExecution, exportCurrentArrangement as runExportCurrentArrangement, exportCurrentPattern as runExportCurrentPattern } from './features/playback/export-execution.js';
 import { applyPlaybackMixSettingsToInputs, configureExportSettings, getPlaybackMixSettings, getWavExportSettings, inferPlaybackPresetId, normalizePlaybackPresetId, setPlaybackPresetControl, setupExportSettingsModal } from './features/playback/export-settings.js';
 import { configureExportWav, exportArrangementWav, exportPatternWav } from './features/playback/export-wav.js';
@@ -86,7 +86,7 @@ import { applyInitialColorTheme } from './features/settings/theme-controller.js'
 import { setStatus, clearStatusAfter, configureStatusBar, installStatusEventListener } from './features/ui/status-bar.js';
 import { configureStaticModals, installStaticModalHandlers } from './features/ui/static-modals.js';
 import { setupListTouchActivation } from './features/ui/touch-activation.js';
-import { closeExportMenu, configureViewSwitching, isArrangementWorkspaceActive, refreshZzfxmPreviewControlsVisibility, setExportControlsDisabled, showEditor, showIntroduction, showWelcome, toggleExportMenu, updateFooterExportActionLabels } from './features/ui/view-switching.js';
+import { closeExportMenu, configureViewSwitching, isArrangementWorkspaceActive, refreshZzFXTrackPreviewControlsVisibility, setExportControlsDisabled, showEditor, showIntroduction, showWelcome, toggleExportMenu, updateFooterExportActionLabels } from './features/ui/view-switching.js';
 
 // --- Shared utilities ---
 import { ensureArrangementsSection, ensureBlocksSection, nextAvailableVarName, normalizePatternStack as normalizePatternStackShared, slugify, upsertPatternLayer as upsertPatternLayerShared } from './shared/code-transform-utils.js';
@@ -207,7 +207,7 @@ configureViewSwitching({
     updateArrangementListScopeVisualizer,
     renderPlayButton,
     updatePatternListVisualizer,
-    clearZzfxmPreviewData,
+    clearZzFXTrackPreviewData,
     refreshArrangementListActiveState,
     renderArrangementWorkspace,
 });
@@ -378,7 +378,7 @@ configurePatternController({
     showWelcome,
     clearRenameDebounceTimeout: () => { renameDebounceTimeout = null; },
     setExportControlsDisabled,
-    clearZzfxmPreviewData,
+    clearZzFXTrackPreviewData,
     renderPlayButton,
     loadPatternMeta,
     updateInstrumentUsage,
@@ -541,7 +541,7 @@ configureArrangementWorkspace({
     getCurrentArrangementFilename: () => appState.currentArrangementFilename,
     updateArrangementInstrumentUsage,
     setExportControlsDisabled,
-    refreshZzfxmPreviewControlsVisibility,
+    refreshZzFXTrackPreviewControlsVisibility,
     updateAdvancedSettingsButtonsVisibility,
     updateFooterExportActionLabels,
     updateArrangementListScopeVisualizer,
@@ -827,8 +827,8 @@ configureExportPreview({
     getPlaybackMixSettings,
     getAudioContext,
     stopAllPlaybackForSelectionChange,
-    playZzfxmSong,
-    stopZzfxmSong,
+    playZzFXTrackSong,
+    stopZzFXTrackSong,
     triggerFileDownload,
     setStatus,
     getIsPreviewPlaying: () => isPreviewPlaying,
@@ -866,8 +866,8 @@ configureExportExecution({
     getDefragmentedInstruments,
     buildArrangementExportContext,
     getPlaybackMixSettings,
-    setZzfxmPreviewData,
-    buildZzfxmSongJsModule,
+    setZzFXTrackPreviewData,
+    buildZzFXTrackSongJsModule,
     saveExportedJsonFile,
     saveExportedJsFile,
     slugify,
@@ -1012,11 +1012,11 @@ configureStaticModals({
     isDemoMode: () => DEMO_MODE,
 });
 
-const PATTERN_FOLDER_STATE_KEY = 'zzfxm-folder-state-patterns-v1';
+const PATTERN_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-patterns-v1';
 /** Default: user folder open, system collapsed. User toggles are persisted and restored on next launch. */
 let patternFolderState = loadFolderState(PATTERN_FOLDER_STATE_KEY, { user: true, system: false });
 
-const ARRANGEMENT_FOLDER_STATE_KEY = 'zzfxm-folder-state-arrangements-v1';
+const ARRANGEMENT_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-arrangements-v1';
 let arrangementFolderState = loadFolderState(ARRANGEMENT_FOLDER_STATE_KEY, { user: true, system: false });
 
 applyInitialColorTheme();
@@ -1059,7 +1059,7 @@ function stopAllPlaybackForSelectionChange() {
     }
 
     if (isPreviewPlaying) {
-        stopZzfxmSong();
+        stopZzFXTrackSong();
         updatePreviewPlayButton(false);
     }
 
@@ -1073,7 +1073,7 @@ function stopAllPlaybackForSelectionChange() {
     clearArrangementPlaybackInstrumentAliases();
 }
 
-function setZzfxmPreviewData(songData, meta = null, { type, filename, reveal = true } = {}) {
+function setZzFXTrackPreviewData(songData, meta = null, { type, filename, reveal = true } = {}) {
     lastExportedData = songData || null;
     lastExportedMeta = meta || null;
     lastExportedContext = {
@@ -1084,20 +1084,20 @@ function setZzfxmPreviewData(songData, meta = null, { type, filename, reveal = t
         renderSongDataPreview();
     }
     if (reveal) {
-        refreshZzfxmPreviewControlsVisibility();
+        refreshZzFXTrackPreviewControlsVisibility();
     }
 }
 
-function clearZzfxmPreviewData({ placeholder = '// Click GENERATE to create ZzFXTrack Player data' } = {}) {
+function clearZzFXTrackPreviewData({ placeholder = '// Click GENERATE to create ZzFXTrack Player data' } = {}) {
     if (isPreviewPlaying) {
-        stopZzfxmSong();
+        stopZzFXTrackSong();
         updatePreviewPlayButton(false);
     }
     lastExportedData = null;
     lastExportedMeta = null;
     lastExportedContext = { type: null, filename: null };
     dom.previewJson.innerText = placeholder;
-    refreshZzfxmPreviewControlsVisibility();
+    refreshZzFXTrackPreviewControlsVisibility();
 }
 
 function handleSidebarTitleClick() {
@@ -1471,7 +1471,7 @@ function triggerFileDownload(filename, content, mime = 'text/plain;charset=utf-8
 async function exportCurrentPatternWav() {
     if (!appState.currentPatternFilename) return;
 
-    await exportCurrentPattern({ revealZzfxmPreview: false });
+    await exportCurrentPattern({ revealZzFXTrackPreview: false });
     if (!lastExportedData) {
         setStatus('WAV export failed: no pattern data generated.', 'error');
         return;
@@ -1575,7 +1575,7 @@ document.addEventListener('keydown', (e) => {
 if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadProjectBundle);
 installProjectImportHandlers();
 const trackerBlockNameLabel = document.getElementById('trackerBlockNameLabel');
-if (trackerBlockNameLabel) {
+    if (trackerBlockNameLabel) {
     trackerBlockNameLabel.draggable = true;
     trackerBlockNameLabel.addEventListener('dragstart', (e) => {
         const filename = appState.activeArrangementBlockFilename;
@@ -1584,7 +1584,7 @@ if (trackerBlockNameLabel) {
             ? appState.arrangementDraftState.rows.findIndex((r) => Array.isArray(r?.blocks) && r.blocks.includes(filename))
             : -1;
         e.dataTransfer.effectAllowed = 'copyMove';
-        e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({
+        e.dataTransfer.setData('application/x-zzfxtrack-arr-chip', JSON.stringify({
             filename,
             fromRowIndex: fromRowIndex >= 0 ? fromRowIndex : null,
         }));
@@ -1947,7 +1947,7 @@ function setupTrackerEventListeners() {
                 }
             } catch (_err) { /* ignore */ }
             if (isPreviewPlaying) {
-                stopZzfxmSong();
+                stopZzFXTrackSong();
                 updatePreviewPlayButton(false);
             }
             if (aliases.length) {

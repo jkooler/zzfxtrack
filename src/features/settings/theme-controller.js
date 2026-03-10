@@ -3,7 +3,7 @@
  * Purpose: Initial app theme bootstrap and legacy theme-value migration.
  */
 
-export const COLOR_THEME_KEY = 'zzfxm-color-theme';
+export const COLOR_THEME_KEY = 'zzfxtrack-color-theme';
 
 export function applyInitialColorTheme() {
     try {

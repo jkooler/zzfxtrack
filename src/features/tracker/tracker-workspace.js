@@ -105,7 +105,7 @@ export function renderTrackerWorkspace() {
             const filename = deps.getActiveArrangementBlockFilenameForDrag();
             if (!filename || !e.dataTransfer) return;
             e.dataTransfer.effectAllowed = 'copyMove';
-            e.dataTransfer.setData('application/x-zzfxm-arr-chip', JSON.stringify({ filename }));
+            e.dataTransfer.setData('application/x-zzfxtrack-arr-chip', JSON.stringify({ filename }));
             e.dataTransfer.setData('text/plain', filename);
         });
     }).catch((err) => {

@@ -5,8 +5,8 @@
 
 export {
   buildSong,
-  playZzfxmSong,
-  stopZzfxmSong,
+  playZzFXTrackSong,
+  stopZzFXTrackSong,
 } from './src/zzfxtrack-player.js';
 
 export {
