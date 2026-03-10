@@ -4,6 +4,7 @@ output/
 dist/
 .agent/
 
+
 # Strudel patterns: ignore everything by default
 patterns/*.js
 patterns/*.meta.json
@@ -45,3 +46,6 @@ arrangements/*.js
 
 # User instruments: ignore generated instruments.js (user edits stay local)
 instruments.js
+
+# Some old instruments backup
+instruments_backup.js
