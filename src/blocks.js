@@ -1651,7 +1651,7 @@ function renderBlocksList() {
       const empty = document.createElement('div');
       empty.className = 'text-xs text-muted-foreground px-2 py-1';
       empty.textContent = scope === 'user'
-        ? 'No user blocks yet. Click \"Create Block\" to make your first pattern.'
+        ? 'None are found.'
         : 'No system blocks available.';
       list?.appendChild(empty);
     }

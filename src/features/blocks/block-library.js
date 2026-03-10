@@ -98,7 +98,7 @@ export function renderBlocksLibraryFromCache() {
             const empty = document.createElement('div');
             empty.className = 'text-xs text-muted-foreground px-2 py-1';
             empty.textContent = scope === 'user'
-                ? 'No user blocks yet. Click "+ New" to create one.'
+                ? 'None are found.'
                 : 'No system blocks available.';
             items?.appendChild(empty);
         }
