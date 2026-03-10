@@ -3,9 +3,9 @@ import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-set
 
 /**
  * ZzFXTrack Player — ZzFX Music Renderer v2.0.3 by Frank Force 2019
- * Adapted from ZzFXM (Keith Clark and Frank Force, MIT License)
+ * Adapted from earlier work by Keith Clark and Frank Force (MIT License)
  * for ES Modules and ZzFXTrack Player export format. Uses ZzFXMicro (21-param) engine.
- * Original project: https://keithclark.github.io/ZzFXM/
+ * Original project by Keith Clark and Frank Force.
  */
 
 // Max attenuation used in export-logic.js

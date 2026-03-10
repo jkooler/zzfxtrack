@@ -6,7 +6,7 @@
 - **Legacy:** `[instruments, patterns, sequence, BPM]` (21-param ZzFXMicro instrument arrays), or
 - **With mix (exported by this app):** `{ song: [instruments, patterns, sequence, BPM], mix: { targetPeak, masterGainDb, softClipDrive } }`. When present, the stored mix is applied so your game or project sounds like the in-app preview. Caller `options` override stored mix.
 
-It is **not** compatible with the canonical ZzFXM player (different engine and format).
+It is **not** compatible with legacy ZzFX song players (different engine and format).
 
 ### Installation (alpha)
 
@@ -57,4 +57,4 @@ playZzFXTrackSong(songData, audioCtx, () => console.log('Done'));
 
 ## License
 
-MIT. Adapted from ZzFXM (Keith Clark and Frank Force). See repository for attribution.
+MIT. Adapted from earlier work by Keith Clark and Frank Force. See repository for attribution.

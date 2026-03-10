@@ -3,7 +3,7 @@ import { dbToGain, sanitizePlaybackMixSettings, softClipSample } from './mix-set
 
 /**
  * ZzFXTrack Player — renders song data to PCM using the ZzFXMicro (21-param) engine.
- * Uses ZzFXMicro-compatible synthesis; not compatible with the canonical ZzFXM player.
+ * Uses ZzFXMicro-compatible synthesis; not compatible with legacy ZzFX song players.
  */
 
 // Max attenuation used in export-logic.js

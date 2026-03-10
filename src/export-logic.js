@@ -379,7 +379,7 @@ export function exportPattern(pattern, bpm, instrumentArray, instrumentMapping, 
     const channelCount = patternData.length;
 
     // Convert a dense channel array to sparse: { _: length, "index": [inst, atten, semi], ... }
-    // so JSON has no repeated 0s (smaller file, like ZzFXM style).
+    // so JSON has no repeated 0s (smaller file, sparse-channel style).
     function denseChannelToSparse(arr) {
         const out = { _: arr.length };
         for (let i = 0; i < arr.length; i++) {
