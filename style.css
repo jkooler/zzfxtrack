@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans:wght@300;400;500;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans:wght@300;400;500;700;800;900&family=Orbitron:wght@900&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -47,6 +47,12 @@
 
   /* Scope waveform stroke – inherits from theme via tertiary/accent */
   --scope-stroke: var(--tertiary-foreground);
+}
+
+.font-orbitron-black {
+  font-family: "Orbitron", sans-serif;
+  font-weight: 900;
+  font-style: normal;
 }
 
 @layer base {

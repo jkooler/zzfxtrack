@@ -663,11 +663,6 @@ export const trackerState = ${JSON.stringify(trackerState, null, 2)};
                 }
               }
               const normalizedScope = normalizeScope(scope, existingScope);
-              if (existingScope === 'system' && normalizedScope === 'system' && !isDeveloperModeRequest(req)) {
-                res.statusCode = 403;
-                res.end('System blocks are immutable');
-                return;
-              }
               
               if (!fs.existsSync(BLOCKS_DIR)) {
                 fs.mkdirSync(BLOCKS_DIR, { recursive: true });
@@ -969,11 +964,6 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
                 }
               }
               const normalizedScope = normalizeScope(scope, existingScope);
-              if (existingScope === 'system' && normalizedScope === 'system' && !isDeveloperModeRequest(req)) {
-                res.statusCode = 403;
-                res.end('System arrangements are immutable');
-                return;
-              }
 
               if (!fs.existsSync(ARRANGEMENTS_DIR)) {
                 fs.mkdirSync(ARRANGEMENTS_DIR, { recursive: true });

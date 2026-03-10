@@ -14,7 +14,6 @@ let deps = {
     getIcons: () => ({}),
     getPatternEntry: () => null,
     isDemoMode: () => false,
-    isDeveloperModeEnabled: () => false,
     logError: () => {},
     normalizeScope: (value) => value,
     refreshArrangementList: async () => {},
@@ -54,17 +53,16 @@ export function openAdvancedSettingsModal(context) {
             ? `${typeLabel[0].toUpperCase()}${typeLabel.slice(1)}: ${resourceName}`
             : `${typeLabel[0].toUpperCase()}${typeLabel.slice(1)}`;
     }
-    const devMode = deps.isDeveloperModeEnabled();
     if (dom.advancedSettingsSystemToggle) {
         dom.advancedSettingsSystemToggle.checked = pendingAdvancedSettingsContext.scope === 'system';
-        dom.advancedSettingsSystemToggle.disabled = deps.isDemoMode() || !devMode;
+        dom.advancedSettingsSystemToggle.disabled = deps.isDemoMode();
     }
     if (dom.advancedSettingsSystemLockIcon) {
-        dom.advancedSettingsSystemLockIcon.classList.toggle('hidden', devMode);
+        dom.advancedSettingsSystemLockIcon.classList.add('hidden');
     }
     if (dom.advancedSettingsSystemLabel) {
-        dom.advancedSettingsSystemLabel.classList.toggle('text-muted-foreground', !devMode);
-        dom.advancedSettingsSystemLabel.classList.toggle('text-foreground', devMode);
+        dom.advancedSettingsSystemLabel.classList.add('text-foreground');
+        dom.advancedSettingsSystemLabel.classList.remove('text-muted-foreground');
     }
     if (dom.saveAdvancedSettingsBtn) dom.saveAdvancedSettingsBtn.disabled = deps.isDemoMode();
     dom.advancedSettingsModal?.classList.add('open');
@@ -85,10 +83,6 @@ async function applyAdvancedSettings() {
         return;
     }
     const nextScope = dom.advancedSettingsSystemToggle?.checked ? 'system' : 'user';
-    if (nextScope === 'system' && !deps.isDeveloperModeEnabled()) {
-        deps.setStatus('Enable developer mode to set resource as system', 'normal');
-        return;
-    }
     const context = pendingAdvancedSettingsContext;
     try {
         if (context.type === 'pattern') {

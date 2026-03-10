@@ -731,7 +731,7 @@ export function renderArrangementWorkspace() {
                 else appState.arrangementDraftState.rows.splice(fromRowIndex, 1);
                 renderArrangementWorkspace();
                 deps.scheduleArrangementAutoSave();
-                deps.emitArrangementStateChanged();
+                deps.emitArrangementStateChanged({ removedRowIndex: fromRowIndex });
                 await deps.saveCurrentArrangement();
                 return;
             }
@@ -943,7 +943,7 @@ export function renderArrangementWorkspace() {
                 const val = parseInt(repeatsEl.value, 10);
                 row.repeats = Number.isFinite(val) ? Math.min(Math.max(val, 1), 16) : 1;
                 deps.scheduleArrangementAutoSave();
-                deps.emitArrangementStateChanged();
+                deps.emitArrangementStateChanged({ addedRowIndex: rowIndex + 1 });
             });
             const repeatsWrap = document.createElement('div');
             repeatsWrap.className = 'arr-repeats-wrap';
@@ -1010,7 +1010,7 @@ export function renderArrangementWorkspace() {
                 });
                 renderArrangementWorkspace();
                 deps.scheduleArrangementAutoSave();
-                deps.emitArrangementStateChanged();
+                deps.emitArrangementStateChanged({ addedRowIndex: rowIndex + 1 });
             });
 
             const removeRowBtn = document.createElement('button');
@@ -1038,7 +1038,7 @@ export function renderArrangementWorkspace() {
                 else appState.arrangementDraftState.rows.splice(rowIndex, 1);
                 renderArrangementWorkspace();
                 deps.scheduleArrangementAutoSave();
-                deps.emitArrangementStateChanged();
+                deps.emitArrangementStateChanged({ removedRowIndex: rowIndex });
             });
 
             const renderChips = () => {

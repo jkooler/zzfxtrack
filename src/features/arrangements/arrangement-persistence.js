@@ -21,6 +21,17 @@ let deps = {
     setAutoSaveTimeout: () => {},
     setStatus: () => {},
 };
+let suppressNextSuccessStatus = false;
+
+function shouldSuppressSuccessStatus(detail = {}) {
+    return Boolean(
+        detail?.quietSaveStatus
+        || Number.isInteger(detail?.addedRowIndex)
+        || Number.isInteger(detail?.removedRowIndex)
+        || typeof detail?.addedFilename === 'string'
+        || typeof detail?.removedFilename === 'string'
+    );
+}
 
 export function configureArrangementPersistence(options = {}) {
     deps = { ...deps, ...options };
@@ -89,6 +100,9 @@ export function buildArrangementStatePayloadForSave() {
 }
 
 export function emitArrangementStateChanged(extraDetail = {}) {
+    if (shouldSuppressSuccessStatus(extraDetail)) {
+        suppressNextSuccessStatus = true;
+    }
     const arrangementState = buildArrangementStatePayload();
     deps.dispatchStateChanged({
         arrangementState,
@@ -139,9 +153,15 @@ export async function saveCurrentArrangement() {
         }
         const entry = deps.getEntriesCache().find((e) => e.filename === currentFilename);
         if (entry) entry.arrangementState = arrangementState;
-        deps.setStatus('Saved arrangement', 'success');
+        if (suppressNextSuccessStatus) {
+            console.debug('[Arrangements] Saved arrangement (status suppressed)');
+        } else {
+            deps.setStatus('Saved arrangement', 'success');
+        }
     } catch (err) {
         deps.logError('[Arrangements] Autosave failed:', err);
         deps.setStatus('Failed to save arrangement', 'error');
+    } finally {
+        suppressNextSuccessStatus = false;
     }
 }
