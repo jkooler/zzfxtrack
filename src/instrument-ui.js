@@ -25,6 +25,7 @@ import { refreshPatternListActiveState } from './features/patterns/pattern-list.
 import { isStrudelPlaybackActive } from './features/playback/playback-controller.js';
 import { isTrackerOpen, applyInstrumentRenameToChannelInstruments, isArrangementPreviewPlaying, isTrackerPreviewPlaying } from './tracker.js';
 import { addRenameMapping } from './instrument-rename-map.js';
+import { promptDialog } from './dialog.js';
 import { createIcons, icons } from 'lucide';
 import { getInstrumentAnalyser } from './zzfx-loader.js';
 import { ScopeVisualizer, getVisualizerAnalyser } from './visualizer.js';
@@ -1636,6 +1637,12 @@ function handleDrawerAliasBlur() {
 
     const oldAlias = current.strudelAlias || '';
     const updated = updateInstrument(currentInstrumentId, { exportName, strudelAlias });
+    if (!updated) {
+        alert(`Instrument alias "${strudelAlias}" already exists.`);
+        dom.instStrudelAlias.value = current.strudelAlias || '';
+        dom.instExportName.value = generateExportName(current.strudelAlias || '');
+        return;
+    }
     if (updated?.id) currentInstrumentId = updated.id;
     renderInstrumentList();
     autoUpdateInstrumentsFile();
@@ -1664,6 +1671,10 @@ function handleDrawerChange() {
     dom.instExportName.value = exportName;
 
     const updated = updateInstrument(currentInstrumentId, { exportName, strudelAlias });
+    if (!updated) {
+        dom.instExportName.value = generateExportName(current.strudelAlias || '');
+        return;
+    }
     if (updated?.id) currentInstrumentId = updated.id;
     renderInstrumentList();
     autoUpdateInstrumentsFile();
@@ -1797,6 +1808,10 @@ function handleCreateInstrument() {
     const channel = instruments.length; // Auto-assign next channel
     
     const newInst = createInstrument(exportName, strudelAlias, channel);
+    if (!newInst) {
+        alert(`Instrument alias "${strudelAlias}" already exists.`);
+        return;
+    }
     
     closeNewInstrumentModal();
     renderInstrumentList();
@@ -1922,7 +1937,16 @@ async function handleExportZzFX() {
         console.warn('[InstrumentUI] Clipboard export failed, falling back to prompt:', err);
     }
 
-    window.prompt('Copy ZzFX data:', csv);
+    await promptDialog({
+        title: 'Copy ZzFX Data',
+        message: 'Clipboard access is unavailable. Copy the data below manually.',
+        confirmLabel: 'Close',
+        showCancel: false,
+        promptValue: csv,
+        promptReadOnly: true,
+        promptRows: 5,
+        selectPromptOnOpen: true,
+    });
 }
 
 function closeImportModal() {

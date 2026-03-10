@@ -2076,7 +2076,9 @@ document.addEventListener('tracker:saveBlock', async (e) => {
     
     if (isNewBlock) {
         // Handle new block creation
-        const result = await saveBlock(name, description || "Created in tracker", pattern, trackerState, scope || 'user');
+        const result = await saveBlock(name, description || "Created in tracker", pattern, trackerState, scope || 'user', {
+            allowAutoSuffix: false,
+        });
         if (result) {
             // Keep footer status quiet for block creation; the UI updates immediately.
             setStatus('', 'normal');

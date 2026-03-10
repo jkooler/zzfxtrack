@@ -130,14 +130,11 @@ export async function createNewArrangement(name) {
     try {
         const existing = await deps.listArrangementsOrEmpty();
         const existingFilenames = new Set((existing || []).map((item) => String(item?.filename || '').toLowerCase()));
-        const baseSlug = normalizedBase;
-        let slug = baseSlug;
-        let suffix = 1;
-        while (existingFilenames.has(`${slug}.js`.toLowerCase())) {
-            suffix += 1;
-            slug = `${baseSlug}-${suffix}`;
+        const filename = `${normalizedBase}.js`;
+        if (existingFilenames.has(filename.toLowerCase())) {
+            deps.setStatus('An arrangement with that name already exists', 'error');
+            return;
         }
-        const filename = `${slug}.js`;
 
         let initialBlockFilename = null;
         try {

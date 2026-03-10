@@ -103,6 +103,15 @@ function toSafeSystemExportName(exportName, alias) {
   return candidate || aliasToExportName(alias);
 }
 
+function hasInstrumentAliasConflict(alias, excludedId = null) {
+  const normalizedAlias = String(alias || "").trim();
+  if (!normalizedAlias) return false;
+  return getDefragmentedInstruments().some((record) => {
+    if (!record || record.id === excludedId) return false;
+    return String(record.strudelAlias || "").trim() === normalizedAlias;
+  });
+}
+
 function getStaticSystemSourceSignature() {
   return JSON.stringify({
     instrumentMapping: systemModule.instrumentMapping || {},
@@ -332,6 +341,11 @@ export function createInstrument(
     0.2, 0, 440, 0.01, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
   ];
 
+  if (hasInstrumentAliasConflict(strudelAlias)) {
+    console.error("[InstrumentManager] Instrument alias already exists:", strudelAlias);
+    return null;
+  }
+
   const instrument = {
     id: generateId(),
     exportName: exportName || "INST_UNTITLED",
@@ -363,13 +377,9 @@ export function updateInstrument(id, changes) {
     const current = systemRecords[index];
     const nextAlias = String(changes?.strudelAlias || current.strudelAlias || "").trim();
     if (!nextAlias) return null;
-    const aliasChanged = nextAlias !== current.strudelAlias;
-    if (aliasChanged) {
-      const duplicate = systemRecords.find((record, recordIndex) => recordIndex !== index && record.strudelAlias === nextAlias);
-      if (duplicate) {
-        console.error("[InstrumentManager] Duplicate system instrument alias:", nextAlias);
-        return null;
-      }
+    if (hasInstrumentAliasConflict(nextAlias, id)) {
+      console.error("[InstrumentManager] Instrument alias already exists:", nextAlias);
+      return null;
     }
 
     const next = normalizeSystemInstrumentRecord({
@@ -402,6 +412,12 @@ export function updateInstrument(id, changes) {
   const currentScope = normalizeScope(current?.scope, inferLegacyScope(current));
   const next = { ...current, ...changes };
   next.scope = normalizeScope(next.scope, currentScope);
+  const nextAlias = String(next.strudelAlias || "").trim();
+  if (!nextAlias) return null;
+  if (hasInstrumentAliasConflict(nextAlias, id)) {
+    console.error("[InstrumentManager] Instrument alias already exists:", nextAlias);
+    return null;
+  }
 
   instruments[index] = next;
   saveInstruments(instruments);
@@ -482,8 +498,8 @@ export function setInstrumentScope(id, scope) {
 
   const [moved] = userInstruments.splice(index, 1);
   const systemRecords = loadSystemInstrumentStore();
-  if (systemRecords.some((record) => record.strudelAlias === moved.strudelAlias)) {
-    console.error("[InstrumentManager] System instrument alias already exists:", moved.strudelAlias);
+  if (hasInstrumentAliasConflict(moved.strudelAlias, id)) {
+    console.error("[InstrumentManager] Instrument alias already exists:", moved.strudelAlias);
     return null;
   }
 

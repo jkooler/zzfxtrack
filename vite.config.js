@@ -523,6 +523,11 @@ const apiPlugin = () => ({
              }
              
              const filePath = path.join(BLOCKS_DIR, filename);
+             if (fs.existsSync(filePath)) {
+               res.statusCode = 409;
+               res.end('A block with that name already exists');
+               return;
+             }
              
              // Generate block file content
              const fileContent = `// Block: ${name}
@@ -849,6 +854,11 @@ export const arrangementState = ${JSON.stringify(arrangementState, null, 2)};
 
              const nameFromFilename = filename.replace(/\.js$/i, '');
              const filePath = path.join(ARRANGEMENTS_DIR, filename);
+             if (fs.existsSync(filePath)) {
+               res.statusCode = 409;
+               res.end('An arrangement with that name already exists');
+               return;
+             }
              const fileContent = `// Arrangement: ${nameFromFilename}
 
 export const name = "${nameFromFilename}";

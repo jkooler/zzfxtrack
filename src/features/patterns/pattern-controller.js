@@ -44,6 +44,19 @@ export async function createNewPattern(name) {
     }
     const filename = `${normalizedBase}.js`;
 
+    try {
+        const payload = await deps.listPatterns();
+        const files = deps.normalizePatternEntries(payload).map((entry) => entry.filename);
+        if (files.includes(filename)) {
+            deps.setStatus('A pattern with that name already exists', 'error');
+            return;
+        }
+    } catch (e) {
+        deps.logError(e);
+        deps.setStatus('Error checking pattern names', 'error');
+        return;
+    }
+
     deps.setStatus('Creating...');
     const template = `import { stack, note } from "@strudel/core";
 

@@ -2049,8 +2049,9 @@ function clearBlockSelection() {
 /**
  * Save a new block from tracker data
  */
-export async function saveBlock(name, description, pattern, trackerState, scope = 'user') {
+export async function saveBlock(name, description, pattern, trackerState, scope = 'user', options = {}) {
   try {
+    const { allowAutoSuffix = true } = options;
     const sanitizeBase = (raw) => (raw || 'block')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
@@ -2063,6 +2064,13 @@ export async function saveBlock(name, description, pattern, trackerState, scope 
     const baseName = String(name || '').trim() || 'block';
     let uniqueName = baseName;
     let suffix = 1;
+    if (!allowAutoSuffix && existingNames.has(baseName.toLowerCase())) {
+      await alertDialog({
+        title: 'Duplicate Block Name',
+        message: `A block named "${baseName}" already exists.`,
+      });
+      return false;
+    }
     while (existingNames.has(uniqueName.toLowerCase())) {
       suffix++;
       uniqueName = `${baseName}_${suffix}`;
@@ -2071,6 +2079,13 @@ export async function saveBlock(name, description, pattern, trackerState, scope 
     const baseSlug = sanitizeBase(baseName);
     let uniqueSlug = baseSlug;
     suffix = 1;
+    if (!allowAutoSuffix && existingFilenames.has(`${baseSlug}.js`)) {
+      await alertDialog({
+        title: 'Duplicate Block Name',
+        message: `A block named "${baseName}" already exists.`,
+      });
+      return false;
+    }
     while (existingFilenames.has(`${uniqueSlug}.js`)) {
       suffix++;
       uniqueSlug = `${baseSlug}-${suffix}`;
