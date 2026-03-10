@@ -5,7 +5,7 @@
  */
 
 let deps = {
-    autoUpdateInstrumentsFile: () => {},
+    autoUpdateInstrumentsFile: async () => {},
     createIcons: () => {},
     dispatchResourceScopeChanged: () => {},
     getCurrentArrangementFilename: () => null,
@@ -99,9 +99,15 @@ async function applyAdvancedSettings() {
             if (!context.id) throw new Error('No instrument selected');
             const updated = deps.setInstrumentScope(context.id, nextScope);
             if (!updated) throw new Error('Failed to update instrument scope');
-            deps.autoUpdateInstrumentsFile();
+            await deps.autoUpdateInstrumentsFile();
             await deps.reloadInstruments();
             deps.refreshInstrumentListUI();
+            pendingAdvancedSettingsContext = {
+                ...context,
+                id: updated.id,
+                name: updated.strudelAlias,
+                scope: nextScope,
+            };
         } else if (context.type === 'block') {
             if (context.filename) await deps.updateBlockScope(context.filename, nextScope);
             await deps.refreshBlocksLibrary();
@@ -117,7 +123,13 @@ async function applyAdvancedSettings() {
         } else {
             throw new Error('Unsupported resource type');
         }
-        deps.dispatchResourceScopeChanged({ ...context, scope: nextScope });
+        deps.dispatchResourceScopeChanged({
+            ...context,
+            id: pendingAdvancedSettingsContext?.id || context.id,
+            previousId: context.id,
+            name: pendingAdvancedSettingsContext?.name || context.name,
+            scope: nextScope,
+        });
         deps.setStatus('Advanced settings updated', 'success');
         closeAdvancedSettingsModal();
     } catch (e) {

@@ -151,7 +151,7 @@ export async function refreshPatternList() {
                 const empty = document.createElement('li');
                 empty.className = 'text-xs text-muted-foreground px-2 py-1';
                 empty.textContent = scope === 'user'
-                    ? 'Create a new pattern to get started.'
+                    ? 'None was found'
                     : 'No system patterns available.';
                 list?.appendChild(empty);
             }
@@ -162,14 +162,15 @@ export async function refreshPatternList() {
                 const isSystem = normalizeScope(entry.scope) === 'system';
                 const devMode = isDeveloperModeEnabled();
                 const canDelete = !isDemoMode() && (!isSystem || devMode);
+                const deleteActionMarkup = canDelete
+                    ? `<button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
+                    : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
                 const li = document.createElement('li');
                 li.className = `list-item ${file === getCurrentPatternFilename() && !getWelcomeViewVisible() ? 'active' : ''}`;
                 li.dataset.scope = normalizeScope(entry.scope);
                 li.dataset.filename = file;
 
-                li.innerHTML = isDemoMode()
-                    ? `<span class="font-medium">${fileName}</span>`
-                    : `<span class="font-medium">${fileName}</span>${canDelete ? `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>` : ''}`;
+                li.innerHTML = `<span class="font-medium">${fileName}</span><div class="list-item-actions">${deleteActionMarkup}</div>`;
 
                 li.querySelector('span')?.addEventListener('click', (e) => {
                     e.stopPropagation();

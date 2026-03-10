@@ -242,15 +242,15 @@ export async function refreshArrangementList() {
             items.forEach((entry) => {
                 const isSystem = deps.normalizeScope(entry.scope) === 'system';
                 const canDelete = !deps.isDemoMode() && (!isSystem || deps.isDeveloperModeEnabled());
+                const displayName = decodeURIComponent((entry.filename || '').replace(/\.js$/i, ''));
+                const deleteActionMarkup = canDelete
+                    ? `<button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
+                    : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
                 const li = document.createElement('li');
                 li.className = `list-item ${entry.filename === deps.getCurrentArrangementFilename() ? 'active' : ''}`;
                 li.dataset.scope = deps.normalizeScope(entry.scope);
                 li.dataset.filename = entry.filename;
-
-                const displayName = decodeURIComponent((entry.filename || '').replace(/\.js$/i, ''));
-                li.innerHTML = deps.isDemoMode()
-                    ? `<span class="font-medium">${deps.escapeHtml(displayName)}</span>`
-                    : `<span class="font-medium">${deps.escapeHtml(displayName)}</span>${canDelete ? `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>` : ''}`;
+                li.innerHTML = `<span class="font-medium">${deps.escapeHtml(displayName)}</span><div class="list-item-actions">${deleteActionMarkup}</div>`;
 
                 li.querySelector('span')?.addEventListener('click', (e) => {
                     e.stopPropagation();

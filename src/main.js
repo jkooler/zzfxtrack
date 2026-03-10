@@ -953,6 +953,8 @@ configureSystemSettings({
     updateAdvancedSettingsButtonsVisibility,
     updateDevModeToolbarLabelVisibility,
     refreshPatternList,
+    refreshArrangementList,
+    refreshBlocksLibrary,
     refreshInstrumentListUI,
     logWarning: (...args) => console.warn(...args),
 });

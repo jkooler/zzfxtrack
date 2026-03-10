@@ -719,6 +719,9 @@ function renderArrangementsList() {
       const displayName = decodeURIComponent((arr.filename || '').replace(/\.js$/i, ''));
       const isSystem = normalizeScope(arr.scope) === 'system';
       const canDeleteArr = !isSystem || devMode;
+      const deleteActionMarkup = canDeleteArr
+        ? `<button class="sidebar-del-btn" title="Delete ${escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
+        : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
       el.innerHTML = `
         <div class="min-w-0">
           <div class="block-name font-medium text-sm text-foreground">${escapeHtml(displayName)}</div>
@@ -726,7 +729,7 @@ function renderArrangementsList() {
         </div>
         <div class="list-item-actions">
           <button class="sidebar-edit-btn" title="Edit ${escapeHtml(displayName)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
-          ${canDeleteArr ? `<button class="sidebar-del-btn" title="Delete ${escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+          ${deleteActionMarkup}
         </div>
       `;
 
@@ -756,10 +759,12 @@ function renderArrangementsList() {
       });
 
       const arrDelBtn = el.querySelector('.sidebar-del-btn');
-      arrDelBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openDeleteArrangementModal(index);
-      });
+      if (canDeleteArr && arrDelBtn) {
+        arrDelBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openDeleteArrangementModal(index);
+        });
+      }
 
       list?.appendChild(el);
     });
@@ -1659,6 +1664,9 @@ function renderBlocksList() {
     entries.forEach(({ block, index }) => {
       const isSystem = normalizeScope(block.scope) === 'system';
       const canDeleteBlock = !isSystem || devMode;
+      const deleteActionMarkup = canDeleteBlock
+        ? `<button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
+        : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
       const bpm = Number.isFinite(block?.trackerState?.bpm) ? block.trackerState.bpm : null;
       const steps = Number.isFinite(block?.trackerState?.steps)
         ? block.trackerState.steps
@@ -1680,7 +1688,7 @@ function renderBlocksList() {
         </div>
         <div class="list-item-actions">
           <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
-          ${canDeleteBlock ? `<button class="sidebar-del-btn" title="Delete ${escapeHtml(block.name)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+          ${deleteActionMarkup}
         </div>
       `;
 
@@ -1709,7 +1717,7 @@ function renderBlocksList() {
       });
 
       const deleteBtn = blockEl.querySelector('.sidebar-del-btn');
-      if (deleteBtn) {
+      if (canDeleteBlock && deleteBtn) {
         deleteBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           deleteBlockByIndex(index);

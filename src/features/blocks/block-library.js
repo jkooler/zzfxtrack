@@ -106,13 +106,16 @@ export function renderBlocksLibraryFromCache() {
         entries.forEach((block) => {
             const isSystem = deps.normalizeScope(block.scope) === 'system';
             const canDelete = !isSystem || deps.isDeveloperModeEnabled();
+            const deleteActionMarkup = canDelete
+                ? `<button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
+                : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
             const li = document.createElement('div');
             const isSelected = block.filename === deps.getActiveArrangementBlockFilename();
             li.className = `list-item ${isSelected ? 'active' : ''}`;
             li.dataset.filename = block.filename;
             li.innerHTML = `
                 <span class="font-medium text-xs">${deps.escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
-                ${canDelete ? `<div class="list-item-actions"><button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>` : ''}
+                <div class="list-item-actions">${deleteActionMarkup}</div>
             `;
             li.draggable = true;
             li.addEventListener('dragstart', (e) => {
@@ -132,7 +135,7 @@ export function renderBlocksLibraryFromCache() {
                 deps.renderTrackerWorkspace();
             });
             const delBtn = li.querySelector('.sidebar-del-btn');
-            if (delBtn) {
+            if (canDelete && delBtn) {
                 delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     await deps.deleteBlockFromLibrary(block.filename, block.name || block.filename);

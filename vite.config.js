@@ -1050,6 +1050,27 @@ const updateInstrumentsPlugin = () => ({
       }
       next();
     });
+
+    server.middlewares.use('/api/update-system-instruments', (req, res, next) => {
+      if (req.method === 'POST') {
+        const filePath = path.resolve(__dirname, 'instruments.system.js');
+
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+          try {
+            fs.writeFileSync(filePath, body);
+            console.log('[API] Updated instruments.system.js');
+            res.end('instruments.system.js updated');
+          } catch (e) {
+            res.statusCode = 500;
+            res.end(`Error writing instruments.system.js: ${e.message}`);
+          }
+        });
+        return;
+      }
+      next();
+    });
   }
 });
 
@@ -1080,7 +1101,7 @@ export default defineConfig({
     strictPort: false, // Allow using next available port if 5173 is taken
     host: true, // Listen on all network interfaces for better accessibility
     watch: {
-      ignored: ['**/patterns/**', '**/output/**', '**/instruments.js', '**/blocks/**', '**/arrangements/**']
+      ignored: ['**/patterns/**', '**/output/**', '**/instruments.js', '**/instruments.system.js', '**/blocks/**', '**/arrangements/**']
     }
   }
 });

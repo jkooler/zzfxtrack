@@ -12,7 +12,8 @@ import {
     deleteInstrument,
     getInstrumentById,
     migrateFromFile,
-    needsMigration
+    needsMigration,
+    consumeInstrumentScopeRepairFlag
 } from './instrument-manager.js';
 import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
@@ -255,6 +256,9 @@ export async function initInstrumentUI() {
     
     // Normalize existing aliases in localStorage
     normalizeLocalInstruments();
+    if (consumeInstrumentScopeRepairFlag()) {
+        await autoUpdateInstrumentsFile();
+    }
 
     // Render instrument list
     renderInstrumentList();
@@ -382,6 +386,9 @@ function setupEventListeners() {
 
     document.addEventListener('resource-scope:changed', (e) => {
         if (e?.detail?.type !== 'instrument') return;
+        if (currentInstrumentId && e.detail?.previousId === currentInstrumentId && e.detail?.id) {
+            currentInstrumentId = e.detail.id;
+        }
         renderInstrumentList();
         if (currentInstrumentId) {
             openDrawer(currentInstrumentId);
@@ -1315,6 +1322,9 @@ function renderInstrumentList() {
             const instScope = normalizeScope(inst.scope);
             const isSystem = instScope === 'system';
             const canDelete = !isSystem || devMode;
+            const deleteActionMarkup = canDelete
+                ? `<button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
+                : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
             const waveShapeLabel = getWaveShapeLabel(inst.params);
 
             const li = document.createElement('li');
@@ -1334,7 +1344,7 @@ function renderInstrumentList() {
                     </div>
                 </div>
                 <div class="list-item-actions">
-                    ${canDelete ? `<button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+                    ${deleteActionMarkup}
                 </div>
             `;
 
@@ -1357,7 +1367,7 @@ function renderInstrumentList() {
             });
 
             const deleteBtn = li.querySelector('.sidebar-del-btn');
-            if (deleteBtn) {
+            if (canDelete && deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     showDeleteInstrumentConfirmation(inst.id);
@@ -1625,7 +1635,8 @@ function handleDrawerAliasBlur() {
     dom.instExportName.value = exportName;
 
     const oldAlias = current.strudelAlias || '';
-    updateInstrument(currentInstrumentId, { exportName, strudelAlias });
+    const updated = updateInstrument(currentInstrumentId, { exportName, strudelAlias });
+    if (updated?.id) currentInstrumentId = updated.id;
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
@@ -1652,7 +1663,8 @@ function handleDrawerChange() {
     const exportName = generateExportName(strudelAlias);
     dom.instExportName.value = exportName;
 
-    updateInstrument(currentInstrumentId, { exportName, strudelAlias });
+    const updated = updateInstrument(currentInstrumentId, { exportName, strudelAlias });
+    if (updated?.id) currentInstrumentId = updated.id;
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
@@ -1660,7 +1672,8 @@ function handleDrawerChange() {
 
 function handleMonophonicChange() {
     if (!currentInstrumentId) return;
-    updateInstrument(currentInstrumentId, { monophonic: Boolean(dom.instMonophonic.checked) });
+    const updated = updateInstrument(currentInstrumentId, { monophonic: Boolean(dom.instMonophonic.checked) });
+    if (updated?.id) currentInstrumentId = updated.id;
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
@@ -1712,7 +1725,8 @@ function handleParamChange(paramIndex) {
     const newParams = [...instrument.params];
     newParams[paramIndex] = parseFloat(paramInputs[paramIndex].value) || 0;
     
-    updateInstrument(currentInstrumentId, { params: newParams });
+    const updated = updateInstrument(currentInstrumentId, { params: newParams });
+    if (updated?.id) currentInstrumentId = updated.id;
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
     
@@ -1928,7 +1942,8 @@ function handleConfirmImport() {
     // Let's ensure it has at least enough items for the standard ZzFXMicro.
     
     // Update instrument
-    updateInstrument(currentInstrumentId, { params: pendingImportParams });
+    const updated = updateInstrument(currentInstrumentId, { params: pendingImportParams });
+    if (updated?.id) currentInstrumentId = updated.id;
     
     // Update inputs in drawer
     const instrument = getInstrumentById(currentInstrumentId);

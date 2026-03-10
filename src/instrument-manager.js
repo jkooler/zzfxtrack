@@ -7,11 +7,14 @@
 import * as systemModule from "../instruments.system.js";
 
 const STORAGE_KEY = "zzfxtrack-instruments";
+const SYSTEM_STORE_KEY = "zzfxtrack-system-instruments-store";
 const SYSTEM_OVERRIDES_KEY = "zzfxtrack-instruments-system-overrides";
 const VALID_SCOPES = new Set(["user", "system"]);
 const DEVELOPER_MODE_KEY = "zzfxtrack-developer-mode";
 
 const SYSTEM_ID_PREFIX = "system:";
+let systemInstrumentStoreCache = null;
+let didRepairInstrumentScopeStorage = false;
 
 function isDeveloperModeEnabled() {
   try {
@@ -68,6 +71,47 @@ function aliasToExportName(alias) {
   return `zzfxtrack_${safe || "untitled"}`;
 }
 
+function cloneInstrument(record) {
+  if (!record || typeof record !== "object") return null;
+  return {
+    ...record,
+    params: Array.isArray(record.params) ? [...record.params] : [],
+  };
+}
+
+function buildSystemInstrumentId(alias) {
+  return SYSTEM_ID_PREFIX + String(alias || "");
+}
+
+function normalizeSystemInstrumentRecord(record) {
+  if (!record || typeof record !== "object") return null;
+  const alias = String(record.strudelAlias || "").trim();
+  if (!alias) return null;
+  return {
+    id: buildSystemInstrumentId(alias),
+    exportName: toSafeSystemExportName(record.exportName, alias),
+    strudelAlias: alias,
+    channel: Number.isFinite(Number(record.channel)) ? Number(record.channel) : 0,
+    params: Array.isArray(record.params) ? [...record.params] : [],
+    monophonic: parseMonophonicFlag(record.monophonic, false),
+    scope: "system",
+  };
+}
+
+function toSafeSystemExportName(exportName, alias) {
+  const candidate = String(exportName || "").trim();
+  return candidate || aliasToExportName(alias);
+}
+
+function getStaticSystemSourceSignature() {
+  return JSON.stringify({
+    instrumentMapping: systemModule.instrumentMapping || {},
+    instruments: systemModule.instruments || {},
+    instrumentMonophonic: systemModule.instrumentMonophonic || {},
+    instrumentScope: systemModule.instrumentScope || {},
+  });
+}
+
 /**
  * Load system parameter overrides from localStorage (user edits to system instruments)
  * @returns {Object} Map of strudelAlias -> { params?, monophonic? }
@@ -94,16 +138,16 @@ function saveSystemOverrides(overrides) {
 }
 
 /**
- * Build system instrument records from instruments.system.js and apply overrides
- * @returns {Array} Array of instrument objects with id "system:alias"
+ * Build mutable system instrument records from instruments.system.js and apply any
+ * legacy local overrides so older saved edits are preserved.
  */
-function getSystemInstrumentRecords() {
+function buildStaticSystemInstrumentRecords() {
   const mapping = systemModule.instrumentMapping || {};
   const instruments = systemModule.instruments || {};
   const monophonic = systemModule.instrumentMonophonic || {};
   const overrides = loadSystemOverrides();
 
-  return Object.entries(mapping).map(([alias, channel]) => {
+  return Object.entries(mapping).map(([alias, channel], index) => {
     let params = instruments[alias];
     if (!params || !Array.isArray(params)) params = [];
     let monophonicFlag = Boolean(monophonic[alias]);
@@ -112,23 +156,85 @@ function getSystemInstrumentRecords() {
       if (Array.isArray(override.params) && override.params.length === 21) params = override.params;
       if (typeof override.monophonic === "boolean") monophonicFlag = override.monophonic;
     }
-    return {
-      id: SYSTEM_ID_PREFIX + alias,
+    return normalizeSystemInstrumentRecord({
+      id: buildSystemInstrumentId(alias),
       exportName: aliasToExportName(alias),
       strudelAlias: alias,
-      channel: Number(channel),
+      channel: Number.isFinite(Number(channel)) ? Number(channel) : index,
       params,
       monophonic: monophonicFlag,
       scope: "system",
-    };
+    });
   });
 }
 
+function loadStoredSystemInstrumentStore() {
+  try {
+    const raw = localStorage.getItem(SYSTEM_STORE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.records)) return null;
+    return {
+      sourceSignature: typeof parsed.sourceSignature === "string" ? parsed.sourceSignature : "",
+      records: parsed.records.map(normalizeSystemInstrumentRecord).filter(Boolean),
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
+function saveSystemInstrumentStore(records) {
+  const normalized = records
+    .map(normalizeSystemInstrumentRecord)
+    .filter(Boolean)
+    .map((record, index) => ({ ...record, channel: index }));
+  systemInstrumentStoreCache = normalized.map(cloneInstrument).filter(Boolean);
+  try {
+    localStorage.setItem(
+      SYSTEM_STORE_KEY,
+      JSON.stringify({
+        sourceSignature: getStaticSystemSourceSignature(),
+        records: systemInstrumentStoreCache,
+      }),
+    );
+    return true;
+  } catch (e) {
+    console.error("[InstrumentManager] Failed to save system instruments:", e);
+    return false;
+  }
+}
+
+function loadSystemInstrumentStore() {
+  if (Array.isArray(systemInstrumentStoreCache)) {
+    return systemInstrumentStoreCache.map(cloneInstrument).filter(Boolean);
+  }
+
+  const currentSourceSignature = getStaticSystemSourceSignature();
+  const stored = loadStoredSystemInstrumentStore();
+  const needsReset = !stored || stored.sourceSignature !== currentSourceSignature;
+  const seeded = needsReset ? buildStaticSystemInstrumentRecords() : stored.records;
+
+  systemInstrumentStoreCache = seeded.map(normalizeSystemInstrumentRecord).filter(Boolean);
+  if (needsReset) {
+    saveSystemInstrumentStore(systemInstrumentStoreCache);
+  }
+  return systemInstrumentStoreCache.map(cloneInstrument).filter(Boolean);
+}
+
 /**
- * Load user instruments from localStorage
- * @returns {Array} Array of instrument objects (user only)
+ * Build system instrument records from the mutable runtime/system store.
+ * @returns {Array} Array of instrument objects with id "system:alias"
  */
-export function loadInstruments() {
+function getSystemInstrumentRecords() {
+  return loadSystemInstrumentStore().map((record, index) => ({
+    ...record,
+    id: buildSystemInstrumentId(record.strudelAlias),
+    channel: index,
+    scope: "system",
+  }));
+}
+
+function loadStoredUserInstruments() {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return [];
@@ -141,14 +247,64 @@ export function loadInstruments() {
   }
 }
 
+function migrateSystemScopedUserInstruments() {
+  const records = loadStoredUserInstruments();
+  const promoted = records.filter((record) => normalizeScope(record.scope, inferLegacyScope(record)) === "system");
+  if (promoted.length === 0) return records;
+
+  const userOnly = records.filter((record) => normalizeScope(record.scope, inferLegacyScope(record)) !== "system");
+  const systemRecords = loadSystemInstrumentStore();
+  const systemByAlias = new Map(systemRecords.map((record) => [String(record.strudelAlias || "").toLowerCase(), record]));
+
+  promoted.forEach((record) => {
+    const aliasKey = String(record.strudelAlias || "").toLowerCase();
+    if (systemByAlias.has(aliasKey)) return;
+    systemRecords.push(
+      normalizeSystemInstrumentRecord({
+        exportName: record.exportName,
+        strudelAlias: record.strudelAlias,
+        params: record.params,
+        monophonic: record.monophonic,
+      }),
+    );
+  });
+
+  saveSystemInstrumentStore(systemRecords);
+  saveInstruments(userOnly);
+  didRepairInstrumentScopeStorage = true;
+  console.log("[InstrumentManager] Migrated", promoted.length, "system-scoped instruments out of user storage");
+  return userOnly;
+}
+
+export function consumeInstrumentScopeRepairFlag() {
+  const value = didRepairInstrumentScopeStorage;
+  didRepairInstrumentScopeStorage = false;
+  return value;
+}
+
+/**
+ * Load user instruments from localStorage
+ * @returns {Array} Array of instrument objects (user only)
+ */
+export function loadInstruments() {
+  return migrateSystemScopedUserInstruments()
+    .filter((record) => normalizeScope(record.scope, inferLegacyScope(record)) !== "system")
+    .map((record) => ({ ...record, scope: "user" }));
+}
+
 /**
  * Save user instruments to localStorage (user only; system instruments are in instruments.system.js)
  * @param {Array} instruments - Array of user instrument objects
  */
 export function saveInstruments(instruments) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(instruments));
-    console.log("[InstrumentManager] Saved", instruments.length, "user instruments");
+    const userOnly = (Array.isArray(instruments) ? instruments : [])
+      .map(normalizeInstrument)
+      .filter(Boolean)
+      .filter((record) => normalizeScope(record.scope, inferLegacyScope(record)) !== "system")
+      .map((record) => ({ ...record, scope: "user" }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(userOnly));
+    console.log("[InstrumentManager] Saved", userOnly.length, "user instruments");
     return true;
   } catch (e) {
     console.error("[InstrumentManager] Failed to save instruments:", e);
@@ -200,19 +356,38 @@ export function createInstrument(
  */
 export function updateInstrument(id, changes) {
   if (typeof id === "string" && id.startsWith(SYSTEM_ID_PREFIX)) {
-    const alias = id.slice(SYSTEM_ID_PREFIX.length);
-    const overrides = loadSystemOverrides();
-    const systemRecords = getSystemInstrumentRecords();
-    const base = systemRecords.find((r) => r.strudelAlias === alias);
-    if (!base) return null;
-    const currentOverride = overrides[alias] || {};
-    const nextParams = changes.params && Array.isArray(changes.params) && changes.params.length === 21
-      ? changes.params
-      : base.params;
-    const nextMonophonic = typeof changes.monophonic === "boolean" ? changes.monophonic : base.monophonic;
-    overrides[alias] = { params: nextParams, monophonic: nextMonophonic };
-    saveSystemOverrides(overrides);
-    return { ...base, params: nextParams, monophonic: nextMonophonic };
+    const systemRecords = loadSystemInstrumentStore();
+    const index = systemRecords.findIndex((record) => record.id === id);
+    if (index === -1) return null;
+
+    const current = systemRecords[index];
+    const nextAlias = String(changes?.strudelAlias || current.strudelAlias || "").trim();
+    if (!nextAlias) return null;
+    const aliasChanged = nextAlias !== current.strudelAlias;
+    if (aliasChanged) {
+      const duplicate = systemRecords.find((record, recordIndex) => recordIndex !== index && record.strudelAlias === nextAlias);
+      if (duplicate) {
+        console.error("[InstrumentManager] Duplicate system instrument alias:", nextAlias);
+        return null;
+      }
+    }
+
+    const next = normalizeSystemInstrumentRecord({
+      ...current,
+      ...changes,
+      id: buildSystemInstrumentId(nextAlias),
+      strudelAlias: nextAlias,
+      exportName: toSafeSystemExportName(changes?.exportName, nextAlias),
+      params: changes.params && Array.isArray(changes.params) && changes.params.length === 21
+        ? changes.params
+        : current.params,
+      monophonic: typeof changes.monophonic === "boolean" ? changes.monophonic : current.monophonic,
+    });
+    if (!next) return null;
+
+    systemRecords[index] = next;
+    saveSystemInstrumentStore(systemRecords);
+    return next;
   }
 
   const instruments = loadInstruments();
@@ -242,10 +417,13 @@ export function updateInstrument(id, changes) {
 export function deleteInstrument(id) {
   if (typeof id === "string" && id.startsWith(SYSTEM_ID_PREFIX)) {
     if (!isDeveloperModeEnabled()) return false;
-    const alias = id.slice(SYSTEM_ID_PREFIX.length);
-    const overrides = loadSystemOverrides();
-    delete overrides[alias];
-    saveSystemOverrides(overrides);
+    const systemRecords = loadSystemInstrumentStore();
+    const filtered = systemRecords.filter((record) => record.id !== id);
+    if (filtered.length === systemRecords.length) {
+      console.error("[InstrumentManager] System instrument not found:", id);
+      return false;
+    }
+    saveSystemInstrumentStore(filtered);
     return true;
   }
 
@@ -270,7 +448,57 @@ export function deleteInstrument(id) {
 }
 
 export function setInstrumentScope(id, scope) {
-  return updateInstrument(id, { scope: normalizeScope(scope, "user") });
+  const nextScope = normalizeScope(scope, "user");
+
+  if (typeof id === "string" && id.startsWith(SYSTEM_ID_PREFIX)) {
+    if (nextScope === "system") return getInstrumentById(id);
+    const systemRecords = loadSystemInstrumentStore();
+    const index = systemRecords.findIndex((record) => record.id === id);
+    if (index === -1) return null;
+
+    const [moved] = systemRecords.splice(index, 1);
+    saveSystemInstrumentStore(systemRecords);
+
+    const userInstruments = loadInstruments();
+    const userRecord = {
+      ...cloneInstrument(moved),
+      id: generateId(),
+      scope: "user",
+    };
+    userInstruments.push(userRecord);
+    saveInstruments(userInstruments);
+    return userRecord;
+  }
+
+  const userInstruments = loadInstruments();
+  const index = userInstruments.findIndex((inst) => inst.id === id);
+  if (index === -1) return null;
+
+  if (nextScope === "user") {
+    userInstruments[index] = { ...userInstruments[index], scope: "user" };
+    saveInstruments(userInstruments);
+    return userInstruments[index];
+  }
+
+  const [moved] = userInstruments.splice(index, 1);
+  const systemRecords = loadSystemInstrumentStore();
+  if (systemRecords.some((record) => record.strudelAlias === moved.strudelAlias)) {
+    console.error("[InstrumentManager] System instrument alias already exists:", moved.strudelAlias);
+    return null;
+  }
+
+  const systemRecord = normalizeSystemInstrumentRecord({
+    ...cloneInstrument(moved),
+    id: buildSystemInstrumentId(moved.strudelAlias),
+    exportName: toSafeSystemExportName(moved.exportName, moved.strudelAlias),
+    scope: "system",
+  });
+  if (!systemRecord) return null;
+
+  systemRecords.push(systemRecord);
+  saveSystemInstrumentStore(systemRecords);
+  saveInstruments(userInstruments);
+  return systemRecord;
 }
 
 /**

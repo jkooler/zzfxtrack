@@ -16,6 +16,8 @@ let deps = {
     isDemoMode: () => false,
     isDeveloperModeEnabled: () => false,
     logWarning: () => {},
+    refreshArrangementList: async () => {},
+    refreshBlocksLibrary: async () => {},
     refreshInstrumentListUI: () => {},
     refreshPatternList: async () => {},
     setDeveloperModeEnabled: () => {},
@@ -365,6 +367,8 @@ export function installSystemSettingsHandlers() {
         deps.updateAdvancedSettingsButtonsVisibility();
         deps.updateDevModeToolbarLabelVisibility();
         void deps.refreshPatternList();
+        void deps.refreshArrangementList?.();
+        void deps.refreshBlocksLibrary?.();
         try {
             deps.refreshInstrumentListUI?.();
         } catch (_e) {
