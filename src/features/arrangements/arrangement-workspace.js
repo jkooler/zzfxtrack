@@ -441,7 +441,7 @@ export function renderArrangementWorkspaceShell({
                 <button
                     id="arrangementWorkspaceAddRowBtn"
                     type="button"
-                    class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 ${readonly ? 'opacity-40 cursor-not-allowed' : ''}"
+                    class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-2 py-2 ${readonly ? 'opacity-40 cursor-not-allowed' : ''}"
                     ${readonly ? 'disabled' : ''}
                 >
                     <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Row
