@@ -1306,7 +1306,7 @@ function renderInstrumentList() {
             const empty = document.createElement('li');
             empty.className = 'text-xs text-muted-foreground px-2 py-1';
             empty.textContent = scope === 'user'
-                ? 'None are found.'
+                ? 'None was found'
                 : 'No system instruments available.';
             list?.appendChild(empty);
         }
