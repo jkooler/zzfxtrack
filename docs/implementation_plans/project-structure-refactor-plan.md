@@ -1,3 +1,136 @@
+# Project Structure Refactor Follow-Up
+
+Status: Active follow-up  
+Last rewritten: 2026-03-11
+
+## Context
+
+The original refactor plan is no longer accurate as a target structure document. The codebase has already completed the large first extraction pass, but it did not land exactly as originally mapped.
+
+Today the useful refactor question is narrower:
+
+- `src/main.js` is still large and orchestration-heavy.
+- `src/blocks.js` still contains substantial legacy modal logic.
+- `src/tracker.js` still combines rendering, playback, editing, autosave-adjacent behavior, and arrangement-preview runtime concerns.
+
+The codebase now contains a real modular foundation:
+
+- `src/app/*`
+- `src/features/*`
+- `src/shared/*`
+
+The next work should build on that actual foundation instead of chasing the old target tree literally.
+
+## Current Baseline
+
+Implemented already:
+
+- entrypoint moved to `src/main.js`
+- raw API calls centralized in `src/app/api.js`
+- shared transform helpers centralized in `src/shared/code-transform-utils.js`
+- pattern, arrangement, playback, project, settings, tracker, and block modules extracted under `src/features/*`
+- arrangement workspace shipped
+
+Notable divergence from the original draft:
+
+- some planned files do not exist, for example `pattern-insertions.js`, `bootstrap.js`, `events.js`, `ui/icons.js`, `ui/modals.js`
+- several extra modules exist instead, for example:
+  - `arrangement-preview-events.js`
+  - `arrangement-preview-runtime.js`
+  - `arrangement-export-context.js`
+  - `export-execution.js`
+  - `export-wav.js`
+  - `system-settings.js`
+  - `static-modals.js`
+
+## Goals
+
+1. Reduce `src/main.js` further into a composition root.
+2. Continue shrinking `src/tracker.js` into smaller ownership-based modules.
+3. Either split or retire the remaining legacy-heavy responsibilities in `src/blocks.js`.
+4. Remove stale bridging code and reduce cross-feature coupling where practical.
+
+## Non-Goals
+
+- recreating the exact file tree from the original refactor draft
+- broad architecture rewrite
+- TypeScript migration in the same pass
+- feature redesign mixed into structural cleanup
+
+## Recommended Work Order
+
+### Phase 1: Finish `main.js` reduction
+
+Move any remaining feature-owned logic out of `src/main.js`, especially:
+
+- leftover selection and workspace glue that belongs to view or controller modules
+- long setup blocks that can become `install*Handlers()` helpers
+- state mutation helpers that belong to feature modules
+
+Exit criteria:
+
+- `main.js` reads mostly as startup, configuration, and wiring
+
+### Phase 2: Split `src/tracker.js`
+
+Split by responsibility, not by line count. Strong candidates:
+
+- tracker grid editing and input handling
+- tracker rendering and DOM updates
+- tracker preview playback
+- arrangement preview live-swap/render runtime
+
+Exit criteria:
+
+- arrangement preview runtime no longer lives mostly in `tracker.js`
+- tracker UI behavior is easier to change without touching playback internals
+
+### Phase 3: Reduce legacy `src/blocks.js`
+
+Decide explicitly whether the old modal-first implementation should:
+
+- stay as a compatibility surface but delegate more behavior to feature modules, or
+- be reduced to thin event wiring around already-extracted modules
+
+Exit criteria:
+
+- duplication between `src/blocks.js` and `src/features/blocks/*` is minimized
+
+### Phase 4: Cleanup
+
+- remove stale comments and references to the old refactor target tree
+- normalize module naming
+- document actual ownership boundaries
+
+## Validation
+
+Run after each meaningful slice:
+
+1. `npx vite build`
+2. Manual smoke:
+   - app boot
+   - pattern load/save/rename/delete
+   - arrangement load/save/rename/delete
+   - arrangement workspace editing
+   - tracker open/edit/save
+   - block create/update/delete
+   - block insertion into pattern
+   - arrangement insertion into pattern
+   - arrangement preview
+   - project download/upload
+
+## Success Criteria
+
+This follow-up is complete when:
+
+- `main.js` is materially smaller and mostly orchestration
+- tracker and block logic have clearer ownership boundaries
+- there is less legacy duplication between extracted modules and old monolithic files
+- future feature work no longer requires routinely editing `main.js`, `blocks.js`, and `tracker.js` together
+
+## Archived Original Version
+
+~~~markdown
 # Project Structure Refactor Plan
 
 Status: Draft  
@@ -604,3 +737,4 @@ The refactor is complete when:
 - duplicated code transform logic is centralized.
 - the app behavior matches current behavior closely.
 - the resulting structure supports gradual TypeScript adoption.
+~~~

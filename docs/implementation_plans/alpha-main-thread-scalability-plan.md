@@ -1,5 +1,54 @@
 # Alpha Main-Thread Scalability Plan (Arrangement Playback)
 
+Status: Deferred beyond observability  
+Last audited: 2026-03-11
+
+## Decision
+
+Do not implement the original full adaptive-mode plan right now.
+
+The current codebase already contains meaningful tactical hardening:
+
+- worker render path and fallback accounting
+- render stats exposed via `window.__arrangementRenderStats`
+- live-swap debouncing and boundary-apply behavior
+- short crossfade handling around live swap boundaries
+
+Those pieces live primarily in `src/tracker.js`.
+
+What is missing from the original plan:
+
+- no visible diagnostics panel
+- no stress harness
+- no adaptive `LIVE_STEP` / `LIVE_ROW` / `IDLE_APPLY` policy engine
+- no complexity budget score
+- no user-facing safety toggles
+
+## Revised Recommendation
+
+Limit future work to Phase 1 only unless real alpha usage shows clear instability:
+
+1. Add a dev-mode diagnostics panel for the existing render stats.
+2. Add a short repeatable stress checklist to testing docs.
+3. Measure actual failure and stutter cases before building more policy.
+
+Do not build the adaptive degradation engine yet. It would add state complexity before there is evidence that the simpler mitigations are insufficient.
+
+## When To Reopen
+
+Reopen this plan only if at least one of these becomes true:
+
+- repeated user reports of arrangement-preview stutter
+- clear internal repros on mid-range hardware
+- worker fallback/error rates show consistent instability
+
+If reopened later, start from the current runtime code rather than from the original draft structure.
+
+## Archived Original Version
+
+~~~markdown
+# Alpha Main-Thread Scalability Plan (Arrangement Playback)
+
 Status: Draft  
 Created: 2026-03-01
 
@@ -136,4 +185,4 @@ Minimum acceptance for alpha stability:
 - Keep diagnostics data lightweight and sample-based.
 - Ensure every degradation decision is observable in logs/stats.
 - Avoid introducing blocking work on the main thread in policy evaluation.
-
+~~~

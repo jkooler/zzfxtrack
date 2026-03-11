@@ -1,3 +1,72 @@
+# Inclusive Blocks UI (Current Shipped Architecture)
+
+Status: Mostly implemented  
+Last rewritten: 2026-03-11
+
+## Summary
+
+The original draft has largely shipped, but not exactly in the originally proposed shape.
+
+The app now has:
+
+- selection-driven switching between Strudel editor and arrangement workspace
+- a dedicated arrangement workspace
+- a docked tracker workspace
+- a right-side global block library
+- autosave and recovery paths for arrangements and blocks
+- block deletion conflict guard backed by server-side checks
+- arrangement export support from the workspace flow
+
+## What Actually Shipped
+
+### Main view switching
+
+- selecting a pattern shows the Strudel editor
+- selecting an arrangement shows the arrangement workspace
+- playback is coordinated so pattern and arrangement playback do not fight each other
+
+### Arrangement workspace
+
+- left main pane for arrangement editing
+- tracker workspace pane beside it
+- right sidebar block library
+- tracker is reused by docking the tracker modal into the workspace rather than rendering a separate tracker implementation
+
+### Block library
+
+- user/system grouping
+- create/open/delete actions
+- drag source behavior for arrangement chips
+- deletion blocked when arrangements reference the block
+
+### Persistence and recovery
+
+- arrangement autosave and local recovery
+- block autosave and local recovery
+- beforeunload confirmation and best-effort flush
+
+## Deltas From The Original Draft
+
+These are intentional divergences from the older concept document:
+
+- there are two main sidebar tabs (`Arranger` and `Strudel`), not three
+- instruments remain a persistent lower sidebar section rather than a separate tab
+- tracker is implemented by docking the existing modal UI into the workspace
+- arrangement export exists now, even though the draft treated it as future work
+
+## Remaining Follow-Up Worth Considering
+
+- responsive and narrow-layout refinement
+- clearer user-copy flow for system resources
+- continued cleanup of legacy blocks modal code now that the workspace exists
+
+## Closeout Guidance
+
+This document should no longer be treated as a draft feature plan. It is now primarily a record of the shipped architecture and the known deltas from the original proposal.
+
+## Archived Original Version
+
+~~~markdown
 # New Inclusive Blocks UI (Arrangements Workspace)
 
 Status: Draft (created 2026-02-23)
@@ -290,3 +359,4 @@ Likely files:
 - Export-from-arrangements UX (direct export without inserting to a pattern).
 - Responsive/narrow layout behavior.
 - Potential “detached edits” (browse/edit blocks without changing the current arranger selection).
+~~~

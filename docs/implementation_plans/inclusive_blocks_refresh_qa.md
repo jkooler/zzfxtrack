@@ -1,3 +1,123 @@
+# Inclusive Blocks UI - Focused Manual QA (Refresh + Autosave Recovery)
+
+Status: Ready to execute, not yet recorded as run  
+Last audited: 2026-03-11
+
+## Scope
+
+Focused validation for the high-risk reliability paths:
+
+1. arrangement autosave + refresh recovery
+2. tracker block autosave + refresh recovery
+3. beforeunload confirmation + flush behavior
+4. block deletion guard when arrangement references exist
+
+## Audit Note
+
+The code paths required for these checks exist today:
+
+- arrangement recovery and autosave
+- block recovery and autosave
+- beforeunload flush/confirmation
+- server-backed block deletion conflict response
+
+What is still missing is execution evidence. Treat this as an active manual QA checklist, not as a completed task.
+
+## Preconditions
+
+- run in non-demo mode
+- open the app via `npm run dev`
+- use disposable test pattern, arrangement, and block data
+- keep DevTools open
+
+## Test Data Setup
+
+1. Create arrangement `qa-arrangement`.
+2. Add one new block from the arrangement workspace so `Untitled-n` is created.
+3. Rename that block in tracker to `qa-block`.
+4. Confirm the arrangement row references the same block.
+
+## Case A - Arrangement autosave
+
+1. Select `qa-arrangement`.
+2. Change arrangement name to `qa-arrangement-a`.
+3. Change BPM to `137`.
+4. Add a new row and set repeats to `2`.
+5. Wait 1 second.
+
+Expected:
+
+- arrangement save request succeeds
+- reload shows updated name, BPM, rows, and repeats
+
+## Case B - Arrangement refresh recovery from cache
+
+1. Select `qa-arrangement`.
+2. Edit name, BPM, or rows quickly.
+3. Hard refresh before debounce save finishes.
+4. Re-open the same arrangement.
+
+Expected:
+
+- recovery status appears
+- arrangement loads with recovered edits
+- cache clears after best-effort save
+
+## Case C - Block autosave
+
+1. Open `qa-block` in tracker.
+2. Modify notes or pattern content.
+3. Wait 1 second.
+
+Expected:
+
+- block save request succeeds after debounce
+- re-opening the block preserves edits
+
+## Case D - Block refresh recovery from cache
+
+1. Open `qa-block` in tracker.
+2. Make edits.
+3. Hard refresh before debounce save finishes.
+4. Re-open the same block.
+
+Expected:
+
+- recovery status appears
+- tracker opens with recovered state
+- cache clears after best-effort save
+
+## Case E - beforeunload confirm + flush
+
+1. Make a pending arrangement edit or tracker edit.
+2. Immediately close the tab or window.
+
+Expected:
+
+- browser shows native unload confirmation
+- pending save is sent best-effort
+- local cache still protects against save failure
+
+## Case F - Block deletion conflict guard
+
+1. Ensure `qa-block` is referenced by `qa-arrangement`.
+2. Try deleting `qa-block` from both the sidebar library and blocks modal.
+
+Expected:
+
+- deletion is blocked in both places
+- UI explains that the block is used in arrangements
+- server responds with `409` and `usedBy`
+
+## Pass Criteria
+
+- all cases A-F pass
+- no uncaught console errors during the flow
+- no data loss in refresh or close scenarios
+
+## Archived Original Version
+
+~~~markdown
 # Inclusive Blocks UI — Focused Manual QA (Refresh + Autosave Recovery)
 
 Status: Ready to execute  
@@ -121,3 +241,4 @@ Expected:
 - Narrow/responsive layout behavior.
 - “Create user copy” flow for system resources.
 - Export-from-arrangements feature work.
+~~~

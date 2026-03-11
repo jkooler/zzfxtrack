@@ -1,3 +1,46 @@
+# Cursor-Based Block Insertion
+
+Status: Deferred, not planned right now  
+Last audited: 2026-03-11
+
+## Current Behavior
+
+Block insertion is intentionally non-destructive and layer-based:
+
+- a block constant is added to the `BLOCKS` section
+- `export const pattern = ...` is updated to include that layer
+- existing custom helper code is preserved
+
+This behavior is currently implemented and remains the preferred default.
+
+## Decision
+
+Do not implement true cursor-based insertion at this stage.
+
+## Why
+
+The original idea adds a lot of complexity for limited clear value:
+
+- editor coordinates do not match saved file coordinates
+- safe insertion depends on pattern-context detection
+- the failure mode is syntax breakage in user-authored code
+- the current layer insertion flow is already robust and predictable
+
+## Reopen Conditions
+
+Revisit this only if there is repeated user demand for inline composition inside existing pattern expressions.
+
+If reopened later:
+
+- use editor-native range handling
+- avoid regex-style insertion heuristics
+- keep the current layer insertion path as the fallback
+
+Until then, this plan should be treated as intentionally deferred.
+
+## Archived Original Version
+
+~~~markdown
 # Cursor-Based Block Insertion Implementation Plan
 
 Status: Partially implemented (last verified 2026-02-18)
@@ -236,3 +279,4 @@ This provides immediate value while keeping complexity manageable. Phases 3-5 ca
 - Consider adding keyboard shortcut for quick insertion (e.g., Ctrl+Shift+Enter)
 - May need to expose more CodeMirror APIs from Strudel REPL component
 - Test thoroughly with complex patterns containing nested functions
+~~~

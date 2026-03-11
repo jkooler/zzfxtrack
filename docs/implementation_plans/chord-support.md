@@ -1,5 +1,31 @@
 # ZzFXTrack Player Chord Support
 
+Status: Completed and closed  
+Last verified: 2026-03-11
+
+Chord export support is implemented.
+
+## What Landed
+
+- simultaneous notes on one Strudel instrument are expanded into multiple export voices
+- optional voice limiting is supported through export settings
+- per-instrument monophonic mode is supported
+- export stats report channel count and dropped notes
+
+## Source Of Truth
+
+- `src/export-logic.js`
+- `src/features/playback/export-execution.js`
+
+## Notes
+
+The original implementation plan is no longer an active work item. Any future improvements should be tracked as separate export enhancements, not by reopening this document.
+
+## Archived Original Version
+
+~~~markdown
+# ZzFXTrack Player Chord Support
+
 Status: Implemented (last verified 2026-02-18)
 
 ## Problem Statement
@@ -114,3 +140,4 @@ When building final `patternData`:
 ## Conclusion
 
 This implementation preserves full harmonic content by default while providing optional limiting for constrained scenarios like js13k. Users get maximum flexibility without artificial restrictions.
+~~~

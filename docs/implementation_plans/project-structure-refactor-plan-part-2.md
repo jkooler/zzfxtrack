@@ -1,5 +1,39 @@
 # Project Structure Refactor Plan Part 2
 
+Status: Completed and closed  
+Last verified: 2026-03-11
+
+This phase landed successfully.
+
+## Confirmed Outcomes
+
+- `src/main.js` is the app entrypoint.
+- feature modules under `src/features/*` exist and own substantial behavior.
+- shared app surfaces exist in:
+  - `src/app/api.js`
+  - `src/app/dom.js`
+  - `src/app/state.js`
+  - `src/shared/code-transform-utils.js`
+- playback, project I/O, settings, UI, arrangements, patterns, blocks, and tracker all have extracted modules.
+- `npx vite build` passes.
+
+## Important Caveat
+
+Closing this phase does not mean the broader refactor is fully finished.
+
+The current architecture is materially better than the pre-refactor monolith, but the remaining follow-up work is narrower than this phase and should be tracked separately in `project-structure-refactor-plan.md`.
+
+Current hotspots still worth future attention:
+
+- `src/main.js`
+- `src/blocks.js`
+- `src/tracker.js`
+
+## Archived Original Version
+
+~~~markdown
+# Project Structure Refactor Plan Part 2
+
 Status: Completed  
 Created: 2026-03-09  
 Depends on: `docs/project-structure-refactor-plan.md`
@@ -230,3 +264,4 @@ Key initial type targets:
 - export settings
 - preview context
 - custom event payloads
+~~~

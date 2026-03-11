@@ -1,3 +1,46 @@
+# User Guide (ZzFXTrack) Plan
+
+Status: Deferred and should be re-scoped  
+Last audited: 2026-03-11
+
+## Decision
+
+Do not implement the original full in-app guide plan as written right now.
+
+The proposed scope is too large for the current stage:
+
+- new offline content system
+- markdown rendering
+- snippet copy actions
+- optional snippet insertion into editor
+- ongoing content maintenance
+
+None of that exists yet, and it is not currently the highest-leverage product work.
+
+## Revised Recommendation
+
+If onboarding help becomes necessary, start with a much smaller deliverable:
+
+- one static `Help` or `Export-safe patterns` modal
+- short curated examples
+- no markdown dependency
+- no snippet insertion
+
+That would cover the most important user guidance with much lower implementation and maintenance cost.
+
+## Reopen Conditions
+
+Reopen a richer guide only if:
+
+- users repeatedly struggle with export-safe authoring
+- preview/export mismatch becomes a common support issue
+- there is clear demand for bundled, offline help inside the app
+
+Until then, this plan should be treated as deferred rather than pending implementation.
+
+## Archived Original Version
+
+~~~markdown
 # User Guide (ZzFXTrack) Implementation Plan
 
 Status: Proposed (not implemented)
@@ -145,4 +188,4 @@ Start with:
 - Per-snippet `Copy` (and optionally `Insert`) actions
 
 Then iterate based on user feedback and export edge cases.
-
+~~~
