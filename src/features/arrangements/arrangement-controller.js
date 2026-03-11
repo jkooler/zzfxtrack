@@ -170,6 +170,12 @@ export async function createNewArrangement(name) {
             version: 1,
             name: normalizedBase,
             bpm: 120,
+            metadata: {
+                title: '',
+                author: '',
+                contact: '',
+                license: '',
+            },
             rows: [{
                 repeats: 1,
                 blocks: initialBlockFilename ? [initialBlockFilename] : [],

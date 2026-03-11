@@ -7,6 +7,12 @@ export const arrangementState = {
   "version": 1,
   "name": "02-Simple",
   "bpm": 120,
+  "metadata": {
+    "title": "Simple (test)",
+    "author": "Jarno Koole",
+    "contact": "",
+    "license": "CC0"
+  },
   "rows": [
     {
       "repeats": 16,
@@ -17,5 +23,6 @@ export const arrangementState = {
       ],
       "loop": false
     }
-  ]
+  ],
+  "scope": "system"
 };

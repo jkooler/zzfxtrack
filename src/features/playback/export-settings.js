@@ -169,6 +169,9 @@ export function setupExportSettingsModal() {
 
     dom.exportSettingsBtn.addEventListener('click', () => {
         exportSettingsSnapshot = getExportSettingsSnapshot();
+        dom.exportSettingsModal?.querySelectorAll('details').forEach((el) => {
+            el.open = false;
+        });
         dom.exportSettingsModal.classList.add('open');
         updateExportSettingsApplyButton();
     });

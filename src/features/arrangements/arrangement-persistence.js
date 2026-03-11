@@ -23,6 +23,15 @@ let deps = {
 };
 let suppressNextSuccessStatus = false;
 
+export function normalizeArrangementMetadata(value) {
+    return {
+        title: String(value?.title || '').trim(),
+        author: String(value?.author || '').trim(),
+        contact: String(value?.contact || '').trim(),
+        license: String(value?.license || '').trim(),
+    };
+}
+
 function shouldSuppressSuccessStatus(detail = {}) {
     return Boolean(
         detail?.quietSaveStatus
@@ -52,6 +61,7 @@ export function cloneArrangementState(value) {
         blocks: Array.isArray(row?.blocks) ? row.blocks.filter(Boolean).map(String) : [],
         loop: Boolean(row?.loop),
     })) : [{ repeats: 1, blocks: [], loop: false }];
+    const metadata = normalizeArrangementMetadata(value?.metadata);
     const loopIndices = outRows.map((r, i) => (r.loop ? i : -1)).filter((i) => i >= 0);
     if (loopIndices.length > 1) {
         const keepIndex = loopIndices[loopIndices.length - 1];
@@ -61,6 +71,7 @@ export function cloneArrangementState(value) {
         version: 1,
         name: String(value?.name || 'Arrangement').trim() || 'Arrangement',
         bpm: Number.isFinite(Number(value?.bpm)) ? Math.max(20, Math.min(300, Number(value.bpm))) : 120,
+        metadata,
         rows: outRows,
     };
 }

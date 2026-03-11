@@ -504,6 +504,23 @@ export function bindArrangementWorkspaceTopControls({
             const draftState = getDraftState();
             const name = String(nameInput?.value ?? draftState?.name ?? '').trim();
             dispatchResourceScopeOpen({
+                applyDraftSettings: ({ metadata, scope }) => {
+                    const nextDraftState = getDraftState();
+                    if (!nextDraftState) return;
+                    nextDraftState.metadata = { ...metadata };
+                    if (typeof scope === 'string') {
+                        nextDraftState.scope = normalizeScope(scope);
+                    }
+                },
+                getArrangementStatePayload: (metadataOverride) => {
+                    const nextDraftState = getDraftState();
+                    if (!nextDraftState) return null;
+                    return {
+                        ...nextDraftState,
+                        metadata: metadataOverride ? { ...metadataOverride } : { ...(nextDraftState.metadata || {}) },
+                    };
+                },
+                metadata: draftState?.metadata || {},
                 type: 'arrangement',
                 filename: getCurrentArrangementFilename(),
                 name,

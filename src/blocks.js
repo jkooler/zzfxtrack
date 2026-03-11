@@ -48,6 +48,15 @@ function normalizeScope(value) {
   return value === 'system' ? 'system' : 'user';
 }
 
+function normalizeArrangementMetadata(value) {
+  return {
+    title: String(value?.title || '').trim(),
+    author: String(value?.author || '').trim(),
+    contact: String(value?.contact || '').trim(),
+    license: String(value?.license || '').trim(),
+  };
+}
+
 function isDeveloperModeEnabled() {
   try {
     return localStorage.getItem(DEVELOPER_MODE_KEY) === '1';
@@ -239,12 +248,14 @@ function getArrangementDraftState() {
   const name = (elements.arrangementName?.value || arrangementDraft.name || 'Arrangement').trim() || 'Arrangement';
   const bpmVal = parseInt(elements.arrangementBpm?.value || String(arrangementDraft.bpm || 120), 10);
   const bpm = Number.isFinite(bpmVal) ? Math.min(Math.max(bpmVal, 20), 300) : 120;
+  const metadata = normalizeArrangementMetadata(arrangementDraft.metadata);
 
   return {
     arrangementState: {
       version: 1,
       name,
       bpm,
+      metadata,
       rows: arrangementDraft.rows.map(r => ({
         repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
         blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
@@ -393,6 +404,18 @@ function setupEventListeners() {
     const name = (elements.arrangementName?.value || arrangementDraft.name || '').trim();
     document.dispatchEvent(new CustomEvent('resource-scope:open', {
       detail: {
+        applyDraftSettings: ({ metadata, scope }) => {
+          arrangementDraft.metadata = normalizeArrangementMetadata(metadata);
+          arrangementEditMode.scope = normalizeScope(scope);
+        },
+        getArrangementStatePayload: (metadataOverride) => {
+          const { arrangementState } = getArrangementDraftState();
+          return {
+            ...arrangementState,
+            metadata: normalizeArrangementMetadata(metadataOverride || arrangementDraft.metadata),
+          };
+        },
+        metadata: arrangementDraft.metadata,
         type: 'arrangement',
         filename: arrangementEditMode.filename,
         name,
@@ -942,6 +965,7 @@ let arrangementDraft = {
   version: 1,
   name: '',
   bpm: 120,
+  metadata: normalizeArrangementMetadata(),
   rows: [{ repeats: 1, blocks: [], loop: false }],
 };
 
@@ -951,12 +975,13 @@ let lastSavedArrangementSnapshot = '';
 function getArrangementSnapshot() {
   const name = (elements.arrangementName?.value ?? arrangementDraft.name ?? '').trim();
   const bpm = String(elements.arrangementBpm?.value ?? arrangementDraft.bpm ?? 120);
+  const metadata = normalizeArrangementMetadata(arrangementDraft.metadata);
   const rows = arrangementDraft.rows.map((r) => ({
     repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
     blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],
     loop: Boolean(r.loop),
   }));
-  return JSON.stringify({ name, bpm, rows });
+  return JSON.stringify({ name, bpm, metadata, rows });
 }
 
 function hasArrangementUnsavedChanges() {
@@ -986,6 +1011,7 @@ async function openArrangementEditor(arrangement = null) {
     version: 1,
     name: arrangement ? nameFromFilename : (state?.name || ''),
     bpm: state?.bpm ?? arrangement?.bpm ?? 120,
+    metadata: normalizeArrangementMetadata(state?.metadata),
     rows: Array.isArray(state?.rows) && state.rows.length
       ? (() => {
           const mapped = state.rows.map(r => ({
@@ -1511,6 +1537,7 @@ async function saveArrangementFromEditor() {
     version: 1,
     name: arrangementDraft.name,
     bpm: arrangementDraft.bpm,
+    metadata: normalizeArrangementMetadata(arrangementDraft.metadata),
     rows: arrangementDraft.rows.map(r => ({
       repeats: Number.isInteger(r.repeats) ? r.repeats : 1,
       blocks: Array.isArray(r.blocks) ? r.blocks.slice() : [],

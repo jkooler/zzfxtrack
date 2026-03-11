@@ -7,6 +7,12 @@ export const arrangementState = {
   "version": 1,
   "name": "01-Introduction",
   "bpm": 120,
+  "metadata": {
+    "title": "Introduction Song for ZzFXTrack (alpha)",
+    "author": "Jarno Koole",
+    "contact": "",
+    "license": "CC0"
+  },
   "rows": [
     {
       "repeats": 4,

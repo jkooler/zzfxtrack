@@ -1,3 +1,9 @@
 {
-  "scope": "system"
+  "scope": "system",
+  "metadata": {
+    "title": "Introduction Pattern for ZzFXTrack (alpha)",
+    "author": "Jarno Koole",
+    "contact": "",
+    "license": "CC0"
+  }
 }

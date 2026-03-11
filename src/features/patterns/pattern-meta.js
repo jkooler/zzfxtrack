@@ -8,7 +8,14 @@ import { getPatternMetaOrNull, savePatternMetaRecord } from '../../app/api.js';
 let metaDeps = {
     isDemoMode: () => false,
     getCurrentPatternFilename: () => null,
+    getCurrentPatternMetadata: () => ({
+        title: '',
+        author: '',
+        contact: '',
+        license: '',
+    }),
     setCurrentPatternScope: () => {},
+    setCurrentPatternMetadata: () => {},
     updatePatternNameReadOnly: () => {},
     sanitizePlaybackMixSettings: (v) => v,
     applyPlaybackMixSettingsToInputs: () => {},
@@ -28,6 +35,15 @@ function normalizeScope(value) {
     return value === 'system' ? 'system' : 'user';
 }
 
+export function normalizePatternMetadata(value) {
+    return {
+        title: String(value?.title || '').trim(),
+        author: String(value?.author || '').trim(),
+        contact: String(value?.contact || '').trim(),
+        license: String(value?.license || '').trim(),
+    };
+}
+
 export function configurePatternMeta(options = {}) {
     metaDeps = { ...metaDeps, ...options };
 }
@@ -45,10 +61,22 @@ export async function updatePatternScope(filename, scope) {
     await savePatternMetaRecord(filename, updated);
 }
 
+export async function updatePatternAdvancedSettings(filename, { scope, metadata } = {}) {
+    const existing = await getPatternMetaOrNull(filename) || {};
+    const updated = {
+        ...(existing || {}),
+        scope: normalizeScope(scope),
+        metadata: normalizePatternMetadata(metadata),
+    };
+    await savePatternMetaRecord(filename, updated);
+}
+
 export async function loadPatternMeta(filename) {
+    metaDeps.setCurrentPatternMetadata(normalizePatternMetadata());
     if (metaDeps.isDemoMode()) return;
     try {
         const data = await getPatternMetaOrNull(filename);
+        metaDeps.setCurrentPatternMetadata(normalizePatternMetadata(data?.metadata));
         if (!data) return;
         if (typeof data?.scope === 'string') {
             metaDeps.setCurrentPatternScope(normalizeScope(data.scope));
@@ -89,6 +117,7 @@ export async function savePatternMeta() {
         const existing = await getPatternMetaOrNull(filename) || {};
         await savePatternMetaRecord(filename, {
             ...(existing || {}),
+            metadata: normalizePatternMetadata(metaDeps.getCurrentPatternMetadata()),
             rowsPerCycle,
             playbackTargetPeak: mixSettings.targetPeak,
             playbackMasterGainDb: mixSettings.masterGainDb,

@@ -41,7 +41,7 @@ import { configureInstrumentReferenceSync } from './features/instruments/instrum
 import { configurePatternList, getPatternEntry, normalizePatternEntries, refreshPatternList, refreshPatternListActiveState, updatePatternListVisualizer } from './features/patterns/pattern-list.js';
 import { configurePatternController, createNewPattern, deletePattern, loadPattern, renamePattern, saveCurrentPattern } from './features/patterns/pattern-controller.js';
 import { configurePatternEditor, editorToFile, fileToEditor, setupPatternEditorAutosave, validateCodeForExport } from './features/patterns/pattern-editor.js';
-import { configurePatternMeta, loadPatternMeta, normalizePatternBaseName, savePatternMeta, updatePatternScope } from './features/patterns/pattern-meta.js';
+import { configurePatternMeta, loadPatternMeta, normalizePatternBaseName, savePatternMeta, updatePatternAdvancedSettings, updatePatternScope } from './features/patterns/pattern-meta.js';
 
 // --- Features: arrangements ---
 import { configureArrangementList, getArrangementEntry, refreshArrangementList, refreshArrangementListActiveState, updateArrangementListScopeVisualizer } from './features/arrangements/arrangement-list.js';
@@ -239,7 +239,9 @@ configurePatternList({
 configurePatternMeta({
     isDemoMode: () => DEMO_MODE,
     getCurrentPatternFilename: () => appState.currentPatternFilename,
+    getCurrentPatternMetadata: () => appState.currentPatternMetadata,
     setCurrentPatternScope: (scope) => { appState.currentPatternScope = scope; },
+    setCurrentPatternMetadata: (metadata) => { appState.currentPatternMetadata = metadata; },
     updatePatternNameReadOnly: () => {
         dom.patternNameInput.readOnly = DEMO_MODE;
     },
@@ -848,6 +850,7 @@ configureExportExecution({
     getDom: () => dom,
     isDemoMode: () => DEMO_MODE,
     getCurrentPatternFilename: () => appState.currentPatternFilename,
+    getCurrentPatternMetadata: () => appState.currentPatternMetadata,
     getCurrentArrangementFilename: () => appState.currentArrangementFilename,
     getCurrentArrangementDraftState: () => appState.arrangementDraftState,
     saveCurrentPattern,
@@ -967,10 +970,14 @@ configureAdvancedSettings({
     createIcons,
     getIcons: () => icons,
     setStatus,
+    getDeveloperModeHeaders,
     updatePatternScope,
+    savePatternAdvancedSettings: updatePatternAdvancedSettings,
     getPatternEntry,
     getCurrentPatternFilename: () => appState.currentPatternFilename,
+    getCurrentPatternMetadata: () => appState.currentPatternMetadata,
     setCurrentPatternScope: (scope) => { appState.currentPatternScope = scope; },
+    setCurrentPatternMetadata: (metadata) => { appState.currentPatternMetadata = metadata; },
     setPatternNameReadOnly: () => {
         dom.patternNameInput.readOnly = DEMO_MODE;
     },
@@ -982,8 +989,11 @@ configureAdvancedSettings({
     updateBlockScope,
     refreshBlocksLibrary,
     updateArrangementScope,
+    saveArrangementSettings: saveArrangement,
     getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    getCurrentArrangementDraftState: () => appState.arrangementDraftState,
     setCurrentArrangementScope: (scope) => { appState.currentArrangementScope = scope; },
+    setCurrentArrangementDraftState: (state) => { appState.arrangementDraftState = state; },
     refreshArrangementList,
     renderArrangementWorkspace,
     dispatchResourceScopeChanged: (detail) => {
@@ -1631,6 +1641,7 @@ if (dom.openPatternAdvancedSettingsBtn) {
             type: 'pattern',
             filename: appState.currentPatternFilename,
             name: currentPatternDisplayName || appState.currentPatternFilename.replace(/\.js$/, ''),
+            metadata: appState.currentPatternMetadata,
             scope: appState.currentPatternScope,
         });
     });

@@ -18,6 +18,12 @@ let deps = {
     getCurrentArrangementDraftState: () => null,
     getCurrentArrangementFilename: () => null,
     getCurrentPatternFilename: () => null,
+    getCurrentPatternMetadata: () => ({
+        title: '',
+        author: '',
+        contact: '',
+        license: '',
+    }),
     getDefragmentedInstruments: () => [],
     getDom: () => ({}),
     getExportDurationSeconds: () => 0,
@@ -145,7 +151,11 @@ export async function exportCurrentPattern(options = {}) {
             monophonicByInstrumentIndex: monophonicByIndex,
             forceCycles: isArrangementSong ? inferredArrangeCycles : null,
         });
-        const exportData = { song: result.song, mix: deps.getPlaybackMixSettings() };
+        const exportData = {
+            song: result.song,
+            mix: deps.getPlaybackMixSettings(),
+            metadata: deps.getCurrentPatternMetadata(),
+        };
         const { channelCount, droppedNotes, unknownInstrumentNotes, unknownInstrumentAliases = [] } = result.stats;
 
         deps.setZzFXTrackPreviewData(exportData, { monophonicByInstrumentIndex: monophonicByIndex }, {
@@ -326,7 +336,16 @@ export async function exportCurrentArrangement() {
             rowCycleBoundaries: rowCycleBoundaries.length >= 2 ? rowCycleBoundaries : null,
             simpleExport: Boolean(dom.simpleExport?.checked),
         });
-        const exportData = { song: result.song, mix: deps.getPlaybackMixSettings() };
+        const exportData = {
+            song: result.song,
+            mix: deps.getPlaybackMixSettings(),
+            metadata: arrangementState?.metadata || {
+                title: '',
+                author: '',
+                contact: '',
+                license: '',
+            },
+        };
         const { channelCount, droppedNotes, unknownInstrumentNotes, unknownInstrumentAliases = [] } = result.stats;
 
         deps.setZzFXTrackPreviewData(exportData, { monophonicByInstrumentIndex: monophonicByIndex }, {

@@ -8,6 +8,12 @@ export const appState = {
     currentArrangementFilename: null,
     currentPatternScope: 'user',
     currentArrangementScope: 'user',
+    currentPatternMetadata: {
+        title: '',
+        author: '',
+        contact: '',
+        license: '',
+    },
     patternEntriesCache: [],
     arrangementEntriesCache: [],
     arrangementDraftState: null,

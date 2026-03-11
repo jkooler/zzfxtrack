@@ -8,8 +8,16 @@ let deps = {
     autoUpdateInstrumentsFile: async () => {},
     createIcons: () => {},
     dispatchResourceScopeChanged: () => {},
+    getDeveloperModeHeaders: () => ({}),
     getCurrentArrangementFilename: () => null,
+    getCurrentArrangementDraftState: () => null,
     getCurrentPatternFilename: () => null,
+    getCurrentPatternMetadata: () => ({
+        title: '',
+        author: '',
+        contact: '',
+        license: '',
+    }),
     getDom: () => ({}),
     getIcons: () => ({}),
     getPatternEntry: () => null,
@@ -23,9 +31,13 @@ let deps = {
     renderArrangementWorkspace: () => {},
     reloadInstruments: async () => {},
     setCurrentArrangementScope: () => {},
+    setCurrentArrangementDraftState: () => {},
     setCurrentPatternScope: () => {},
+    setCurrentPatternMetadata: () => {},
     setInstrumentScope: () => false,
     setPatternNameReadOnly: () => {},
+    savePatternAdvancedSettings: async () => {},
+    saveArrangementSettings: async () => {},
     setStatus: () => {},
     updateArrangementScope: async () => {},
     updateBlockScope: async () => {},
@@ -38,11 +50,40 @@ export function configureAdvancedSettings(options = {}) {
     deps = { ...deps, ...options };
 }
 
+function normalizeArrangementMetadata(value) {
+    return {
+        title: String(value?.title || '').trim(),
+        author: String(value?.author || '').trim(),
+        contact: String(value?.contact || '').trim(),
+        license: String(value?.license || '').trim(),
+    };
+}
+
+function setArrangementMetadataInputs(dom, metadata = {}) {
+    if (dom.advancedSettingsMetadataTitle) dom.advancedSettingsMetadataTitle.value = metadata.title || '';
+    if (dom.advancedSettingsMetadataAuthor) dom.advancedSettingsMetadataAuthor.value = metadata.author || '';
+    if (dom.advancedSettingsMetadataContact) dom.advancedSettingsMetadataContact.value = metadata.contact || '';
+    if (dom.advancedSettingsMetadataLicense) dom.advancedSettingsMetadataLicense.value = metadata.license || '';
+}
+
+function readArrangementMetadataInputs(dom) {
+    return normalizeArrangementMetadata({
+        title: dom.advancedSettingsMetadataTitle?.value,
+        author: dom.advancedSettingsMetadataAuthor?.value,
+        contact: dom.advancedSettingsMetadataContact?.value,
+        license: dom.advancedSettingsMetadataLicense?.value,
+    });
+}
+
 export function openAdvancedSettingsModal(context) {
     if (!context) return;
     const dom = deps.getDom();
     pendingAdvancedSettingsContext = {
         ...context,
+        metadata: normalizeArrangementMetadata(
+            context.metadata
+            || (context.type === 'pattern' ? deps.getCurrentPatternMetadata() : null)
+        ),
         scope: deps.normalizeScope(context.scope),
     };
     const typeLabel = String(context.type || 'resource');
@@ -64,7 +105,16 @@ export function openAdvancedSettingsModal(context) {
         dom.advancedSettingsSystemLabel.classList.add('text-foreground');
         dom.advancedSettingsSystemLabel.classList.remove('text-muted-foreground');
     }
+    if (dom.advancedSettingsMetadataDetails) {
+        const showMetadata = pendingAdvancedSettingsContext.type === 'arrangement'
+            || pendingAdvancedSettingsContext.type === 'pattern';
+        dom.advancedSettingsMetadataDetails.classList.toggle('hidden', !showMetadata);
+    }
+    setArrangementMetadataInputs(dom, pendingAdvancedSettingsContext.metadata);
     if (dom.saveAdvancedSettingsBtn) dom.saveAdvancedSettingsBtn.disabled = deps.isDemoMode();
+    dom.advancedSettingsModal?.querySelectorAll('details').forEach((el) => {
+        el.open = false;
+    });
     dom.advancedSettingsModal?.classList.add('open');
     deps.createIcons({ icons: deps.getIcons() });
 }
@@ -78,20 +128,27 @@ async function applyAdvancedSettings() {
     const dom = deps.getDom();
     if (!pendingAdvancedSettingsContext) return;
     if (deps.isDemoMode()) {
-        deps.setStatus('Demo mode: updating system visibility is disabled', 'normal');
+        deps.setStatus('Demo mode: advanced settings are disabled', 'normal');
         closeAdvancedSettingsModal();
         return;
     }
     const nextScope = dom.advancedSettingsSystemToggle?.checked ? 'system' : 'user';
     const context = pendingAdvancedSettingsContext;
+    const nextMetadata = context.type === 'arrangement' || context.type === 'pattern'
+        ? readArrangementMetadataInputs(dom)
+        : normalizeArrangementMetadata();
     try {
         if (context.type === 'pattern') {
             if (!context.filename) throw new Error('No pattern selected');
-            await deps.updatePatternScope(context.filename, nextScope);
+            await deps.savePatternAdvancedSettings(context.filename, {
+                scope: nextScope,
+                metadata: nextMetadata,
+            });
             const entry = deps.getPatternEntry(context.filename);
             if (entry) entry.scope = nextScope;
             if (context.filename === deps.getCurrentPatternFilename()) {
                 deps.setCurrentPatternScope(nextScope);
+                deps.setCurrentPatternMetadata(nextMetadata);
                 deps.setPatternNameReadOnly();
             }
             await deps.refreshPatternList();
@@ -112,8 +169,33 @@ async function applyAdvancedSettings() {
             if (context.filename) await deps.updateBlockScope(context.filename, nextScope);
             await deps.refreshBlocksLibrary();
         } else if (context.type === 'arrangement') {
+            if (typeof context.applyDraftSettings === 'function') {
+                context.applyDraftSettings({
+                    metadata: nextMetadata,
+                    scope: nextScope,
+                });
+            } else if (context.filename && context.filename === deps.getCurrentArrangementFilename()) {
+                const currentDraftState = deps.getCurrentArrangementDraftState();
+                if (currentDraftState) {
+                    deps.setCurrentArrangementDraftState({
+                        ...currentDraftState,
+                        metadata: nextMetadata,
+                    });
+                }
+            }
             if (context.filename) {
-                await deps.updateArrangementScope(context.filename, nextScope);
+                const arrangementState = typeof context.getArrangementStatePayload === 'function'
+                    ? context.getArrangementStatePayload(nextMetadata)
+                    : null;
+                if (arrangementState) {
+                    await deps.saveArrangementSettings(context.filename, {
+                        name: context.filename.replace(/\.js$/i, ''),
+                        arrangementState,
+                        scope: nextScope,
+                    }, deps.getDeveloperModeHeaders());
+                } else {
+                    await deps.updateArrangementScope(context.filename, nextScope);
+                }
                 if (context.filename === deps.getCurrentArrangementFilename()) {
                     deps.setCurrentArrangementScope(nextScope);
                 }
@@ -126,6 +208,7 @@ async function applyAdvancedSettings() {
         deps.dispatchResourceScopeChanged({
             ...context,
             id: pendingAdvancedSettingsContext?.id || context.id,
+            metadata: nextMetadata,
             previousId: context.id,
             name: pendingAdvancedSettingsContext?.name || context.name,
             scope: nextScope,

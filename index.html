@@ -1870,12 +1870,12 @@
     <!-- Advanced Settings Modal -->
     <div
       id="advancedSettingsModal"
-      class="modal-overlay fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+      class="modal-overlay fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto p-4"
     >
       <div
-        class="modal fixed z-[81] grid w-full max-w-md gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
+        class="modal fixed z-[81] flex max-h-[90vh] w-full max-w-md flex-col border border-border bg-background shadow-lg sm:rounded-lg overflow-hidden"
       >
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between shrink-0 p-4 pb-0">
           <h2
             id="advancedSettingsTitle"
             class="text-lg font-semibold leading-none tracking-tight text-primary"
@@ -1890,28 +1890,55 @@
             <i data-lucide="x" class="w-6 h-6"></i>
           </button>
         </div>
-        <p id="advancedSettingsResourceLabel" class="text-sm text-muted-foreground"></p>
-        <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
-          <span class="flex flex-col gap-1 min-w-0">
-            <span id="advancedSettingsSystemLabel" class="text-sm text-foreground leading-snug flex items-center gap-3">
-              <span id="advancedSettingsSystemLockIcon" class="hidden shrink-0 [&_svg]:stroke-current" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 p-4">
+          <p id="advancedSettingsResourceLabel" class="text-sm text-muted-foreground"></p>
+          <label class="flex items-center justify-between gap-3 p-3 rounded-md border border-input bg-card/40">
+            <span class="flex flex-col gap-1 min-w-0">
+              <span id="advancedSettingsSystemLabel" class="text-sm text-foreground leading-snug flex items-center gap-3">
+                <span id="advancedSettingsSystemLockIcon" class="hidden shrink-0 [&_svg]:stroke-current" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </span>
+                Define as system resource
               </span>
-              Define as system resource
+              <span class="text-xs text-muted-foreground/90 leading-relaxed">Makes the resource part of the code base and subject to overwriting itself when app receives updates.</span>
             </span>
-            <span class="text-xs text-muted-foreground/90 leading-relaxed">Makes the resource part of the code base and subject to overwriting itself when app receives updates.</span>
-          </span>
-          <span class="relative inline-flex h-6 w-11 items-center shrink-0">
-            <input
-              type="checkbox"
-              id="advancedSettingsSystemToggle"
-              class="peer sr-only"
-            />
-            <span class="absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-primary/70"></span>
-            <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background border border-border transition-transform peer-checked:translate-x-5"></span>
-          </span>
-        </label>
-        <div class="flex justify-end gap-2">
+            <span class="relative inline-flex h-6 w-11 items-center shrink-0">
+              <input
+                type="checkbox"
+                id="advancedSettingsSystemToggle"
+                class="peer sr-only"
+              />
+              <span class="absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-primary/70"></span>
+              <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background border border-border transition-transform peer-checked:translate-x-5"></span>
+            </span>
+          </label>
+          <details id="advancedSettingsMetadataDetails" class="hidden group shrink-0 rounded-md border border-input bg-card/40 overflow-visible">
+            <summary class="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-medium text-foreground select-none hover:bg-accent/50 transition-colors [&::-webkit-details-marker]:hidden">
+              <span>Metadata</span>
+              <i data-lucide="chevron-down" class="w-4 h-4 ml-auto text-muted-foreground shrink-0 transition-transform group-open:rotate-180"></i>
+            </summary>
+            <div class="px-3 pb-3 pt-0 space-y-3 border-t border-border mt-0">
+              <p class="pt-2 text-xs text-muted-foreground">Optional credits and licensing information for the arrangement and exported song data.</p>
+              <label class="flex flex-col gap-1.5">
+                <span class="text-sm text-foreground">Title</span>
+                <input type="text" id="advancedSettingsMetadataTitle" class="h-9 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="flex flex-col gap-1.5">
+                <span class="text-sm text-foreground">Author</span>
+                <input type="text" id="advancedSettingsMetadataAuthor" class="h-9 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="flex flex-col gap-1.5">
+                <span class="text-sm text-foreground">Contact</span>
+                <input type="text" id="advancedSettingsMetadataContact" class="h-9 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+              <label class="flex flex-col gap-1.5">
+                <span class="text-sm text-foreground">License</span>
+                <input type="text" id="advancedSettingsMetadataLicense" class="h-9 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </label>
+            </div>
+          </details>
+        </div>
+        <div class="flex justify-end gap-2 shrink-0 p-4 pt-0">
           <button
             id="cancelAdvancedSettingsBtn"
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"

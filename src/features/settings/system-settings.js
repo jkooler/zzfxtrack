@@ -302,6 +302,9 @@ function openSystemSettingsModal() {
     syncThemeColorPickers();
     syncReplThemeSelect();
     scopeStrudelThemeVarsToRepl();
+    dom.systemSettingsModal?.querySelectorAll('details').forEach((el) => {
+        el.open = false;
+    });
     dom.systemSettingsModal.classList.add('open');
     deps.createIcons({ icons: deps.getIcons() });
 }
