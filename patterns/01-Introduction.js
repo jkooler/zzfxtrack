@@ -20,8 +20,9 @@ const pattern = stack(
 
 export const pattern = arrange([16, pattern])
 
-// If you look down, you'll see the "Export ZzFXTrack" button.
-// Clicking it will generate the song data as .json, that is compatible with ZzFXTrack Player.
+// If you look down, you'll see the "Export" button.
+// Clicking it and choosing ZzFXTrack Player will generate the song data as JSON.
+// You can also export an audio file (.wav).
 
 // 1. Audio processing effects will not carry over to exported .json file.
 // 2. Some more advanced Strudel pattern logic may also be only partially compatible.
