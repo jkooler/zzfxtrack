@@ -5193,7 +5193,9 @@ function updateEditModeUI() {
     }
   }
   if (elements.duplicateBlockBtn) {
-    if (editMode.isEditing) {
+    const shouldHide = editMode.isEditing
+      && (editMode.returnToBlocksOnClose || editMode.returnToArrangementsOnClose);
+    if (editMode.isEditing && !shouldHide) {
       elements.duplicateBlockBtn.classList.remove('hidden');
       elements.duplicateBlockBtn.disabled = false;
       elements.duplicateBlockBtn.title = 'Duplicate this block (new name with suffix -2, -3, …)';

@@ -1687,7 +1687,8 @@ function renderBlocksList() {
           <div class="block-description text-xs text-muted-foreground mt-1">${escapeHtml(blockMeta)}</div>
         </div>
         <div class="list-item-actions">
-          <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}"><i data-lucide="pencil" class="w-4 h-4"></i> Edit</button>
+          <button class="sidebar-edit-btn" title="Edit ${escapeHtml(block.name)}">Edit</button>
+          <button class="sidebar-dup-btn" title="Duplicate ${escapeHtml(block.name)}"><i data-lucide="copy-plus" class="w-4 h-4"></i></button>
           ${deleteActionMarkup}
         </div>
       `;
@@ -1707,6 +1708,13 @@ function renderBlocksList() {
         } else {
           selectBlock(index);
         }
+      });
+
+      const dupBtn = blockEl.querySelector('.sidebar-dup-btn');
+      dupBtn?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        selectBlock(index, { preview: false });
+        await duplicateBlockByIndex(index);
       });
 
       const editBtn = blockEl.querySelector('.sidebar-edit-btn');
@@ -1813,6 +1821,48 @@ function getSelectedBlock() {
   return blocksCache[index];
 }
 
+async function duplicateBlockByIndex(index) {
+  const block = Number.isInteger(index) ? blocksCache[index] : null;
+  if (!block) return;
+
+  let trackerState = block.trackerState;
+  let description = block.description || '';
+  let scope = block.scope;
+
+  if (block.filename) {
+    try {
+      const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
+      if (response.ok) {
+        const fullBlock = await response.json();
+        trackerState = fullBlock?.trackerState ?? trackerState;
+        description = fullBlock?.description ?? description;
+        scope = fullBlock?.scope ?? scope;
+      }
+    } catch (err) {
+      console.warn('[Blocks] Could not fetch full block data for duplication:', err);
+    }
+  }
+
+  if (!trackerState) {
+    await alertDialog({
+      title: 'Cannot Duplicate Block',
+      message: 'This block has no tracker data to duplicate.',
+    });
+    return;
+  }
+
+  document.dispatchEvent(new CustomEvent('tracker:duplicateBlock', {
+    detail: {
+      filename: block.filename,
+      name: block.name,
+      description,
+      scope: normalizeScope(scope),
+      pattern: block.pattern || '',
+      trackerState,
+    },
+  }));
+}
+
 /**
  * Open tracker to create a new block
  */
@@ -1842,14 +1892,12 @@ function openTrackerForNewBlockFromArrangement(rowIndex) {
 async function openTrackerForEdit(index = null) {
   let block = Number.isInteger(index) ? blocksCache[index] : getSelectedBlock();
   if (!block) return;
-  
-  suspendBlocksModal();
-  
+
   // Always fetch full block data so we get trackerState, scope, denseRows, etc.
   let trackerState = block.trackerState;
   if (block.filename) {
     try {
-      const response = await fetch(`/api/blocks/${block.filename}`);
+      const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
       if (response.ok) {
         const fullBlock = await response.json();
         trackerState = fullBlock.trackerState ?? trackerState;
@@ -1860,7 +1908,9 @@ async function openTrackerForEdit(index = null) {
       console.warn('[Blocks] Could not fetch full block data:', err);
     }
   }
-  
+
+  suspendBlocksModal();
+
   // Dispatch event to open tracker in "block edit mode"
   const event = new CustomEvent('blocks:edit', {
     detail: { 
@@ -1878,7 +1928,7 @@ async function openTrackerForArrangementBlock(filename) {
 
   if (block.filename) {
     try {
-      const response = await fetch(`/api/blocks/${block.filename}`);
+      const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
       if (response.ok) {
         const fullBlock = await response.json();
         trackerState = fullBlock.trackerState ?? trackerState;

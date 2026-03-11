@@ -22,7 +22,7 @@ export const zzfxtrack_kickdrum_s = [0.9,0,130,0,0.06,0.05,1,0.8,-2,5,0,0,0,0,0.
 export const zzfxtrack_elpiano_s = [0.32,0,440,0,0.09,1.01,1,14.5,0,0,0,0,0.23,0.08,0,0,0,0.82,0.19,0.1,-180];
 export const zzfxtrack_horn_s = [0.48,0,110,0.03,0.22,0.1,2,7.8,0,0,0,0,0,0,0,0,0,0.92,0.82,0,-300];
 export const zzfxtrack_saw2_s = [0.25,0,440,0.01,0,0,2,1.5,0,0,0,0,0,0,0,0,0,0,1,0,0];
-export const zzfxtrack_metronome_s = [0.5,0,65.41,0,0,0,1,1,-5,0,0,0,0,0.01,0,0,0,0,0.1,0,700];
+export const zzfxtrack_tap_s = [0.5,0,65.41,0,0,0,1,1,-5,0,0,0,0,0.01,0,0,0,0,0.1,0,700];
 
 export const instrumentMapping = {
     "cp-s": 0,
@@ -46,7 +46,7 @@ export const instrumentMapping = {
     "elpiano-s": 18,
     "horn-s": 19,
     "saw2-s": 20,
-    "metronome-s": 21
+    "tap-s": 21
 };
 
 export const instruments = {
@@ -71,7 +71,7 @@ export const instruments = {
     "elpiano-s": zzfxtrack_elpiano_s,
     "horn-s": zzfxtrack_horn_s,
     "saw2-s": zzfxtrack_saw2_s,
-    "metronome-s": zzfxtrack_metronome_s
+    "tap-s": zzfxtrack_tap_s
 };
 
 export const instrumentMonophonic = {
@@ -96,7 +96,7 @@ export const instrumentMonophonic = {
     "elpiano-s": false,
     "horn-s": true,
     "saw2-s": false,
-    "metronome-s": false
+    "tap-s": false
 };
 export const instrumentScope = {
     "cp-s": "system",
@@ -120,7 +120,7 @@ export const instrumentScope = {
     "elpiano-s": "system",
     "horn-s": "system",
     "saw2-s": "system",
-    "metronome-s": "system"
+    "tap-s": "system"
 };
 export const instrumentArray = [
     zzfxtrack_cp_s,
@@ -144,5 +144,5 @@ export const instrumentArray = [
     zzfxtrack_elpiano_s,
     zzfxtrack_horn_s,
     zzfxtrack_saw2_s,
-    zzfxtrack_metronome_s
+    zzfxtrack_tap_s
 ];
