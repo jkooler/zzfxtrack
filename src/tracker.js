@@ -306,7 +306,8 @@ function clearSelectionToFocus() {
 /**
  * Move focus to (channel, step) without changing selection anchor. Updates active cell and scroll.
  */
-function moveFocusOnly(channel, step) {
+function moveFocusOnly(channel, step, options = {}) {
+  const shouldDomFocus = options.domFocus === true;
   const clampedCh = Math.max(0, Math.min(channel, state.channels - 1));
   const clampedStep = Math.max(0, Math.min(step, state.steps - 1));
   selLog('moveFocusOnly', state.focusedChannel, state.focusedStep, '->', clampedCh, clampedStep);
@@ -339,6 +340,9 @@ function moveFocusOnly(channel, step) {
         bodyScroll.scrollTop = Math.min(Math.max(targetTop, 0), maxTop);
         if (timeTrackScroll) timeTrackScroll.scrollTop = bodyScroll.scrollTop;
       }
+    }
+    if (shouldDomFocus && document.activeElement !== newCell) {
+      newCell.focus({ preventScroll: true });
     }
   }
   const newTimeStep = document.querySelector(`.tracker-timetrack-row[data-step="${state.focusedStep}"]`);
@@ -1578,6 +1582,7 @@ function renderGrid() {
 function setFocus(channel, step, options = {}) {
   const shouldScroll = options.scroll !== false;
   const extendSelection = options.extendSelection === true;
+  const shouldDomFocus = options.domFocus === true;
   const clampedChannel = Math.max(0, Math.min(channel, state.channels - 1));
   const clampedStep = Math.max(0, Math.min(step, state.steps - 1));
 
@@ -1626,6 +1631,9 @@ function setFocus(channel, step, options = {}) {
         newCell.scrollIntoView({ block: 'nearest', behavior: 'auto' });
       }
     }
+    if (shouldDomFocus && document.activeElement !== newCell) {
+      newCell.focus({ preventScroll: true });
+    }
   }
 
   const newTimeStep = document.querySelector(`.tracker-timetrack-row[data-step="${state.focusedStep}"]`);
@@ -1670,13 +1678,7 @@ function focusNdInput(channel, step) {
 }
 
 function focusNoteCell(channel, step) {
-  setFocus(channel, step);
-  const cell = document.querySelector(
-    `.tracker-cell[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
-  );
-  if (cell) {
-    cell.focus();
-  }
+  setFocus(channel, step, { domFocus: true });
 }
 
 /**
@@ -2066,7 +2068,7 @@ function handleKeyDown(e) {
     else if (key === 'arrowleft') newCh = Math.max(state.focusedChannel - 1, 0);
     else if (key === 'arrowright') newCh = Math.min(state.focusedChannel + 1, state.channels - 1);
     selLog('Shift+Arrow extend: anchor', state.selectionAnchor.channel, state.selectionAnchor.step, '-> focus', newCh, newStep);
-    moveFocusOnly(newCh, newStep);
+    moveFocusOnly(newCh, newStep, { domFocus: true });
     updateSelectionHighlight();
     return;
   }
@@ -2088,14 +2090,14 @@ function handleKeyDown(e) {
   if (key === 'arrowup') {
     e.preventDefault();
     const newStep = Math.max(state.focusedStep - 1, 0);
-    setFocus(state.focusedChannel, newStep);
+    setFocus(state.focusedChannel, newStep, { domFocus: true });
     return;
   }
 
   if (key === 'arrowdown') {
     e.preventDefault();
     const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
-    setFocus(state.focusedChannel, newStep);
+    setFocus(state.focusedChannel, newStep, { domFocus: true });
     return;
   }
 
@@ -2104,7 +2106,7 @@ function handleKeyDown(e) {
     if (state.focusedChannel > 0) {
       focusNdInput(state.focusedChannel - 1, state.focusedStep);
     } else {
-      setFocus(0, state.focusedStep);
+      setFocus(0, state.focusedStep, { domFocus: true });
     }
     return;
   }
@@ -2118,7 +2120,7 @@ function handleKeyDown(e) {
       focusVolInput(state.focusedChannel, state.focusedStep);
     } else {
       const newCh = Math.min(state.focusedChannel + 1, state.channels - 1);
-      setFocus(newCh, state.focusedStep);
+      setFocus(newCh, state.focusedStep, { domFocus: true });
     }
     return;
   }
@@ -2127,7 +2129,7 @@ function handleKeyDown(e) {
     e.preventDefault();
     const delta = e.shiftKey ? -4 : 4;
     const targetStep = Math.min(Math.max(state.focusedStep + delta, 0), state.steps - 1);
-    setFocus(state.focusedChannel, targetStep);
+    setFocus(state.focusedChannel, targetStep, { domFocus: true });
     return;
   }
 
@@ -2241,7 +2243,7 @@ function handleKeyDown(e) {
     pushUndo();
     setNote(state.focusedChannel, state.focusedStep, '-');
     const newStep = (state.focusedStep + 1) % state.steps;
-    setFocus(state.focusedChannel, newStep);
+    setFocus(state.focusedChannel, newStep, { domFocus: true });
     return;
   }
 
@@ -2299,7 +2301,7 @@ function handleKeyDown(e) {
     } else {
       insertBlankRowAtStep(state.focusedChannel, state.focusedStep);
       scheduleArrangementLiveEditUpdate();
-      setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
+      setFocus(state.focusedChannel, state.focusedStep, { scroll: false, domFocus: true });
       requestAnimationFrame(() => {
         const body = elements.grid?.querySelector('.tracker-body-scroll');
         const timeTrack = elements.grid?.querySelector('.tracker-timetrack-scroll');
@@ -2320,7 +2322,7 @@ function handleKeyDown(e) {
     pushUndo();
     setNote(state.focusedChannel, state.focusedStep, null);
     const newStep = Math.min(state.focusedStep + 1, state.steps - 1);
-    setFocus(state.focusedChannel, newStep);
+    setFocus(state.focusedChannel, newStep, { domFocus: true });
     return;
   }
 
@@ -2342,16 +2344,16 @@ function handleKeyDown(e) {
       pushUndo();
       setNote(state.focusedChannel, state.focusedStep, null);
       scheduleArrangementLiveEditUpdate();
-      setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
+      setFocus(state.focusedChannel, state.focusedStep, { scroll: false, domFocus: true });
     } else if (state.focusedStep === 0) {
       setNote(state.focusedChannel, state.focusedStep, null);
       scheduleArrangementLiveEditUpdate();
-      setFocus(state.focusedChannel, 0, { scroll: false });
+      setFocus(state.focusedChannel, 0, { scroll: false, domFocus: true });
     } else {
       // Remove current row: shift content from below up (don't touch the row above)
       shiftColumnUpFromStep(state.focusedChannel, state.focusedStep);
       scheduleArrangementLiveEditUpdate();
-      setFocus(state.focusedChannel, state.focusedStep, { scroll: false });
+      setFocus(state.focusedChannel, state.focusedStep, { scroll: false, domFocus: true });
     }
     requestAnimationFrame(() => {
       const body = elements.grid?.querySelector('.tracker-body-scroll');
@@ -2372,7 +2374,7 @@ function handleKeyDown(e) {
     }
     pushUndo();
     setNote(state.focusedChannel, state.focusedStep, null);
-    setFocus(state.focusedChannel, state.focusedStep);
+    setFocus(state.focusedChannel, state.focusedStep, { domFocus: true });
     return;
   }
 

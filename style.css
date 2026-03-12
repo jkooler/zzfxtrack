@@ -1005,8 +1005,11 @@ strudel-editor {
   min-width: 3.5rem;
 }
 
+.tracker-cell:focus,
 .tracker-cell:focus-visible {
   outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
+  border-color: var(--primary);
 }
 
 .tracker-vol-input,
@@ -1062,7 +1065,14 @@ strudel-editor {
   @apply border-transparent rounded-none;
 }
 .tracker-grid[data-dense-rows="true"] .tracker-cell.active {
-  @apply border-primary bg-primary/10 text-primary;
+  @apply bg-primary/10 text-primary;
+  border-color: transparent;
+  box-shadow: none;
+}
+.tracker-grid[data-dense-rows="true"] .tracker-cell.active:focus,
+.tracker-grid[data-dense-rows="true"] .tracker-cell.active:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .tracker-grid[data-dense-rows="true"] .tracker-cell.tracker-cell-selected:not(.active) {
   @apply border-quaternary ring-1 ring-quaternary;
@@ -1123,7 +1133,15 @@ strudel-editor {
 }
 
 .tracker-cell.active {
-  @apply border-primary bg-primary/10 text-primary;
+  @apply bg-primary/10 text-primary;
+  border-color: var(--input);
+  box-shadow: none;
+}
+
+.tracker-cell.active:focus,
+.tracker-cell.active:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 
 .tracker-cell.has-note {
@@ -1272,8 +1290,8 @@ strudel-editor {
   border-color: var(--quaternary);
 }
 .arr-repeats-wrap {
-  @apply relative min-w-[2.5rem] rounded-md border border-input flex items-center;
-  width: fit-content;
+  @apply relative rounded-md border border-input flex items-center;
+  width: 1.8rem;
   background-color: var(--input-bg);
   background-image: linear-gradient(
     90deg,
@@ -1285,6 +1303,9 @@ strudel-editor {
   background-size: 100% 100%;
   background-repeat: no-repeat;
   background-position: left top;
+}
+.arr-repeats-wrap:focus-within {
+  @apply ring-1 ring-ring;
 }
 
 .arr-repeats-wrap .arr-repeats {
@@ -1310,7 +1331,8 @@ strudel-editor {
 }
 
 .arr-repeats {
-  @apply h-8 pl-1 pr-0 py-1 text-sm font-mono text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-transparent border-0 min-w-0 w-full;
+  @apply h-8 pl-1 pr-0 py-1 text-sm font-mono text-left outline-none bg-transparent border-0 min-w-0;
+  width: 100%;
   color: white;
   mix-blend-mode: difference;
   -moz-appearance: textfield;
