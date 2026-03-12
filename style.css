@@ -533,7 +533,7 @@ input[readonly]:focus-visible {
 }
 
 .instrument-type-tab-all {
-  flex: 0 0 2.75rem;
+  flex: 0 0 1.75rem;
 }
 
 .instrument-info {
