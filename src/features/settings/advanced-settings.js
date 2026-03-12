@@ -46,6 +46,14 @@ let deps = {
 
 let pendingAdvancedSettingsContext = null;
 
+function getSettingsTitle(type) {
+    if (type === 'arrangement') return 'Arrangement settings';
+    if (type === 'block') return 'Block settings';
+    if (type === 'pattern') return 'Pattern settings';
+    if (type === 'instrument') return 'Instrument settings';
+    return 'Settings';
+}
+
 export function configureAdvancedSettings(options = {}) {
     deps = { ...deps, ...options };
 }
@@ -88,7 +96,7 @@ export function openAdvancedSettingsModal(context) {
     };
     const typeLabel = String(context.type || 'resource');
     const resourceName = String(context.name || context.filename || context.id || '').trim();
-    if (dom.advancedSettingsTitle) dom.advancedSettingsTitle.textContent = 'Advanced settings';
+    if (dom.advancedSettingsTitle) dom.advancedSettingsTitle.textContent = getSettingsTitle(context.type);
     if (dom.advancedSettingsResourceLabel) {
         dom.advancedSettingsResourceLabel.textContent = resourceName
             ? `${typeLabel[0].toUpperCase()}${typeLabel.slice(1)}: ${resourceName}`
@@ -128,7 +136,7 @@ async function applyAdvancedSettings() {
     const dom = deps.getDom();
     if (!pendingAdvancedSettingsContext) return;
     if (deps.isDemoMode()) {
-        deps.setStatus('Demo mode: advanced settings are disabled', 'normal');
+        deps.setStatus('Demo mode: settings are disabled', 'normal');
         closeAdvancedSettingsModal();
         return;
     }
@@ -213,7 +221,7 @@ async function applyAdvancedSettings() {
             name: pendingAdvancedSettingsContext?.name || context.name,
             scope: nextScope,
         });
-        deps.setStatus('Advanced settings updated', 'success');
+        deps.setStatus('Settings updated', 'success');
         closeAdvancedSettingsModal();
     } catch (e) {
         deps.logError(e);

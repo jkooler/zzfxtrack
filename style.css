@@ -1010,7 +1010,7 @@ strudel-editor {
 }
 
 .tracker-cell {
-  @apply flex-1 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all hover:border-primary/30 h-7;
+  @apply flex-1 rounded border border-transparent bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all h-7;
   min-height: 1.75rem;
 }
 
@@ -1029,7 +1029,7 @@ strudel-editor {
 .tracker-vol-input,
 .tracker-reps-input,
 .tracker-nd-input {
-  @apply w-[24px] shrink-0 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring h-7;
+  @apply w-[24px] shrink-0 rounded border border-transparent bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring h-7;
   min-height: 1.75rem;
 }
 
