@@ -544,7 +544,8 @@ function getFingerprint(instruments = []) {
             .map((inst) => ({
                 name: getInstrumentDisplayName(inst),
                 params: Array.isArray(inst.params) ? inst.params : [],
-                monophonic: parseMonophonicFlag(inst.monophonic, false)
+                monophonic: parseMonophonicFlag(inst.monophonic, false),
+                type: normalizeInstrumentType(inst.type),
             }))
             .sort((a, b) => a.name.localeCompare(b.name))
     );
@@ -567,6 +568,7 @@ function buildServerInstrumentList(serverData) {
     const list = [];
     const instruments = serverData?.instruments || {};
     const monophonicMap = serverData?.instrumentMonophonic || {};
+    const typeMap = serverData?.instrumentType || {};
 
     const readMonophonic = (alias) => {
         const raw =
@@ -574,6 +576,13 @@ function buildServerInstrumentList(serverData) {
             monophonicMap?.[String(alias).toLowerCase()] ??
             monophonicMap?.[String(alias).toUpperCase()];
         return parseMonophonicFlag(raw, false);
+    };
+    const readType = (alias) => {
+        const raw =
+            typeMap?.[alias] ??
+            typeMap?.[String(alias).toLowerCase()] ??
+            typeMap?.[String(alias).toUpperCase()];
+        return normalizeInstrumentType(raw);
     };
 
     if (serverData?.instrumentMapping) {
@@ -588,7 +597,8 @@ function buildServerInstrumentList(serverData) {
                 list.push({
                     strudelAlias: alias,
                     params,
-                    monophonic: readMonophonic(alias)
+                    monophonic: readMonophonic(alias),
+                    type: readType(alias),
                 });
             }
         });
@@ -600,7 +610,8 @@ function buildServerInstrumentList(serverData) {
             list.push({
                 strudelAlias: alias,
                 params,
-                monophonic: readMonophonic(alias)
+                monophonic: readMonophonic(alias),
+                type: readType(alias),
             });
         }
     });
@@ -608,7 +619,7 @@ function buildServerInstrumentList(serverData) {
     return list;
 }
 
-function renderSyncList(listEl, names, highlightSet, paramConflictSet, monophonicConflictSet) {
+function renderSyncList(listEl, names, highlightSet, paramConflictSet, monophonicConflictSet, typeConflictSet) {
     if (!listEl) return;
     listEl.innerHTML = '';
 
@@ -625,6 +636,8 @@ function renderSyncList(listEl, names, highlightSet, paramConflictSet, monophoni
             li.textContent = `${name} (Parameter conflict)`;
         } else if (monophonicConflictSet?.has(name)) {
             li.textContent = `${name} (Monophonic conflict)`;
+        } else if (typeConflictSet?.has(name)) {
+            li.textContent = `${name} (Type conflict)`;
         } else {
             li.textContent = name;
         }
@@ -652,18 +665,22 @@ function showSyncModal(localInstruments, fileInstruments) {
     const fileParamMap = new Map();
     const localMonoMap = new Map();
     const fileMonoMap = new Map();
+    const localTypeMap = new Map();
+    const fileTypeMap = new Map();
 
     localInstruments.forEach((inst) => {
         const name = getInstrumentDisplayName(inst);
         const params = Array.isArray(inst.params) ? inst.params : [];
         localParamMap.set(name, JSON.stringify(params));
         localMonoMap.set(name, parseMonophonicFlag(inst.monophonic, false));
+        localTypeMap.set(name, normalizeInstrumentType(inst.type));
     });
     fileInstruments.forEach((inst) => {
         const name = getInstrumentDisplayName(inst);
         const params = Array.isArray(inst.params) ? inst.params : [];
         fileParamMap.set(name, JSON.stringify(params));
         fileMonoMap.set(name, parseMonophonicFlag(inst.monophonic, false));
+        fileTypeMap.set(name, normalizeInstrumentType(inst.type));
     });
 
     const paramConflicts = new Set();
@@ -680,11 +697,18 @@ function showSyncModal(localInstruments, fileInstruments) {
         }
     });
 
-    const localHighlight = new Set([...localOnly, ...paramConflicts, ...monophonicConflicts]);
-    const fileHighlight = new Set([...fileOnly, ...paramConflicts, ...monophonicConflicts]);
+    const typeConflicts = new Set();
+    localNames.forEach((name) => {
+        if (fileTypeMap.has(name) && localTypeMap.get(name) !== fileTypeMap.get(name)) {
+            typeConflicts.add(name);
+        }
+    });
 
-    renderSyncList(dom.syncLocalList, localNames, localHighlight, paramConflicts, monophonicConflicts);
-    renderSyncList(dom.syncFileList, fileNames, fileHighlight, paramConflicts, monophonicConflicts);
+    const localHighlight = new Set([...localOnly, ...paramConflicts, ...monophonicConflicts, ...typeConflicts]);
+    const fileHighlight = new Set([...fileOnly, ...paramConflicts, ...monophonicConflicts, ...typeConflicts]);
+
+    renderSyncList(dom.syncLocalList, localNames, localHighlight, paramConflicts, monophonicConflicts, typeConflicts);
+    renderSyncList(dom.syncFileList, fileNames, fileHighlight, paramConflicts, monophonicConflicts, typeConflicts);
 
     dom.instrumentSyncModal.classList.add('open');
 

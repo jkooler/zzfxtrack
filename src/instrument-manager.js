@@ -121,6 +121,7 @@ function getStaticSystemSourceSignature() {
     instruments: systemModule.instruments || {},
     instrumentMonophonic: systemModule.instrumentMonophonic || {},
     instrumentScope: systemModule.instrumentScope || {},
+    instrumentType: systemModule.instrumentType || {},
   });
 }
 
@@ -157,12 +158,17 @@ function buildStaticSystemInstrumentRecords() {
   const mapping = systemModule.instrumentMapping || {};
   const instruments = systemModule.instruments || {};
   const monophonic = systemModule.instrumentMonophonic || {};
+  const instrumentType = systemModule.instrumentType || {};
   const overrides = loadSystemOverrides();
 
   return Object.entries(mapping).map(([alias, channel], index) => {
     let params = instruments[alias];
     if (!params || !Array.isArray(params)) params = [];
     let monophonicFlag = Boolean(monophonic[alias]);
+    const type =
+      instrumentType[alias] ??
+      instrumentType[String(alias).toLowerCase()] ??
+      instrumentType[String(alias).toUpperCase()];
     const override = overrides[alias];
     if (override) {
       if (Array.isArray(override.params) && override.params.length === 21) params = override.params;
@@ -175,6 +181,7 @@ function buildStaticSystemInstrumentRecords() {
       channel: Number.isFinite(Number(channel)) ? Number(channel) : index,
       params,
       monophonic: monophonicFlag,
+      type,
       scope: "system",
     });
   });
@@ -614,7 +621,7 @@ export function getInstrumentById(id) {
 /**
  * Migrate user instruments from file data (e.g. instruments.js user file).
  * Only records with scope "user" are saved to localStorage; system instruments are in instruments.system.js.
- * @param {Object} importedData - Object with instrument exports (instruments, instrumentMapping, instrumentMonophonic, instrumentScope)
+ * @param {Object} importedData - Object with instrument exports (instruments, instrumentMapping, instrumentMonophonic, instrumentScope, instrumentType)
  * @returns {Array} Migrated user instruments
  */
 export function migrateFromFile(importedData) {
@@ -633,6 +640,7 @@ export function migrateFromFile(importedData) {
   );
   const monophonicFromFile = importedData?.instrumentMonophonic || {};
   const scopeFromFile = importedData?.instrumentScope || {};
+  const typeFromFile = importedData?.instrumentType || {};
   const systemCount = getSystemInstrumentRecords().length;
 
   const allFromFile = [];
@@ -650,6 +658,7 @@ export function migrateFromFile(importedData) {
       const monoFromFile =
         monophonicFromFile[alias] ?? monophonicFromFile[alias.toLowerCase()] ?? monophonicFromFile[alias.toUpperCase()];
       const fileScope = scopeFromFile[alias] ?? scopeFromFile[alias.toLowerCase()] ?? scopeFromFile[alias.toUpperCase()];
+      const fileType = typeFromFile[alias] ?? typeFromFile[alias.toLowerCase()] ?? typeFromFile[alias.toUpperCase()];
       const scope = normalizeScope(
         typeof fileScope === "string" ? fileScope : prev?.scope,
         "user",
@@ -666,6 +675,7 @@ export function migrateFromFile(importedData) {
         channel: systemCount + idx,
         params,
         monophonic: parseMonophonicFlag(monoFromFile, parseMonophonicFlag(prev?.monophonic, false)),
+        type: normalizeInstrumentType(fileType, normalizeInstrumentType(prev?.type)),
         scope,
       });
     });

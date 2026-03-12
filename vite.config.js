@@ -1031,6 +1031,7 @@ const updateInstrumentsPlugin = () => ({
           instrumentMapping: moduleData.instrumentMapping || {},
           instrumentMonophonic: moduleData.instrumentMonophonic || {},
           instrumentScope: moduleData.instrumentScope || {},
+          instrumentType: moduleData.instrumentType || {},
           instrumentArray: moduleData.instrumentArray || []
         }));
       } catch (e) {

@@ -122,6 +122,30 @@ export const instrumentScope = {
     "saw2-s": "system",
     "tap-s": "system"
 };
+export const instrumentType = {
+    "cp-s": "synth",
+    "enterprise-s": "synth",
+    "sine-s": "synth",
+    "tri-s": "synth",
+    "saw-s": "synth",
+    "tan-s": "synth",
+    "minimal-s": "synth",
+    "noise-s": "other",
+    "square-s": "synth",
+    "kick-s": "drums",
+    "snare-s": "drums",
+    "synth-stab-s": "synth",
+    "hh-closed-s": "drums",
+    "pad-s": "synth",
+    "cowbell-s": "drums",
+    "bass-s": "bass",
+    "hh-open-s": "drums",
+    "kickdrum-s": "drums",
+    "elpiano-s": "synth",
+    "horn-s": "synth",
+    "saw2-s": "synth",
+    "tap-s": "other"
+};
 export const instrumentArray = [
     zzfxtrack_cp_s,
     zzfxtrack_enterprise_s,
