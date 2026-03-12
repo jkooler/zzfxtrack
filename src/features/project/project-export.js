@@ -9,7 +9,10 @@ import JSZip from 'jszip';
 let deps = {
     buildArrangementSourceFromApi: () => '',
     buildBlockSourceFromApi: () => '',
+    getDom: () => ({}),
     editorToFile: (value) => value,
+    getGeneratedSystemInstrumentsContent: () => '',
+    getGeneratedUserInstrumentsContent: () => '',
     getArrangementOrNull: async () => null,
     getBlockDetailOrNull: async () => null,
     getBundleKind: () => 'strudel-project-bundle',
@@ -35,7 +38,27 @@ export function configureProjectExport(options = {}) {
     deps = { ...deps, ...options };
 }
 
+function normalizeBundleIdentifier(value) {
+    return String(value || '').trim();
+}
+
+function countInstrumentDefinitionsInModule(content) {
+    const source = String(content || '');
+    if (!source.trim()) return 0;
+    const mappingMatch = source.match(/export\s+const\s+instrumentMapping\s*=\s*\{([\s\S]*?)\};/);
+    if (!mappingMatch) return 0;
+    const entries = mappingMatch[1].match(/"[^"]+"\s*:/g);
+    return Array.isArray(entries) ? entries.length : 0;
+}
+
 async function getInstrumentFileContent(cacheKey, path) {
+    const generated = cacheKey === 'instruments-system-js-content'
+        ? deps.getGeneratedSystemInstrumentsContent()
+        : deps.getGeneratedUserInstrumentsContent();
+    if (generated && generated.trim()) {
+        sessionStorage.setItem(cacheKey, generated);
+        return generated;
+    }
     const cached = sessionStorage.getItem(cacheKey);
     if (cached && cached.trim()) {
         return cached;
@@ -46,9 +69,10 @@ async function getInstrumentFileContent(cacheKey, path) {
     return fileCode.trim() ? fileCode : '';
 }
 
-export async function downloadProjectBundle() {
+export async function downloadProjectBundle({ identifier = '' } = {}) {
     try {
         const zip = new JSZip();
+        const normalizedIdentifier = normalizeBundleIdentifier(identifier);
 
         let downloadedUserInstruments = 0;
         let downloadedSystemInstruments = 0;
@@ -64,6 +88,9 @@ export async function downloadProjectBundle() {
             zip.file('instruments.system.js', systemInstrumentsContent);
             downloadedSystemInstruments = 1;
         }
+        const exportedUserInstrumentCount = countInstrumentDefinitionsInModule(userInstrumentsContent);
+        const exportedSystemInstrumentCount = countInstrumentDefinitionsInModule(systemInstrumentsContent);
+        const exportedInstrumentCount = exportedUserInstrumentCount + exportedSystemInstrumentCount;
 
         const files = deps.isDemoMode()
             ? Array.from(deps.getDemoPatternSourceByFile().keys()).sort()
@@ -169,15 +196,19 @@ export async function downloadProjectBundle() {
             JSON.stringify(
                 {
                     kind: deps.getBundleKind(),
-                    version: 2,
+                    identifier: normalizedIdentifier,
+                    version: 3,
                     generatedAt: stampIso,
                     counts: {
                         patterns: downloadedPatterns,
                         blocks: downloadedBlocks,
                         arrangements: downloadedArrangements,
-                        instruments: downloadedInstruments,
-                        userInstruments: downloadedUserInstruments,
-                        systemInstruments: downloadedSystemInstruments,
+                        instruments: exportedInstrumentCount,
+                        userInstruments: exportedUserInstrumentCount,
+                        systemInstruments: exportedSystemInstrumentCount,
+                        instrumentFiles: downloadedInstruments,
+                        userInstrumentFiles: downloadedUserInstruments,
+                        systemInstrumentFiles: downloadedSystemInstruments,
                     },
                 },
                 null,
@@ -200,5 +231,72 @@ export async function downloadProjectBundle() {
     } catch (e) {
         deps.logError(e);
         deps.setStatus(`Download failed: ${e.message}`, 'error');
+    }
+}
+
+let pendingExportResolver = null;
+
+function closeExportProjectModal(resolveValue = null) {
+    const dom = deps.getDom();
+    dom.exportProjectModal?.classList.remove('open');
+    const resolver = pendingExportResolver;
+    pendingExportResolver = null;
+    if (resolver) resolver(resolveValue);
+}
+
+function openExportProjectModal() {
+    const dom = deps.getDom();
+    if (!dom.exportProjectModal) return Promise.resolve(null);
+    if (pendingExportResolver) closeExportProjectModal(null);
+    if (dom.exportProjectIdentifierInput) {
+        dom.exportProjectIdentifierInput.value = '';
+    }
+    dom.exportProjectModal.classList.add('open');
+    requestAnimationFrame(() => {
+        dom.exportProjectIdentifierInput?.focus();
+        dom.exportProjectIdentifierInput?.select();
+    });
+    return new Promise((resolve) => {
+        pendingExportResolver = resolve;
+    });
+}
+
+export function installProjectExportHandlers() {
+    const dom = deps.getDom();
+    if (dom.downloadProjectBtn) {
+        dom.downloadProjectBtn.addEventListener('click', async () => {
+            const identifier = await openExportProjectModal();
+            if (identifier == null) return;
+            await downloadProjectBundle({ identifier });
+        });
+    }
+    if (dom.closeExportProjectModalBtn) {
+        dom.closeExportProjectModalBtn.addEventListener('click', () => closeExportProjectModal(null));
+    }
+    if (dom.cancelExportProjectBtn) {
+        dom.cancelExportProjectBtn.addEventListener('click', () => closeExportProjectModal(null));
+    }
+    if (dom.confirmExportProjectBtn) {
+        dom.confirmExportProjectBtn.addEventListener('click', () => {
+            closeExportProjectModal(normalizeBundleIdentifier(dom.exportProjectIdentifierInput?.value));
+        });
+    }
+    if (dom.exportProjectIdentifierInput) {
+        dom.exportProjectIdentifierInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                closeExportProjectModal(normalizeBundleIdentifier(dom.exportProjectIdentifierInput?.value));
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeExportProjectModal(null);
+            }
+        });
+    }
+    if (dom.exportProjectModal) {
+        dom.exportProjectModal.addEventListener('click', (e) => {
+            if (e.target === dom.exportProjectModal) {
+                closeExportProjectModal(null);
+            }
+        });
     }
 }

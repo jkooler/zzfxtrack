@@ -24,7 +24,7 @@ import { createArrangement, deleteArrangementByFilename, deleteBlockByFilenameWi
 // --- Legacy / shared app modules (instruments, tracker, blocks, mix, unload, dialog) ---
 import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, pulsePlaybackAliases, setupScrubInteraction } from './instrument-ui.js';
 import { setInstrumentScope, updateInstrument, getDefragmentedInstruments } from './instrument-manager.js';
-import { autoUpdateInstrumentsFile } from './file-generator.js';
+import { autoUpdateInstrumentsFile, generateSystemInstrumentsFile, generateUserInstrumentsFile } from './file-generator.js';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate, setTrackerPreviewReferenceContext, clearTrackerPreviewReferenceContext } from './tracker.js';
 import { resolveTrackerStateChannelInstruments } from './instrument-rename-map.js';
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, BLOCKS_FOLDER_STATE_KEY, restoreSuspendedBlocksModals } from './blocks.js';
@@ -72,7 +72,7 @@ import { configureExportWav, exportArrangementWav, exportPatternWav } from './fe
 
 // --- Features: project (import/export bundle) ---
 import { buildArrangementSourceFromApi, buildBlockSourceFromApi, parseBlockSource } from './features/project/bundle-utils.js';
-import { configureProjectExport, downloadProjectBundle } from './features/project/project-export.js';
+import { configureProjectExport, installProjectExportHandlers } from './features/project/project-export.js';
 import { configureProjectImport, installProjectImportHandlers } from './features/project/project-import.js';
 
 // --- Features: settings ---
@@ -880,10 +880,13 @@ configureExportExecution({
 });
 
 configureProjectExport({
+    getDom: () => dom,
     isDemoMode: () => DEMO_MODE,
     getDemoPatternSourceByFile: () => demoPatternSourceByFile,
     getDemoBlockSourceByFile: () => demoBlockSourceByFile,
     getDemoArrangementSourceByFile: () => demoArrangementSourceByFile,
+    getGeneratedUserInstrumentsContent: generateUserInstrumentsFile,
+    getGeneratedSystemInstrumentsContent: generateSystemInstrumentsFile,
     normalizePatternEntries,
     listPatterns,
     listBlocksOrEmpty,
@@ -1587,7 +1590,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeExportMenu();
 });
-if (dom.downloadProjectBtn) dom.downloadProjectBtn.addEventListener('click', downloadProjectBundle);
+installProjectExportHandlers();
 installProjectImportHandlers();
 const trackerBlockNameLabel = document.getElementById('trackerBlockNameLabel');
     if (trackerBlockNameLabel) {

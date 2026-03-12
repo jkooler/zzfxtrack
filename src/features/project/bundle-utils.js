@@ -7,6 +7,15 @@ function normalizeScope(value) {
     return value === 'system' ? 'system' : 'user';
 }
 
+function countInstrumentDefinitionsInModule(content) {
+    const source = String(content || '');
+    if (!source.trim()) return 0;
+    const mappingMatch = source.match(/export\s+const\s+instrumentMapping\s*=\s*\{([\s\S]*?)\};/);
+    if (!mappingMatch) return 0;
+    const entries = mappingMatch[1].match(/"[^"]+"\s*:/g);
+    return Array.isArray(entries) ? entries.length : 0;
+}
+
 export function buildBlockSourceFromApi(item) {
     const name = item?.name || 'Block';
     const description = item?.description || '';
@@ -100,9 +109,13 @@ export function describeUploadBundle(bundle) {
 export function validateUploadBundle(bundle, { expectedKind }) {
     if (!bundle) return 'No file selected.';
 
-    const userInstrumentsCount = Number(Boolean(bundle.userInstrumentsContent));
-    const systemInstrumentsCount = Number(Boolean(bundle.systemInstrumentsContent));
-    const instrumentCount = userInstrumentsCount + systemInstrumentsCount;
+    const userInstrumentFileCount = Number(Boolean(bundle.userInstrumentsContent));
+    const systemInstrumentFileCount = Number(Boolean(bundle.systemInstrumentsContent));
+    const instrumentFileCount = userInstrumentFileCount + systemInstrumentFileCount;
+    const userInstrumentCount = countInstrumentDefinitionsInModule(bundle.userInstrumentsContent);
+    const systemInstrumentCount = countInstrumentDefinitionsInModule(bundle.systemInstrumentsContent);
+    const instrumentCount = userInstrumentCount + systemInstrumentCount;
+    const legacyInstrumentCount = instrumentFileCount;
     const hasAnyData = Boolean(bundle.patterns.length || bundle.blocks.length || bundle.arrangements.length || instrumentCount);
     if (!hasAnyData) return 'Incompatible ZIP: no importable app data found.';
 
@@ -114,18 +127,30 @@ export function validateUploadBundle(bundle, { expectedKind }) {
     }
 
     if (bundle.manifest) {
-        if (bundle.manifest.kind !== expectedKind || ![1, 2].includes(bundle.manifest.version)) {
+        if (bundle.manifest.kind !== expectedKind || ![1, 2, 3].includes(bundle.manifest.version)) {
             return 'Incompatible ZIP: invalid bundle metadata.';
         }
         const expected = bundle.manifest.counts || {};
-        const countChecks = [
-            ['patterns', bundle.patterns.length],
-            ['blocks', bundle.blocks.length],
-            ['arrangements', bundle.arrangements.length],
-            ['instruments', instrumentCount],
-            ['userInstruments', userInstrumentsCount],
-            ['systemInstruments', systemInstrumentsCount],
-        ];
+        const countChecks = bundle.manifest.version >= 3
+            ? [
+                ['patterns', bundle.patterns.length],
+                ['blocks', bundle.blocks.length],
+                ['arrangements', bundle.arrangements.length],
+                ['instruments', instrumentCount],
+                ['userInstruments', userInstrumentCount],
+                ['systemInstruments', systemInstrumentCount],
+                ['instrumentFiles', instrumentFileCount],
+                ['userInstrumentFiles', userInstrumentFileCount],
+                ['systemInstrumentFiles', systemInstrumentFileCount],
+            ]
+            : [
+                ['patterns', bundle.patterns.length],
+                ['blocks', bundle.blocks.length],
+                ['arrangements', bundle.arrangements.length],
+                ['instruments', legacyInstrumentCount],
+                ['userInstruments', userInstrumentFileCount],
+                ['systemInstruments', systemInstrumentFileCount],
+            ];
         for (const [key, actual] of countChecks) {
             const value = expected[key];
             if (Number.isFinite(value) && value !== actual) {
