@@ -28,9 +28,11 @@ function isDeveloperModeEnabled() {
 
 function getDenseRowsPreference() {
   try {
-    return localStorage.getItem(TRACKER_DENSE_ROWS_KEY) === '1';
+    const stored = localStorage.getItem(TRACKER_DENSE_ROWS_KEY);
+    if (stored == null) return true;
+    return stored === '1';
   } catch (_e) {
-    return false;
+    return true;
   }
 }
 
@@ -181,7 +183,7 @@ let editMode = {
   returnToArrangementsOnClose: false,
   returnToBlocksOnClose: false,
   arrangementInsertRowIndex: null,
-  denseRows: false,
+  denseRows: true,
 };
 
 /** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
@@ -1301,6 +1303,8 @@ function renderGrid() {
       rowEl.className = 'tracker-row';
       rowEl.dataset.step = step;
       rowEl.dataset.channel = ch;
+      if (step % 4 === 0) rowEl.classList.add('beat');
+      if (step % 16 === 0) rowEl.classList.add('bar');
 
       const cellEl = document.createElement('div');
       cellEl.className = 'tracker-cell';
@@ -5116,7 +5120,7 @@ function resetEditMode() {
   editMode.returnToArrangementsOnClose = false;
   editMode.returnToBlocksOnClose = false;
   editMode.arrangementInsertRowIndex = null;
-  editMode.denseRows = false;
+  editMode.denseRows = true;
   lastSavedSnapshot = '';
   undoStack = [];
   redoStack = [];

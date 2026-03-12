@@ -995,6 +995,20 @@ strudel-editor {
   box-sizing: border-box;
 }
 
+.tracker-row.beat .tracker-cell,
+.tracker-row.beat .tracker-vol-input,
+.tracker-row.beat .tracker-reps-input,
+.tracker-row.beat .tracker-nd-input {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--input-bg));
+}
+
+.tracker-row.bar .tracker-cell,
+.tracker-row.bar .tracker-vol-input,
+.tracker-row.bar .tracker-reps-input,
+.tracker-row.bar .tracker-nd-input {
+  background-color: color-mix(in srgb, var(--foreground) 12%, var(--input-bg));
+}
+
 .tracker-cell {
   @apply flex-1 rounded border border-input bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all hover:border-primary/30 h-7;
   min-height: 1.75rem;
@@ -1054,7 +1068,7 @@ strudel-editor {
 .tracker-grid[data-dense-rows="true"] .tracker-cell {
   min-height: 14px;
   height: 14px;
-  font-size: 11px;
+  @apply text-xs;
   @apply border-transparent rounded-none;
 }
 .tracker-grid[data-dense-rows="true"] .tracker-vol-input,
@@ -1145,7 +1159,7 @@ strudel-editor {
 }
 
 .tracker-cell.has-note {
-  @apply bg-accent/20 text-foreground font-bold;
+  @apply text-foreground font-bold;
 }
 
 .tracker-cell.rest {
