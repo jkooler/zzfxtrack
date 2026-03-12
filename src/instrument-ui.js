@@ -40,7 +40,7 @@ const playbackAliasesBySource = new Map();
 const transientPlayingAliases = new Map();
 const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-instruments-v2';
 let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, {
-    user: true,
+    user: false,
     system: false,
 });
 const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
@@ -1322,14 +1322,14 @@ function renderInstrumentList() {
     const userInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'user');
     const systemInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'system');
 
-    const appendFolder = (scope, label, items) => {
-        const folderItem = document.createElement('li');
-        folderItem.className = 'mt-1 pb-1';
+        const appendFolder = (scope, label, items) => {
+            const folderItem = document.createElement('li');
+            folderItem.className = scope === 'user'
+                ? 'mt-1 mb-1 pb-2 border-b border-border/80'
+                : 'mt-1 pb-1';
 
         const isEmpty = items.length === 0;
-        const expanded = isEmpty
-            ? true
-            : (scope === 'system' ? instrumentFolderState.system : instrumentFolderState.user);
+        const expanded = scope === 'system' ? instrumentFolderState.system : instrumentFolderState.user;
         const icon = expanded ? 'chevron-down' : 'chevron-right';
 
         folderItem.innerHTML = `
@@ -1346,7 +1346,6 @@ function renderInstrumentList() {
         const button = folderItem.querySelector(`[data-folder-scope="${scope}"]`);
         const list = folderItem.querySelector(`[data-folder-items="${scope}"]`);
         button?.addEventListener('click', () => {
-            if (isEmpty) return;
             if (scope === 'system') {
                 instrumentFolderState.system = !instrumentFolderState.system;
             } else {

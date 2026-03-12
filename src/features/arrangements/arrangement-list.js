@@ -16,7 +16,7 @@ let deps = {
     getCurrentArrangementFilename: () => null,
     getDemoArrangementFiles: () => [],
     getEntriesCache: () => [],
-    getFolderState: () => ({ user: true, system: false }),
+    getFolderState: () => ({ user: false, system: false }),
     getListElement: () => document.getElementById('arrangementList'),
     icons: {},
     isArrangementPreviewPlaying: () => false,
@@ -205,10 +205,12 @@ export async function refreshArrangementList() {
         const appendFolder = (scope, label, items) => {
             const isEmpty = items.length === 0;
             const folderState = deps.getFolderState();
-            const expanded = isEmpty ? true : (scope === 'system' ? folderState.system : folderState.user);
+            const expanded = scope === 'system' ? folderState.system : folderState.user;
             const folderIcon = expanded ? 'chevron-down' : 'chevron-right';
             const folderLi = document.createElement('li');
-            folderLi.className = 'mt-1 pb-1';
+            folderLi.className = scope === 'user'
+                ? 'mt-1 mb-1 pb-2 border-b border-border/80'
+                : 'mt-1 pb-1';
             folderLi.innerHTML = `
                 <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-arrangement-folder="${scope}">
                     <span class="inline-flex items-center gap-1.5">
@@ -221,7 +223,6 @@ export async function refreshArrangementList() {
             `;
             const list = folderLi.querySelector(`[data-arrangement-folder-items="${scope}"]`);
             folderLi.querySelector(`[data-arrangement-folder="${scope}"]`)?.addEventListener('click', () => {
-                if (isEmpty) return;
                 const next = { ...deps.getFolderState() };
                 if (scope === 'system') next.system = !next.system;
                 else next.user = !next.user;
