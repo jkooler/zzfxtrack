@@ -153,9 +153,9 @@ export async function createNewArrangement(name) {
                 vol: [emptyRow.slice()],
                 reps: [emptyRow.slice()],
                 nd: [emptyRow.slice()],
-                channelInstruments: ['hh-closed'],
+                channelInstruments: ['tap-s'],
             };
-            const pattern = 'note("c4 ~ ~ ~ c4 ~ ~ ~ c4 ~ ~ ~ ~ ~ ~ ~").s("hh-closed")';
+            const pattern = 'note("c4 ~ ~ ~ c4 ~ ~ ~ c4 ~ ~ ~ ~ ~ ~ ~").s("tap-s")';
             await deps.refreshBlocksLibrary();
             const starterName = deps.getNextUntitledBlockName();
             const blockResult = await deps.saveBlock(starterName, '', pattern, trackerState, 'user');
