@@ -618,10 +618,9 @@ export function renderArrangementWorkspace() {
 
     const readonly = deps.getArrangementReadonly();
     const isPreviewPlaying = deps.isArrangementPreviewPlaying();
-    const blocksAvailableForPicker = readonly
-        ? appState.blocksLibraryCache
-        : appState.blocksLibraryCache.filter((block) => deps.normalizeScope(block.scope) !== 'system');
-    const blocksForPicker = sortBlocksForPicker(blocksAvailableForPicker);
+    // User arrangements can reference both user and system blocks. Showing the
+    // full library keeps the add-block picker useful even before any user blocks exist.
+    const blocksForPicker = sortBlocksForPicker(appState.blocksLibraryCache);
     const blockByFilename = new Map(appState.blocksLibraryCache.map((b) => [b.filename, b]));
     const compareRowBlockFilenames = createRowBlockFilenameComparator(blockByFilename);
     const isCopyModifier = createCopyModifierDetector();

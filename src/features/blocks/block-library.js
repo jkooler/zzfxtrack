@@ -66,7 +66,7 @@ export function renderBlocksLibraryFromCache() {
         return;
     }
 
-    const blockFolderState = loadFolderState(deps.getBlocksFolderStateKey(), { user: true, system: false });
+    const blockFolderState = loadFolderState(deps.getBlocksFolderStateKey(), { user: false, system: true });
 
     const appendFolder = (scope, label, entries) => {
         const isEmpty = entries.length === 0;

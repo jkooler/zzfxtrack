@@ -1028,11 +1028,11 @@ configureStaticModals({
 });
 
 const PATTERN_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-patterns-v1';
-/** Default: user folder collapsed, system collapsed. User toggles are persisted and restored on next launch. */
-let patternFolderState = loadFolderState(PATTERN_FOLDER_STATE_KEY, { user: false, system: false });
+/** Default: user folder collapsed, system expanded. User toggles are persisted and restored on next launch. */
+let patternFolderState = loadFolderState(PATTERN_FOLDER_STATE_KEY, { user: false, system: true });
 
 const ARRANGEMENT_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-arrangements-v1';
-let arrangementFolderState = loadFolderState(ARRANGEMENT_FOLDER_STATE_KEY, { user: false, system: false });
+let arrangementFolderState = loadFolderState(ARRANGEMENT_FOLDER_STATE_KEY, { user: false, system: true });
 
 applyInitialColorTheme();
 

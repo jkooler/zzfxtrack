@@ -41,7 +41,7 @@ const transientPlayingAliases = new Map();
 const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-instruments-v2';
 let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, {
     user: false,
-    system: false,
+    system: true,
 });
 const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
 

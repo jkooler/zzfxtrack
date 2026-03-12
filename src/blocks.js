@@ -35,11 +35,11 @@ let arrangementEditMode = {
 	};
 let arrangementToDelete = null;
 let arrangementRowToDeleteIndex = null;
-// v2: default User expanded, System collapsed when first using the app
+// v2: default User collapsed, System expanded when first using the app
 export const BLOCKS_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-blocks-v2';
 const ARRANGEMENTS_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-arrangements-v2';
-let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, system: false });
-let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: true, system: false });
+let blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: false, system: true });
+let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { user: false, system: true });
 const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 let targetPatternScope = 'user';
@@ -1113,12 +1113,9 @@ function renderArrangementRows() {
       return collator ? collator.compare(aFile, bFile) : aFile.localeCompare(bFile);
     });
   };
-  // When editing a user-scope arrangement, only list user blocks in the add-block picker (no system blocks)
-  const blocksAvailableForPicker =
-    arrangementEditMode.scope === 'user'
-      ? blocksCache.filter((b) => normalizeScope(b?.scope) !== 'system')
-      : blocksCache;
-  const blocksForPicker = sortBlocksForPicker(blocksAvailableForPicker);
+  // User arrangements can reference both user and system blocks. Restricting this
+  // to user-only blocks makes the picker look empty in common first-run cases.
+  const blocksForPicker = sortBlocksForPicker(blocksCache);
   const blockByFilename = new Map(blocksCache.map((b) => [b.filename, b]));
   const compareRowBlockFilenames = (aFilename, bFilename) => {
     const aBlock = blockByFilename.get(aFilename);
@@ -1630,7 +1627,7 @@ async function loadBlocksList() {
 function renderBlocksList() {
   if (!elements.blocksList) return;
 
-  blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: true, system: false });
+  blockFolderState = loadFolderState(BLOCKS_FOLDER_STATE_KEY, { user: false, system: true });
   
   elements.blocksList.innerHTML = '';
   selectedBlockIndex = null;

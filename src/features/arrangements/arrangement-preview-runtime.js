@@ -73,9 +73,9 @@ export function updateArrangementPlaybackInstrumentAliases(detail = {}) {
     const context = deps.getArrangementPreviewContext();
     const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
     const row = rowIndex == null ? null : context?.arrangementState?.rows?.[rowIndex];
-    const blocks = Array.isArray(detail.blocks) && detail.blocks.length
-        ? detail.blocks
-        : (Array.isArray(row?.blocks) ? row.blocks : []);
+    const blocks = rowIndex != null && Array.isArray(row?.blocks)
+        ? row.blocks
+        : (Array.isArray(detail.blocks) ? detail.blocks : []);
     if (rowIndex == null || !blocks.length) {
         if (deps.getLastArrangementPlaybackInstrumentSignature() !== 'empty') {
             deps.setLastArrangementPlaybackInstrumentSignature('empty');
@@ -125,6 +125,7 @@ export function applyArrangementPreviewAfterBlockRemoved(removedFilename) {
         mixSettings: nextContext.mixSettings,
         // Preserve transport position when removing blocks during live preview.
         keepPosition: true,
+        liveSwapMode: 'step',
     });
     updateArrangementPlaybackInstrumentAliases(deps.getArrangementWorkspacePlayhead());
 }

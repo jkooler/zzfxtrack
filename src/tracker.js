@@ -4632,7 +4632,7 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
   return started;
 }
 
-export function updateArrangementPreview({ arrangementState, trackerStateByFilename, instrumentList, bpm, keepPosition = true, mixSettings } = {}) {
+export function updateArrangementPreview({ arrangementState, trackerStateByFilename, instrumentList, bpm, keepPosition = true, mixSettings, liveSwapMode } = {}) {
   if (arrangementState) arrangementPreviewState.arrangementState = arrangementState;
   if (trackerStateByFilename) arrangementPreviewState.trackerStateByFilename = trackerStateByFilename;
   if (instrumentList) arrangementPreviewState.instrumentList = instrumentList;
@@ -4752,7 +4752,10 @@ export function updateArrangementPreview({ arrangementState, trackerStateByFilen
     overridesByRowIndexEntries: Array.from(arrangementPreviewState.overridesByRowIndex.entries()),
   };
   const hasLiveOverrides = hasLiveArrangementOverrides();
-  const deferredSwapMode = hasLiveOverrides ? 'step' : 'row';
+  const requestedLiveSwapMode = liveSwapMode === 'step' || liveSwapMode === 'row'
+    ? liveSwapMode
+    : null;
+  const deferredSwapMode = requestedLiveSwapMode || (hasLiveOverrides ? 'step' : 'row');
   const shouldDeferLiveSwap = keepPosition;
   if (keepPosition && arrangementPreviewState._renderWorkerAvailable) {
     const playbackTokenAtRequest = arrangementPreviewState._playbackToken;

@@ -15,7 +15,7 @@ let isDeveloperModeEnabled = () => false;
 let getWelcomeViewVisible = () => false;
 let loadPattern = () => {};
 let showDeleteConfirmation = () => {};
-let getPatternFolderState = () => ({ user: false, system: false });
+let getPatternFolderState = () => ({ user: false, system: true });
 let setPatternFolderState = () => {};
 let savePatternFolderState = () => {};
 let createIcons = () => {};

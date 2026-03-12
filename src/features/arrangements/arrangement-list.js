@@ -16,7 +16,7 @@ let deps = {
     getCurrentArrangementFilename: () => null,
     getDemoArrangementFiles: () => [],
     getEntriesCache: () => [],
-    getFolderState: () => ({ user: false, system: false }),
+    getFolderState: () => ({ user: false, system: true }),
     getListElement: () => document.getElementById('arrangementList'),
     icons: {},
     isArrangementPreviewPlaying: () => false,

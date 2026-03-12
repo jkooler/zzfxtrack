@@ -193,9 +193,17 @@ export function installArrangementPreviewEventListeners() {
         const addedRowIndex = e?.detail?.addedRowIndex;
         const addedFilename = e?.detail?.addedFilename;
         const removedFilename = e?.detail?.removedFilename;
+        const removedRowIndex = e?.detail?.removedRowIndex;
         if (Number.isInteger(addedRowIndex)) deps.clearArrangementLiveOverride({ rowIndex: addedRowIndex, scheduleUpdate: false });
+        if (Number.isInteger(removedRowIndex)) deps.clearArrangementLiveOverride({ rowIndex: removedRowIndex, scheduleUpdate: false });
         if (addedFilename) deps.clearArrangementLiveOverride({ filename: addedFilename, scheduleUpdate: false });
         if (removedFilename) deps.clearArrangementLiveOverride({ filename: removedFilename, scheduleUpdate: false });
+        const liveSwapMode = (
+            Number.isInteger(addedRowIndex)
+            || Number.isInteger(removedRowIndex)
+            || typeof addedFilename === 'string'
+            || typeof removedFilename === 'string'
+        ) ? 'step' : undefined;
         const nextContext = deps.getArrangementPreviewContext();
         deps.updateArrangementPreview({
             arrangementState,
@@ -205,6 +213,7 @@ export function installArrangementPreviewEventListeners() {
             mixSettings: nextContext.mixSettings,
             // Keep playback position stable for row/block removal edits.
             keepPosition: true,
+            liveSwapMode,
         });
         deps.updateArrangementPlaybackInstrumentAliases(deps.getArrangementWorkspacePlayhead());
     });
