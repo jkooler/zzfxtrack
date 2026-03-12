@@ -17,7 +17,6 @@ import {
 } from './instrument-manager.js';
 import { playTestNoteDebounced, resumePreviewAudio } from './instrument-preview.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
-import { getAudioContext } from '@strudel/webaudio';
 
 import { reloadInstruments } from './features/instruments/instrument-runtime.js';
 import { updateInstrumentReferencesInPatternsAndBlocks } from './features/instruments/instrument-reference-sync.js';
@@ -27,8 +26,7 @@ import { isTrackerOpen, applyInstrumentRenameToChannelInstruments, isArrangement
 import { addRenameMapping } from './instrument-rename-map.js';
 import { promptDialog } from './dialog.js';
 import { createIcons, icons } from 'lucide';
-import { getInstrumentAnalyser } from './zzfx-loader.js';
-import { ScopeVisualizer, getVisualizerAnalyser } from './visualizer.js';
+import { getInstrumentTypeMeta, normalizeInstrumentType } from './features/instruments/instrument-types.js';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 
@@ -37,9 +35,14 @@ let currentInstrumentId = null;
 let currentView = 'blocks'; // 'strudel' | 'blocks' — Arranger is default
 let hasSelectedPattern = false;
 let hasSelectedArrangement = false;
+let currentInstrumentTypeFilter = 'all';
 const playbackAliasesBySource = new Map();
-const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-instruments-v1';
-let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, { user: true, system: false });
+const transientPlayingAliases = new Map();
+const INSTRUMENT_FOLDER_STATE_KEY = 'zzfxtrack-folder-state-instruments-v2';
+let instrumentFolderState = loadFolderState(INSTRUMENT_FOLDER_STATE_KEY, {
+    user: true,
+    system: false,
+});
 const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
 
 function isDeveloperModeEnabled() {
@@ -64,6 +67,7 @@ const dom = {
     patternList: document.getElementById('patternList'),
     arrangementList: document.getElementById('arrangementList'),
     instrumentList: document.getElementById('instrumentList'),
+    instrumentTypeTabs: document.getElementById('instrumentTypeTabs'),
     
     // Buttons
     newPatternBtn: document.getElementById('newPatternBtn'),
@@ -151,6 +155,14 @@ function collectActivePlaybackAliases() {
     return active;
 }
 
+function collectPlayingAliases() {
+    const playing = collectActivePlaybackAliases();
+    transientPlayingAliases.forEach((_timeoutId, alias) => {
+        playing.add(alias);
+    });
+    return playing;
+}
+
 function isAliasInActivePlayback(alias) {
     if (!alias) return false;
     for (const aliases of playbackAliasesBySource.values()) {
@@ -159,38 +171,69 @@ function isAliasInActivePlayback(alias) {
     return false;
 }
 
-function usesMixedPlaybackAnalyser(source) {
-    return source === 'tracker-preview' || source === 'arrangement-preview';
-}
-
-function getMixedPlaybackAnalyser() {
-    const ctx = getAudioContext();
-    if (!ctx) return null;
-    return getVisualizerAnalyser(ctx);
-}
-
 function refreshPlaybackHighlights() {
     if (!dom.instrumentList) return;
-    const activeAliases = collectActivePlaybackAliases();
-    const hasMixedPlaybackSource = Array.from(playbackAliasesBySource.entries()).some(([source, aliases]) =>
-        usesMixedPlaybackAnalyser(source) && aliases?.size
-    );
-    const mixedPlaybackAnalyser = hasMixedPlaybackSource ? getMixedPlaybackAnalyser() : null;
+    const playingAliases = collectPlayingAliases();
     dom.instrumentList.querySelectorAll('.instrument-item').forEach((item) => {
         const alias = item.dataset.alias;
         if (!alias) return;
-        const shouldHighlight = activeAliases.has(alias) || Boolean(item._playingTimeout);
-        item.classList.toggle('playing', shouldHighlight);
-        if (!item._scopeViz) return;
-        const fallbackAnalyser = item._scopeBaseAnalyser || getInstrumentAnalyser(alias);
-        const targetAnalyser = activeAliases.has(alias) && mixedPlaybackAnalyser
-            ? mixedPlaybackAnalyser
-            : fallbackAnalyser;
-        if (item._scopeActiveAnalyser !== targetAnalyser) {
-            item._scopeActiveAnalyser = targetAnalyser;
-            item._scopeViz.setAnalyser(targetAnalyser);
-        }
+        item.classList.toggle('playing', playingAliases.has(alias));
     });
+    refreshInstrumentIconPlaybackIndicators(playingAliases);
+}
+
+function refreshInstrumentIconPlaybackIndicators(playingAliases = collectPlayingAliases()) {
+    if (!dom.instrumentList) return;
+    dom.instrumentList.querySelectorAll('.instrument-item[data-alias]').forEach((item) => {
+        const alias = item.dataset.alias;
+        if (!alias) return;
+        item.dataset.iconPlaying = playingAliases.has(alias) ? 'true' : 'false';
+    });
+}
+
+function flashInstrumentIconsForAliases(aliases = [], durationMs = 450) {
+    if (!dom.instrumentList) return;
+    const targetAliases = normalizePlaybackAliasList(aliases);
+    if (!targetAliases.size) return;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    dom.instrumentList.querySelectorAll('.instrument-item[data-alias]').forEach((item) => {
+        const alias = item.dataset.alias;
+        if (!alias || !targetAliases.has(alias)) return;
+        const lastFlashAt = Number(item.dataset.lastFlashAt || '0');
+        if (now - lastFlashAt < 180) return;
+        item.dataset.lastFlashAt = String(now);
+        item.classList.remove('instrument-item-flashing');
+        // Force reflow so repeated note entries restart the one-shot flash.
+        void item.offsetWidth;
+        item.classList.add('instrument-item-flashing');
+        if (item._iconFlashTimeout) clearTimeout(item._iconFlashTimeout);
+        item._iconFlashTimeout = setTimeout(() => {
+            item.classList.remove('instrument-item-flashing');
+            item._iconFlashTimeout = null;
+        }, durationMs);
+    });
+}
+
+function markAliasTransientPlaying(alias, durationSeconds = 0) {
+    const normalizedAlias = typeof alias === 'string' ? alias.trim() : '';
+    if (!normalizedAlias) return;
+    const existingTimeout = transientPlayingAliases.get(normalizedAlias);
+    if (existingTimeout) clearTimeout(existingTimeout);
+    const flashDuration = Math.max(Number(durationSeconds) * 1000, 100);
+    const timeoutId = setTimeout(() => {
+        transientPlayingAliases.delete(normalizedAlias);
+        refreshPlaybackHighlights();
+    }, flashDuration);
+    transientPlayingAliases.set(normalizedAlias, timeoutId);
+    refreshPlaybackHighlights();
+}
+
+export function pulsePlaybackAliases(aliases = [], durationSeconds = 0) {
+    const normalizedAliases = normalizePlaybackAliasList(aliases);
+    normalizedAliases.forEach((alias) => {
+        markAliasTransientPlaying(alias, durationSeconds);
+    });
+    flashInstrumentIconsForAliases(Array.from(normalizedAliases));
 }
 
 export function setPlaybackInstrumentAliases(source, aliases = []) {
@@ -297,11 +340,23 @@ function setupEventListeners() {
             renderInstrumentList();
         });
     }
+    if (dom.instrumentTypeTabs) {
+        dom.instrumentTypeTabs.addEventListener('click', (event) => {
+            const button = event.target?.closest?.('[data-instrument-type-filter]');
+            if (!button) return;
+            const nextFilter = button.dataset.instrumentTypeFilter || 'all';
+            if (nextFilter === currentInstrumentTypeFilter) return;
+            currentInstrumentTypeFilter = nextFilter;
+            renderInstrumentTypeTabs();
+            renderInstrumentList();
+        });
+    }
 
     // Listen for instrument triggers (highlighting)
     if (typeof window !== 'undefined') {
         window.addEventListener('strudel:instrument-trigger', (e) => {
             const { id, duration } = e.detail;
+            pulsePlaybackAliases([id], duration);
             const li = dom.instrumentList.querySelector(`li[data-alias="${id}"]`);
             if (li) {
                 li.classList.add('playing');
@@ -354,6 +409,7 @@ function setupEventListeners() {
                     type: 'instrument',
                     id: instrument.id,
                     name: instrument.strudelAlias,
+                    instrumentType: normalizeInstrumentType(instrument.type),
                     scope: normalizeScope(instrument.scope),
                 }
             }));
@@ -403,21 +459,6 @@ function setupEventListeners() {
         }
     });
 
-    document.addEventListener('instrument-preview:start', (e) => {
-        const { alias, analyser } = e.detail || {};
-        if (!alias || !analyser) return;
-        const item = dom.instrumentList?.querySelector(`.instrument-item[data-alias="${alias}"]`);
-        if (item?._scopeViz) item._scopeViz.setAnalyser(analyser);
-    });
-    document.addEventListener('instrument-preview:end', (e) => {
-        const { alias } = e.detail || {};
-        if (!alias) return;
-        const item = dom.instrumentList?.querySelector(`.instrument-item[data-alias="${alias}"]`);
-        if (item?._scopeViz) {
-            item._scopeActiveAnalyser = null;
-            refreshPlaybackHighlights();
-        }
-    });
 }
 
 function showInitOverlay() {
@@ -1191,6 +1232,18 @@ function refreshInstrumentControlsVisibility() {
     }
 }
 
+function renderInstrumentTypeTabs() {
+    if (!dom.instrumentTypeTabs) return;
+    dom.instrumentTypeTabs.querySelectorAll('[data-instrument-type-filter]').forEach((button) => {
+        const value = button.dataset.instrumentTypeFilter || 'all';
+        const isActive = value === currentInstrumentTypeFilter;
+        button.classList.toggle('text-primary', isActive);
+        button.classList.toggle('text-muted-foreground', !isActive);
+        button.classList.toggle('hover:text-foreground', !isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+}
+
 /**
  * Handle pattern selection state from main app
  */
@@ -1249,20 +1302,11 @@ function switchView(view) {
     createIcons({ icons });
 }
 
-/**
- * Render instrument list
- */
-
-let activeVisualizers = [];
-
 function renderInstrumentList() {
-    // Cleanup old visualizers
-    activeVisualizers.forEach(v => v.attach(null));
-    activeVisualizers = [];
-
     const instruments = getDefragmentedInstruments();
     dom.instrumentList.innerHTML = '';
     const devMode = isDeveloperModeEnabled();
+    renderInstrumentTypeTabs();
     
     const filterUsed = dom.usedInstrumentsOnly && dom.usedInstrumentsOnly.checked;
     
@@ -1271,6 +1315,9 @@ function renderInstrumentList() {
         if (!filterUsed || !lastKnownCode) return true;
         const regex = new RegExp(`["']${inst.strudelAlias}["']|\\b${inst.strudelAlias}\\b`, 'g');
         return regex.test(lastKnownCode);
+    }).filter((inst) => {
+        if (currentInstrumentTypeFilter === 'all') return true;
+        return normalizeInstrumentType(inst.type) === currentInstrumentTypeFilter;
     });
     const userInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'user');
     const systemInstruments = filtered.filter((inst) => normalizeScope(inst.scope) === 'system');
@@ -1284,7 +1331,6 @@ function renderInstrumentList() {
             ? true
             : (scope === 'system' ? instrumentFolderState.system : instrumentFolderState.user);
         const icon = expanded ? 'chevron-down' : 'chevron-right';
-        const highlightIcon = expanded && (scope !== 'user' || items.length > 0);
 
         folderItem.innerHTML = `
             <button type="button" class="w-full flex items-center justify-between py-1 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/40" data-folder-scope="${scope}">
@@ -1317,6 +1363,8 @@ function renderInstrumentList() {
                 ? 'None was found'
                 : 'No system instruments available.';
             list?.appendChild(empty);
+            dom.instrumentList.appendChild(folderItem);
+            return;
         }
 
         items.forEach((inst) => {
@@ -1326,7 +1374,9 @@ function renderInstrumentList() {
             const deleteActionMarkup = canDelete
                 ? `<button class="sidebar-del-btn" title="Delete ${inst.strudelAlias}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
                 : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
-            const waveShapeLabel = getWaveShapeLabel(inst.params);
+            const waveShapeLabel = getWaveShapeLabel(inst.params).toUpperCase();
+            const typeMeta = getInstrumentTypeMeta(inst.type);
+            const compactTypeLabel = String(typeMeta.label || typeMeta.value || '').toUpperCase();
 
             const li = document.createElement('li');
             li.className = `instrument-item ${inst.id === currentInstrumentId ? 'active' : ''}`;
@@ -1334,33 +1384,24 @@ function renderInstrumentList() {
             li.dataset.instrumentId = inst.id;
             li.dataset.alias = inst.strudelAlias;
             li.dataset.scope = instScope;
+            li.dataset.type = typeMeta.value;
+            li.dataset.iconPlaying = 'false';
 
             li.innerHTML = `
                 <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
-                <div class="instrument-info" style="cursor: move; display: flex; align-items: center; gap: 8px;">
-                    <canvas class="instrument-scope w-[1.6rem] h-[1.6rem] rounded-full bg-black/20 border border-border/20 opacity-50 transition-opacity shrink-0" width="64" height="64"></canvas>
+                <div class="instrument-info flex items-center gap-1 cursor-move">
+                    <span class="instrument-type-icon-wrap inline-flex items-center justify-center w-[1.6rem] h-[1.6rem] text-muted-foreground opacity-80 transition-colors shrink-0">
+                        <i data-lucide="${typeMeta.icon}" class="w-4 h-4 shrink-0"></i>
+                    </span>
                     <div class="min-w-0">
                         <div class="instrument-name truncate max-w-[120px] group-hover:text-primary transition-colors">${inst.strudelAlias}</div>
-                        <div class="instrument-channel text-[9px] uppercase tracking-wide opacity-50">${waveShapeLabel} • CH: ${inst.channel}</div>
+                        <div class="instrument-channel text-[9px] tracking-wide opacity-50">${compactTypeLabel}, ${waveShapeLabel}, Ch${inst.channel}</div>
                     </div>
                 </div>
                 <div class="list-item-actions">
                     ${deleteActionMarkup}
                 </div>
             `;
-
-            const canvas = li.querySelector('canvas');
-            if (canvas) {
-                const analyser = getInstrumentAnalyser(inst.strudelAlias);
-                if (analyser) {
-                    const viz = new ScopeVisualizer(analyser);
-                    viz.attach(canvas);
-                    activeVisualizers.push(viz);
-                    li._scopeViz = viz;
-                    li._scopeBaseAnalyser = analyser;
-                    li._scopeActiveAnalyser = analyser;
-                }
-            }
 
             li.querySelector('.instrument-info').addEventListener('click', () => {
                 openDrawer(inst.id);

@@ -22,8 +22,8 @@ import { appState } from './app/state.js';
 import { createArrangement, deleteArrangementByFilename, deleteBlockByFilenameWithConflictInfo, deletePatternByFilename, getArrangement, getArrangementOrNull, getBlockDetailOrNull, getPatternMetaTextOrNull, getPatternSource, getPatternSourceOrEmpty, listArrangements, listArrangementsOrEmpty, listBlocksOrEmpty, listPatterns, renameArrangementFile, renamePatternFile, saveArrangement, saveArrangementKeepalive, saveBlockDetail, saveBlockDetailKeepalive, saveExportedJsFile, saveExportedJsonFile, savePatternSource, savePatternSourceKeepalive, sendPatternSourceBeacon, updateInstrumentsSourceFile, updateSystemInstrumentsSourceFile } from './app/api.js';
 
 // --- Legacy / shared app modules (instruments, tracker, blocks, mix, unload, dialog) ---
-import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
-import { setInstrumentScope, getDefragmentedInstruments } from './instrument-manager.js';
+import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, pulsePlaybackAliases, setupScrubInteraction } from './instrument-ui.js';
+import { setInstrumentScope, updateInstrument, getDefragmentedInstruments } from './instrument-manager.js';
 import { autoUpdateInstrumentsFile } from './file-generator.js';
 import { initTracker, openTracker, openTrackerForEdit, closeTracker, isTrackerOpen, updateInstruments as updateTrackerInstruments, serializeTrackerState, deserializeTrackerState, previewTrackerStateOnce, startArrangementPreview, stopArrangementPreview, primeArrangementPreviewBuffer, updateArrangementPreview, isArrangementPreviewPlaying, setArrangementLiveOverride, clearArrangementLiveOverride, clearArrangementLiveOverrides, primePreviewAudioContext, stopTrackerPreviewPlayback, renderArrangementStateForExport, flushTrackerSaveForBlockSwitch, clearArrangementPendingLiveSwap, isTrackerPreviewPlaying, refreshTrackerPreview, scheduleArrangementPreviewInstrumentUpdate, setTrackerPreviewReferenceContext, clearTrackerPreviewReferenceContext } from './tracker.js';
 import { resolveTrackerStateChannelInstruments } from './instrument-rename-map.js';
@@ -630,6 +630,7 @@ configureArrangementPreviewRuntime({
     updateArrangementPreview,
     clearPlaybackInstrumentAliases,
     setPlaybackInstrumentAliases,
+    pulsePlaybackAliases,
     getLastArrangementPlaybackInstrumentSignature: () => lastArrangementPlaybackInstrumentSignature,
     setLastArrangementPlaybackInstrumentSignature: (value) => { lastArrangementPlaybackInstrumentSignature = value; },
     getArrangementWorkspacePlayhead: () => arrangementWorkspacePlayhead,
@@ -983,6 +984,7 @@ configureAdvancedSettings({
         dom.patternNameInput.readOnly = DEMO_MODE;
     },
     refreshPatternList,
+    updateInstrument,
     setInstrumentScope,
     autoUpdateInstrumentsFile,
     reloadInstruments,

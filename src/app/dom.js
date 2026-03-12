@@ -160,6 +160,7 @@ export const dom = {
     advancedSettingsSystemToggle: document.getElementById('advancedSettingsSystemToggle'),
     advancedSettingsSystemLockIcon: document.getElementById('advancedSettingsSystemLockIcon'),
     advancedSettingsSystemLabel: document.getElementById('advancedSettingsSystemLabel'),
+    advancedSettingsInstrumentTypeSection: document.getElementById('advancedSettingsInstrumentTypeSection'),
     advancedSettingsMetadataDetails: document.getElementById('advancedSettingsMetadataDetails'),
     advancedSettingsMetadataTitle: document.getElementById('advancedSettingsMetadataTitle'),
     advancedSettingsMetadataAuthor: document.getElementById('advancedSettingsMetadataAuthor'),

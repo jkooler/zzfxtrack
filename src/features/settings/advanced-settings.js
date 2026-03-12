@@ -4,6 +4,8 @@
  * Deps keys: alphabetical.
  */
 
+import { normalizeInstrumentType } from '../instruments/instrument-types.js';
+
 let deps = {
     autoUpdateInstrumentsFile: async () => {},
     createIcons: () => {},
@@ -34,6 +36,7 @@ let deps = {
     setCurrentArrangementDraftState: () => {},
     setCurrentPatternScope: () => {},
     setCurrentPatternMetadata: () => {},
+    updateInstrument: () => null,
     setInstrumentScope: () => false,
     setPatternNameReadOnly: () => {},
     savePatternAdvancedSettings: async () => {},
@@ -83,11 +86,25 @@ function readArrangementMetadataInputs(dom) {
     });
 }
 
+function setInstrumentTypeInputs(dom, value = 'synth') {
+    const normalized = normalizeInstrumentType(value);
+    dom.advancedSettingsModal?.querySelectorAll('input[name="advancedSettingsInstrumentType"]').forEach((input) => {
+        input.checked = input.value === normalized;
+        input.disabled = deps.isDemoMode();
+    });
+}
+
+function readInstrumentTypeInputs(dom) {
+    const selected = dom.advancedSettingsModal?.querySelector('input[name="advancedSettingsInstrumentType"]:checked');
+    return normalizeInstrumentType(selected?.value);
+}
+
 export function openAdvancedSettingsModal(context) {
     if (!context) return;
     const dom = deps.getDom();
     pendingAdvancedSettingsContext = {
         ...context,
+        instrumentType: normalizeInstrumentType(context.instrumentType),
         metadata: normalizeArrangementMetadata(
             context.metadata
             || (context.type === 'pattern' ? deps.getCurrentPatternMetadata() : null)
@@ -118,7 +135,11 @@ export function openAdvancedSettingsModal(context) {
             || pendingAdvancedSettingsContext.type === 'pattern';
         dom.advancedSettingsMetadataDetails.classList.toggle('hidden', !showMetadata);
     }
+    if (dom.advancedSettingsInstrumentTypeSection) {
+        dom.advancedSettingsInstrumentTypeSection.classList.toggle('hidden', pendingAdvancedSettingsContext.type !== 'instrument');
+    }
     setArrangementMetadataInputs(dom, pendingAdvancedSettingsContext.metadata);
+    setInstrumentTypeInputs(dom, pendingAdvancedSettingsContext.instrumentType);
     if (dom.saveAdvancedSettingsBtn) dom.saveAdvancedSettingsBtn.disabled = deps.isDemoMode();
     dom.advancedSettingsModal?.querySelectorAll('details').forEach((el) => {
         el.open = false;
@@ -142,6 +163,9 @@ async function applyAdvancedSettings() {
     }
     const nextScope = dom.advancedSettingsSystemToggle?.checked ? 'system' : 'user';
     const context = pendingAdvancedSettingsContext;
+    const nextInstrumentType = context.type === 'instrument'
+        ? readInstrumentTypeInputs(dom)
+        : normalizeInstrumentType(context.instrumentType);
     const nextMetadata = context.type === 'arrangement' || context.type === 'pattern'
         ? readArrangementMetadataInputs(dom)
         : normalizeArrangementMetadata();
@@ -162,7 +186,9 @@ async function applyAdvancedSettings() {
             await deps.refreshPatternList();
         } else if (context.type === 'instrument') {
             if (!context.id) throw new Error('No instrument selected');
-            const updated = deps.setInstrumentScope(context.id, nextScope);
+            const typed = deps.updateInstrument(context.id, { type: nextInstrumentType });
+            if (!typed) throw new Error('Failed to update instrument type');
+            const updated = deps.setInstrumentScope(typed.id, nextScope);
             if (!updated) throw new Error('Failed to update instrument scope');
             await deps.autoUpdateInstrumentsFile();
             await deps.reloadInstruments();
@@ -172,6 +198,7 @@ async function applyAdvancedSettings() {
                 id: updated.id,
                 name: updated.strudelAlias,
                 scope: nextScope,
+                instrumentType: normalizeInstrumentType(updated.type),
             };
         } else if (context.type === 'block') {
             if (context.filename) await deps.updateBlockScope(context.filename, nextScope);
@@ -220,6 +247,9 @@ async function applyAdvancedSettings() {
             previousId: context.id,
             name: pendingAdvancedSettingsContext?.name || context.name,
             scope: nextScope,
+            instrumentType: context.type === 'instrument'
+                ? normalizeInstrumentType(pendingAdvancedSettingsContext?.instrumentType || nextInstrumentType)
+                : undefined,
         });
         deps.setStatus('Settings updated', 'success');
         closeAdvancedSettingsModal();

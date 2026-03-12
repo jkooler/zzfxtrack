@@ -5,6 +5,7 @@
  */
 
 import * as systemModule from "../instruments.system.js";
+import { normalizeInstrumentType } from "./features/instruments/instrument-types.js";
 
 const STORAGE_KEY = "zzfxtrack-instruments";
 const SYSTEM_STORE_KEY = "zzfxtrack-system-instruments-store";
@@ -43,6 +44,7 @@ function normalizeInstrument(record) {
   return {
     ...record,
     scope: normalizeScope(record.scope, inferLegacyScope(record)),
+    type: normalizeInstrumentType(record.type),
   };
 }
 
@@ -94,6 +96,7 @@ function normalizeSystemInstrumentRecord(record) {
     channel: Number.isFinite(Number(record.channel)) ? Number(record.channel) : 0,
     params: Array.isArray(record.params) ? [...record.params] : [],
     monophonic: parseMonophonicFlag(record.monophonic, false),
+    type: normalizeInstrumentType(record.type),
     scope: "system",
   };
 }
@@ -353,6 +356,7 @@ export function createInstrument(
     channel: channel ?? systemCount + userInstruments.length,
     params: params.length === 21 ? params : defaultParams,
     monophonic: false,
+    type: "synth",
     scope: "user",
   };
 
@@ -412,6 +416,7 @@ export function updateInstrument(id, changes) {
   const currentScope = normalizeScope(current?.scope, inferLegacyScope(current));
   const next = { ...current, ...changes };
   next.scope = normalizeScope(next.scope, currentScope);
+  next.type = normalizeInstrumentType(next.type, normalizeInstrumentType(current.type));
   const nextAlias = String(next.strudelAlias || "").trim();
   if (!nextAlias) return null;
   if (hasInstrumentAliasConflict(nextAlias, id)) {

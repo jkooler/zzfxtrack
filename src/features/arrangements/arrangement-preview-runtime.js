@@ -16,6 +16,7 @@ let deps = {
     getLastArrangementPlaybackInstrumentSignature: () => '',
     getPlaybackMixSettings: () => ({}),
     isArrangementPreviewPlaying: () => false,
+    pulsePlaybackAliases: () => {},
     setArrangementPreviewContext: () => {},
     setLastArrangementPlaybackInstrumentSignature: () => {},
     setPlaybackInstrumentAliases: () => {},
@@ -93,8 +94,12 @@ export function updateArrangementPlaybackInstrumentAliases(detail = {}) {
     if (signature === deps.getLastArrangementPlaybackInstrumentSignature()) return;
     deps.setLastArrangementPlaybackInstrumentSignature(signature);
 
-    if (sortedAliases.length) deps.setPlaybackInstrumentAliases('arrangement-preview', sortedAliases);
-    else deps.clearPlaybackInstrumentAliases('arrangement-preview');
+    if (sortedAliases.length) {
+        const bpm = Math.max(1, Number(context?.bpm) || 120);
+        const stepDurationSeconds = 60 / bpm / 4;
+        deps.setPlaybackInstrumentAliases('arrangement-preview', sortedAliases);
+        deps.pulsePlaybackAliases(sortedAliases, stepDurationSeconds);
+    } else deps.clearPlaybackInstrumentAliases('arrangement-preview');
 }
 
 export function applyArrangementPreviewAfterBlockRemoved(removedFilename) {

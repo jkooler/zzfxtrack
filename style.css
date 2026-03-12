@@ -489,15 +489,31 @@ input[readonly]:focus-visible {
   color: var(--tertiary-foreground);
 }
 
+@keyframes instrument-type-icon-play-pulse {
+  0% {
+    color: var(--muted-foreground);
+  }
+  22% {
+    color: var(--primary);
+  }
+  100% {
+    color: var(--muted-foreground);
+  }
+}
+
+.instrument-item.instrument-item-flashing .instrument-type-icon-wrap {
+  animation: instrument-type-icon-play-pulse 0.6s ease-out 1;
+}
+
 .instrument-item.playing .instrument-name {
   color: var(--strudel-inst-color, var(--primary));
   opacity: 1;
   text-shadow: 0 0 8px var(--strudel-inst-color-glow, hsl(45 93% 47% / 0.4));
 }
 
-.instrument-item.playing .instrument-scope {
+.instrument-item.playing .instrument-type-icon-wrap {
   opacity: 1;
-  border-color: var(--strudel-inst-color, hsl(45 93% 47% / 0.5));
+  color: var(--strudel-inst-color, hsl(45 93% 47% / 0.85));
   box-shadow: 0 0 10px var(--strudel-inst-color-glow, hsl(45 93% 47% / 0.2));
 }
 
@@ -507,13 +523,17 @@ input[readonly]:focus-visible {
   text-shadow: 0 0 8px color-mix(in srgb, var(--tertiary) 60%, transparent);
 }
 
-.instrument-list .instrument-item.playing .instrument-scope {
-  border-color: var(--tertiary);
+.instrument-list .instrument-item.playing .instrument-type-icon-wrap {
+  color: var(--tertiary);
   box-shadow: 0 0 10px color-mix(in srgb, var(--tertiary) 40%, transparent);
 }
 
 .instrument-list .usage-indicator {
   background-color: var(--tertiary);
+}
+
+.instrument-type-tab-all {
+  flex: 0 0 2.75rem;
 }
 
 .instrument-info {

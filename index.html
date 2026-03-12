@@ -141,6 +141,13 @@
 
       <!-- Instruments (persistent, 50vh) -->
       <div class="sidebar-instruments shrink-0 min-w-0 flex flex-col border-t border-border overflow-hidden" style="height: 50vh; min-height: 0;">
+        <div id="instrumentTypeTabs" class="shrink-0 flex items-center gap-1 text-[10px] font-bold tracking-wide uppercase border-b border-border/40">
+          <button type="button" class="instrument-type-tab-all py-2 text-center transition-colors text-primary" data-instrument-type-filter="all">All</button>
+          <button type="button" class="flex-1 py-2 text-center transition-colors text-muted-foreground hover:text-foreground" data-instrument-type-filter="synth">Synth</button>
+          <button type="button" class="flex-1 py-2 text-center transition-colors text-muted-foreground hover:text-foreground" data-instrument-type-filter="bass">Bass</button>
+          <button type="button" class="flex-1 py-2 text-center transition-colors text-muted-foreground hover:text-foreground" data-instrument-type-filter="drums">Drums</button>
+          <button type="button" class="flex-1 py-2 text-center transition-colors text-muted-foreground hover:text-foreground" data-instrument-type-filter="other">Other</button>
+        </div>
         <ul
           id="instrumentList"
           class="instrument-list flex-1 min-h-0 overflow-y-auto space-y-1"
@@ -1912,6 +1919,37 @@
               <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background border border-border transition-transform peer-checked:translate-x-5"></span>
             </span>
           </label>
+          <section
+            id="advancedSettingsInstrumentTypeSection"
+            class="hidden shrink-0 rounded-md border border-input bg-card/40 overflow-hidden"
+          >
+            <div class="p-3 border-b border-border">
+              <div class="text-sm font-medium text-foreground">Instrument type</div>
+              <div class="mt-1 text-xs text-muted-foreground">Used for organizing the instrument list.</div>
+            </div>
+            <div class="p-3 space-y-2">
+              <label class="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-accent/40 transition-colors cursor-pointer">
+                <input type="radio" name="advancedSettingsInstrumentType" value="synth" class="h-4 w-4 accent-primary" />
+                <i data-lucide="keyboard-music" class="w-4 h-4 text-muted-foreground shrink-0"></i>
+                <span class="text-sm text-foreground">Synth</span>
+              </label>
+              <label class="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-accent/40 transition-colors cursor-pointer">
+                <input type="radio" name="advancedSettingsInstrumentType" value="drums" class="h-4 w-4 accent-primary" />
+                <i data-lucide="drum" class="w-4 h-4 text-muted-foreground shrink-0"></i>
+                <span class="text-sm text-foreground">Drums</span>
+              </label>
+              <label class="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-accent/40 transition-colors cursor-pointer">
+                <input type="radio" name="advancedSettingsInstrumentType" value="bass" class="h-4 w-4 accent-primary" />
+                <i data-lucide="guitar" class="w-4 h-4 text-muted-foreground shrink-0"></i>
+                <span class="text-sm text-foreground">Bass</span>
+              </label>
+              <label class="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-accent/40 transition-colors cursor-pointer">
+                <input type="radio" name="advancedSettingsInstrumentType" value="other" class="h-4 w-4 accent-primary" />
+                <i data-lucide="audio-waveform" class="w-4 h-4 text-muted-foreground shrink-0"></i>
+                <span class="text-sm text-foreground">Other</span>
+              </label>
+            </div>
+          </section>
           <details id="advancedSettingsMetadataDetails" class="hidden group shrink-0 rounded-md border border-input bg-card/40 overflow-visible">
             <summary class="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-medium text-foreground select-none hover:bg-accent/50 transition-colors [&::-webkit-details-marker]:hidden">
               <span>Metadata</span>
