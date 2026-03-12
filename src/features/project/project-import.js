@@ -31,6 +31,7 @@ let deps = {
     savePatternSource: async () => {},
     setStatus: () => {},
     updateInstrumentsSourceFile: async () => {},
+    updateSystemInstrumentsSourceFile: async () => {},
 };
 
 let pendingUploadBundle = null;
@@ -46,7 +47,8 @@ async function buildUploadBundle(file) {
     const patterns = new Map();
     const blocks = new Map();
     const arrangements = new Map();
-    let instrumentsContent = '';
+    let userInstrumentsContent = '';
+    let systemInstrumentsContent = '';
     let manifest = null;
     let hasInvalidManifest = false;
     const unknownPaths = [];
@@ -67,7 +69,12 @@ async function buildUploadBundle(file) {
         }
 
         if (normalizedLower.endsWith('/instruments.js') || normalizedLower === 'instruments.js') {
-            instrumentsContent = content;
+            userInstrumentsContent = content;
+            continue;
+        }
+
+        if (normalizedLower.endsWith('/instruments.system.js') || normalizedLower === 'instruments.system.js') {
+            systemInstrumentsContent = content;
             continue;
         }
 
@@ -97,7 +104,8 @@ async function buildUploadBundle(file) {
         patterns: Array.from(patterns, ([filename, content]) => ({ filename, content })),
         blocks: Array.from(blocks, ([filename, content]) => ({ filename, content })),
         arrangements: Array.from(arrangements, ([filename, content]) => ({ filename, content })),
-        instrumentsContent,
+        userInstrumentsContent,
+        systemInstrumentsContent,
         manifest,
         hasInvalidManifest,
         unknownPaths,
@@ -285,7 +293,8 @@ async function applyUploadProject() {
     const includePatterns = pendingUploadBundle.patterns.length > 0;
     const includeBlocks = pendingUploadBundle.blocks.length > 0;
     const includeArrangements = pendingUploadBundle.arrangements.length > 0;
-    const includeInstruments = Boolean(pendingUploadBundle.instrumentsContent);
+    const includeUserInstruments = Boolean(pendingUploadBundle.userInstrumentsContent);
+    const includeSystemInstruments = Boolean(pendingUploadBundle.systemInstrumentsContent);
     const mode = 'merge';
     const replaceInstruments = true;
 
@@ -299,26 +308,41 @@ async function applyUploadProject() {
         const blocksStats = await importSectionItems('blocks', pendingUploadBundle.blocks, includeBlocks, mode, existing.blocks);
         const arrangementsStats = await importSectionItems('arrangements', pendingUploadBundle.arrangements, includeArrangements, mode, existing.arrangements);
 
-        let instrumentsImported = 0;
-        if (includeInstruments && pendingUploadBundle.instrumentsContent && replaceInstruments) {
+        let userInstrumentsImported = 0;
+        let systemInstrumentsImported = 0;
+        if (includeUserInstruments && pendingUploadBundle.userInstrumentsContent && replaceInstruments) {
             if (deps.isDemoMode()) {
-                sessionStorage.setItem('instruments-js-content', pendingUploadBundle.instrumentsContent);
-                instrumentsImported = 1;
+                sessionStorage.setItem('instruments-js-content', pendingUploadBundle.userInstrumentsContent);
+                userInstrumentsImported = 1;
             } else {
                 try {
-                    await deps.updateInstrumentsSourceFile(pendingUploadBundle.instrumentsContent);
-                    instrumentsImported = 1;
+                    await deps.updateInstrumentsSourceFile(pendingUploadBundle.userInstrumentsContent);
+                    userInstrumentsImported = 1;
                 } catch (_e) {
-                    instrumentsImported = 0;
+                    userInstrumentsImported = 0;
+                }
+            }
+        }
+
+        if (includeSystemInstruments && pendingUploadBundle.systemInstrumentsContent && replaceInstruments) {
+            if (deps.isDemoMode()) {
+                sessionStorage.setItem('instruments-system-js-content', pendingUploadBundle.systemInstrumentsContent);
+                systemInstrumentsImported = 1;
+            } else {
+                try {
+                    await deps.updateSystemInstrumentsSourceFile(pendingUploadBundle.systemInstrumentsContent);
+                    systemInstrumentsImported = 1;
+                } catch (_e) {
+                    systemInstrumentsImported = 0;
                 }
             }
         }
 
         await deps.refreshPatternList();
-        if (instrumentsImported) await deps.reloadInstruments();
+        if (userInstrumentsImported || systemInstrumentsImported) await deps.reloadInstruments();
 
         deps.setStatus(
-            `Imported patterns ${patternsStats.written} (renamed ${patternsStats.renamed}, skipped ${patternsStats.skipped}), blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), instruments ${instrumentsImported}`,
+            `Imported patterns ${patternsStats.written} (renamed ${patternsStats.renamed}, skipped ${patternsStats.skipped}), blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), user instruments ${userInstrumentsImported}, system instruments ${systemInstrumentsImported}`,
             'success'
         );
         closeUploadProjectModal();

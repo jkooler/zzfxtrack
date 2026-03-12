@@ -257,6 +257,14 @@ export async function updateInstrumentsSourceFile(content) {
     if (!res.ok) throw buildApiError('Failed to update instruments file', res);
 }
 
+export async function updateSystemInstrumentsSourceFile(content) {
+    const res = await fetch('/api/update-system-instruments', {
+        method: 'POST',
+        body: content,
+    });
+    if (!res.ok) throw buildApiError('Failed to update system instruments file', res);
+}
+
 export async function getPatternMetaTextOrNull(filename) {
     const res = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
     if (!res.ok) return null;

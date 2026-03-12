@@ -35,12 +35,12 @@ export function configureProjectExport(options = {}) {
     deps = { ...deps, ...options };
 }
 
-async function getInstrumentsFileContent() {
-    const cached = sessionStorage.getItem('instruments-js-content');
+async function getInstrumentFileContent(cacheKey, path) {
+    const cached = sessionStorage.getItem(cacheKey);
     if (cached && cached.trim()) {
         return cached;
     }
-    const res = await fetch('/instruments.js');
+    const res = await fetch(path);
     if (!res.ok) return '';
     const fileCode = await res.text();
     return fileCode.trim() ? fileCode : '';
@@ -50,11 +50,19 @@ export async function downloadProjectBundle() {
     try {
         const zip = new JSZip();
 
-        let downloadedInstruments = 0;
-        const instrumentsContent = await getInstrumentsFileContent();
-        if (instrumentsContent) {
-            zip.file('instruments.js', instrumentsContent);
-            downloadedInstruments = 1;
+        let downloadedUserInstruments = 0;
+        let downloadedSystemInstruments = 0;
+        const [userInstrumentsContent, systemInstrumentsContent] = await Promise.all([
+            getInstrumentFileContent('instruments-js-content', '/instruments.js'),
+            getInstrumentFileContent('instruments-system-js-content', '/instruments.system.js'),
+        ]);
+        if (userInstrumentsContent) {
+            zip.file('instruments.js', userInstrumentsContent);
+            downloadedUserInstruments = 1;
+        }
+        if (systemInstrumentsContent) {
+            zip.file('instruments.system.js', systemInstrumentsContent);
+            downloadedSystemInstruments = 1;
         }
 
         const files = deps.isDemoMode()
@@ -149,6 +157,7 @@ export async function downloadProjectBundle() {
             }
         }
 
+        const downloadedInstruments = downloadedUserInstruments + downloadedSystemInstruments;
         if (!downloadedPatterns && !downloadedBlocks && !downloadedArrangements && !downloadedInstruments) {
             deps.setStatus('Nothing to download', 'error');
             return;
@@ -160,13 +169,15 @@ export async function downloadProjectBundle() {
             JSON.stringify(
                 {
                     kind: deps.getBundleKind(),
-                    version: 1,
+                    version: 2,
                     generatedAt: stampIso,
                     counts: {
                         patterns: downloadedPatterns,
                         blocks: downloadedBlocks,
                         arrangements: downloadedArrangements,
                         instruments: downloadedInstruments,
+                        userInstruments: downloadedUserInstruments,
+                        systemInstruments: downloadedSystemInstruments,
                     },
                 },
                 null,
@@ -178,7 +189,10 @@ export async function downloadProjectBundle() {
         const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
         deps.triggerFileDownload(zipName, zipBlob, 'application/zip');
 
-        const instrumentsLabel = downloadedInstruments ? ' + instruments.js' : ' (no instruments.js)';
+        const instrumentLabels = [];
+        if (downloadedUserInstruments) instrumentLabels.push('instruments.js');
+        if (downloadedSystemInstruments) instrumentLabels.push('instruments.system.js');
+        const instrumentsLabel = instrumentLabels.length ? ` + ${instrumentLabels.join(' + ')}` : ' (no instruments files)';
         deps.setStatus(
             `Downloaded ZIP: ${downloadedPatterns} pattern${downloadedPatterns === 1 ? '' : 's'}, ${downloadedBlocks} block${downloadedBlocks === 1 ? '' : 's'}, ${downloadedArrangements} arrangement${downloadedArrangements === 1 ? '' : 's'}${instrumentsLabel}`,
             'success'

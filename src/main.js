@@ -19,7 +19,7 @@ import { attachVisualizer } from './visualizer.js';
 // --- App shell (dom, state, API) ---
 import { dom } from './app/dom.js';
 import { appState } from './app/state.js';
-import { createArrangement, deleteArrangementByFilename, deleteBlockByFilenameWithConflictInfo, deletePatternByFilename, getArrangement, getArrangementOrNull, getBlockDetailOrNull, getPatternMetaTextOrNull, getPatternSource, getPatternSourceOrEmpty, listArrangements, listArrangementsOrEmpty, listBlocksOrEmpty, listPatterns, renameArrangementFile, renamePatternFile, saveArrangement, saveArrangementKeepalive, saveBlockDetail, saveBlockDetailKeepalive, saveExportedJsFile, saveExportedJsonFile, savePatternSource, savePatternSourceKeepalive, sendPatternSourceBeacon, updateInstrumentsSourceFile } from './app/api.js';
+import { createArrangement, deleteArrangementByFilename, deleteBlockByFilenameWithConflictInfo, deletePatternByFilename, getArrangement, getArrangementOrNull, getBlockDetailOrNull, getPatternMetaTextOrNull, getPatternSource, getPatternSourceOrEmpty, listArrangements, listArrangementsOrEmpty, listBlocksOrEmpty, listPatterns, renameArrangementFile, renamePatternFile, saveArrangement, saveArrangementKeepalive, saveBlockDetail, saveBlockDetailKeepalive, saveExportedJsFile, saveExportedJsonFile, savePatternSource, savePatternSourceKeepalive, sendPatternSourceBeacon, updateInstrumentsSourceFile, updateSystemInstrumentsSourceFile } from './app/api.js';
 
 // --- Legacy / shared app modules (instruments, tracker, blocks, mix, unload, dialog) ---
 import { initInstrumentUI, hideInitOverlay, getInstrumentsForExporter, updateInstrumentUsage, updatePatternSelectionState, updateArrangementSelectionState, refreshInstrumentListUI, setPlaybackInstrumentAliases, clearPlaybackInstrumentAliases, setupScrubInteraction } from './instrument-ui.js';
@@ -921,6 +921,7 @@ configureProjectImport({
     saveArrangement,
     getDeveloperModeHeaders,
     updateInstrumentsSourceFile,
+    updateSystemInstrumentsSourceFile,
     reloadInstruments,
     refreshPatternList,
     setStatus,

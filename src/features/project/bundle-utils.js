@@ -90,13 +90,20 @@ export function getFilenameFromSection(pathname, section) {
 
 export function describeUploadBundle(bundle) {
     if (!bundle) return '';
-    return `${bundle.patterns.length} patterns, ${bundle.blocks.length} blocks, ${bundle.arrangements.length} arrangements${bundle.instrumentsContent ? ', instruments.js' : ''}`;
+    const instrumentLabels = [];
+    if (bundle.userInstrumentsContent) instrumentLabels.push('instruments.js');
+    if (bundle.systemInstrumentsContent) instrumentLabels.push('instruments.system.js');
+    const instrumentsSuffix = instrumentLabels.length ? `, ${instrumentLabels.join(' + ')}` : '';
+    return `${bundle.patterns.length} patterns, ${bundle.blocks.length} blocks, ${bundle.arrangements.length} arrangements${instrumentsSuffix}`;
 }
 
 export function validateUploadBundle(bundle, { expectedKind }) {
     if (!bundle) return 'No file selected.';
 
-    const hasAnyData = Boolean(bundle.patterns.length || bundle.blocks.length || bundle.arrangements.length || bundle.instrumentsContent);
+    const userInstrumentsCount = Number(Boolean(bundle.userInstrumentsContent));
+    const systemInstrumentsCount = Number(Boolean(bundle.systemInstrumentsContent));
+    const instrumentCount = userInstrumentsCount + systemInstrumentsCount;
+    const hasAnyData = Boolean(bundle.patterns.length || bundle.blocks.length || bundle.arrangements.length || instrumentCount);
     if (!hasAnyData) return 'Incompatible ZIP: no importable app data found.';
 
     if (bundle.hasInvalidManifest) {
@@ -107,7 +114,7 @@ export function validateUploadBundle(bundle, { expectedKind }) {
     }
 
     if (bundle.manifest) {
-        if (bundle.manifest.kind !== expectedKind || bundle.manifest.version !== 1) {
+        if (bundle.manifest.kind !== expectedKind || ![1, 2].includes(bundle.manifest.version)) {
             return 'Incompatible ZIP: invalid bundle metadata.';
         }
         const expected = bundle.manifest.counts || {};
@@ -115,7 +122,9 @@ export function validateUploadBundle(bundle, { expectedKind }) {
             ['patterns', bundle.patterns.length],
             ['blocks', bundle.blocks.length],
             ['arrangements', bundle.arrangements.length],
-            ['instruments', bundle.instrumentsContent ? 1 : 0],
+            ['instruments', instrumentCount],
+            ['userInstruments', userInstrumentsCount],
+            ['systemInstruments', systemInstrumentsCount],
         ];
         for (const [key, actual] of countChecks) {
             const value = expected[key];
