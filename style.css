@@ -446,7 +446,7 @@ input[readonly]:focus-visible {
   touch-action: manipulation; /* iPad: single tap to select/activate, no double-tap */
 }
 .list-item {
-  @apply flex items-center justify-between p-1 mb-0 rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative overflow-hidden font-medium text-sm;
+  @apply flex items-center justify-between p-1 py-1.5 mb-0 rounded-md hover:bg-accent/50 cursor-pointer transition-colors relative overflow-hidden font-medium text-sm;
 }
 .list-item.active {
   @apply bg-accent text-accent-foreground;
