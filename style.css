@@ -406,7 +406,7 @@ input[readonly]:focus-visible {
 }
 
 .instrument-list {
-  @apply list-none m-0 py-2 px-1 space-y-1;
+  @apply list-none m-0 py-2 px-2 space-y-1;
 }
 .instrument-list.active {
   @apply block;

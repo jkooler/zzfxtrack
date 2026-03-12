@@ -1258,7 +1258,7 @@ function renderGrid() {
     const stepEl = document.createElement('div');
     stepEl.className = 'tracker-timetrack-row';
     stepEl.dataset.step = step;
-    stepEl.textContent = String(step + 1);
+    stepEl.textContent = String(step);
     if (step % 4 === 0) stepEl.classList.add('beat');
     if (step === state.focusedStep) stepEl.classList.add('active');
     stepEl.addEventListener('click', () => {
