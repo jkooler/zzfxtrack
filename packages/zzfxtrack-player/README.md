@@ -57,4 +57,4 @@ playZzFXTrackSong(songData, audioCtx, () => console.log('Done'));
 
 ## License
 
-MIT. Adapted from earlier work by Keith Clark and Frank Force. See repository for attribution.
+MIT. Adapted from earlier work by Keith Clark and Frank Force called [ZzFXM](https://keithclark.github.io/ZzFXM/). See repository for attribution.
