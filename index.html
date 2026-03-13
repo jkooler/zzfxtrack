@@ -521,11 +521,11 @@
       <!-- Toolbar -->
       <header
         id="mainHeader"
-        class="toolbar h-14 border-b border-border flex items-center px-2 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        class="toolbar h-12 border-b border-border flex items-center px-2 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
         <button
           id="playBtn"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-10 h-10 p-0 shadow-sm flex items-center justify-center text-primary"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-secondary hover:bg-accent hover:text-accent-foreground w-8 h-8 p-0 shadow-sm flex items-center justify-center text-primary"
         >
           <i data-lucide="play" class="w-[18px] h-5 fill-current text-primary"></i>
         </button>
@@ -599,7 +599,7 @@
             your games or other projects using the bundled <strong>ZzFXTrack Player</strong>.
           </p>
           <div class="text-sm text-muted-foreground">The exported JSON is
-            <strong>not compatible</strong> with the <strong>ZzFXM player</strong> and it's modified ZzFX engine. Strudel's internal ZzFX engine is not supported as well.
+            <strong>not compatible</strong> with the <strong>ZzFXM player</strong> and it's modified ZzFX engine. Strudel's internal ZzFX engine is not supported either.
           </div>
           <div class="flex items-center justify-center gap-2">
             <button
@@ -2174,16 +2174,16 @@
           </p>
           <div class="flex flex-wrap gap-2">
             <button
-              id="downloadProjectBtn"
-              class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
-            >
-              Export
-            </button>
-            <button
               id="uploadProjectBtn"
               class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
             >
               Import
+            </button>
+            <button
+              id="downloadProjectBtn"
+              class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
+            >
+              Export
             </button>
           </div>
           <input id="uploadProjectInput" type="file" accept=".zip" class="hidden" />
@@ -2556,7 +2556,7 @@
             <button
               id="previewTrackerBtn"
               type="button"
-              class="inline-flex items-center justify-center shrink-0 whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-0 bg-secondary text-secondary-foreground hover:bg-secondary/80 w-10 h-10 p-0 shadow-sm"
+              class="inline-flex items-center justify-center shrink-0 whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-0 bg-secondary text-secondary-foreground hover:bg-secondary/80 w-8 h-8 p-0 shadow-sm"
               title="Preview"
             >
               <i data-lucide="play" class="w-[18px] h-5 fill-current text-secondary-foreground"></i>

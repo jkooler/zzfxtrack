@@ -119,13 +119,13 @@ function formatNoteLabel(note) {
   if (note === '-') return '-';
   const m = /^([a-g](?:#)?)(\d)$/.exec(note);
   if (!m) return note;
-  const name = m[1];
+  const name = m[1].toUpperCase();
   const oct = m[2];
   if (name.length === 1) {
-    // Natural note: c3 -> c-3
+    // Natural note: c3 -> C-3
     return `${name}-${oct}`;
   }
-  // Sharp: keep as-is (c#3)
+  // Sharp: keep the compact sharp form (C#3)
   return `${name}${oct}`;
 }
 
@@ -1321,6 +1321,7 @@ function renderGrid() {
         cellEl.classList.add('rest');
       } else {
         cellEl.textContent = '·';
+        cellEl.classList.add('tracker-cell-empty');
       }
 
       if (ch === state.focusedChannel && step === state.focusedStep) {
@@ -2424,6 +2425,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
     cellEl.textContent = formatNoteLabel(initialNote);
     cellEl.classList.toggle('has-note', initialNote && initialNote !== '-');
     cellEl.classList.toggle('rest', initialNote === '-');
+    cellEl.classList.toggle('tracker-cell-empty', initialNote == null);
     return SCRUB_EMPTY_START_INDEX;
   };
 
@@ -2439,6 +2441,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
       cellEl.textContent = formatNoteLabel(note);
       cellEl.classList.toggle('has-note', note && note !== '-');
       cellEl.classList.toggle('rest', note === '-');
+      cellEl.classList.toggle('tracker-cell-empty', note == null);
       if (note && note !== '-') {
         if (scrubPreviewTimeout) clearTimeout(scrubPreviewTimeout);
         scrubPreviewTimeout = setTimeout(() => {
@@ -2640,6 +2643,7 @@ function updateNoteCellInDOM(channel, step) {
   cellEl.textContent = formatNoteLabel(note);
   cellEl.classList.toggle('has-note', !!note && note !== '-');
   cellEl.classList.toggle('rest', note === '-');
+  cellEl.classList.toggle('tracker-cell-empty', note == null);
   return true;
 }
 

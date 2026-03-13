@@ -25,6 +25,41 @@ let getPlayingPatternFilename = () => null;
 let getStrudelTabElement = () => null;
 let attachVisualizer = () => {};
 
+function scrollListItemIntoView(item) {
+    if (!item) return;
+    let container = item.parentElement;
+    while (container && container !== document.body) {
+        const style = window.getComputedStyle(container);
+        const overflowY = style?.overflowY || '';
+        if (/(auto|scroll|overlay)/.test(overflowY) && container.scrollHeight > container.clientHeight) {
+            break;
+        }
+        container = container.parentElement;
+    }
+    if (!container || container === document.body) {
+        item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        return;
+    }
+    const padding = 80;
+    const itemRect = item.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    if (itemRect.top < containerRect.top + padding) {
+        container.scrollTop += itemRect.top - (containerRect.top + padding);
+    } else if (itemRect.bottom > containerRect.bottom - padding) {
+        container.scrollTop += itemRect.bottom - (containerRect.bottom - padding);
+    }
+}
+
+function getVisiblePatternItems(patternList) {
+    return Array.from(patternList?.querySelectorAll('.list-item') || [])
+        .filter((item) => item.offsetParent !== null);
+}
+
+function focusPatternItem(item) {
+    if (!item || typeof item.focus !== 'function') return;
+    item.focus({ preventScroll: true });
+}
+
 export function configurePatternList(options = {}) {
     if (typeof options.getCurrentPatternFilename === 'function') {
         getCurrentPatternFilename = options.getCurrentPatternFilename;
@@ -68,6 +103,11 @@ export function refreshPatternListActiveState() {
     Array.from(patternList.querySelectorAll('.list-item')).forEach((li) => {
         li.classList.toggle('active', li.dataset.filename === currentPatternFilename);
     });
+    const activeItem = patternList.querySelector('.list-item.active');
+    scrollListItemIntoView(activeItem);
+    if (document.activeElement && patternList.contains(document.activeElement)) {
+        focusPatternItem(activeItem);
+    }
 }
 
 export function normalizePatternEntries(payload) {
@@ -168,6 +208,7 @@ export async function refreshPatternList() {
                     : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
                 const li = document.createElement('li');
                 li.className = `list-item ${file === getCurrentPatternFilename() && !getWelcomeViewVisible() ? 'active' : ''}`;
+                li.tabIndex = 0;
                 li.dataset.scope = normalizeScope(entry.scope);
                 li.dataset.filename = file;
 
@@ -175,9 +216,35 @@ export async function refreshPatternList() {
 
                 li.querySelector('span')?.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    focusPatternItem(li);
                     loadPattern(file);
                 });
-                li.addEventListener('click', () => loadPattern(file));
+                li.addEventListener('click', () => {
+                    focusPatternItem(li);
+                    loadPattern(file);
+                });
+                li.addEventListener('keydown', (e) => {
+                    const items = getVisiblePatternItems(patternList);
+                    const index = items.indexOf(li);
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const next = items[Math.min(items.length - 1, index + 1)];
+                        if (next && next !== li) {
+                            focusPatternItem(next);
+                            loadPattern(next.dataset.filename);
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        const prev = items[Math.max(0, index - 1)];
+                        if (prev && prev !== li) {
+                            focusPatternItem(prev);
+                            loadPattern(prev.dataset.filename);
+                        }
+                    } else if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        loadPattern(file);
+                    }
+                });
 
                 if (canDelete) {
                     li.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
@@ -195,6 +262,7 @@ export async function refreshPatternList() {
         const systemEntries = entries.filter((entry) => normalizeScope(entry.scope) === 'system');
         appendFolder('user', 'Your patterns', userEntries);
         appendFolder('system', 'System', systemEntries);
+        scrollListItemIntoView(patternList.querySelector('.list-item.active'));
         updatePatternListVisualizer();
         createIcons({ icons });
     } catch (e) {

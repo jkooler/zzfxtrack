@@ -29,6 +29,41 @@ let deps = {
     setStatus: () => {},
 };
 
+function scrollListItemIntoView(item) {
+    if (!item) return;
+    let container = item.parentElement;
+    while (container && container !== document.body) {
+        const style = window.getComputedStyle(container);
+        const overflowY = style?.overflowY || '';
+        if (/(auto|scroll|overlay)/.test(overflowY) && container.scrollHeight > container.clientHeight) {
+            break;
+        }
+        container = container.parentElement;
+    }
+    if (!container || container === document.body) {
+        item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        return;
+    }
+    const padding = 80;
+    const itemRect = item.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    if (itemRect.top < containerRect.top + padding) {
+        container.scrollTop += itemRect.top - (containerRect.top + padding);
+    } else if (itemRect.bottom > containerRect.bottom - padding) {
+        container.scrollTop += itemRect.bottom - (containerRect.bottom - padding);
+    }
+}
+
+function getVisibleBlockLibraryItems(list) {
+    return Array.from(list?.querySelectorAll('.list-item') || [])
+        .filter((item) => item.offsetParent !== null);
+}
+
+function focusBlockLibraryItem(item) {
+    if (!item || typeof item.focus !== 'function') return;
+    item.focus({ preventScroll: true });
+}
+
 export function configureBlockLibrary(options = {}) {
     deps = { ...deps, ...options };
 }
@@ -112,6 +147,7 @@ export function renderBlocksLibraryFromCache() {
             const li = document.createElement('div');
             const isSelected = block.filename === deps.getActiveArrangementBlockFilename();
             li.className = `list-item ${isSelected ? 'active' : ''}`;
+            li.tabIndex = 0;
             li.dataset.filename = block.filename;
             li.innerHTML = `
                 <span class="font-medium text-xs">${deps.escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
@@ -126,6 +162,7 @@ export function renderBlocksLibraryFromCache() {
                 e.dataTransfer.setData('text/plain', block.filename);
             });
             li.addEventListener('click', () => {
+                focusBlockLibraryItem(li);
                 document.getElementById('trackerBlockName')?.blur();
                 deps.flushTrackerSaveForBlockSwitch();
                 deps.setActiveArrangementBlockFilename(block.filename);
@@ -133,6 +170,31 @@ export function renderBlocksLibraryFromCache() {
                 if (arrangementFilename) deps.setSelectedBlockForArrangement(arrangementFilename, block.filename);
                 deps.renderArrangementWorkspace();
                 deps.renderTrackerWorkspace();
+            });
+            li.addEventListener('keydown', (e) => {
+                const allItems = getVisibleBlockLibraryItems(listEl);
+                const index = allItems.indexOf(li);
+                const selectBlock = (target) => {
+                    if (!target || target === li) return;
+                    focusBlockLibraryItem(target);
+                    document.getElementById('trackerBlockName')?.blur();
+                    deps.flushTrackerSaveForBlockSwitch();
+                    deps.setActiveArrangementBlockFilename(target.dataset.filename);
+                    const arrangementFilename = deps.getCurrentArrangementFilename();
+                    if (arrangementFilename) deps.setSelectedBlockForArrangement(arrangementFilename, target.dataset.filename);
+                    deps.renderArrangementWorkspace();
+                    deps.renderTrackerWorkspace();
+                };
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    selectBlock(allItems[Math.min(allItems.length - 1, index + 1)]);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    selectBlock(allItems[Math.max(0, index - 1)]);
+                } else if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    li.click();
+                }
             });
             const delBtn = li.querySelector('.sidebar-del-btn');
             if (canDelete && delBtn) {
@@ -155,6 +217,11 @@ export function renderBlocksLibraryFromCache() {
     appendFolder('user', 'User', userEntries);
     appendFolder('system', 'System', systemEntries);
     deps.createIcons({ icons: deps.icons });
+    const activeItem = listEl.querySelector('.list-item.active');
+    scrollListItemIntoView(activeItem);
+    if (document.activeElement && listEl.contains(document.activeElement)) {
+        focusBlockLibraryItem(activeItem);
+    }
 }
 
 export async function refreshBlocksLibrary() {

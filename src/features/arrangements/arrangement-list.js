@@ -32,6 +32,41 @@ let deps = {
     setStatus: () => {},
 };
 
+function scrollListItemIntoView(item) {
+    if (!item) return;
+    let container = item.parentElement;
+    while (container && container !== document.body) {
+        const style = window.getComputedStyle(container);
+        const overflowY = style?.overflowY || '';
+        if (/(auto|scroll|overlay)/.test(overflowY) && container.scrollHeight > container.clientHeight) {
+            break;
+        }
+        container = container.parentElement;
+    }
+    if (!container || container === document.body) {
+        item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        return;
+    }
+    const padding = 80;
+    const itemRect = item.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    if (itemRect.top < containerRect.top + padding) {
+        container.scrollTop += itemRect.top - (containerRect.top + padding);
+    } else if (itemRect.bottom > containerRect.bottom - padding) {
+        container.scrollTop += itemRect.bottom - (containerRect.bottom - padding);
+    }
+}
+
+function getVisibleArrangementItems(list) {
+    return Array.from(list?.querySelectorAll('.list-item') || [])
+        .filter((item) => item.offsetParent !== null);
+}
+
+function focusArrangementItem(item) {
+    if (!item || typeof item.focus !== 'function') return;
+    item.focus({ preventScroll: true });
+}
+
 export function configureArrangementList(options = {}) {
     deps = { ...deps, ...options };
 }
@@ -173,6 +208,11 @@ export function refreshArrangementListActiveState() {
     Array.from(arrangementList.querySelectorAll('.list-item')).forEach((li) => {
         li.classList.toggle('active', li.dataset.filename === deps.getCurrentArrangementFilename());
     });
+    const activeItem = arrangementList.querySelector('.list-item.active');
+    scrollListItemIntoView(activeItem);
+    if (document.activeElement && arrangementList.contains(document.activeElement)) {
+        focusArrangementItem(activeItem);
+    }
     updateArrangementListScopeVisualizer();
 }
 
@@ -249,15 +289,42 @@ export async function refreshArrangementList() {
                     : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
                 const li = document.createElement('li');
                 li.className = `list-item ${entry.filename === deps.getCurrentArrangementFilename() ? 'active' : ''}`;
+                li.tabIndex = 0;
                 li.dataset.scope = deps.normalizeScope(entry.scope);
                 li.dataset.filename = entry.filename;
                 li.innerHTML = `<span class="font-medium">${deps.escapeHtml(displayName)}</span><div class="list-item-actions">${deleteActionMarkup}</div>`;
 
                 li.querySelector('span')?.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    focusArrangementItem(li);
                     deps.loadArrangement(entry.filename);
                 });
-                li.addEventListener('click', () => deps.loadArrangement(entry.filename));
+                li.addEventListener('click', () => {
+                    focusArrangementItem(li);
+                    deps.loadArrangement(entry.filename);
+                });
+                li.addEventListener('keydown', (e) => {
+                    const items = getVisibleArrangementItems(arrangementList);
+                    const index = items.indexOf(li);
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const next = items[Math.min(items.length - 1, index + 1)];
+                        if (next && next !== li) {
+                            focusArrangementItem(next);
+                            deps.loadArrangement(next.dataset.filename);
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        const prev = items[Math.max(0, index - 1)];
+                        if (prev && prev !== li) {
+                            focusArrangementItem(prev);
+                            deps.loadArrangement(prev.dataset.filename);
+                        }
+                    } else if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        deps.loadArrangement(entry.filename);
+                    }
+                });
 
                 if (canDelete) {
                     li.querySelector('.sidebar-del-btn')?.addEventListener('click', (e) => {
@@ -275,6 +342,7 @@ export async function refreshArrangementList() {
         const systemItems = [...entries.filter((entry) => deps.normalizeScope(entry.scope) === 'system')].sort(sortByLeadingNumber);
         appendFolder('user', 'Your arrangements', userItems);
         appendFolder('system', 'System', systemItems);
+        scrollListItemIntoView(arrangementList.querySelector('.list-item.active'));
         deps.createIcons({ icons: deps.icons });
         updateArrangementListScopeVisualizer();
     } catch (err) {

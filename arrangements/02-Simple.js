@@ -23,6 +23,5 @@ export const arrangementState = {
       ],
       "loop": false
     }
-  ],
-  "scope": "system"
+  ]
 };

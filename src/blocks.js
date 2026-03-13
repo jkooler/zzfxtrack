@@ -98,6 +98,40 @@ function updateInsertButtonsDisabledState() {
   if (elements.insertArrangementBtn) elements.insertArrangementBtn.disabled = selectedArrangementIndex == null || !canInsert;
 }
 
+function scrollListItemIntoView(item) {
+  if (!item) return;
+  let container = item.parentElement;
+  while (container && container !== document.body) {
+    const style = window.getComputedStyle(container);
+    const overflowY = style?.overflowY || '';
+    if (/(auto|scroll|overlay)/.test(overflowY) && container.scrollHeight > container.clientHeight) {
+      break;
+    }
+    container = container.parentElement;
+  }
+  if (!container || container === document.body) {
+    item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    return;
+  }
+  const padding = 80;
+  const itemRect = item.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  if (itemRect.top < containerRect.top + padding) {
+    container.scrollTop += itemRect.top - (containerRect.top + padding);
+  } else if (itemRect.bottom > containerRect.bottom - padding) {
+    container.scrollTop += itemRect.bottom - (containerRect.bottom - padding);
+  }
+}
+
+function getVisibleModalListItems(selector) {
+  return Array.from(document.querySelectorAll(selector)).filter((item) => item.offsetParent !== null);
+}
+
+function focusModalListItem(item) {
+  if (!item || typeof item.focus !== 'function') return;
+  item.focus({ preventScroll: true });
+}
+
 export function loadFolderState(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -757,6 +791,7 @@ function renderArrangementsList() {
       `;
 
       el.addEventListener('click', () => {
+        focusModalListItem(el);
         if (selectedArrangementIndex === index) {
           selectArrangement(index, { preview: false });
           void openArrangementEditor(arrangementsCache[index]);
@@ -765,6 +800,20 @@ function renderArrangementsList() {
         }
       });
       el.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const items = getVisibleModalListItems('#arrangementsList .block-item');
+          const current = items.indexOf(el);
+          const next = e.key === 'ArrowDown'
+            ? items[Math.min(items.length - 1, current + 1)]
+            : items[Math.max(0, current - 1)];
+          if (next && next !== el) {
+            focusModalListItem(next);
+            const nextIndex = parseInt(next.dataset.index, 10);
+            if (Number.isInteger(nextIndex)) selectArrangement(nextIndex);
+          }
+          return;
+        }
         if (e.key !== 'Enter') return;
         e.preventDefault();
         if (selectedArrangementIndex === index) {
@@ -828,6 +877,7 @@ function selectArrangement(index, { preview = true } = {}) {
   const selectedEl = document.querySelector(`#arrangementsList .block-item[data-index="${index}"]`);
   if (selectedEl) {
     selectedEl.classList.add('selected', 'bg-accent', 'border-primary');
+    scrollListItemIntoView(selectedEl);
   }
   selectedArrangementIndex = index;
   updateInsertButtonsDisabledState();
@@ -1718,6 +1768,7 @@ function renderBlocksList() {
       `;
 
       blockEl.addEventListener('click', () => {
+        focusModalListItem(blockEl);
         if (selectedBlockIndex === index) {
           openTrackerForEdit(index);
         } else {
@@ -1725,6 +1776,20 @@ function renderBlocksList() {
         }
       });
       blockEl.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const items = getVisibleModalListItems('#blocksList .block-item');
+          const current = items.indexOf(blockEl);
+          const next = e.key === 'ArrowDown'
+            ? items[Math.min(items.length - 1, current + 1)]
+            : items[Math.max(0, current - 1)];
+          if (next && next !== blockEl) {
+            focusModalListItem(next);
+            const nextIndex = parseInt(next.dataset.index, 10);
+            if (Number.isInteger(nextIndex)) selectBlock(nextIndex);
+          }
+          return;
+        }
         if (e.key !== 'Enter') return;
         e.preventDefault();
         if (selectedBlockIndex === index) {
@@ -1791,6 +1856,7 @@ function selectBlock(index, { preview = true } = {}) {
   const selectedEl = document.querySelector(`#blocksList .block-item[data-index="${index}"]`);
   if (selectedEl) {
     selectedEl.classList.add('selected', 'bg-accent', 'border-primary');
+    scrollListItemIntoView(selectedEl);
   }
   
   // Store selected index

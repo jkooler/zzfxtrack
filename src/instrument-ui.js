@@ -1268,6 +1268,57 @@ function renderInstrumentTypeTabs() {
     });
 }
 
+function scrollListItemIntoView(item) {
+    if (!item) return;
+    let container = item.parentElement;
+    while (container && container !== document.body) {
+        const style = window.getComputedStyle(container);
+        const overflowY = style?.overflowY || '';
+        if (/(auto|scroll|overlay)/.test(overflowY) && container.scrollHeight > container.clientHeight) {
+            break;
+        }
+        container = container.parentElement;
+    }
+    if (!container || container === document.body) {
+        item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        return;
+    }
+    const padding = 80;
+    const itemRect = item.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    if (itemRect.top < containerRect.top + padding) {
+        container.scrollTop += itemRect.top - (containerRect.top + padding);
+    } else if (itemRect.bottom > containerRect.bottom - padding) {
+        container.scrollTop += itemRect.bottom - (containerRect.bottom - padding);
+    }
+}
+
+function getVisibleInstrumentItems() {
+    return Array.from(dom.instrumentList?.querySelectorAll('.instrument-item') || [])
+        .filter((item) => item.offsetParent !== null);
+}
+
+function focusInstrumentItem(item) {
+    if (!item || typeof item.focus !== 'function') return;
+    item.focus({ preventScroll: true });
+}
+
+function openAdjacentInstrument(currentItem, direction) {
+    const items = getVisibleInstrumentItems();
+    if (!items.length) return;
+    const currentIndex = items.indexOf(currentItem);
+    if (currentIndex === -1) return;
+    const nextIndex = Math.max(0, Math.min(items.length - 1, currentIndex + direction));
+    if (nextIndex === currentIndex) return;
+    const nextId = items[nextIndex]?.dataset.instrumentId;
+    if (!nextId) return;
+    const nextInstrument = getInstrumentById(nextId);
+    openDrawer(nextId, { focusListItem: true });
+    if (nextInstrument) {
+        playTestNoteDebounced(nextInstrument.params, null, 0, nextInstrument.strudelAlias);
+    }
+}
+
 /**
  * Handle pattern selection state from main app
  */
@@ -1403,6 +1454,7 @@ function renderInstrumentList() {
 
             const li = document.createElement('li');
             li.className = `instrument-item ${inst.id === currentInstrumentId ? 'active' : ''}`;
+            li.tabIndex = 0;
             li.draggable = true;
             li.dataset.instrumentId = inst.id;
             li.dataset.alias = inst.strudelAlias;
@@ -1427,8 +1479,22 @@ function renderInstrumentList() {
             `;
 
             li.querySelector('.instrument-info').addEventListener('click', () => {
-                openDrawer(inst.id);
+                focusInstrumentItem(li);
+                openDrawer(inst.id, { focusListItem: true });
                 playTestNoteDebounced(inst.params, null, 0, inst.strudelAlias);
+            });
+            li.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    openAdjacentInstrument(li, 1);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    openAdjacentInstrument(li, -1);
+                } else if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openDrawer(inst.id, { focusListItem: true });
+                    playTestNoteDebounced(inst.params, null, 0, inst.strudelAlias);
+                }
             });
 
             const deleteBtn = li.querySelector('.sidebar-del-btn');
@@ -1455,6 +1521,11 @@ function renderInstrumentList() {
     appendFolder('system', 'System', systemInstruments);
     
     createIcons({ icons });
+    const activeItem = dom.instrumentList.querySelector('.instrument-item.active');
+    scrollListItemIntoView(activeItem);
+    if (document.activeElement && dom.instrumentList.contains(document.activeElement)) {
+        focusInstrumentItem(activeItem);
+    }
 
     // Refresh usage indicators (dots)
     updateInstrumentUsage();
@@ -1616,7 +1687,7 @@ function handleDragEnd(e) {
 /**
  * Open drawer to edit instrument
  */
-function openDrawer(instrumentId) {
+function openDrawer(instrumentId, { focusListItem = false } = {}) {
     const instrument = getInstrumentById(instrumentId);
     if (!instrument) return;
 
@@ -1654,6 +1725,10 @@ function openDrawer(instrumentId) {
     
     // Update active state in list
     renderInstrumentList();
+    if (focusListItem) {
+        const activeItem = dom.instrumentList?.querySelector(`.instrument-item[data-instrument-id="${instrumentId}"]`);
+        focusInstrumentItem(activeItem);
+    }
     
     // Resume audio context (needed for user interaction)
     resumePreviewAudio();

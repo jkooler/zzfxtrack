@@ -391,7 +391,7 @@ export function renderArrangementWorkspaceShell({
                     <button
                         id="arrangementWorkspacePreviewBtn"
                         type="button"
-                        class="inline-flex items-center justify-center shrink-0 whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-0 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 w-10 h-10 p-0 shadow-sm"
+                        class="inline-flex items-center justify-center shrink-0 whitespace-nowrap rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-0 bg-quaternary text-quaternary-foreground hover:bg-quaternary/80 w-8 h-8 p-0 shadow-sm"
                         title="${isPreviewPlaying ? 'Stop arrangement preview' : 'Preview arrangement'}"
                     >
                         <i data-lucide="${isPreviewPlaying ? 'square' : 'play'}" class="w-[18px] h-5 fill-current text-quaternary-foreground"></i>

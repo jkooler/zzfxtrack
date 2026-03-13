@@ -135,7 +135,7 @@
   /* Phantom theme */
   html[data-theme="phantom"] {
     font-size: 16px;
-    --background: hsl(214, 30%, 14%);
+    --background: hsl(214, 30%, 12%);
     --foreground: hsl(72, 14%, 73%);
     --card: hsl(314, 8%, 14%);
     --card-foreground: hsla(0, 0%, 100%, 0.74);
@@ -1182,6 +1182,10 @@ strudel-editor {
   @apply text-foreground font-bold;
 }
 
+.tracker-cell.tracker-cell-empty {
+  @apply text-muted-foreground;
+}
+
 .tracker-cell.rest {
   @apply text-muted-foreground/50;
 }
@@ -1253,12 +1257,21 @@ strudel-editor {
 
 /* Arranger */
 .arr-rows-header {
-  @apply flex items-center gap-3 text-[11px] font-bold text-muted-foreground uppercase select-none px-1;
+  @apply flex items-center gap-3 text-[11px] font-bold text-muted-foreground uppercase select-none px-2;
   padding-bottom: calc(var(--spacing) * 2);
 }
 
 .arr-rows-header-spacer {
-  width: calc(var(--spacing) * 4);
+  @apply inline-flex items-center justify-center;
+  width: calc(var(--spacing) * 6);
+}
+
+.arr-rows-header-spacer::before {
+  content: "#";
+}
+
+.arr-rows-header-repeat::before {
+  content: "Reps";
 }
 
 .arr-rows-header-repeat {
@@ -1266,8 +1279,13 @@ strudel-editor {
   width: calc(var(--spacing) * 9.6); /* matches .arr-repeats width (60%) */
 }
 
+.arr-rows-header-blocks::before {
+  content: "Blocks";
+}
+
 .arr-rows-header-blocks {
   @apply inline-flex items-center;
+  transform: translateX(-0.5rem);
 }
 
 .arr-row {
