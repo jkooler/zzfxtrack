@@ -1,6 +1,6 @@
 # ZzFXTrack Player
 
-**ZzFXTrack Player** — play song data in your game or project. Uses the **ZzFXMicro** 21-parameter engine (sample-rate synthesis). No dependencies.
+**ZzFXTrack Player** — play song data in your game or project. Uses the **ZzFXMicro** 20-parameter engine (sample-rate synthesis). No dependencies.
 
 **Format:** This player accepts either:
 - **Legacy:** `[instruments, patterns, sequence, BPM]` (21-param ZzFXMicro instrument arrays), or
