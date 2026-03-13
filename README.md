@@ -1,10 +1,10 @@
 # ZzFXTrack
 
-**ZzFXTrack** is a music creation app that uses **ZzFXMicro** synthesis by **Frank Force**. It embeds **Strudel** for its REPL workflow and adds a custom made **Arranger** and **Blocks** with a tracker interface. The Arranger and Blocks is built upon Strudel's patterns and scheduling with one way integration support.
+**ZzFXTrack** is a music creation app that uses [**ZzFXMicro**](https://github.com/KilledByAPixel/ZzFX) synthesis by **Frank Force**. It embeds [**Strudel**](https://strudel.cc/) for its REPL workflow and adds a custom made **Arranger** and **Blocks** with a tracker interface. The Arranger and Blocks is built upon Strudel's patterns and scheduling with one way integration support.
 
 **Instruments** can be created using a streamlined editor with scrub inputs. Instruments are audited by ZzFXMicro externally instead of Strudel's internal sound engine with ZzFX support. This is because the music needs to be exported to games or demos in an optimal and predictable way.
 
-Exported music can be played with the bundled **ZzFXTrack Player** which takes its inspiration from **ZzFXM** by **Keith Clark** and **Frank Force**. Developers can freely use it their projects or build their own. WAV export is also supported.
+Exported music can be played with the bundled **ZzFXTrack Player** which takes its inspiration from [**ZzFXM**](https://keithclark.github.io/ZzFXM) by **Keith Clark** and **Frank Force**. Developers can freely use it their projects or build their own. WAV export is also supported.
 
 Disclaimer: ZzFXTrack is not affiliated with or endorsed by creators of Strudel, ZzFX and ZzFXM. It's made for my personal projects, but I'm always open to expand the idea and collaborate.
 
