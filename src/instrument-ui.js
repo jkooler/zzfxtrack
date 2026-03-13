@@ -1052,7 +1052,7 @@ function reorganizeParameters(useArrayOrder) {
                              toggleGroup.querySelectorAll('button').forEach(btn => {
                                  const btnVal = parseInt(btn.dataset.value);
                                  if (btnVal === currentVal) {
-                                     btn.className = 'flex-1 h-full text-sm font-medium rounded-md bg-input-bg border border-border text-foreground shadow-sm transition-all';
+                                     btn.className = 'flex-1 h-full text-sm font-medium rounded-md bg-input-bg border border-tertiary text-foreground shadow-sm transition-all';
                                  } else {
                                      btn.className = 'flex-1 h-full text-sm font-medium rounded-md border border-card text-muted-foreground hover:text-foreground hover:bg-background/50 transition-all';
                                  }
