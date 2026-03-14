@@ -1112,6 +1112,10 @@ strudel-editor {
   @apply text-foreground;
 }
 
+.tracker-grid.tracker-grid-multitrack-mode .multitrack-tracker-segment-live .tracker-timetrack-row.beat {
+  color: var(--primary);
+}
+
 .tracker-timetrack-row.active {
   @apply text-primary;
 }

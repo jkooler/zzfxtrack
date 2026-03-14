@@ -71,6 +71,12 @@ function syncFocusedFieldUI(field = state.focusedField || 'note') {
   }
 }
 
+function getActiveTrackerTimeTrackRoot() {
+  if (!elements.grid) return document;
+  if (!isMultitrackEditing()) return elements.grid;
+  return elements.grid.querySelector('.multitrack-tracker-segment-live') || elements.grid;
+}
+
 // Keyboard to note mapping (zxcvb row = C3-B3, qwerty row = C4-B4)
 const KEYBOARD_MAP = {
   // Lower row (C3 - B3)
@@ -330,12 +336,13 @@ function moveFocusOnly(channel, step, options = {}) {
   const shouldDomFocus = options.domFocus === true;
   const clampedCh = Math.max(0, Math.min(channel, state.channels - 1));
   const clampedStep = Math.max(0, Math.min(step, state.steps - 1));
+  const timeTrackRoot = getActiveTrackerTimeTrackRoot();
   selLog('moveFocusOnly', state.focusedChannel, state.focusedStep, '->', clampedCh, clampedStep);
   const oldCell = document.querySelector(
     `.tracker-cell[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
   );
   if (oldCell) oldCell.classList.remove('active');
-  document.querySelectorAll('.tracker-timetrack-row.active').forEach((r) => r.classList.remove('active'));
+  timeTrackRoot.querySelectorAll('.tracker-timetrack-row.active').forEach((r) => r.classList.remove('active'));
 
   state.focusedChannel = clampedCh;
   state.focusedStep = clampedStep;
@@ -365,7 +372,7 @@ function moveFocusOnly(channel, step, options = {}) {
       newCell.focus({ preventScroll: true });
     }
   }
-  const newTimeStep = document.querySelector(`.tracker-timetrack-row[data-step="${state.focusedStep}"]`);
+  const newTimeStep = timeTrackRoot.querySelector(`.tracker-timetrack-row[data-step="${state.focusedStep}"]`);
   if (newTimeStep) newTimeStep.classList.add('active');
 }
 
@@ -2103,6 +2110,7 @@ function setFocus(channel, step, options = {}) {
   const field = options.field === 'vol' || options.field === 'reps' || options.field === 'nd' ? options.field : 'note';
   const clampedChannel = Math.max(0, Math.min(channel, state.channels - 1));
   const clampedStep = Math.max(0, Math.min(step, state.steps - 1));
+  const timeTrackRoot = getActiveTrackerTimeTrackRoot();
 
   // Remove active class from old cell
   const oldCell = document.querySelector(
@@ -2111,10 +2119,9 @@ function setFocus(channel, step, options = {}) {
   if (oldCell) {
     oldCell.classList.remove('active');
   }
-  const oldTimeStep = document.querySelector('.tracker-timetrack-row.active');
-  if (oldTimeStep) {
-    oldTimeStep.classList.remove('active');
-  }
+  timeTrackRoot.querySelectorAll('.tracker-timetrack-row.active').forEach((stepEl) => {
+    stepEl.classList.remove('active');
+  });
 
   state.focusedChannel = clampedChannel;
   state.focusedStep = clampedStep;
@@ -2155,7 +2162,7 @@ function setFocus(channel, step, options = {}) {
     }
   }
 
-  const newTimeStep = document.querySelector(`.tracker-timetrack-row[data-step="${state.focusedStep}"]`);
+  const newTimeStep = timeTrackRoot.querySelector(`.tracker-timetrack-row[data-step="${state.focusedStep}"]`);
   if (newTimeStep) {
     newTimeStep.classList.add('active');
   }
