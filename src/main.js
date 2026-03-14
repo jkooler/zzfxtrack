@@ -56,7 +56,7 @@ import { applyArrangementWorkspacePlayhead, clearArrangementWorkspacePlayheadVis
 // --- Features: tracker ---
 import { configureTrackerController, openTrackerModal, openTrackerModalForEdit, scheduleTrackerAutoSave } from './features/tracker/tracker-controller.js';
 import { configureTrackerPreviewSync, scheduleTrackerPreviewInstrumentRefresh } from './features/tracker/tracker-preview-sync.js';
-import { configureTrackerWorkspace, renderTrackerWorkspace, undockTrackerModalFromWorkspace } from './features/tracker/tracker-workspace.js';
+import { configureTrackerWorkspace, renderTrackerWorkspace, requestTrackerWorkspaceMultitrackAutoscroll, undockTrackerModalFromWorkspace } from './features/tracker/tracker-workspace.js';
 
 // --- Features: blocks ---
 import { configureBlockLibrary, refreshBlocksLibrary } from './features/blocks/block-library.js';
@@ -592,8 +592,9 @@ configureArrangementWorkspace({
     getActiveArrangementBlockFilename: () => appState.activeArrangementBlockFilename,
     getActiveArrangementRowIndex: () => appState.activeArrangementRowIndex,
     setActiveArrangementRowIndex: (value) => { appState.activeArrangementRowIndex = value; },
-    getArrangementCombineMode: () => appState.arrangementCombineMode,
-    setArrangementCombineMode: (value) => { appState.arrangementCombineMode = Boolean(value); },
+    getArrangementMultitrackMode: () => appState.arrangementMultitrackMode,
+    setArrangementMultitrackMode: (value) => { appState.arrangementMultitrackMode = Boolean(value); },
+    requestTrackerWorkspaceMultitrackAutoscroll,
     getSelectedBlockForArrangement: (filename) => arrangementSelectedBlockByArrangement[filename],
     setSelectedBlockForArrangement: (filename, blockFilename) => { arrangementSelectedBlockByArrangement[filename] = blockFilename; },
     getBlockByFilename,
@@ -721,7 +722,7 @@ configureTrackerWorkspace({
     getActiveArrangementBlockFilename: () => appState.activeArrangementBlockFilename,
     setActiveArrangementBlockFilename: (value) => { appState.activeArrangementBlockFilename = value; },
     getActiveArrangementRowIndex: () => appState.activeArrangementRowIndex,
-    getArrangementCombineMode: () => appState.arrangementCombineMode,
+    getArrangementMultitrackMode: () => appState.arrangementMultitrackMode,
     getArrangementDraftState: () => appState.arrangementDraftState,
     getBlockByFilename,
     getTrackerWorkspaceLoadedFilename: () => trackerWorkspaceLoadedFilename,

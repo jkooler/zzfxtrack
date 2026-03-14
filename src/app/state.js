@@ -20,5 +20,5 @@ export const appState = {
     blocksLibraryCache: [],
     activeArrangementBlockFilename: null,
     activeArrangementRowIndex: null,
-    arrangementCombineMode: false,
+    arrangementMultitrackMode: false,
 };

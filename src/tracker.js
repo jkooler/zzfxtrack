@@ -45,11 +45,11 @@ function setDenseRowsPreference(value) {
 function updateDenseRowsToggleUI() {
   const btn = elements.denseRowsToggle;
   if (!btn) return;
-  const combineEditing = isCombineEditing();
-  const isDense = combineEditing ? true : !!editMode.denseRows;
+  const multitrackEditing = isMultitrackEditing();
+  const isDense = multitrackEditing ? true : !!editMode.denseRows;
   btn.setAttribute('aria-pressed', String(isDense));
-  btn.disabled = combineEditing;
-  btn.classList.toggle('hidden', combineEditing);
+  btn.disabled = multitrackEditing;
+  btn.classList.toggle('hidden', multitrackEditing);
   const iconEl = btn.querySelector('[data-lucide]');
   if (iconEl) {
     const desired = isDense ? 'list-chevrons-up-down' : 'list-chevrons-down-up';
@@ -194,13 +194,15 @@ let editMode = {
   returnToArrangementsOnClose: false,
   returnToBlocksOnClose: false,
   arrangementInsertRowIndex: null,
-  combineSegments: null,
+  multitrackSegments: null,
   denseRows: true,
 };
 
-let pendingCombineFocusTarget = null;
-let combineKeyboardTransitionLock = null;
-let combineBoundaryRepeatLockKey = null;
+let pendingMultitrackFocusTarget = null;
+let multitrackKeyboardTransitionLock = null;
+let multitrackBoundaryRepeatLockKey = null;
+let multitrackSharedScrollTop = 0;
+let multitrackSharedScrollLeft = 0;
 
 /** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
 let lastSavedSnapshot = '';
@@ -1180,11 +1182,11 @@ function getVerticalScrollbarWidthPx() {
 /**
  * Render the tracker grid
  */
-function isCombineEditing() {
-  return editMode.isEditing && Array.isArray(editMode.combineSegments) && editMode.combineSegments.length > 1;
+function isMultitrackEditing() {
+  return editMode.isEditing && Array.isArray(editMode.multitrackSegments) && editMode.multitrackSegments.length > 1;
 }
 
-function cloneCombineSegments(segments = []) {
+function cloneMultitrackSegments(segments = []) {
   return segments
     .map((segment) => {
       if (!segment?.filename) return null;
@@ -1200,13 +1202,13 @@ function cloneCombineSegments(segments = []) {
     .filter(Boolean);
 }
 
-function getActiveCombineSegment() {
-  if (!isCombineEditing() || !editMode.blockFilename) return null;
-  return editMode.combineSegments.find((segment) => segment.filename === editMode.blockFilename) || null;
+function getActiveMultitrackSegment() {
+  if (!isMultitrackEditing() || !editMode.blockFilename) return null;
+  return editMode.multitrackSegments.find((segment) => segment.filename === editMode.blockFilename) || null;
 }
 
-function syncCurrentCombineSegmentState() {
-  const segment = getActiveCombineSegment();
+function syncCurrentMultitrackSegmentState() {
+  const segment = getActiveMultitrackSegment();
   if (!segment) return;
   segment.trackerState = JSON.parse(JSON.stringify(serializeTrackerState()));
   segment.name = (elements.blockNameInput?.value ?? editMode.blockName ?? segment.name ?? '').trim() || segment.filename.replace(/\.js$/i, '');
@@ -1215,76 +1217,99 @@ function syncCurrentCombineSegmentState() {
   segment.scope = editMode.blockScope === 'system' ? 'system' : 'user';
 }
 
-function focusCombineTarget(target = null) {
+function focusMultitrackTarget(target = null) {
   if (!target || target.filename !== editMode.blockFilename) return;
   const channel = Math.max(0, Math.min(Number.isInteger(target.channel) ? target.channel : 0, state.channels - 1));
   const step = Math.max(0, Math.min(Number.isInteger(target.step) ? target.step : 0, state.steps - 1));
   if (target.field === 'vol') {
-    focusVolInput(channel, step);
+    setFocus(channel, step, { field: 'vol', scroll: false });
+    const volInput = document.querySelector(
+      `.tracker-vol-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+    );
+    if (volInput) {
+      volInput.focus({ preventScroll: true });
+      volInput.select();
+    }
   } else if (target.field === 'reps') {
-    focusRepsInput(channel, step);
+    setFocus(channel, step, { field: 'reps', scroll: false });
+    const repsInput = document.querySelector(
+      `.tracker-reps-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+    );
+    if (repsInput) {
+      repsInput.focus({ preventScroll: true });
+      repsInput.select();
+    }
   } else if (target.field === 'nd') {
-    focusNdInput(channel, step);
+    setFocus(channel, step, { field: 'nd', scroll: false });
+    const ndInput = document.querySelector(
+      `.tracker-nd-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
+    );
+    if (ndInput) {
+      ndInput.focus({ preventScroll: true });
+      ndInput.select();
+    }
   } else {
-    focusNoteCell(channel, step);
+    setFocus(channel, step, { domFocus: true, field: 'note', scroll: false });
   }
 }
 
-function switchCombineActiveBlock(filename, focusTarget = {}) {
-  if (!isCombineEditing() || !filename) return;
-  const nextSegment = editMode.combineSegments.find((segment) => segment.filename === filename);
+function switchMultitrackActiveBlock(filename, focusTarget = {}) {
+  if (!isMultitrackEditing() || !filename) return;
+  const nextSegment = editMode.multitrackSegments.find((segment) => segment.filename === filename);
   if (!nextSegment) return;
   if (filename === editMode.blockFilename) {
-    focusCombineTarget({ ...focusTarget, filename });
+    focusMultitrackTarget({ ...focusTarget, filename });
     return;
   }
-  scheduleArrangementLiveEditUpdate();
-  syncCurrentCombineSegmentState();
-  pendingCombineFocusTarget = {
+  syncCurrentMultitrackSegmentState();
+  pendingMultitrackFocusTarget = {
     channel: Number.isInteger(focusTarget.channel) ? focusTarget.channel : 0,
     field: focusTarget.field === 'vol' || focusTarget.field === 'reps' || focusTarget.field === 'nd' ? focusTarget.field : 'note',
     filename,
     step: Number.isInteger(focusTarget.step) ? focusTarget.step : 0,
   };
-  document.dispatchEvent(new CustomEvent('tracker:combineActiveBlockChanged', {
+  document.dispatchEvent(new CustomEvent('tracker:multitrackActiveBlockChanged', {
     detail: { filename },
   }));
-  loadCombineSegmentInPlace(nextSegment);
+  loadMultitrackSegmentInPlace(nextSegment);
 }
 
-function getCombineSegmentIndex(filename = editMode.blockFilename) {
-  if (!isCombineEditing() || !filename) return -1;
-  return editMode.combineSegments.findIndex((segment) => segment.filename === filename);
+function getMultitrackSegmentIndex(filename = editMode.blockFilename) {
+  if (!isMultitrackEditing() || !filename) return -1;
+  return editMode.multitrackSegments.findIndex((segment) => segment.filename === filename);
 }
 
-function moveFocusToAdjacentCombineSegment(direction, focusTarget = {}, repeatLockKey = null) {
-  const currentIndex = getCombineSegmentIndex();
+function moveFocusToAdjacentMultitrackSegment(direction, focusTarget = {}, repeatLockKey = null) {
+  const currentIndex = getMultitrackSegmentIndex();
   if (currentIndex < 0) return false;
   const nextIndex = direction === 'previous' ? currentIndex - 1 : currentIndex + 1;
-  const nextSegment = editMode.combineSegments[nextIndex];
+  const nextSegment = editMode.multitrackSegments[nextIndex];
   if (!nextSegment?.filename) return false;
   const lockToken = {};
-  combineKeyboardTransitionLock = lockToken;
-  combineBoundaryRepeatLockKey = repeatLockKey || null;
-  switchCombineActiveBlock(nextSegment.filename, {
+  multitrackKeyboardTransitionLock = lockToken;
+  multitrackBoundaryRepeatLockKey = repeatLockKey || null;
+  switchMultitrackActiveBlock(nextSegment.filename, {
     channel: Number.isInteger(focusTarget.channel) ? focusTarget.channel : 0,
     field: focusTarget.field === 'vol' || focusTarget.field === 'reps' || focusTarget.field === 'nd' ? focusTarget.field : 'note',
     step: Number.isInteger(focusTarget.step) ? focusTarget.step : 0,
   });
+  scrollActiveMultitrackSegmentIntoView();
   requestAnimationFrame(() => {
-    if (combineKeyboardTransitionLock === lockToken) {
-      combineKeyboardTransitionLock = null;
+    if (multitrackKeyboardTransitionLock === lockToken) {
+      multitrackKeyboardTransitionLock = null;
     }
   });
   return true;
 }
 
-function loadCombineSegmentInPlace(segment) {
+function loadMultitrackSegmentInPlace(segment) {
   if (!segment?.filename) return;
 
   if (editMode.blockFilename) {
     const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    if (elements.grid) multitrackSharedScrollLeft = elements.grid.scrollLeft;
     if (bodyScroll) {
+      multitrackSharedScrollTop = bodyScroll.scrollTop;
       blockScrollPositions.set(editMode.blockFilename, {
         scrollTop: bodyScroll.scrollTop,
         channel: state.focusedChannel,
@@ -1313,25 +1338,113 @@ function loadCombineSegmentInPlace(segment) {
   const saved = blockScrollPositions.get(segment.filename);
   const channel = saved && Number.isInteger(saved.channel) ? Math.max(0, Math.min(saved.channel, state.channels - 1)) : 0;
   const step = saved && Number.isInteger(saved.step) ? Math.max(0, Math.min(saved.step, state.steps - 1)) : 0;
-  setFocus(channel, step);
-  focusCombineTarget(pendingCombineFocusTarget);
-  if (pendingCombineFocusTarget?.filename === segment.filename) {
-    pendingCombineFocusTarget = null;
+  setFocus(channel, step, { scroll: false });
+  focusMultitrackTarget(pendingMultitrackFocusTarget);
+  if (pendingMultitrackFocusTarget?.filename === segment.filename) {
+    pendingMultitrackFocusTarget = null;
   }
-  if (saved != null && saved.scrollTop != null) {
-    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
-    if (bodyScroll) bodyScroll.scrollTop = saved.scrollTop;
-  }
+  const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+  if (bodyScroll) bodyScroll.scrollTop = multitrackSharedScrollTop;
+  syncMultitrackSnapshotScroll(multitrackSharedScrollTop);
 }
 
-function applyCombineSegmentLayoutVars(element, channels) {
+function applyMultitrackSegmentLayoutVars(element, channels) {
   if (!element) return;
   const safeChannels = Math.min(Math.max(Number.isInteger(channels) ? channels : 1, 1), MAX_CHANNELS);
-  element.style.setProperty('--combine-channel-count', String(safeChannels));
-  element.style.setProperty('--combine-channel-width', 'calc(192px * 0.7)');
+  element.style.setProperty('--multitrack-channel-count', String(safeChannels));
+  element.style.setProperty('--multitrack-channel-width', 'calc(192px * 0.7)');
 }
 
-function buildCombineSnapshotSegment(segment) {
+function scrollActiveMultitrackSegmentIntoView() {
+  if (!isMultitrackEditing()) return;
+  requestAnimationFrame(() => {
+    const container = elements.grid;
+    const activeSegment = container?.querySelector('.multitrack-tracker-segment-live');
+    if (!container || !activeSegment) return;
+
+    const margin = 48;
+    const segmentLeft = activeSegment.offsetLeft;
+    const segmentRight = segmentLeft + activeSegment.offsetWidth;
+    const viewLeft = container.scrollLeft;
+    const viewRight = viewLeft + container.clientWidth;
+
+    let nextScrollLeft = null;
+    if (segmentLeft - margin < viewLeft) {
+      nextScrollLeft = Math.max(segmentLeft - margin, 0);
+    } else if (segmentRight + margin > viewRight) {
+      nextScrollLeft = Math.max(segmentRight - container.clientWidth + margin, 0);
+    }
+
+    if (nextScrollLeft != null) {
+      container.scrollLeft = nextScrollLeft;
+    }
+  });
+}
+
+function syncMultitrackSnapshotScroll(scrollTop = 0) {
+  if (!isMultitrackEditing() || !elements.grid) return;
+  multitrackSharedScrollTop = Math.max(0, scrollTop);
+  elements.grid.style.setProperty('--multitrack-scroll-top', `${multitrackSharedScrollTop}px`);
+}
+
+function getMultitrackMaxSteps() {
+  if (!isMultitrackEditing()) return state.steps;
+  const steps = editMode.multitrackSegments.map((segment) => {
+    const value = Number.isInteger(segment?.trackerState?.steps) ? segment.trackerState.steps : state.steps;
+    return Math.max(1, value || state.steps);
+  });
+  return Math.max(state.steps, ...steps);
+}
+
+function applyMultitrackVirtualScrollRange(timeTrackScroll, timeTrackEl, channelsScroll, gridBody) {
+  if (!timeTrackScroll || !timeTrackEl || !channelsScroll || !gridBody) return;
+
+  timeTrackScroll.querySelectorAll('.multitrack-virtual-scroll-spacer').forEach((el) => el.remove());
+  channelsScroll.querySelectorAll('.multitrack-virtual-scroll-spacer').forEach((el) => el.remove());
+
+  if (!isMultitrackEditing()) return;
+
+  const maxSteps = getMultitrackMaxSteps();
+  const extraSteps = Math.max(0, maxSteps - state.steps);
+  if (!extraSteps) return;
+
+  const firstRow = gridBody.querySelector('.tracker-row');
+  const secondRow = gridBody.querySelector('.tracker-row[data-step="1"]');
+  const firstTimeRow = timeTrackEl.querySelector('.tracker-timetrack-row');
+  const secondTimeRow = timeTrackEl.querySelector('.tracker-timetrack-row[data-step="1"]');
+
+  const rowPitch = firstRow && secondRow
+    ? Math.abs(secondRow.offsetTop - firstRow.offsetTop)
+    : ((firstRow?.offsetHeight || 14) + 1);
+  const timeRowPitch = firstTimeRow && secondTimeRow
+    ? Math.abs(secondTimeRow.offsetTop - firstTimeRow.offsetTop)
+    : ((firstTimeRow?.offsetHeight || 14) + 1);
+
+  const channelSpacer = document.createElement('div');
+  channelSpacer.className = 'multitrack-virtual-scroll-spacer';
+  channelSpacer.setAttribute('aria-hidden', 'true');
+  channelSpacer.style.height = `${Math.max(0, extraSteps * rowPitch)}px`;
+  channelSpacer.style.pointerEvents = 'none';
+
+  const timeSpacer = document.createElement('div');
+  timeSpacer.className = 'multitrack-virtual-scroll-spacer';
+  timeSpacer.setAttribute('aria-hidden', 'true');
+  timeSpacer.style.height = `${Math.max(0, extraSteps * timeRowPitch)}px`;
+  timeSpacer.style.pointerEvents = 'none';
+
+  channelsScroll.appendChild(channelSpacer);
+  timeTrackScroll.appendChild(timeSpacer);
+
+  const maxScrollTop = Math.max(0, channelsScroll.scrollHeight - channelsScroll.clientHeight);
+  if (multitrackSharedScrollTop > maxScrollTop) {
+    multitrackSharedScrollTop = maxScrollTop;
+    channelsScroll.scrollTop = maxScrollTop;
+    timeTrackScroll.scrollTop = maxScrollTop;
+    syncMultitrackSnapshotScroll(maxScrollTop);
+  }
+}
+
+function buildMultitrackSnapshotSegment(segment) {
   const trackerState = segment?.trackerState || {};
   const channels = Number.isInteger(trackerState.channels) ? Math.min(Math.max(trackerState.channels, 1), MAX_CHANNELS) : 4;
   const steps = Number.isInteger(trackerState.steps) ? Math.min(Math.max(trackerState.steps, 1), 256) : 16;
@@ -1342,23 +1455,23 @@ function buildCombineSnapshotSegment(segment) {
   const channelInstruments = Array.isArray(trackerState.channelInstruments) ? trackerState.channelInstruments : [];
 
   const segmentEl = document.createElement('div');
-  segmentEl.className = 'combine-tracker-segment combine-tracker-segment-snapshot';
+  segmentEl.className = 'multitrack-tracker-segment multitrack-tracker-segment-snapshot';
   segmentEl.dataset.filename = segment.filename;
   segmentEl.dataset.channels = String(channels);
-  applyCombineSegmentLayoutVars(segmentEl, channels);
+  applyMultitrackSegmentLayoutVars(segmentEl, channels);
 
   const headerEl = document.createElement('div');
-  headerEl.className = 'tracker-headers combine-tracker-segment-header';
+  headerEl.className = 'tracker-headers multitrack-tracker-segment-header';
 
   const timeHeaderEl = document.createElement('div');
-  timeHeaderEl.className = 'tracker-timetrack-header combine-tracker-time-header';
+  timeHeaderEl.className = 'tracker-timetrack-header multitrack-tracker-time-header';
   const timeTrackSelectSpacer = document.createElement('div');
   timeTrackSelectSpacer.className = 'tracker-timetrack-select-spacer';
   timeHeaderEl.appendChild(timeTrackSelectSpacer);
   headerEl.appendChild(timeHeaderEl);
 
   const channelHeadersEl = document.createElement('div');
-  channelHeadersEl.className = 'tracker-headers tracker-channels-header-inner combine-tracker-channel-headers';
+  channelHeadersEl.className = 'tracker-headers tracker-channels-header-inner multitrack-tracker-channel-headers';
   for (let ch = 0; ch < channels; ch++) {
     const channelHeaderEl = document.createElement('div');
     channelHeaderEl.className = 'tracker-channel-header';
@@ -1404,29 +1517,32 @@ function buildCombineSnapshotSegment(segment) {
   segmentEl.appendChild(headerEl);
 
   const bodyEl = document.createElement('div');
-  bodyEl.className = 'combine-tracker-segment-body';
+  bodyEl.className = 'multitrack-tracker-segment-body';
+
+  const viewportEl = document.createElement('div');
+  viewportEl.className = 'multitrack-tracker-segment-viewport';
 
   const timeColEl = document.createElement('div');
-  timeColEl.className = 'tracker-timetrack combine-tracker-time-col';
+  timeColEl.className = 'tracker-timetrack multitrack-tracker-time-col';
   for (let step = 0; step < steps; step++) {
     const stepEl = document.createElement('div');
-    stepEl.className = 'tracker-timetrack-row combine-tracker-time-row';
+    stepEl.className = 'tracker-timetrack-row multitrack-tracker-time-row';
     stepEl.dataset.step = String(step);
     if (step % 4 === 0) stepEl.classList.add('beat');
     if (step % 16 === 0) stepEl.classList.add('bar');
     stepEl.textContent = String(step);
     timeColEl.appendChild(stepEl);
   }
-  bodyEl.appendChild(timeColEl);
+  viewportEl.appendChild(timeColEl);
 
   const channelsEl = document.createElement('div');
-  channelsEl.className = 'combine-tracker-snapshot-channels';
+  channelsEl.className = 'multitrack-tracker-snapshot-channels';
   for (let ch = 0; ch < channels; ch++) {
     const channelEl = document.createElement('div');
-    channelEl.className = 'combine-tracker-snapshot-channel';
+    channelEl.className = 'multitrack-tracker-snapshot-channel';
     for (let step = 0; step < steps; step++) {
       const rowEl = document.createElement('div');
-      rowEl.className = 'combine-tracker-row';
+      rowEl.className = 'multitrack-tracker-row';
       rowEl.dataset.step = String(step);
       if (step % 4 === 0) rowEl.classList.add('beat');
       if (step % 16 === 0) rowEl.classList.add('bar');
@@ -1441,25 +1557,21 @@ function buildCombineSnapshotSegment(segment) {
         button.type = 'button';
         button.tabIndex = -1;
         button.className = field === 'note'
-          ? 'combine-tracker-cell'
-          : 'combine-tracker-fx';
+          ? 'multitrack-tracker-cell'
+          : 'multitrack-tracker-fx';
         if (field === 'note') {
           if (value === '-') button.textContent = '-';
           else if (value) button.textContent = formatNoteLabel(value);
           else {
             button.textContent = '·';
-            button.classList.add('combine-tracker-cell-empty');
+            button.classList.add('multitrack-tracker-cell-empty');
           }
         } else {
           button.textContent = value != null ? String(value) : '';
         }
         button.addEventListener('mousedown', (event) => {
           event.preventDefault();
-          switchCombineActiveBlock(segment.filename, { channel: ch, step, field });
-        });
-        button.addEventListener('click', (event) => {
-          event.preventDefault();
-          switchCombineActiveBlock(segment.filename, { channel: ch, step, field });
+          switchMultitrackActiveBlock(segment.filename, { channel: ch, step, field });
         });
         return button;
       };
@@ -1472,49 +1584,80 @@ function buildCombineSnapshotSegment(segment) {
     }
     channelsEl.appendChild(channelEl);
   }
-  bodyEl.appendChild(channelsEl);
+  viewportEl.appendChild(channelsEl);
+  bodyEl.appendChild(viewportEl);
   segmentEl.appendChild(bodyEl);
 
   return segmentEl;
 }
 
-function renderCombineGridAroundLiveSegment() {
-  if (!elements.grid || !isCombineEditing()) return;
-  syncCurrentCombineSegmentState();
+function renderMultitrackGridAroundLiveSegment() {
+  if (!elements.grid || !isMultitrackEditing()) return;
+  syncCurrentMultitrackSegmentState();
+  multitrackSharedScrollLeft = elements.grid.scrollLeft || multitrackSharedScrollLeft;
 
   const liveChildren = Array.from(elements.grid.childNodes);
   const stripEl = document.createElement('div');
-  stripEl.className = 'combine-tracker-strip';
+  stripEl.className = 'multitrack-tracker-strip';
 
-  editMode.combineSegments.forEach((segment) => {
+  editMode.multitrackSegments.forEach((segment) => {
     const segmentWrapper = document.createElement('div');
-    segmentWrapper.className = `combine-tracker-segment ${segment.filename === editMode.blockFilename ? 'combine-tracker-segment-live' : 'combine-tracker-segment-snapshot-wrap'}`;
+    segmentWrapper.className = `multitrack-tracker-segment ${segment.filename === editMode.blockFilename ? 'multitrack-tracker-segment-live' : 'multitrack-tracker-segment-snapshot-wrap'}`;
     segmentWrapper.dataset.filename = segment.filename;
-    applyCombineSegmentLayoutVars(segmentWrapper, segment.filename === editMode.blockFilename ? state.channels : (segment.trackerState?.channels || state.channels));
+    applyMultitrackSegmentLayoutVars(segmentWrapper, segment.filename === editMode.blockFilename ? state.channels : (segment.trackerState?.channels || state.channels));
     if (segment.filename === editMode.blockFilename) {
       liveChildren.forEach((child) => segmentWrapper.appendChild(child));
     } else {
-      segmentWrapper.appendChild(buildCombineSnapshotSegment(segment));
+      segmentWrapper.appendChild(buildMultitrackSnapshotSegment(segment));
     }
     stripEl.appendChild(segmentWrapper);
   });
 
   elements.grid.innerHTML = '';
-  elements.grid.classList.toggle('tracker-grid-combine-mode', true);
+  elements.grid.classList.toggle('tracker-grid-multitrack-mode', true);
   elements.grid.appendChild(stripEl);
+  elements.grid.scrollLeft = multitrackSharedScrollLeft;
+  const activeBodyScroll = elements.grid.querySelector('.multitrack-tracker-segment-live .tracker-body-scroll');
+  syncMultitrackSnapshotScroll(activeBodyScroll?.scrollTop || 0);
+  elements.grid.onscroll = () => {
+    if (elements.grid) multitrackSharedScrollLeft = elements.grid.scrollLeft;
+  };
+  elements.grid.onwheel = (event) => {
+    const activeBodyScroll = elements.grid?.querySelector('.multitrack-tracker-segment-live .tracker-body-scroll');
+    if (!activeBodyScroll) return;
+
+    const absDeltaY = Math.abs(event.deltaY);
+    const absDeltaX = Math.abs(event.deltaX);
+
+    if (absDeltaY > 0 && absDeltaY >= absDeltaX) {
+      activeBodyScroll.scrollTop += event.deltaY;
+      event.preventDefault();
+      return;
+    }
+
+    if (absDeltaX > 0) {
+      elements.grid.scrollLeft += event.deltaX;
+      multitrackSharedScrollLeft = elements.grid.scrollLeft;
+      event.preventDefault();
+    }
+  };
 }
 
 function renderGrid() {
   renderSingleGrid();
-  elements.grid?.classList.toggle('tracker-grid-combine-mode', isCombineEditing());
-  if (isCombineEditing()) renderCombineGridAroundLiveSegment();
+  elements.grid?.classList.toggle('tracker-grid-multitrack-mode', isMultitrackEditing());
+  if (isMultitrackEditing()) renderMultitrackGridAroundLiveSegment();
+  else if (elements.grid) {
+    elements.grid.onwheel = null;
+    elements.grid.onscroll = null;
+  }
 }
 
 function renderSingleGrid() {
   if (!elements.grid) return;
 
   elements.grid.dataset.channels = String(state.channels);
-  elements.grid.dataset.denseRows = isCombineEditing() || editMode.denseRows ? 'true' : 'false';
+  elements.grid.dataset.denseRows = isMultitrackEditing() || editMode.denseRows ? 'true' : 'false';
   elements.grid.dataset.focusedField = state.focusedField || 'note';
   elements.grid.innerHTML = '';
 
@@ -1849,12 +1992,14 @@ function renderSingleGrid() {
     scrollSyncLock = true;
     channelsScroll.scrollTop = timeTrackScroll.scrollTop;
     scrollSyncLock = false;
+    syncMultitrackSnapshotScroll(timeTrackScroll.scrollTop);
   });
   channelsScroll.addEventListener('scroll', () => {
     if (scrollSyncLock) return;
     scrollSyncLock = true;
     timeTrackScroll.scrollTop = channelsScroll.scrollTop;
     scrollSyncLock = false;
+    syncMultitrackSnapshotScroll(channelsScroll.scrollTop);
   });
 
   // Drag row strip to change vertical scroll position
@@ -1875,6 +2020,7 @@ function renderSingleGrid() {
       channelsScroll.scrollTop = newScrollTop;
       timeTrackScroll.scrollTop = newScrollTop;
       scrollSyncLock = false;
+      syncMultitrackSnapshotScroll(newScrollTop);
     };
     const onUp = () => {
       timeTrackScroll.classList.remove('tracker-timetrack-dragging');
@@ -1940,6 +2086,8 @@ function renderSingleGrid() {
   requestAnimationFrame(() => applyScrollbarGutter());
   const scrollbarResizeObs = new ResizeObserver(() => applyScrollbarGutter());
   if (elements.grid) scrollbarResizeObs.observe(elements.grid);
+
+  applyMultitrackVirtualScrollRange(timeTrackScroll, timeTrackEl, channelsScroll, gridBody);
 
   updateSelectionHighlight();
 }
@@ -2267,8 +2415,8 @@ function setupEventListeners() {
   });
 
   document.addEventListener('keyup', (e) => {
-    if (combineBoundaryRepeatLockKey && e.key.toLowerCase() === combineBoundaryRepeatLockKey) {
-      combineBoundaryRepeatLockKey = null;
+    if (multitrackBoundaryRepeatLockKey && e.key.toLowerCase() === multitrackBoundaryRepeatLockKey) {
+      multitrackBoundaryRepeatLockKey = null;
     }
   }, true);
 
@@ -2285,8 +2433,8 @@ function handleKeyDown(e) {
 
   const normalizedKey = e.key.toLowerCase();
   if (
-    combineBoundaryRepeatLockKey &&
-    normalizedKey === combineBoundaryRepeatLockKey &&
+    multitrackBoundaryRepeatLockKey &&
+    normalizedKey === multitrackBoundaryRepeatLockKey &&
     normalizedKey !== 'tab'
   ) {
     e.preventDefault();
@@ -2295,7 +2443,7 @@ function handleKeyDown(e) {
   }
 
   if (
-    combineKeyboardTransitionLock &&
+    multitrackKeyboardTransitionLock &&
     (normalizedKey === 'arrowup' ||
       normalizedKey === 'arrowdown' ||
       normalizedKey === 'arrowleft' ||
@@ -2373,7 +2521,7 @@ function handleKeyDown(e) {
     return;
   }
 
-  if (isCombineEditing() && !e.shiftKey && !isMultiSelection() && (normalizedKey === 'arrowleft' || normalizedKey === 'arrowright')) {
+  if (isMultitrackEditing() && !e.shiftKey && !isMultiSelection() && (normalizedKey === 'arrowleft' || normalizedKey === 'arrowright')) {
     e.preventDefault();
     e.stopPropagation();
     const channel = state.focusedChannel;
@@ -2397,7 +2545,7 @@ function handleKeyDown(e) {
         focusNdInput(channel - 1, step);
         return;
       }
-      moveFocusToAdjacentCombineSegment('previous', {
+      moveFocusToAdjacentMultitrackSegment('previous', {
         channel: Number.MAX_SAFE_INTEGER,
         field: 'nd',
         step,
@@ -2421,7 +2569,7 @@ function handleKeyDown(e) {
       focusNoteCell(channel + 1, step);
       return;
     }
-    moveFocusToAdjacentCombineSegment('next', {
+    moveFocusToAdjacentMultitrackSegment('next', {
       channel: 0,
       field: 'note',
       step,
@@ -2506,7 +2654,7 @@ function handleKeyDown(e) {
       } else if (inReps) {
         focusNdInput(channel, step);
       } else {
-        if (channel >= state.channels - 1 && moveFocusToAdjacentCombineSegment('next', {
+        if (channel >= state.channels - 1 && moveFocusToAdjacentMultitrackSegment('next', {
           channel: 0,
           field: 'note',
           step,
@@ -2582,7 +2730,7 @@ function handleKeyDown(e) {
     e.preventDefault();
     if (state.focusedChannel > 0) {
       focusNdInput(state.focusedChannel - 1, state.focusedStep);
-    } else if (moveFocusToAdjacentCombineSegment('previous', {
+    } else if (moveFocusToAdjacentMultitrackSegment('previous', {
       channel: Number.MAX_SAFE_INTEGER,
       field: 'nd',
       step: state.focusedStep,
@@ -3372,7 +3520,7 @@ function scheduleArrangementLiveEditUpdate() {
   if (!editMode.returnToArrangementsOnClose && !editMode.autoSaveOnInput) return;
   const hasTarget = !!editMode.blockFilename || Number.isInteger(editMode.arrangementInsertRowIndex);
   if (!hasTarget) return;
-  syncCurrentCombineSegmentState();
+  syncCurrentMultitrackSegmentState();
   if (liveArrangementUpdateTimeout) {
     clearTimeout(liveArrangementUpdateTimeout);
   }
@@ -3381,7 +3529,6 @@ function scheduleArrangementLiveEditUpdate() {
   const arrangementInsertRowIndex = editMode.arrangementInsertRowIndex;
   const isNewBlock = editMode.isNewBlock;
   const trackerStateSnapshot = serializeTrackerState();
-  const nameSnapshot = (elements.blockNameInput?.value ?? editMode.blockName ?? '').trim();
   const patternSnapshot = (elements.output?.value ?? '').trim();
   liveArrangementUpdateTimeout = setTimeout(() => {
     liveArrangementUpdateTimeout = null;
@@ -3391,7 +3538,6 @@ function scheduleArrangementLiveEditUpdate() {
         trackerState: trackerStateSnapshot,
         arrangementInsertRowIndex,
         isNewBlock,
-        name: nameSnapshot || undefined,
         pattern: patternSnapshot || undefined,
       }
     }));
@@ -3408,7 +3554,7 @@ export function flushTrackerSaveForBlockSwitch() {
   if (!editMode.returnToArrangementsOnClose && !editMode.autoSaveOnInput) return false;
   const hasTarget = !!editMode.blockFilename || Number.isInteger(editMode.arrangementInsertRowIndex);
   if (!hasTarget) return false;
-  syncCurrentCombineSegmentState();
+  syncCurrentMultitrackSegmentState();
   if (liveArrangementUpdateTimeout) {
     clearTimeout(liveArrangementUpdateTimeout);
     liveArrangementUpdateTimeout = null;
@@ -3417,7 +3563,6 @@ export function flushTrackerSaveForBlockSwitch() {
   const arrangementInsertRowIndex = editMode.arrangementInsertRowIndex;
   const isNewBlock = editMode.isNewBlock;
   const trackerStateSnapshot = serializeTrackerState();
-  const nameSnapshot = (elements.blockNameInput?.value ?? editMode.blockName ?? '').trim();
   const patternSnapshot = (elements.output?.value ?? '').trim();
   document.dispatchEvent(new CustomEvent('tracker:stateChanged', {
     detail: {
@@ -3425,7 +3570,6 @@ export function flushTrackerSaveForBlockSwitch() {
       trackerState: trackerStateSnapshot,
       arrangementInsertRowIndex,
       isNewBlock,
-      name: nameSnapshot || undefined,
       pattern: patternSnapshot || undefined,
       immediate: true,
     }
@@ -3706,7 +3850,7 @@ function emitTrackerPreviewInstruments({ playing = false, aliases = [] } = {}) {
 function setPlayingStep(step) {
   if (previewState.playingStepsByFilename) {
     Object.entries(previewState.playingStepsByFilename).forEach(([filename, playingStep]) => {
-      clearPlayingStepForCombineSegment(filename, playingStep);
+      clearPlayingStepForMultitrackSegment(filename, playingStep);
     });
     previewState.playingStepsByFilename = null;
   }
@@ -3737,26 +3881,26 @@ function setPlayingStep(step) {
   timeRow?.classList.add('playing-step');
 }
 
-function getCombineSegmentRoot(filename) {
-  return Array.from(elements.grid?.querySelectorAll('.combine-tracker-segment[data-filename]') || [])
+function getMultitrackSegmentRoot(filename) {
+  return Array.from(elements.grid?.querySelectorAll('.multitrack-tracker-segment[data-filename]') || [])
     .find((el) => el.dataset.filename === filename) || null;
 }
 
-function clearPlayingStepForCombineSegment(filename, step) {
+function clearPlayingStepForMultitrackSegment(filename, step) {
   if (step == null) return;
-  const root = getCombineSegmentRoot(filename);
+  const root = getMultitrackSegmentRoot(filename);
   if (!root) return;
   root.querySelectorAll(`.tracker-cell[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
   root.querySelectorAll(`.tracker-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
   root.querySelectorAll(`.tracker-timetrack-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
-  root.querySelectorAll(`.combine-tracker-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
-  root.querySelectorAll(`.combine-tracker-time-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
+  root.querySelectorAll(`.multitrack-tracker-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
+  root.querySelectorAll(`.multitrack-tracker-time-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
 }
 
-function setCombinePlayingSteps(stepsByFilename = null) {
+function setMultitrackPlayingSteps(stepsByFilename = null) {
   const prevMap = previewState.playingStepsByFilename || {};
   Object.entries(prevMap).forEach(([filename, step]) => {
-    clearPlayingStepForCombineSegment(filename, step);
+    clearPlayingStepForMultitrackSegment(filename, step);
   });
   previewState.playingStepsByFilename = null;
   previewState.playingStep = null;
@@ -3766,13 +3910,13 @@ function setCombinePlayingSteps(stepsByFilename = null) {
   const nextMap = {};
   Object.entries(stepsByFilename).forEach(([filename, step]) => {
     if (!filename || step == null) return;
-    const root = getCombineSegmentRoot(filename);
+    const root = getMultitrackSegmentRoot(filename);
     if (!root) return;
     root.querySelectorAll(`.tracker-cell[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
     root.querySelectorAll(`.tracker-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
     root.querySelectorAll(`.tracker-timetrack-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
-    root.querySelectorAll(`.combine-tracker-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
-    root.querySelectorAll(`.combine-tracker-time-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
+    root.querySelectorAll(`.multitrack-tracker-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
+    root.querySelectorAll(`.multitrack-tracker-time-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
     nextMap[filename] = step;
   });
   previewState.playingStepsByFilename = Object.keys(nextMap).length ? nextMap : null;
@@ -4532,7 +4676,7 @@ function handleArrangementPlayheadForTracker(detail = {}) {
     && rowIndex === editMode.arrangementInsertRowIndex;
 
   if (!matchesExistingBlock && !matchesNewBlockRow) {
-    if (isCombineEditing()) setCombinePlayingSteps(null);
+    if (isMultitrackEditing()) setMultitrackPlayingSteps(null);
     else setPlayingStep(null);
     return;
   }
@@ -4541,16 +4685,16 @@ function handleArrangementPlayheadForTracker(detail = {}) {
   const cycleSteps = rowSteps || fallbackTrackerSteps;
   const progress = typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0;
   const arrangementStep = Math.floor(progress * cycleSteps);
-  if (isCombineEditing()) {
+  if (isMultitrackEditing()) {
     const stepsByFilename = {};
-    editMode.combineSegments.forEach((segment) => {
+    editMode.multitrackSegments.forEach((segment) => {
       const segmentSteps = Number.isInteger(segment?.trackerState?.steps) && segment.trackerState.steps > 0
         ? segment.trackerState.steps
         : fallbackTrackerSteps;
       const trackerStep = ((arrangementStep % segmentSteps) + segmentSteps) % segmentSteps;
       stepsByFilename[segment.filename] = trackerStep;
     });
-    setCombinePlayingSteps(stepsByFilename);
+    setMultitrackPlayingSteps(stepsByFilename);
     return;
   }
 
@@ -5550,7 +5694,7 @@ export function openTracker(instrumentList, options = {}) {
   editMode.arrangementInsertRowIndex = Number.isInteger(options.arrangementInsertRowIndex)
     ? options.arrangementInsertRowIndex
     : null;
-  editMode.combineSegments = null;
+  editMode.multitrackSegments = null;
   editMode.blockScope = 'user';
   editMode.denseRows = getDenseRowsPreference();
   state.bpm = 120;
@@ -5582,11 +5726,15 @@ export function openTracker(instrumentList, options = {}) {
  */
 export function openTrackerForEdit(instrumentList, blockData) {
   const modalAlreadyOpen = !!elements.modal?.classList.contains('open');
+  const existingBodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+  const existingMultitrackScrollTop = existingBodyScroll ? existingBodyScroll.scrollTop : multitrackSharedScrollTop;
+  const existingMultitrackScrollLeft = elements.grid?.scrollLeft ?? multitrackSharedScrollLeft;
 
   // Save scroll and focus for the block we're leaving (if any)
   if (editMode.blockFilename) {
     const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
     if (bodyScroll) {
+      if (isMultitrackEditing()) multitrackSharedScrollTop = bodyScroll.scrollTop;
       blockScrollPositions.set(editMode.blockFilename, {
         scrollTop: bodyScroll.scrollTop,
         channel: state.focusedChannel,
@@ -5606,14 +5754,14 @@ export function openTrackerForEdit(instrumentList, blockData) {
   editMode.arrangementInsertRowIndex = Number.isInteger(blockData.arrangementInsertRowIndex)
     ? blockData.arrangementInsertRowIndex
     : null;
-  editMode.combineSegments = Array.isArray(blockData.combineSegments) && blockData.combineSegments.length > 1
-    ? cloneCombineSegments(blockData.combineSegments)
+  editMode.multitrackSegments = Array.isArray(blockData.multitrackSegments) && blockData.multitrackSegments.length > 1
+    ? cloneMultitrackSegments(blockData.multitrackSegments)
     : null;
   editMode.blockFilename = blockData.filename;
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
   editMode.blockScope = blockData.scope === 'system' ? 'system' : 'user';
-  editMode.denseRows = editMode.combineSegments ? true : getDenseRowsPreference();
+  editMode.denseRows = editMode.multitrackSegments ? true : getDenseRowsPreference();
   undoStack = [];
   redoStack = [];
 
@@ -5643,20 +5791,30 @@ export function openTrackerForEdit(instrumentList, blockData) {
     const saved = blockData.filename ? blockScrollPositions.get(blockData.filename) : undefined;
     const channel = saved && Number.isInteger(saved.channel) ? Math.max(0, Math.min(saved.channel, state.channels - 1)) : 0;
     const step = saved && Number.isInteger(saved.step) ? Math.max(0, Math.min(saved.step, state.steps - 1)) : 0;
-    setFocus(channel, step);
-    focusCombineTarget(pendingCombineFocusTarget);
-    if (pendingCombineFocusTarget?.filename === blockData.filename) {
-      pendingCombineFocusTarget = null;
+    const restoreScrollTop = editMode.multitrackSegments
+      ? existingMultitrackScrollTop
+      : (saved?.scrollTop || 0);
+    const restoreScrollLeft = editMode.multitrackSegments
+      ? existingMultitrackScrollLeft
+      : 0;
+    setFocus(channel, step, { scroll: !editMode.multitrackSegments });
+    focusMultitrackTarget(pendingMultitrackFocusTarget);
+    if (pendingMultitrackFocusTarget?.filename === blockData.filename) {
+      pendingMultitrackFocusTarget = null;
     }
     // Restore scroll after setFocus so it isn't overwritten by setFocus's scroll-into-view
-    if (saved != null && saved.scrollTop != null) {
-      const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
-      if (bodyScroll) bodyScroll.scrollTop = saved.scrollTop;
+    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    if (bodyScroll) bodyScroll.scrollTop = restoreScrollTop;
+    syncMultitrackSnapshotScroll(restoreScrollTop);
+    if (elements.grid) {
+      elements.grid.scrollLeft = restoreScrollLeft;
+      multitrackSharedScrollLeft = restoreScrollLeft;
     }
+    scrollActiveMultitrackSegmentIntoView();
   };
 
   // On first open we still defer for the fade-in transition.
-  // During combine-mode block switching the modal is already open, so finalize immediately
+  // During multitrack block switching the modal is already open, so finalize immediately
   // to avoid a stale-focus frame that can make held arrow navigation skip.
   if (modalAlreadyOpen) {
     finalizeOpen();
@@ -5699,9 +5857,11 @@ function resetEditMode() {
   editMode.returnToArrangementsOnClose = false;
   editMode.returnToBlocksOnClose = false;
   editMode.arrangementInsertRowIndex = null;
-  editMode.combineSegments = null;
+  editMode.multitrackSegments = null;
   editMode.denseRows = true;
-  pendingCombineFocusTarget = null;
+  pendingMultitrackFocusTarget = null;
+  multitrackSharedScrollTop = 0;
+  multitrackSharedScrollLeft = 0;
   lastSavedSnapshot = '';
   undoStack = [];
   redoStack = [];

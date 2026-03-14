@@ -44,14 +44,12 @@ export function scheduleTrackerAutoSave({ filename, trackerState, name: nameOver
     const block = deps.getBlockByFilename(filename);
     if (!block) return;
 
-    const trackerNameInput = document.getElementById('trackerBlockName');
-    const trackerOutput = document.getElementById('trackerOutput');
     const nextName = nameOverride != null
         ? String(nameOverride).trim() || block.name || filename.replace(/\.js$/i, '')
-        : String(trackerNameInput?.value || block.name || filename.replace(/\.js$/i, '')).trim() || block.name || filename.replace(/\.js$/i, '');
+        : String(block.name || filename.replace(/\.js$/i, '')).trim() || filename.replace(/\.js$/i, '');
     const nextPattern = patternOverride != null
         ? String(patternOverride).trim() || block.pattern || ''
-        : String(trackerOutput?.value || block.pattern || '').trim();
+        : String(block.pattern || '').trim();
     const payload = {
         name: nextName,
         description: block.description || '',
@@ -61,17 +59,7 @@ export function scheduleTrackerAutoSave({ filename, trackerState, name: nameOver
         filename,
     };
 
-    deps.setPendingTrackerSavePayload(payload);
-    const existing = deps.getTrackerAutoSaveTimeout();
-    if (existing) {
-        clearTimeout(existing);
-        deps.setTrackerAutoSaveTimeout(null);
-    }
-
-    const runSave = async () => {
-        const activePayload = deps.getPendingTrackerSavePayload();
-        deps.setPendingTrackerSavePayload(null);
-        deps.setTrackerAutoSaveTimeout(null);
+    const runSavePayload = async (activePayload) => {
         if (!activePayload) return;
         try {
             const result = await deps.updateBlock(
@@ -105,17 +93,38 @@ export function scheduleTrackerAutoSave({ filename, trackerState, name: nameOver
                         deps.setSelectedBlockForArrangement(deps.getCurrentArrangementFilename(), updatedFilename);
                     }
                 }
-            }
-            await deps.refreshBlocksLibrary();
-            if (deps.isArrangementWorkspaceActive()) {
-                deps.renderArrangementWorkspace();
-                deps.renderTrackerWorkspace();
+                await deps.refreshBlocksLibrary();
+                if (deps.isArrangementWorkspaceActive()) {
+                    deps.renderArrangementWorkspace();
+                    deps.renderTrackerWorkspace();
+                }
             }
         } catch (err) {
             deps.logError('[Tracker] Autosave failed:', err);
             try { localStorage.setItem(`unsaved_block_${activePayload.filename}`, JSON.stringify(activePayload.trackerState || {})); } catch (_e) {}
             deps.setStatus(err.message === 'System block is read-only' ? err.message : 'Failed to autosave block', 'error');
         }
+    };
+
+    const existingPayload = deps.getPendingTrackerSavePayload();
+    const existingTimeout = deps.getTrackerAutoSaveTimeout();
+    if (existingTimeout && existingPayload?.filename && existingPayload.filename !== payload.filename) {
+        clearTimeout(existingTimeout);
+        deps.setTrackerAutoSaveTimeout(null);
+        deps.setPendingTrackerSavePayload(null);
+        void runSavePayload(existingPayload);
+    } else if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        deps.setTrackerAutoSaveTimeout(null);
+    }
+
+    deps.setPendingTrackerSavePayload(payload);
+
+    const runSave = async () => {
+        const activePayload = deps.getPendingTrackerSavePayload();
+        deps.setPendingTrackerSavePayload(null);
+        deps.setTrackerAutoSaveTimeout(null);
+        await runSavePayload(activePayload);
     };
 
     if (immediate) void runSave();
@@ -178,7 +187,7 @@ export async function openTrackerModalForEdit(block, trackerState, options = {})
         scope: deps.normalizeScope(resolvedBlock.scope),
         trackerState: recoveredTrackerState,
         autoSaveOnInput: Boolean(options.autoSaveOnInput),
-        combineSegments: Array.isArray(options.combineSegments) ? options.combineSegments : null,
+        multitrackSegments: Array.isArray(options.multitrackSegments) ? options.multitrackSegments : null,
         returnToArrangementsOnClose: options.returnToArrangementsOnClose,
         returnToBlocksOnClose: options.returnToBlocksOnClose,
     };

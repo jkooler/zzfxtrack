@@ -9,7 +9,7 @@ let deps = {
     getActiveArrangementBlockFilename: () => null,
     getActiveArrangementRowIndex: () => null,
     getActiveArrangementBlockFilenameForDrag: () => null,
-    getArrangementCombineMode: () => false,
+    getArrangementMultitrackMode: () => false,
     getArrangementDraftState: () => null,
     getBlockByFilename: () => null,
     flushTrackerSaveForBlockSwitch: () => false,
@@ -29,7 +29,39 @@ let deps = {
     setTrackerWorkspaceLoadToken: () => {},
 };
 
-let combineActiveBlockListenerInstalled = false;
+let multitrackActiveBlockListenerInstalled = false;
+let pendingArrangementMultitrackScrollFilename = null;
+let workspaceMultitrackActiveFilename = null;
+
+export function requestTrackerWorkspaceMultitrackAutoscroll(filename = null) {
+    pendingArrangementMultitrackScrollFilename = filename || null;
+    if (filename) workspaceMultitrackActiveFilename = filename;
+}
+
+function scrollTrackerWorkspaceMultitrackSegmentIntoView(filename) {
+    if (!filename) return;
+    const trackerModal = document.getElementById('trackerModal');
+    const container = trackerModal?.querySelector('.tracker-grid.tracker-grid-multitrack-mode');
+    const segment = container?.querySelector(`.multitrack-tracker-segment[data-filename="${CSS?.escape ? CSS.escape(filename) : String(filename).replace(/[^a-zA-Z0-9_-]/g, '\\$&')}"]`);
+    if (!container || !segment) return;
+
+    const margin = 48;
+    const segmentLeft = segment.offsetLeft;
+    const segmentRight = segmentLeft + segment.offsetWidth;
+    const viewLeft = container.scrollLeft;
+    const viewRight = viewLeft + container.clientWidth;
+
+    let nextScrollLeft = null;
+    if (segmentLeft - margin < viewLeft) {
+        nextScrollLeft = Math.max(segmentLeft - margin, 0);
+    } else if (segmentRight + margin > viewRight) {
+        nextScrollLeft = Math.max(segmentRight - container.clientWidth + margin, 0);
+    }
+
+    if (nextScrollLeft != null) {
+        container.scrollLeft = nextScrollLeft;
+    }
+}
 
 function createRowBlockFilenameComparator(blockByFilename) {
     const collator = typeof Intl !== 'undefined' && Intl.Collator
@@ -60,13 +92,13 @@ function createRowBlockFilenameComparator(blockByFilename) {
 
 export function configureTrackerWorkspace(options = {}) {
     deps = { ...deps, ...options };
-    if (!combineActiveBlockListenerInstalled) {
-        document.addEventListener('tracker:combineActiveBlockChanged', (event) => {
+    if (!multitrackActiveBlockListenerInstalled) {
+        document.addEventListener('tracker:multitrackActiveBlockChanged', (event) => {
             const filename = event?.detail?.filename;
             if (!filename) return;
-            deps.setActiveArrangementBlockFilename(filename);
+            workspaceMultitrackActiveFilename = filename;
         });
-        combineActiveBlockListenerInstalled = true;
+        multitrackActiveBlockListenerInstalled = true;
     }
 }
 
@@ -114,31 +146,37 @@ export function renderTrackerWorkspace() {
     const pane = deps.getTrackerWorkspacePane();
     if (!pane) return;
     preserveDockedTrackerModal(pane);
-    const combineMode = deps.getArrangementCombineMode();
+    const multitrackMode = deps.getArrangementMultitrackMode();
     const activeRowIndex = deps.getActiveArrangementRowIndex();
     const draftState = deps.getArrangementDraftState();
     const activeRow = Number.isInteger(activeRowIndex) ? draftState?.rows?.[activeRowIndex] : null;
     const rowBlocks = Array.isArray(activeRow?.blocks) ? activeRow.blocks : [];
     const blockByFilename = new Map(rowBlocks.map((filename) => [filename, deps.getBlockByFilename(filename)]));
     const compareRowBlockFilenames = createRowBlockFilenameComparator(blockByFilename);
-    const combineRowBlocks = combineMode && rowBlocks.length
+    const multitrackRowBlocks = multitrackMode && rowBlocks.length
         ? rowBlocks.slice().sort(compareRowBlockFilenames)
         : [];
-    let activeFilename = deps.getActiveArrangementBlockFilename();
-    if (combineMode && combineRowBlocks.length && !combineRowBlocks.includes(activeFilename)) {
-        activeFilename = combineRowBlocks[0];
-        deps.setActiveArrangementBlockFilename(activeFilename);
+    let activeFilename = multitrackMode
+        ? (workspaceMultitrackActiveFilename || deps.getActiveArrangementBlockFilename())
+        : deps.getActiveArrangementBlockFilename();
+    if (multitrackMode && multitrackRowBlocks.length && !multitrackRowBlocks.includes(activeFilename)) {
+        activeFilename = multitrackRowBlocks[0];
+        workspaceMultitrackActiveFilename = activeFilename;
+    } else if (!multitrackMode) {
+        workspaceMultitrackActiveFilename = null;
     }
+    if (multitrackMode && activeFilename) workspaceMultitrackActiveFilename = activeFilename;
     const selectedBlock = activeFilename ? deps.getBlockByFilename(activeFilename) : null;
     if (!selectedBlock) {
+        workspaceMultitrackActiveFilename = null;
         deps.setTrackerWorkspaceLoadedFilename(null);
         deps.setTrackerWorkspaceLoadToken(deps.getTrackerWorkspaceLoadToken() + 1);
         if (deps.isTrackerOpen()) deps.closeTracker();
         undockTrackerModalFromWorkspace();
         pane.innerHTML = `
             <div class="h-full p-4 text-sm text-muted-foreground">
-                ${combineMode
-                    ? 'Enable Combine mode and click a block in an arrangement row to open its row context here.'
+                ${multitrackMode
+                    ? 'Enable Multitrack mode and click a block in an arrangement row to open its row context here.'
                     : 'Select a block from the arrangement or the library to open it in tracker.'}
             </div>
         `;
@@ -148,11 +186,17 @@ export function renderTrackerWorkspace() {
     pane.innerHTML = '<div data-tracker-dock-host class="min-h-0 h-full"></div>';
 
     dockTrackerModalToWorkspace();
-    const workspaceLoadKey = combineMode && combineRowBlocks.length > 1
-        ? `${selectedBlock.filename}::combine::${combineRowBlocks.join('|')}`
+    const workspaceLoadKey = multitrackMode && multitrackRowBlocks.length > 1
+        ? `${selectedBlock.filename}::multitrack::${multitrackRowBlocks.join('|')}`
         : selectedBlock.filename;
     const shouldReload = deps.getTrackerWorkspaceLoadedFilename() !== workspaceLoadKey || !deps.isTrackerOpen();
-    if (!shouldReload) return;
+    if (!shouldReload) {
+        if (pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
+            pendingArrangementMultitrackScrollFilename = null;
+            requestAnimationFrame(() => scrollTrackerWorkspaceMultitrackSegmentIntoView(selectedBlock.filename));
+        }
+        return;
+    }
 
     deps.setTrackerWorkspaceLoadedFilename(workspaceLoadKey);
     deps.setTrackerWorkspaceLoadToken(deps.getTrackerWorkspaceLoadToken() + 1);
@@ -160,8 +204,8 @@ export function renderTrackerWorkspace() {
 
     deps.openTrackerModalForEdit(selectedBlock, selectedBlock.trackerState || null, {
         autoSaveOnInput: true,
-        combineSegments: combineMode && combineRowBlocks.length > 1
-            ? combineRowBlocks.map((filename) => {
+        multitrackSegments: multitrackMode && multitrackRowBlocks.length > 1
+            ? multitrackRowBlocks.map((filename) => {
                 const block = deps.getBlockByFilename(filename);
                 return block
                     ? {
@@ -194,6 +238,10 @@ export function renderTrackerWorkspace() {
                 e.dataTransfer.setData('application/x-zzfxtrack-arr-chip', JSON.stringify({ filename }));
                 e.dataTransfer.setData('text/plain', filename);
             });
+        }
+        if (pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
+            pendingArrangementMultitrackScrollFilename = null;
+            requestAnimationFrame(() => scrollTrackerWorkspaceMultitrackSegmentIntoView(selectedBlock.filename));
         }
     }).catch((err) => {
         if (loadToken !== deps.getTrackerWorkspaceLoadToken()) return;

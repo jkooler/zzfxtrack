@@ -826,90 +826,115 @@ strudel-editor {
   --tracker-scrollbar-gap: 0.5rem; /* space between last row and horizontal scrollbar, and between last channel header and vertical scrollbar */
 }
 
-.tracker-grid.tracker-grid-combine-mode {
+.tracker-grid.tracker-grid-multitrack-mode {
   @apply overflow-x-auto overflow-y-hidden pr-2;
+  --tracker-h-scrollbar-height: 0px;
+  --tracker-v-scrollbar-width: 0px;
 }
 
-.combine-tracker-strip {
-  @apply flex items-start gap-0 w-max min-w-full;
+.multitrack-tracker-strip {
+  @apply flex items-stretch gap-0 w-max min-w-full h-full min-h-0;
 }
 
-.combine-tracker-segment-live,
-.combine-tracker-segment-snapshot-wrap {
-  @apply shrink-0 overflow-hidden;
+.multitrack-tracker-segment-live,
+.multitrack-tracker-segment-snapshot-wrap {
+  @apply shrink-0 overflow-hidden min-h-0;
   width: calc(
     3ch +
-    (var(--combine-channel-count, 4) * var(--combine-channel-width, calc(192px * 0.7))) +
-    ((var(--combine-channel-count, 4) - 1) * 2px) +
+    (var(--multitrack-channel-count, 4) * var(--multitrack-channel-width, calc(192px * 0.7))) +
+    ((var(--multitrack-channel-count, 4) - 1) * 2px) +
     var(--tracker-scrollbar-gap, 0.5rem)
   );
   min-width: calc(
     3ch +
-    (var(--combine-channel-count, 4) * var(--combine-channel-width, calc(192px * 0.7))) +
-    ((var(--combine-channel-count, 4) - 1) * 2px) +
+    (var(--multitrack-channel-count, 4) * var(--multitrack-channel-width, calc(192px * 0.7))) +
+    ((var(--multitrack-channel-count, 4) - 1) * 2px) +
     var(--tracker-scrollbar-gap, 0.5rem)
   );
 }
 
-.combine-tracker-segment-snapshot {
-  @apply shrink-0 p-0;
+.multitrack-tracker-segment-live {
+  @apply flex flex-col h-full min-h-0;
 }
 
-.combine-tracker-segment-header {
-  @apply flex gap-0 mb-[2px];
+.tracker-grid.tracker-grid-multitrack-mode .multitrack-tracker-segment-live .tracker-body-scroll {
+  @apply overflow-y-auto overflow-x-hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-gutter: auto;
 }
 
-.combine-tracker-time-header {
+.tracker-grid.tracker-grid-multitrack-mode .multitrack-tracker-segment-live .tracker-body-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.multitrack-tracker-segment-snapshot {
+  @apply shrink-0 p-0 flex flex-col h-full min-h-0 opacity-80;
+}
+
+.multitrack-tracker-segment-header {
+  @apply flex gap-0;
+}
+
+.multitrack-tracker-time-header {
   width: 3ch;
   min-width: 3ch;
 }
 
-.combine-tracker-channel-headers {
+.multitrack-tracker-channel-headers {
   width: max-content;
   min-width: 0;
   flex: none;
   padding-right: var(--tracker-scrollbar-gap, 0.5rem);
 }
 
-.combine-tracker-segment-body {
-  @apply flex gap-0 mt-2;
+.multitrack-tracker-segment-body {
+  @apply mt-2 flex-1 min-h-0 overflow-hidden;
 }
 
-.combine-tracker-time-col {
+.multitrack-tracker-segment-viewport {
+  @apply flex gap-0;
+  transform: translateY(calc(var(--multitrack-scroll-top, 0px) * -1));
+  will-change: transform;
+}
+
+.multitrack-tracker-time-col {
   @apply shrink-0;
   width: 3ch;
   min-width: 3ch;
 }
 
-.combine-tracker-time-row {
+.multitrack-tracker-time-row {
   width: 3ch;
   min-width: 3ch;
 }
 
-.combine-tracker-time-row.beat {
+.multitrack-tracker-time-row.beat {
   @apply text-foreground;
 }
 
-.combine-tracker-snapshot-channels {
+.multitrack-tracker-snapshot-channels {
   @apply flex gap-[2px];
   width: max-content;
   min-width: 0;
   padding-right: var(--tracker-scrollbar-gap, 0.5rem);
 }
 
-.combine-tracker-snapshot-channel {
+.multitrack-tracker-snapshot-channel {
   @apply flex flex-col gap-0 shrink-0;
-  width: var(--combine-channel-width, calc(192px * 0.7));
-  min-width: var(--combine-channel-width, calc(192px * 0.7));
+  width: var(--multitrack-channel-width, calc(192px * 0.7));
+  min-width: var(--multitrack-channel-width, calc(192px * 0.7));
 }
 
-.combine-tracker-segment-snapshot .tracker-channel-header {
+.multitrack-tracker-segment-snapshot .tracker-channel-header {
   flex: none;
-  width: var(--combine-channel-width, calc(192px * 0.7));
-  min-width: var(--combine-channel-width, calc(192px * 0.7));
+  width: var(--multitrack-channel-width, calc(192px * 0.7));
+  min-width: var(--multitrack-channel-width, calc(192px * 0.7));
 }
 
-.combine-tracker-row {
+.multitrack-tracker-row {
   @apply grid items-center gap-[2px];
   grid-template-columns: minmax(0, 1fr) 24px 24px 24px;
   min-height: 14px;
@@ -917,32 +942,33 @@ strudel-editor {
   margin-bottom: 1px;
 }
 
-.combine-tracker-row.beat .combine-tracker-cell,
-.combine-tracker-row.beat .combine-tracker-fx {
+.multitrack-tracker-row.beat .multitrack-tracker-cell,
+.multitrack-tracker-row.beat .multitrack-tracker-fx {
   background-color: color-mix(in srgb, var(--foreground) 6%, var(--input-bg));
 }
 
-.combine-tracker-row.bar .combine-tracker-cell,
-.combine-tracker-row.bar .combine-tracker-fx {
+.multitrack-tracker-row.bar .multitrack-tracker-cell,
+.multitrack-tracker-row.bar .multitrack-tracker-fx {
   background-color: color-mix(in srgb, var(--foreground) 12%, var(--input-bg));
 }
 
-.combine-tracker-cell,
-.combine-tracker-fx {
+.multitrack-tracker-cell,
+.multitrack-tracker-fx {
   @apply border border-transparent bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center text-foreground rounded-none;
   min-height: 14px;
   height: 14px;
+  box-sizing: border-box;
 }
 
-.combine-tracker-cell {
+.multitrack-tracker-cell {
   min-width: 0;
 }
 
-.combine-tracker-cell-empty {
+.multitrack-tracker-cell-empty {
   @apply text-muted-foreground;
 }
 
-.combine-tracker-fx {
+.multitrack-tracker-fx {
   width: 24px;
   min-width: 24px;
 }
@@ -1154,6 +1180,7 @@ strudel-editor {
 .tracker-cell {
   @apply flex-1 rounded border border-transparent bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center cursor-pointer transition-all h-7;
   min-height: 1.75rem;
+  box-sizing: border-box;
 }
 
 /* When 5+ channels use dynamic width, keep the note cell readable (e.g. "C#4") */
@@ -1164,7 +1191,7 @@ strudel-editor {
 .tracker-cell:focus,
 .tracker-cell:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 1px var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
   border-color: var(--primary);
 }
 
@@ -1173,6 +1200,18 @@ strudel-editor {
 .tracker-nd-input {
   @apply w-[24px] shrink-0 rounded border border-transparent bg-input-bg px-1 text-xs font-mono text-center flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring h-7;
   min-height: 1.75rem;
+  box-sizing: border-box;
+}
+
+.tracker-vol-input:focus,
+.tracker-vol-input:focus-visible,
+.tracker-reps-input:focus,
+.tracker-reps-input:focus-visible,
+.tracker-nd-input:focus,
+.tracker-nd-input:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--ring);
 }
 
 .tracker-reps-input::-webkit-outer-spin-button,
@@ -1227,12 +1266,12 @@ strudel-editor {
 }
 .tracker-grid[data-dense-rows="true"][data-focused-field="note"] .tracker-cell.active {
   border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
 }
 .tracker-grid[data-dense-rows="true"] .tracker-cell.active:focus,
 .tracker-grid[data-dense-rows="true"] .tracker-cell.active:focus-visible {
   border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
 }
 .tracker-grid[data-dense-rows="true"] .tracker-cell.tracker-cell-selected:not(.active) {
   @apply border-quaternary ring-1 ring-quaternary;
@@ -1300,13 +1339,13 @@ strudel-editor {
 
 .tracker-grid[data-focused-field="note"] .tracker-cell.active {
   border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
 }
 
 .tracker-cell.active:focus,
 .tracker-cell.active:focus-visible {
   border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
 }
 
 .tracker-cell.has-note {
@@ -1343,11 +1382,11 @@ strudel-editor {
   @apply text-primary bg-primary/10 rounded;
 }
 
-.combine-tracker-row.playing-step {
+.multitrack-tracker-row.playing-step {
   @apply bg-primary/5 rounded;
 }
 
-.combine-tracker-time-row.playing-step {
+.multitrack-tracker-time-row.playing-step {
   @apply text-primary bg-primary/10 rounded;
 }
 
@@ -1437,7 +1476,7 @@ strudel-editor {
   transition: border-color 0.2s ease, border-width 0.2s ease, box-shadow 0.2s ease;
 }
 
-.arr-row.arr-row-combine-active {
+.arr-row.arr-row-multitrack-active {
   background-color: var(--input-bg);
 }
 @media (max-width: 639px) {

@@ -22,7 +22,7 @@ let deps = {
     getActiveArrangementBlockFilename: () => null,
     getActiveArrangementRowIndex: () => null,
     getAppState: () => ({}),
-    getArrangementCombineMode: () => false,
+    getArrangementMultitrackMode: () => false,
     getArrangementDraftState: () => null,
     getArrangementReadonly: () => false,
     getArrangementWorkspace: () => null,
@@ -50,11 +50,12 @@ let deps = {
     refreshZzFXTrackPreviewControlsVisibility: () => {},
     renameArrangement: () => {},
     renderTrackerWorkspace: () => {},
+    requestTrackerWorkspaceMultitrackAutoscroll: () => {},
     saveCurrentArrangement: () => {},
     scheduleArrangementAutoSave: () => {},
     setActiveArrangementBlockFilename: () => {},
     setActiveArrangementRowIndex: () => {},
-    setArrangementCombineMode: () => {},
+    setArrangementMultitrackMode: () => {},
     setArrangementWorkspacePlayhead: () => {},
     setArrangementWorkspacePlayingRowIndex: () => {},
     setBlocksLibraryCache: () => {},
@@ -384,7 +385,7 @@ export function renderArrangementWorkspaceShell({
     pane,
     draftName,
     bpm,
-    combineMode = false,
+    multitrackMode = false,
     readonly,
     isPreviewPlaying,
     escapeHtml,
@@ -425,13 +426,14 @@ export function renderArrangementWorkspaceShell({
                         ${readonly ? 'readonly' : ''}
                     >
                     <button
-                        id="arrangementWorkspaceCombineBtn"
+                        id="arrangementWorkspaceMultitrackBtn"
                         type="button"
-                        aria-pressed="${combineMode ? 'true' : 'false'}"
-                        class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border h-8 px-3 ${combineMode ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'}"
-                        title="Toggle Combine mode"
+                        aria-pressed="${multitrackMode ? 'true' : 'false'}"
+                        class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border h-8 w-8 p-0 ${multitrackMode ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'}"
+                        title="Toggle Multitrack mode"
+                        aria-label="Toggle Multitrack mode"
                     >
-                        Combine
+                        <i data-lucide="columns-2" class="w-4 h-4"></i>
                     </button>
                     <button
                         id="arrangementWorkspaceAdvancedSettingsBtn"
@@ -482,7 +484,7 @@ export function renderArrangementWorkspaceShell({
         bpmInput: pane.querySelector('#arrangementWorkspaceBpm'),
         addRowBtn: pane.querySelector('#arrangementWorkspaceAddRowBtn'),
         previewBtn: pane.querySelector('#arrangementWorkspacePreviewBtn'),
-        combineBtn: pane.querySelector('#arrangementWorkspaceCombineBtn'),
+        multitrackBtn: pane.querySelector('#arrangementWorkspaceMultitrackBtn'),
         advancedSettingsBtn: pane.querySelector('#arrangementWorkspaceAdvancedSettingsBtn'),
         rowsRoot: pane.querySelector('#arrangementWorkspaceRows'),
         trashDropzone: pane.querySelector('#arrangementWorkspaceTrashDropzone'),
@@ -494,7 +496,7 @@ export function bindArrangementWorkspaceTopControls({
     nameInput,
     bpmInput,
     addRowBtn,
-    combineBtn,
+    multitrackBtn,
     advancedSettingsBtn,
     readonly,
     isDemoMode = false,
@@ -506,12 +508,12 @@ export function bindArrangementWorkspaceTopControls({
     normalizeScope = (value) => (value === 'system' ? 'system' : 'user'),
     dispatchResourceScopeOpen = () => {},
     getArrangementReadonly = () => false,
-    getArrangementCombineMode = () => false,
+    getArrangementMultitrackMode = () => false,
     saveCurrentArrangement = () => {},
     renameArrangement = () => {},
     setStatus = () => {},
     setActiveArrangementRowIndex = () => {},
-    setArrangementCombineMode = () => {},
+    setArrangementMultitrackMode = () => {},
     updateArrangementDisplayName = () => {},
     scheduleArrangementAutoSave = () => {},
     emitArrangementStateChanged = () => {},
@@ -551,9 +553,9 @@ export function bindArrangementWorkspaceTopControls({
         });
     }
 
-    combineBtn?.addEventListener('click', () => {
-        const next = !getArrangementCombineMode();
-        setArrangementCombineMode(next);
+    multitrackBtn?.addEventListener('click', () => {
+        const next = !getArrangementMultitrackMode();
+        setArrangementMultitrackMode(next);
         if (!next) {
             setActiveArrangementRowIndex(null);
         } else if (!Number.isInteger(getActiveArrangementRowIndex())) {
@@ -657,13 +659,13 @@ export function renderArrangementWorkspace() {
 
     const readonly = deps.getArrangementReadonly();
     const isPreviewPlaying = deps.isArrangementPreviewPlaying();
-    const combineMode = deps.getArrangementCombineMode();
-    let activeCombineRowIndex = deps.getActiveArrangementRowIndex();
-    if (combineMode && Number.isInteger(activeCombineRowIndex)) {
+    const multitrackMode = deps.getArrangementMultitrackMode();
+    let activeMultitrackRowIndex = deps.getActiveArrangementRowIndex();
+    if (multitrackMode && Number.isInteger(activeMultitrackRowIndex)) {
         const rowsLength = Array.isArray(appState.arrangementDraftState?.rows) ? appState.arrangementDraftState.rows.length : 0;
-        if (activeCombineRowIndex < 0 || activeCombineRowIndex >= rowsLength) {
+        if (activeMultitrackRowIndex < 0 || activeMultitrackRowIndex >= rowsLength) {
             deps.setActiveArrangementRowIndex(null);
-            activeCombineRowIndex = null;
+            activeMultitrackRowIndex = null;
         }
     }
     // User arrangements can reference both user and system blocks. Showing the
@@ -677,7 +679,7 @@ export function renderArrangementWorkspace() {
         pane,
         draftName: appState.arrangementDraftState.name,
         bpm: appState.arrangementDraftState.bpm,
-        combineMode,
+        multitrackMode,
         readonly,
         isPreviewPlaying,
         escapeHtml: deps.escapeHtml,
@@ -686,7 +688,7 @@ export function renderArrangementWorkspace() {
     const bpmInput = shell?.bpmInput;
     const addRowBtn = shell?.addRowBtn;
     const previewBtn = shell?.previewBtn;
-    const combineBtn = shell?.combineBtn;
+    const multitrackBtn = shell?.multitrackBtn;
     const advancedSettingsBtn = shell?.advancedSettingsBtn;
     const rowsRoot = shell?.rowsRoot;
 
@@ -694,7 +696,7 @@ export function renderArrangementWorkspace() {
         nameInput,
         bpmInput,
         addRowBtn,
-        combineBtn,
+        multitrackBtn,
         advancedSettingsBtn,
         readonly,
         isDemoMode: deps.isDemoMode(),
@@ -706,12 +708,12 @@ export function renderArrangementWorkspace() {
         normalizeScope: deps.normalizeScope,
         dispatchResourceScopeOpen: deps.dispatchResourceScopeOpen,
         getArrangementReadonly: deps.getArrangementReadonly,
-        getArrangementCombineMode: deps.getArrangementCombineMode,
+        getArrangementMultitrackMode: deps.getArrangementMultitrackMode,
         saveCurrentArrangement: deps.saveCurrentArrangement,
         renameArrangement: deps.renameArrangement,
         setStatus: deps.setStatus,
         setActiveArrangementRowIndex: deps.setActiveArrangementRowIndex,
-        setArrangementCombineMode: deps.setArrangementCombineMode,
+        setArrangementMultitrackMode: deps.setArrangementMultitrackMode,
         updateArrangementDisplayName: deps.updateArrangementDisplayName,
         scheduleArrangementAutoSave: deps.scheduleArrangementAutoSave,
         emitArrangementStateChanged: deps.emitArrangementStateChanged,
@@ -847,7 +849,7 @@ export function renderArrangementWorkspace() {
             const rowEl = document.createElement('div');
             rowEl.className = 'arr-row';
             rowEl.dataset.rowIndex = String(rowIndex);
-            rowEl.classList.toggle('arr-row-combine-active', combineMode && activeCombineRowIndex === rowIndex);
+            rowEl.classList.toggle('arr-row-multitrack-active', multitrackMode && activeMultitrackRowIndex === rowIndex);
             const rowDragOver = (event) => {
                 if (!event.dataTransfer || readonly) return;
                 event.preventDefault();
@@ -1128,10 +1130,19 @@ export function renderArrangementWorkspace() {
 
             const renderChips = () => {
                 chipsEl.innerHTML = '';
+                const isMultitrackRowSelection = multitrackMode && activeMultitrackRowIndex === rowIndex;
+                const activeFilename = deps.getActiveArrangementBlockFilename();
                 row.blocks.slice().sort(compareRowBlockFilenames).forEach((filename) => {
                     const block = deps.getBlockByFilename(filename);
                     const chip = document.createElement('div');
-                    chip.className = `arr-chip ${!combineMode && filename === deps.getActiveArrangementBlockFilename() ? 'ring-1 ring-primary' : ''}`;
+                    const chipSelectionClass = isMultitrackRowSelection
+                        ? (filename === activeFilename
+                            ? 'ring-1 ring-primary border-primary bg-input-bg'
+                            : 'ring-1 ring-quaternary border-quaternary bg-input-bg')
+                        : (!multitrackMode && filename === activeFilename
+                            ? 'ring-1 ring-primary border-primary'
+                            : '');
+                    chip.className = `arr-chip ${chipSelectionClass}`;
                     chip.dataset.filename = filename;
                     chip.dataset.blockSteps = String(getBlockSteps(block));
                     chip.draggable = !readonly;
@@ -1145,8 +1156,9 @@ export function renderArrangementWorkspace() {
                     chip.addEventListener('click', (event) => {
                         if (event.target?.closest('.arr-chip-del')) return;
                         deps.flushTrackerSaveForBlockSwitch();
-                        if (combineMode) {
+                        if (multitrackMode) {
                             deps.setActiveArrangementRowIndex(rowIndex);
+                            deps.requestTrackerWorkspaceMultitrackAutoscroll(filename);
                         }
                         deps.setActiveArrangementBlockFilename(filename);
                         if (deps.getCurrentArrangementFilename()) deps.setSelectedBlockForArrangement(deps.getCurrentArrangementFilename(), filename);
