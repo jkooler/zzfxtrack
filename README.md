@@ -111,7 +111,7 @@ export default songData;
 
 ## Using the ZzFXTrack Player in your project
 
-Exported JSON from this app is for the **ZzFXTrack Player** (ZzFXMicro 20-parameter format). It is not compatible with the modified ZzFXM player. To play exported songs in your game or other project you need the standalone player.
+Exported JSON from this app is for the **ZzFXTrack Player** (ZzFXMicro 21-parameter format). It is not compatible with the modified ZzFXM player. To play exported songs in your game or other project you need the standalone player.
 
 **Alpha:** There is no published npm package yet for the player. Use the player by copying the standalone package from this repo:
 
