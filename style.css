@@ -1267,7 +1267,7 @@ strudel-editor {
 }
 
 .arr-rows-header-spacer::before {
-  content: "#";
+  content: "Row";
 }
 
 .arr-rows-header-repeat::before {

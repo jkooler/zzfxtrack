@@ -976,10 +976,10 @@ export function renderArrangementWorkspace() {
 
             const selectEl = document.createElement('select');
             selectEl.className = 'arr-block-select';
-            selectEl.setAttribute('aria-label', 'Add block');
-            selectEl.title = 'Add block';
+            selectEl.setAttribute('aria-label', 'Add block or row');
+            selectEl.title = 'Add block or row';
             if (readonly) selectEl.disabled = true;
-            selectEl.innerHTML = `<option value="" selected></option><option value="__create__">+ New block</option>` + blocksForPicker
+            selectEl.innerHTML = `<option value="" selected></option><option value="__new_row__">+ New row</option><option value="__create__">+ New block</option>` + blocksForPicker
                 .map((block) => {
                     const disabled = row.blocks.includes(block.filename) ? ' disabled' : '';
                     return `<option value="${deps.escapeHtml(block.filename)}"${disabled}>${deps.escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</option>`;
@@ -988,6 +988,18 @@ export function renderArrangementWorkspace() {
                 if (readonly) return;
                 const val = selectEl.value;
                 if (!val) return;
+                if (val === '__new_row__') {
+                    appState.arrangementDraftState.rows.splice(rowIndex + 1, 0, {
+                        repeats: 1,
+                        blocks: [],
+                        loop: false,
+                    });
+                    selectEl.selectedIndex = 0;
+                    renderArrangementWorkspace();
+                    deps.scheduleArrangementAutoSave();
+                    deps.emitArrangementStateChanged({ addedRowIndex: rowIndex + 1 });
+                    return;
+                }
                 if (val === '__create__') {
                     selectEl.selectedIndex = 0;
                     void deps.createUntitledBlock({ rowIndex });

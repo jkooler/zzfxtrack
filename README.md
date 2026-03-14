@@ -6,7 +6,7 @@
 
 Exported music can be played with the bundled **ZzFXTrack Player** which takes its inspiration from [**ZzFXM**](https://keithclark.github.io/ZzFXM) by [**Keith Clark**](https://github.com/keithclark) and **Frank Force**. Developers can freely use it their projects or build their own. WAV export is also supported.
 
-Disclaimer: ZzFXTrack is not affiliated with or endorsed by creators of Strudel, ZzFX and ZzFXM. It's not focused on chip music, j13k games stuff etc. It's solely made for my personal projects, but I'm always open to expand the idea and collaborate. It's made for my personal projects, but I'm always open to expand the idea and collaborate.
+Disclaimer: ZzFXTrack is not affiliated with or endorsed by creators of Strudel, creator of ZzFX (Frank Force) and ZzFXM (Keith Clark & Frank Force). It's usage is not designed for small game compos. It's solely made for my personal projects, but I'm always open to expand the idea and collaborate.
 
 ## Creator's Quick Start
 

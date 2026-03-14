@@ -1453,9 +1453,9 @@ function renderArrangementRows() {
 
 		    const selectEl = document.createElement('select');
 		    selectEl.className = 'arr-block-select';
-		    selectEl.setAttribute('aria-label', 'Add block');
-		    selectEl.title = 'Add block';
-		    selectEl.innerHTML = `<option value="" selected></option><option value="__create__">+ New block</option>` + blocksForPicker
+		    selectEl.setAttribute('aria-label', 'Add block or row');
+		    selectEl.title = 'Add block or row';
+		    selectEl.innerHTML = `<option value="" selected></option><option value="__new_row__">+ New row</option><option value="__create__">+ New block</option>` + blocksForPicker
 		      .map(b => {
 		        const disabled = row.blocks.includes(b.filename) ? ' disabled' : '';
 		        return `<option value="${escapeHtml(b.filename)}"${disabled}>${escapeHtml(b.name)}</option>`;
@@ -1464,6 +1464,18 @@ function renderArrangementRows() {
 	    selectEl.addEventListener('change', () => {
 	      const val = selectEl.value;
 	      if (!val) return;
+	      if (val === '__new_row__') {
+	        arrangementDraft.rows.splice(rowIndex + 1, 0, {
+	          repeats: 1,
+	          blocks: [],
+	          loop: false,
+	        });
+	        selectEl.selectedIndex = 0;
+	        renderArrangementRows();
+	        createIcons({ icons });
+	        emitArrangementStateChanged();
+	        return;
+	      }
 	      if (val === '__create__') {
 	        selectEl.selectedIndex = 0;
 	        openTrackerForNewBlockFromArrangement(rowIndex);
