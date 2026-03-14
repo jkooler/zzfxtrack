@@ -133,7 +133,8 @@
   }
 
   /* Phantom theme */
-  html[data-theme="phantom"] {
+  html[data-theme="phantom"],
+  html[data-theme="user"] {
     font-size: 16px;
     --background: hsl(214, 30%, 12%);
     --foreground: hsl(72, 14%, 73%);

@@ -5,7 +5,16 @@
  */
 
 import Coloris from '@melloware/coloris';
-import { COLOR_THEME_KEY } from './theme-controller.js';
+import {
+    COLOR_THEME_KEY,
+    USER_COLOR_THEME,
+    applyStoredUserThemeValues,
+    applyThemeValues,
+    clearAppliedThemeOverrides,
+    clearStoredUserThemeValues,
+    readStoredUserThemeValues,
+    writeStoredUserThemeValues,
+} from './theme-controller.js';
 
 let deps = {
     createIcons: () => {},
@@ -16,6 +25,8 @@ let deps = {
     isDemoMode: () => false,
     isDeveloperModeEnabled: () => false,
     logWarning: () => {},
+    alertDialog: async () => {},
+    promptDialog: async () => null,
     refreshArrangementList: async () => {},
     refreshBlocksLibrary: async () => {},
     refreshInstrumentListUI: () => {},
@@ -125,23 +136,32 @@ function syncThemeColorPickers() {
 
 function applyThemeColorOverride(varName, colorValue) {
     const key = varName.startsWith('--') ? varName.slice(2) : varName;
-    const prop = `--${key}`;
-    document.documentElement.style.setProperty(prop, colorValue);
-    document.documentElement.style.setProperty(`--color-${key}`, colorValue);
+    if (getActiveColorTheme() !== USER_COLOR_THEME) {
+        writeStoredUserThemeValues(captureCurrentThemeValues());
+        setColorTheme(USER_COLOR_THEME);
+    }
+    applyThemeValues({ [key]: colorValue });
+    writeStoredUserThemeValues(captureCurrentThemeValues());
 }
 
 function resetThemeToDefaults() {
-    const vars = ['background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground', 'primary', 'primary-foreground', 'secondary', 'secondary-foreground', 'tertiary', 'tertiary-foreground', 'quaternary', 'quaternary-foreground', 'muted', 'muted-foreground', 'accent', 'accent-foreground', 'destructive', 'destructive-foreground', 'border', 'input', 'input-bg', 'ring'];
-    vars.forEach((name) => document.documentElement.style.removeProperty(`--${name}`));
-    TAILWIND_COLOR_VARS.forEach((name) => document.documentElement.style.removeProperty(`--color-${name}`));
+    clearAppliedThemeOverrides();
+    if (getActiveColorTheme() === USER_COLOR_THEME) {
+        clearStoredUserThemeValues();
+        applyStoredUserThemeValues();
+    }
     syncThemeColorPickers();
 }
 
 function setAllThemeColorsToWhite() {
     const white = 'hsl(0 0% 100%)';
-    const root = document.documentElement;
-    THEME_COLOR_VARS_AND_TAILWIND.forEach((name) => root.style.setProperty(`--${name}`, white));
-    TAILWIND_COLOR_VARS.forEach((name) => root.style.setProperty(`--color-${name}`, white));
+    if (getActiveColorTheme() !== USER_COLOR_THEME) {
+        writeStoredUserThemeValues(captureCurrentThemeValues());
+        setColorTheme(USER_COLOR_THEME);
+    }
+    const values = Object.fromEntries(THEME_COLOR_VARS_AND_TAILWIND.map((name) => [name, white]));
+    applyThemeValues(values);
+    writeStoredUserThemeValues(captureCurrentThemeValues());
     syncThemeColorPickers();
 }
 
@@ -175,6 +195,15 @@ function getThemeVarFromStylesheet(varName, theme) {
 
 function getActiveColorTheme() {
     return document.documentElement.getAttribute('data-theme') || '';
+}
+
+function captureCurrentThemeValues() {
+    const computed = getComputedStyle(document.documentElement);
+    return Object.fromEntries(
+        THEME_VAR_NAMES
+            .map((name) => [name, computed.getPropertyValue(`--${name}`).trim()])
+            .filter(([, value]) => Boolean(value))
+    );
 }
 
 function getThemeCssBlock() {
@@ -246,6 +275,8 @@ function setColorTheme(theme) {
     } catch (_e) {
         // Ignore storage failures.
     }
+    if (theme === USER_COLOR_THEME) applyStoredUserThemeValues();
+    else clearAppliedThemeOverrides();
     updateThemeOptionButtonsState();
     syncThemeColorPickers();
 }
@@ -253,7 +284,7 @@ function setColorTheme(theme) {
 function updateThemeOptionButtonsState() {
     const dom = deps.getDom();
     const active = getActiveColorTheme();
-    [dom.systemSettingsThemeDefaultBtn, dom.systemSettingsThemeLegacyBtn, dom.systemSettingsThemeRomulanBtn, dom.systemSettingsThemeMonoBtn, dom.systemSettingsThemeMilkBtn].forEach((btn) => {
+    [dom.systemSettingsThemeUserBtn, dom.systemSettingsThemeDefaultBtn, dom.systemSettingsThemeLegacyBtn, dom.systemSettingsThemeRomulanBtn, dom.systemSettingsThemeMonoBtn, dom.systemSettingsThemeMilkBtn].forEach((btn) => {
         if (!btn) return;
         const value = (btn.getAttribute('data-theme') || '').trim();
         const isActive = value === active;
@@ -262,6 +293,47 @@ function updateThemeOptionButtonsState() {
         btn.classList.toggle('text-muted-foreground', !isActive);
         btn.classList.toggle('hover:text-foreground', !isActive);
     });
+}
+
+function parseThemeImportText(text) {
+    const parsed = {};
+    if (!text) return parsed;
+    const regex = /--([a-z-]+)\s*:\s*([^;]+);/gi;
+    let match = regex.exec(text);
+    while (match) {
+        const name = String(match[1] || '').trim();
+        const value = String(match[2] || '').trim();
+        if (THEME_VAR_NAMES.includes(name) && value) parsed[name] = value;
+        match = regex.exec(text);
+    }
+    return parsed;
+}
+
+async function importThemeFromText() {
+    const pasted = await deps.promptDialog({
+        title: 'Import Theme',
+        message: 'Paste a copied theme block or CSS variable lines.',
+        confirmLabel: 'Import',
+        cancelLabel: 'Cancel',
+        promptPlaceholder: 'html[data-theme="user"] {\n  --background: hsl(...);\n  --foreground: hsl(...);\n}',
+        promptRows: 12,
+    });
+    if (pasted == null) return;
+    const imported = parseThemeImportText(pasted);
+    if (Object.keys(imported).length === 0) {
+        await deps.alertDialog({
+            title: 'No theme values found',
+            message: 'Paste theme CSS like `--background: ...;` so the app can import it.',
+        });
+        return;
+    }
+    const next = {
+        ...captureCurrentThemeValues(),
+        ...readStoredUserThemeValues(),
+        ...imported,
+    };
+    writeStoredUserThemeValues(next);
+    setColorTheme(USER_COLOR_THEME);
 }
 
 function syncReplThemeSelect() {
@@ -342,6 +414,8 @@ export function installSystemSettingsHandlers() {
     }
     if (dom.systemSettingsThemeResetBtn) dom.systemSettingsThemeResetBtn.addEventListener('click', resetThemeToDefaults);
     if (dom.systemSettingsThemeCopyBtn) dom.systemSettingsThemeCopyBtn.addEventListener('click', () => { void copyThemeToClipboard(); });
+    if (dom.systemSettingsThemeImportBtn) dom.systemSettingsThemeImportBtn.addEventListener('click', () => { void importThemeFromText(); });
+    if (dom.systemSettingsThemeUserBtn) dom.systemSettingsThemeUserBtn.addEventListener('click', () => setColorTheme(USER_COLOR_THEME));
     if (dom.systemSettingsThemeDefaultBtn) dom.systemSettingsThemeDefaultBtn.addEventListener('click', () => setColorTheme(''));
     if (dom.systemSettingsThemeLegacyBtn) dom.systemSettingsThemeLegacyBtn.addEventListener('click', () => setColorTheme('jester'));
     if (dom.systemSettingsThemeRomulanBtn) dom.systemSettingsThemeRomulanBtn.addEventListener('click', () => setColorTheme('phantom'));

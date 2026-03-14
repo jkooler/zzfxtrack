@@ -30,7 +30,7 @@ import { resolveTrackerStateChannelInstruments } from './instrument-rename-map.j
 import { initBlocks, openBlocksModal, isBlocksModalOpen, saveBlock, updateBlock, BLOCKS_FOLDER_STATE_KEY, restoreSuspendedBlocksModals } from './blocks.js';
 import { DEFAULT_PLAYBACK_MIX_SETTINGS, sanitizePlaybackMixSettings } from './mix-settings.js';
 import { setupBeforeUnloadHandler, registerBeforeUnloadFlusher, registerBeforeUnloadConfirmer } from './unload.js';
-import { confirmDialog, alertDialog } from './dialog.js';
+import { confirmDialog, alertDialog, promptDialog } from './dialog.js';
 import { createIcons, icons } from 'lucide';
 
 // --- Features: instruments ---
@@ -964,7 +964,9 @@ configureSystemSettings({
     refreshArrangementList,
     refreshBlocksLibrary,
     refreshInstrumentListUI,
+    alertDialog,
     logWarning: (...args) => console.warn(...args),
+    promptDialog,
 });
 
 configureAdvancedSettings({

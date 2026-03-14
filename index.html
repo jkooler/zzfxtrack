@@ -7,6 +7,7 @@
     <script>
       (function() {
         var key = 'zzfxtrack-color-theme';
+        var userThemeKey = 'zzfxtrack-user-theme-values';
         try {
           var saved = localStorage.getItem(key);
           if (saved === 'legacy') { saved = 'jester'; localStorage.setItem(key, 'jester'); }
@@ -20,6 +21,18 @@
             document.documentElement.setAttribute('data-theme', saved);
           } else {
             document.documentElement.removeAttribute('data-theme');
+          }
+          if (saved === 'user') {
+            var rawUserTheme = localStorage.getItem(userThemeKey);
+            if (rawUserTheme) {
+              var userTheme = JSON.parse(rawUserTheme);
+              Object.keys(userTheme || {}).forEach(function(name) {
+                var value = userTheme[name];
+                if (!value) return;
+                document.documentElement.style.setProperty('--' + name, value);
+                document.documentElement.style.setProperty('--color-' + name, value);
+              });
+            }
           }
         } catch (e) {}
       })();
@@ -2069,6 +2082,7 @@
         <div class="flex flex-col gap-2 p-3 rounded-md border border-input bg-card/40">
           <span class="text-sm text-foreground leading-snug">Color theme</span>
           <div class="flex gap-1 rounded-md p-0.5 border border-input bg-background [&>button]:flex-1">
+            <button type="button" id="systemSettingsThemeUserBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="user">User</button>
             <button type="button" id="systemSettingsThemeDefaultBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="">Cigar</button>
             <button type="button" id="systemSettingsThemeLegacyBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="jester">Jester</button>
             <button type="button" id="systemSettingsThemeRomulanBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="phantom">Phantom</button>
@@ -2083,7 +2097,7 @@
             <i data-lucide="chevron-down" class="w-4 h-4 ml-auto text-muted-foreground shrink-0 transition-transform group-open:rotate-180"></i>
           </summary>
           <div class="px-3 pb-3 pt-0 space-y-2 border-t border-border mt-0">
-            <p class="text-xs text-muted-foreground pt-2">Override theme tokens. Changes reset on reload.</p>
+            <p class="text-xs text-muted-foreground pt-2">Editing theme colors switches to User and saves changes locally. User starts from Phantom by default.</p>
             <div class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 items-center">
               <label class="text-sm text-foreground">Background</label>
               <input type="text" id="systemSettingsThemeBackground" data-coloris data-theme-var="background" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />
@@ -2137,6 +2151,9 @@
             <div class="flex flex-wrap gap-2 mt-2">
               <button type="button" id="systemSettingsThemeResetBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3">
                 Reset to defaults
+              </button>
+              <button type="button" id="systemSettingsThemeImportBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3" title="Paste a copied theme block or CSS variables to import into User theme">
+                Import theme
               </button>
               <button type="button" id="systemSettingsThemeCopyBtn" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3" title="Copy current theme variable values for style.css or to share">
                 Copy theme to clipboard

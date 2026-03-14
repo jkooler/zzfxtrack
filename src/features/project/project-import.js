@@ -6,6 +6,7 @@
 
 import JSZip from 'jszip';
 import { buildArrangementSourceFromApi, buildBlockSourceFromApi, describeUploadBundle, getFilenameFromSection, normalizeZipEntryPath, parseArrangementSource, parseBlockSource, validateUploadBundle } from './bundle-utils.js';
+import { applyInitialColorTheme, clearStoredUserThemeValues, writeStoredColorTheme, writeStoredUserThemeValues } from '../settings/theme-controller.js';
 
 let deps = {
     getArrangementOrNull: async () => null,
@@ -49,6 +50,7 @@ async function buildUploadBundle(file) {
     const arrangements = new Map();
     let userInstrumentsContent = '';
     let systemInstrumentsContent = '';
+    let themeContent = '';
     let manifest = null;
     let hasInvalidManifest = false;
     const unknownPaths = [];
@@ -75,6 +77,11 @@ async function buildUploadBundle(file) {
 
         if (normalizedLower.endsWith('/instruments.system.js') || normalizedLower === 'instruments.system.js') {
             systemInstrumentsContent = content;
+            continue;
+        }
+
+        if (normalizedLower.endsWith('/theme.json') || normalizedLower === 'theme.json') {
+            themeContent = content;
             continue;
         }
 
@@ -106,6 +113,7 @@ async function buildUploadBundle(file) {
         arrangements: Array.from(arrangements, ([filename, content]) => ({ filename, content })),
         userInstrumentsContent,
         systemInstrumentsContent,
+        themeContent,
         manifest,
         hasInvalidManifest,
         unknownPaths,
@@ -310,6 +318,7 @@ async function applyUploadProject() {
 
         let userInstrumentsImported = 0;
         let systemInstrumentsImported = 0;
+        let themeImported = 0;
         if (includeUserInstruments && pendingUploadBundle.userInstrumentsContent && replaceInstruments) {
             if (deps.isDemoMode()) {
                 sessionStorage.setItem('instruments-js-content', pendingUploadBundle.userInstrumentsContent);
@@ -338,11 +347,28 @@ async function applyUploadProject() {
             }
         }
 
+        if (pendingUploadBundle.themeContent) {
+            try {
+                const parsedTheme = JSON.parse(pendingUploadBundle.themeContent);
+                const activeTheme = typeof parsedTheme?.activeTheme === 'string' ? parsedTheme.activeTheme : 'phantom';
+                const userThemeValues = parsedTheme?.userThemeValues && typeof parsedTheme.userThemeValues === 'object'
+                    ? parsedTheme.userThemeValues
+                    : {};
+                clearStoredUserThemeValues();
+                writeStoredUserThemeValues(userThemeValues);
+                writeStoredColorTheme(activeTheme);
+                applyInitialColorTheme();
+                themeImported = 1;
+            } catch (_e) {
+                themeImported = 0;
+            }
+        }
+
         await deps.refreshPatternList();
         if (userInstrumentsImported || systemInstrumentsImported) await deps.reloadInstruments();
 
         deps.setStatus(
-            `Imported patterns ${patternsStats.written} (renamed ${patternsStats.renamed}, skipped ${patternsStats.skipped}), blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), user instruments ${userInstrumentsImported}, system instruments ${systemInstrumentsImported}`,
+            `Imported patterns ${patternsStats.written} (renamed ${patternsStats.renamed}, skipped ${patternsStats.skipped}), blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), user instruments ${userInstrumentsImported}, system instruments ${systemInstrumentsImported}, theme ${themeImported}`,
             'success'
         );
         closeUploadProjectModal();

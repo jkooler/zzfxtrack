@@ -102,6 +102,7 @@ export function describeUploadBundle(bundle) {
     const instrumentLabels = [];
     if (bundle.userInstrumentsContent) instrumentLabels.push('instruments.js');
     if (bundle.systemInstrumentsContent) instrumentLabels.push('instruments.system.js');
+    if (bundle.themeContent) instrumentLabels.push('theme.json');
     const instrumentsSuffix = instrumentLabels.length ? `, ${instrumentLabels.join(' + ')}` : '';
     return `${bundle.patterns.length} patterns, ${bundle.blocks.length} blocks, ${bundle.arrangements.length} arrangements${instrumentsSuffix}`;
 }
@@ -111,12 +112,13 @@ export function validateUploadBundle(bundle, { expectedKind }) {
 
     const userInstrumentFileCount = Number(Boolean(bundle.userInstrumentsContent));
     const systemInstrumentFileCount = Number(Boolean(bundle.systemInstrumentsContent));
+    const themeCount = Number(Boolean(bundle.themeContent));
     const instrumentFileCount = userInstrumentFileCount + systemInstrumentFileCount;
     const userInstrumentCount = countInstrumentDefinitionsInModule(bundle.userInstrumentsContent);
     const systemInstrumentCount = countInstrumentDefinitionsInModule(bundle.systemInstrumentsContent);
     const instrumentCount = userInstrumentCount + systemInstrumentCount;
     const legacyInstrumentCount = instrumentFileCount;
-    const hasAnyData = Boolean(bundle.patterns.length || bundle.blocks.length || bundle.arrangements.length || instrumentCount);
+    const hasAnyData = Boolean(bundle.patterns.length || bundle.blocks.length || bundle.arrangements.length || instrumentCount || themeCount);
     if (!hasAnyData) return 'Incompatible ZIP: no importable app data found.';
 
     if (bundle.hasInvalidManifest) {
@@ -127,7 +129,7 @@ export function validateUploadBundle(bundle, { expectedKind }) {
     }
 
     if (bundle.manifest) {
-        if (bundle.manifest.kind !== expectedKind || ![1, 2, 3].includes(bundle.manifest.version)) {
+        if (bundle.manifest.kind !== expectedKind || ![1, 2, 3, 4].includes(bundle.manifest.version)) {
             return 'Incompatible ZIP: invalid bundle metadata.';
         }
         const expected = bundle.manifest.counts || {};
@@ -136,6 +138,7 @@ export function validateUploadBundle(bundle, { expectedKind }) {
                 ['patterns', bundle.patterns.length],
                 ['blocks', bundle.blocks.length],
                 ['arrangements', bundle.arrangements.length],
+                ...(bundle.manifest.version >= 4 ? [['themes', themeCount]] : []),
                 ['instruments', instrumentCount],
                 ['userInstruments', userInstrumentCount],
                 ['systemInstruments', systemInstrumentCount],

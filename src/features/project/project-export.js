@@ -5,6 +5,7 @@
  */
 
 import JSZip from 'jszip';
+import { readStoredColorTheme, readStoredUserThemeValues } from '../settings/theme-controller.js';
 
 let deps = {
     buildArrangementSourceFromApi: () => '',
@@ -42,6 +43,13 @@ function normalizeBundleIdentifier(value) {
     return String(value || '').trim();
 }
 
+function buildThemePayload() {
+    return {
+        activeTheme: readStoredColorTheme() ?? 'phantom',
+        userThemeValues: readStoredUserThemeValues(),
+    };
+}
+
 function countInstrumentDefinitionsInModule(content) {
     const source = String(content || '');
     if (!source.trim()) return 0;
@@ -76,6 +84,7 @@ export async function downloadProjectBundle({ identifier = '' } = {}) {
 
         let downloadedUserInstruments = 0;
         let downloadedSystemInstruments = 0;
+        let downloadedThemes = 0;
         const [userInstrumentsContent, systemInstrumentsContent] = await Promise.all([
             getInstrumentFileContent('instruments-js-content', '/instruments.js'),
             getInstrumentFileContent('instruments-system-js-content', '/instruments.system.js'),
@@ -91,6 +100,10 @@ export async function downloadProjectBundle({ identifier = '' } = {}) {
         const exportedUserInstrumentCount = countInstrumentDefinitionsInModule(userInstrumentsContent);
         const exportedSystemInstrumentCount = countInstrumentDefinitionsInModule(systemInstrumentsContent);
         const exportedInstrumentCount = exportedUserInstrumentCount + exportedSystemInstrumentCount;
+
+        const themePayload = buildThemePayload();
+        zip.file('theme.json', JSON.stringify(themePayload, null, 2));
+        downloadedThemes = 1;
 
         const files = deps.isDemoMode()
             ? Array.from(deps.getDemoPatternSourceByFile().keys()).sort()
@@ -185,7 +198,7 @@ export async function downloadProjectBundle({ identifier = '' } = {}) {
         }
 
         const downloadedInstruments = downloadedUserInstruments + downloadedSystemInstruments;
-        if (!downloadedPatterns && !downloadedBlocks && !downloadedArrangements && !downloadedInstruments) {
+        if (!downloadedPatterns && !downloadedBlocks && !downloadedArrangements && !downloadedInstruments && !downloadedThemes) {
             deps.setStatus('Nothing to download', 'error');
             return;
         }
@@ -197,12 +210,13 @@ export async function downloadProjectBundle({ identifier = '' } = {}) {
                 {
                     kind: deps.getBundleKind(),
                     identifier: normalizedIdentifier,
-                    version: 3,
+                    version: 4,
                     generatedAt: stampIso,
                     counts: {
                         patterns: downloadedPatterns,
                         blocks: downloadedBlocks,
                         arrangements: downloadedArrangements,
+                        themes: downloadedThemes,
                         instruments: exportedInstrumentCount,
                         userInstruments: exportedUserInstrumentCount,
                         systemInstruments: exportedSystemInstrumentCount,
@@ -224,8 +238,9 @@ export async function downloadProjectBundle({ identifier = '' } = {}) {
         if (downloadedUserInstruments) instrumentLabels.push('instruments.js');
         if (downloadedSystemInstruments) instrumentLabels.push('instruments.system.js');
         const instrumentsLabel = instrumentLabels.length ? ` + ${instrumentLabels.join(' + ')}` : ' (no instruments files)';
+        const themeLabel = downloadedThemes ? ' + theme.json' : '';
         deps.setStatus(
-            `Downloaded ZIP: ${downloadedPatterns} pattern${downloadedPatterns === 1 ? '' : 's'}, ${downloadedBlocks} block${downloadedBlocks === 1 ? '' : 's'}, ${downloadedArrangements} arrangement${downloadedArrangements === 1 ? '' : 's'}${instrumentsLabel}`,
+            `Downloaded ZIP: ${downloadedPatterns} pattern${downloadedPatterns === 1 ? '' : 's'}, ${downloadedBlocks} block${downloadedBlocks === 1 ? '' : 's'}, ${downloadedArrangements} arrangement${downloadedArrangements === 1 ? '' : 's'}${instrumentsLabel}${themeLabel}`,
             'success'
         );
     } catch (e) {

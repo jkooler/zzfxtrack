@@ -70,6 +70,8 @@ export const dom = {
     systemSettingsThemeDetails: document.getElementById('systemSettingsThemeDetails'),
     systemSettingsThemeResetBtn: document.getElementById('systemSettingsThemeResetBtn'),
     systemSettingsThemeCopyBtn: document.getElementById('systemSettingsThemeCopyBtn'),
+    systemSettingsThemeImportBtn: document.getElementById('systemSettingsThemeImportBtn'),
+    systemSettingsThemeUserBtn: document.getElementById('systemSettingsThemeUserBtn'),
     systemSettingsThemeDefaultBtn: document.getElementById('systemSettingsThemeDefaultBtn'),
     systemSettingsThemeLegacyBtn: document.getElementById('systemSettingsThemeLegacyBtn'),
     systemSettingsThemeRomulanBtn: document.getElementById('systemSettingsThemeRomulanBtn'),
