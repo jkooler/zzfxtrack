@@ -45,8 +45,11 @@ function setDenseRowsPreference(value) {
 function updateDenseRowsToggleUI() {
   const btn = elements.denseRowsToggle;
   if (!btn) return;
-  const isDense = !!editMode.denseRows;
+  const combineEditing = isCombineEditing();
+  const isDense = combineEditing ? true : !!editMode.denseRows;
   btn.setAttribute('aria-pressed', String(isDense));
+  btn.disabled = combineEditing;
+  btn.classList.toggle('hidden', combineEditing);
   const iconEl = btn.querySelector('[data-lucide]');
   if (iconEl) {
     const desired = isDense ? 'list-chevrons-up-down' : 'list-chevrons-down-up';
@@ -58,6 +61,13 @@ function updateDenseRowsToggleUI() {
         // ignore icon refresh errors
       }
     }
+  }
+}
+
+function syncFocusedFieldUI(field = state.focusedField || 'note') {
+  state.focusedField = field === 'vol' || field === 'reps' || field === 'nd' ? field : 'note';
+  if (elements.grid) {
+    elements.grid.dataset.focusedField = state.focusedField;
   }
 }
 
@@ -145,6 +155,7 @@ const state = {
   focusedStep: 0,
   /** Anchor for multi-selection (one corner of the selection rectangle). */
   selectionAnchor: { channel: 0, step: 0 },
+  focusedField: 'note',
 };
 
 /** Copy buffer for tracker selection. */
@@ -183,8 +194,13 @@ let editMode = {
   returnToArrangementsOnClose: false,
   returnToBlocksOnClose: false,
   arrangementInsertRowIndex: null,
+  combineSegments: null,
   denseRows: true,
 };
+
+let pendingCombineFocusTarget = null;
+let combineKeyboardTransitionLock = null;
+let combineBoundaryRepeatLockKey = null;
 
 /** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
 let lastSavedSnapshot = '';
@@ -559,6 +575,7 @@ let previewState = {
   isPlaying: false,
   playheadRafId: null,
   playingStep: null,
+  playingStepsByFilename: null,
   instrumentSignature: '',
 };
 
@@ -1163,11 +1180,342 @@ function getVerticalScrollbarWidthPx() {
 /**
  * Render the tracker grid
  */
+function isCombineEditing() {
+  return editMode.isEditing && Array.isArray(editMode.combineSegments) && editMode.combineSegments.length > 1;
+}
+
+function cloneCombineSegments(segments = []) {
+  return segments
+    .map((segment) => {
+      if (!segment?.filename) return null;
+      return {
+        description: segment.description || '',
+        filename: segment.filename,
+        name: segment.name || segment.filename.replace(/\.js$/i, ''),
+        pattern: segment.pattern || '',
+        scope: segment.scope === 'system' ? 'system' : 'user',
+        trackerState: segment.trackerState ? JSON.parse(JSON.stringify(segment.trackerState)) : null,
+      };
+    })
+    .filter(Boolean);
+}
+
+function getActiveCombineSegment() {
+  if (!isCombineEditing() || !editMode.blockFilename) return null;
+  return editMode.combineSegments.find((segment) => segment.filename === editMode.blockFilename) || null;
+}
+
+function syncCurrentCombineSegmentState() {
+  const segment = getActiveCombineSegment();
+  if (!segment) return;
+  segment.trackerState = JSON.parse(JSON.stringify(serializeTrackerState()));
+  segment.name = (elements.blockNameInput?.value ?? editMode.blockName ?? segment.name ?? '').trim() || segment.filename.replace(/\.js$/i, '');
+  segment.description = editMode.blockDescription || segment.description || '';
+  segment.pattern = String(elements.output?.value || segment.pattern || '').trim();
+  segment.scope = editMode.blockScope === 'system' ? 'system' : 'user';
+}
+
+function focusCombineTarget(target = null) {
+  if (!target || target.filename !== editMode.blockFilename) return;
+  const channel = Math.max(0, Math.min(Number.isInteger(target.channel) ? target.channel : 0, state.channels - 1));
+  const step = Math.max(0, Math.min(Number.isInteger(target.step) ? target.step : 0, state.steps - 1));
+  if (target.field === 'vol') {
+    focusVolInput(channel, step);
+  } else if (target.field === 'reps') {
+    focusRepsInput(channel, step);
+  } else if (target.field === 'nd') {
+    focusNdInput(channel, step);
+  } else {
+    focusNoteCell(channel, step);
+  }
+}
+
+function switchCombineActiveBlock(filename, focusTarget = {}) {
+  if (!isCombineEditing() || !filename) return;
+  const nextSegment = editMode.combineSegments.find((segment) => segment.filename === filename);
+  if (!nextSegment) return;
+  if (filename === editMode.blockFilename) {
+    focusCombineTarget({ ...focusTarget, filename });
+    return;
+  }
+  scheduleArrangementLiveEditUpdate();
+  syncCurrentCombineSegmentState();
+  pendingCombineFocusTarget = {
+    channel: Number.isInteger(focusTarget.channel) ? focusTarget.channel : 0,
+    field: focusTarget.field === 'vol' || focusTarget.field === 'reps' || focusTarget.field === 'nd' ? focusTarget.field : 'note',
+    filename,
+    step: Number.isInteger(focusTarget.step) ? focusTarget.step : 0,
+  };
+  document.dispatchEvent(new CustomEvent('tracker:combineActiveBlockChanged', {
+    detail: { filename },
+  }));
+  loadCombineSegmentInPlace(nextSegment);
+}
+
+function getCombineSegmentIndex(filename = editMode.blockFilename) {
+  if (!isCombineEditing() || !filename) return -1;
+  return editMode.combineSegments.findIndex((segment) => segment.filename === filename);
+}
+
+function moveFocusToAdjacentCombineSegment(direction, focusTarget = {}, repeatLockKey = null) {
+  const currentIndex = getCombineSegmentIndex();
+  if (currentIndex < 0) return false;
+  const nextIndex = direction === 'previous' ? currentIndex - 1 : currentIndex + 1;
+  const nextSegment = editMode.combineSegments[nextIndex];
+  if (!nextSegment?.filename) return false;
+  const lockToken = {};
+  combineKeyboardTransitionLock = lockToken;
+  combineBoundaryRepeatLockKey = repeatLockKey || null;
+  switchCombineActiveBlock(nextSegment.filename, {
+    channel: Number.isInteger(focusTarget.channel) ? focusTarget.channel : 0,
+    field: focusTarget.field === 'vol' || focusTarget.field === 'reps' || focusTarget.field === 'nd' ? focusTarget.field : 'note',
+    step: Number.isInteger(focusTarget.step) ? focusTarget.step : 0,
+  });
+  requestAnimationFrame(() => {
+    if (combineKeyboardTransitionLock === lockToken) {
+      combineKeyboardTransitionLock = null;
+    }
+  });
+  return true;
+}
+
+function loadCombineSegmentInPlace(segment) {
+  if (!segment?.filename) return;
+
+  if (editMode.blockFilename) {
+    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    if (bodyScroll) {
+      blockScrollPositions.set(editMode.blockFilename, {
+        scrollTop: bodyScroll.scrollTop,
+        channel: state.focusedChannel,
+        step: state.focusedStep,
+      });
+    }
+  }
+
+  editMode.blockFilename = segment.filename;
+  editMode.blockName = segment.name || segment.filename.replace(/\.js$/i, '');
+  editMode.blockDescription = segment.description || '';
+  editMode.blockScope = segment.scope === 'system' ? 'system' : 'user';
+  undoStack = [];
+  redoStack = [];
+
+  if (segment.trackerState) {
+    deserializeTrackerState(segment.trackerState);
+  } else {
+    clearAll();
+  }
+
+  updateEditModeUI();
+  updateDenseRowsToggleUI();
+  lastSavedSnapshot = getSnapshot();
+
+  const saved = blockScrollPositions.get(segment.filename);
+  const channel = saved && Number.isInteger(saved.channel) ? Math.max(0, Math.min(saved.channel, state.channels - 1)) : 0;
+  const step = saved && Number.isInteger(saved.step) ? Math.max(0, Math.min(saved.step, state.steps - 1)) : 0;
+  setFocus(channel, step);
+  focusCombineTarget(pendingCombineFocusTarget);
+  if (pendingCombineFocusTarget?.filename === segment.filename) {
+    pendingCombineFocusTarget = null;
+  }
+  if (saved != null && saved.scrollTop != null) {
+    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    if (bodyScroll) bodyScroll.scrollTop = saved.scrollTop;
+  }
+}
+
+function applyCombineSegmentLayoutVars(element, channels) {
+  if (!element) return;
+  const safeChannels = Math.min(Math.max(Number.isInteger(channels) ? channels : 1, 1), MAX_CHANNELS);
+  element.style.setProperty('--combine-channel-count', String(safeChannels));
+  element.style.setProperty('--combine-channel-width', 'calc(192px * 0.7)');
+}
+
+function buildCombineSnapshotSegment(segment) {
+  const trackerState = segment?.trackerState || {};
+  const channels = Number.isInteger(trackerState.channels) ? Math.min(Math.max(trackerState.channels, 1), MAX_CHANNELS) : 4;
+  const steps = Number.isInteger(trackerState.steps) ? Math.min(Math.max(trackerState.steps, 1), 256) : 16;
+  const grid = Array.isArray(trackerState.grid) ? trackerState.grid : [];
+  const vol = Array.isArray(trackerState.vol) ? trackerState.vol : [];
+  const reps = Array.isArray(trackerState.reps) ? trackerState.reps : [];
+  const nd = Array.isArray(trackerState.nd) ? trackerState.nd : [];
+  const channelInstruments = Array.isArray(trackerState.channelInstruments) ? trackerState.channelInstruments : [];
+
+  const segmentEl = document.createElement('div');
+  segmentEl.className = 'combine-tracker-segment combine-tracker-segment-snapshot';
+  segmentEl.dataset.filename = segment.filename;
+  segmentEl.dataset.channels = String(channels);
+  applyCombineSegmentLayoutVars(segmentEl, channels);
+
+  const headerEl = document.createElement('div');
+  headerEl.className = 'tracker-headers combine-tracker-segment-header';
+
+  const timeHeaderEl = document.createElement('div');
+  timeHeaderEl.className = 'tracker-timetrack-header combine-tracker-time-header';
+  const timeTrackSelectSpacer = document.createElement('div');
+  timeTrackSelectSpacer.className = 'tracker-timetrack-select-spacer';
+  timeHeaderEl.appendChild(timeTrackSelectSpacer);
+  headerEl.appendChild(timeHeaderEl);
+
+  const channelHeadersEl = document.createElement('div');
+  channelHeadersEl.className = 'tracker-headers tracker-channels-header-inner combine-tracker-channel-headers';
+  for (let ch = 0; ch < channels; ch++) {
+    const channelHeaderEl = document.createElement('div');
+    channelHeaderEl.className = 'tracker-channel-header';
+
+    const selectEl = document.createElement('select');
+    selectEl.className = 'tracker-channel-select';
+    selectEl.tabIndex = -1;
+    selectEl.setAttribute('aria-hidden', 'true');
+    selectEl.style.pointerEvents = 'none';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Select instrument...';
+    selectEl.appendChild(defaultOpt);
+    state.instruments.forEach((inst) => {
+      const opt = document.createElement('option');
+      opt.value = inst.id;
+      opt.textContent = inst.name || inst.id;
+      selectEl.appendChild(opt);
+    });
+    selectEl.value = channelInstruments[ch] || '';
+
+    const repsLabelEl = document.createElement('div');
+    repsLabelEl.className = 'tracker-reps-label';
+    repsLabelEl.textContent = 'RP';
+    const ndLabelEl = document.createElement('div');
+    ndLabelEl.className = 'tracker-nd-label';
+    ndLabelEl.textContent = 'DL';
+    const volLabelEl = document.createElement('div');
+    volLabelEl.className = 'tracker-vol-label';
+    volLabelEl.textContent = '';
+
+    const headerRowEl = document.createElement('div');
+    headerRowEl.className = 'tracker-channel-header-row';
+    headerRowEl.appendChild(selectEl);
+    headerRowEl.appendChild(volLabelEl);
+    headerRowEl.appendChild(repsLabelEl);
+    headerRowEl.appendChild(ndLabelEl);
+
+    channelHeaderEl.appendChild(headerRowEl);
+    channelHeadersEl.appendChild(channelHeaderEl);
+  }
+  headerEl.appendChild(channelHeadersEl);
+  segmentEl.appendChild(headerEl);
+
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'combine-tracker-segment-body';
+
+  const timeColEl = document.createElement('div');
+  timeColEl.className = 'tracker-timetrack combine-tracker-time-col';
+  for (let step = 0; step < steps; step++) {
+    const stepEl = document.createElement('div');
+    stepEl.className = 'tracker-timetrack-row combine-tracker-time-row';
+    stepEl.dataset.step = String(step);
+    if (step % 4 === 0) stepEl.classList.add('beat');
+    if (step % 16 === 0) stepEl.classList.add('bar');
+    stepEl.textContent = String(step);
+    timeColEl.appendChild(stepEl);
+  }
+  bodyEl.appendChild(timeColEl);
+
+  const channelsEl = document.createElement('div');
+  channelsEl.className = 'combine-tracker-snapshot-channels';
+  for (let ch = 0; ch < channels; ch++) {
+    const channelEl = document.createElement('div');
+    channelEl.className = 'combine-tracker-snapshot-channel';
+    for (let step = 0; step < steps; step++) {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'combine-tracker-row';
+      rowEl.dataset.step = String(step);
+      if (step % 4 === 0) rowEl.classList.add('beat');
+      if (step % 16 === 0) rowEl.classList.add('bar');
+
+      const noteValue = Array.isArray(grid[ch]) ? (grid[ch][step] || null) : null;
+      const volValue = Array.isArray(vol[ch]) ? vol[ch][step] : null;
+      const repsValue = Array.isArray(reps[ch]) ? reps[ch][step] : null;
+      const ndValue = Array.isArray(nd[ch]) ? nd[ch][step] : null;
+
+      const createCellButton = (field, value) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.tabIndex = -1;
+        button.className = field === 'note'
+          ? 'combine-tracker-cell'
+          : 'combine-tracker-fx';
+        if (field === 'note') {
+          if (value === '-') button.textContent = '-';
+          else if (value) button.textContent = formatNoteLabel(value);
+          else {
+            button.textContent = '·';
+            button.classList.add('combine-tracker-cell-empty');
+          }
+        } else {
+          button.textContent = value != null ? String(value) : '';
+        }
+        button.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          switchCombineActiveBlock(segment.filename, { channel: ch, step, field });
+        });
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          switchCombineActiveBlock(segment.filename, { channel: ch, step, field });
+        });
+        return button;
+      };
+
+      rowEl.appendChild(createCellButton('note', noteValue));
+      rowEl.appendChild(createCellButton('vol', volValue));
+      rowEl.appendChild(createCellButton('reps', repsValue));
+      rowEl.appendChild(createCellButton('nd', ndValue));
+      channelEl.appendChild(rowEl);
+    }
+    channelsEl.appendChild(channelEl);
+  }
+  bodyEl.appendChild(channelsEl);
+  segmentEl.appendChild(bodyEl);
+
+  return segmentEl;
+}
+
+function renderCombineGridAroundLiveSegment() {
+  if (!elements.grid || !isCombineEditing()) return;
+  syncCurrentCombineSegmentState();
+
+  const liveChildren = Array.from(elements.grid.childNodes);
+  const stripEl = document.createElement('div');
+  stripEl.className = 'combine-tracker-strip';
+
+  editMode.combineSegments.forEach((segment) => {
+    const segmentWrapper = document.createElement('div');
+    segmentWrapper.className = `combine-tracker-segment ${segment.filename === editMode.blockFilename ? 'combine-tracker-segment-live' : 'combine-tracker-segment-snapshot-wrap'}`;
+    segmentWrapper.dataset.filename = segment.filename;
+    applyCombineSegmentLayoutVars(segmentWrapper, segment.filename === editMode.blockFilename ? state.channels : (segment.trackerState?.channels || state.channels));
+    if (segment.filename === editMode.blockFilename) {
+      liveChildren.forEach((child) => segmentWrapper.appendChild(child));
+    } else {
+      segmentWrapper.appendChild(buildCombineSnapshotSegment(segment));
+    }
+    stripEl.appendChild(segmentWrapper);
+  });
+
+  elements.grid.innerHTML = '';
+  elements.grid.classList.toggle('tracker-grid-combine-mode', true);
+  elements.grid.appendChild(stripEl);
+}
+
 function renderGrid() {
+  renderSingleGrid();
+  elements.grid?.classList.toggle('tracker-grid-combine-mode', isCombineEditing());
+  if (isCombineEditing()) renderCombineGridAroundLiveSegment();
+}
+
+function renderSingleGrid() {
   if (!elements.grid) return;
 
   elements.grid.dataset.channels = String(state.channels);
-  elements.grid.dataset.denseRows = editMode.denseRows ? 'true' : 'false';
+  elements.grid.dataset.denseRows = isCombineEditing() || editMode.denseRows ? 'true' : 'false';
+  elements.grid.dataset.focusedField = state.focusedField || 'note';
   elements.grid.innerHTML = '';
 
   // ---- Headers row: time track (fixed) + channel headers in their own horizontal scroll ----
@@ -1330,7 +1678,11 @@ function renderGrid() {
 
       cellEl.addEventListener('click', () => {
         setFocus(ch, step);
+        syncFocusedFieldUI('note');
         cellEl.focus();
+      });
+      cellEl.addEventListener('focus', () => {
+        syncFocusedFieldUI('note');
       });
 
       setupNoteCellScrub(cellEl, ch, step);
@@ -1373,7 +1725,11 @@ function renderGrid() {
       volEl.addEventListener('click', (e) => {
         e.stopPropagation();
         setFocus(ch, step);
+        syncFocusedFieldUI('vol');
         volEl.focus();
+      });
+      volEl.addEventListener('focus', () => {
+        syncFocusedFieldUI('vol');
       });
 
       setupScrubInteraction(volEl);
@@ -1416,7 +1772,11 @@ function renderGrid() {
       repsEl.addEventListener('click', (e) => {
         e.stopPropagation();
         setFocus(ch, step);
+        syncFocusedFieldUI('reps');
         repsEl.focus();
+      });
+      repsEl.addEventListener('focus', () => {
+        syncFocusedFieldUI('reps');
       });
 
       setupScrubInteraction(repsEl, { sensitivity: 0.1 });
@@ -1459,7 +1819,11 @@ function renderGrid() {
       ndEl.addEventListener('click', (e) => {
         e.stopPropagation();
         setFocus(ch, step);
+        syncFocusedFieldUI('nd');
         ndEl.focus();
+      });
+      ndEl.addEventListener('focus', () => {
+        syncFocusedFieldUI('nd');
       });
 
       setupScrubInteraction(ndEl, { sensitivity: 0.1 });
@@ -1588,6 +1952,7 @@ function setFocus(channel, step, options = {}) {
   const shouldScroll = options.scroll !== false;
   const extendSelection = options.extendSelection === true;
   const shouldDomFocus = options.domFocus === true;
+  const field = options.field === 'vol' || options.field === 'reps' || options.field === 'nd' ? options.field : 'note';
   const clampedChannel = Math.max(0, Math.min(channel, state.channels - 1));
   const clampedStep = Math.max(0, Math.min(step, state.steps - 1));
 
@@ -1605,6 +1970,7 @@ function setFocus(channel, step, options = {}) {
 
   state.focusedChannel = clampedChannel;
   state.focusedStep = clampedStep;
+  syncFocusedFieldUI(field);
   if (!extendSelection) {
     state.selectionAnchor = { channel: clampedChannel, step: clampedStep };
   }
@@ -1650,7 +2016,7 @@ function setFocus(channel, step, options = {}) {
 }
 
 function focusRepsInput(channel, step) {
-  setFocus(channel, step);
+  setFocus(channel, step, { field: 'reps' });
   const repsInput = document.querySelector(
     `.tracker-reps-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
   );
@@ -1661,7 +2027,7 @@ function focusRepsInput(channel, step) {
 }
 
 function focusVolInput(channel, step) {
-  setFocus(channel, step);
+  setFocus(channel, step, { field: 'vol' });
   const volInput = document.querySelector(
     `.tracker-vol-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
   );
@@ -1672,7 +2038,7 @@ function focusVolInput(channel, step) {
 }
 
 function focusNdInput(channel, step) {
-  setFocus(channel, step);
+  setFocus(channel, step, { field: 'nd' });
   const ndInput = document.querySelector(
     `.tracker-nd-input[data-channel="${state.focusedChannel}"][data-step="${state.focusedStep}"]`
   );
@@ -1683,7 +2049,13 @@ function focusNdInput(channel, step) {
 }
 
 function focusNoteCell(channel, step) {
-  setFocus(channel, step, { domFocus: true });
+  setFocus(channel, step, { domFocus: true, field: 'note' });
+}
+
+function restoreFocusedNoteCellAfterInput(channel = state.focusedChannel, step = state.focusedStep) {
+  requestAnimationFrame(() => {
+    focusNoteCell(channel, step);
+  });
 }
 
 /**
@@ -1894,6 +2266,12 @@ function setupEventListeners() {
     handleArrangementPlayheadForTracker(e?.detail || {});
   });
 
+  document.addEventListener('keyup', (e) => {
+    if (combineBoundaryRepeatLockKey && e.key.toLowerCase() === combineBoundaryRepeatLockKey) {
+      combineBoundaryRepeatLockKey = null;
+    }
+  }, true);
+
   // Keyboard input (capture phase so we get keys before Strudel/other handlers when tracker is open)
   document.addEventListener('keydown', handleKeyDown, true);
 }
@@ -1904,6 +2282,30 @@ function setupEventListeners() {
 function handleKeyDown(e) {
   // Only process if tracker is open
   if (!elements.modal?.classList.contains('open')) return;
+
+  const normalizedKey = e.key.toLowerCase();
+  if (
+    combineBoundaryRepeatLockKey &&
+    normalizedKey === combineBoundaryRepeatLockKey &&
+    normalizedKey !== 'tab'
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  if (
+    combineKeyboardTransitionLock &&
+    (normalizedKey === 'arrowup' ||
+      normalizedKey === 'arrowdown' ||
+      normalizedKey === 'arrowleft' ||
+      normalizedKey === 'arrowright' ||
+      normalizedKey === 'tab')
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
 
   selLog('keydown', e.key, { shift: e.shiftKey, ctrl: e.ctrlKey, meta: e.metaKey, target: e.target?.className || e.target?.tagName });
 
@@ -1959,17 +2361,80 @@ function handleKeyDown(e) {
   const isVolInput = e.target.classList?.contains('tracker-vol-input');
   const isRepsInput = e.target.classList?.contains('tracker-reps-input');
   const isNdInput = e.target.classList?.contains('tracker-nd-input');
+  const effectiveField = isVolInput
+    ? 'vol'
+    : isRepsInput
+      ? 'reps'
+      : isNdInput
+        ? 'nd'
+        : (state.focusedField || 'note');
   if (isFormField && !isVolInput && !isRepsInput && !isNdInput) {
     selLog('return: form field (not vol/reps/nd)', e.target.tagName, e.target.id || '');
     return;
   }
 
-  if (isVolInput || isRepsInput || isNdInput) {
+  if (isCombineEditing() && !e.shiftKey && !isMultiSelection() && (normalizedKey === 'arrowleft' || normalizedKey === 'arrowright')) {
+    e.preventDefault();
+    e.stopPropagation();
+    const channel = state.focusedChannel;
+    const step = state.focusedStep;
+    const field = state.focusedField || 'note';
+
+    if (normalizedKey === 'arrowleft') {
+      if (field === 'nd') {
+        focusRepsInput(channel, step);
+        return;
+      }
+      if (field === 'reps') {
+        focusVolInput(channel, step);
+        return;
+      }
+      if (field === 'vol') {
+        focusNoteCell(channel, step);
+        return;
+      }
+      if (channel > 0) {
+        focusNdInput(channel - 1, step);
+        return;
+      }
+      moveFocusToAdjacentCombineSegment('previous', {
+        channel: Number.MAX_SAFE_INTEGER,
+        field: 'nd',
+        step,
+      }, 'arrowleft');
+      return;
+    }
+
+    if (field === 'note') {
+      focusVolInput(channel, step);
+      return;
+    }
+    if (field === 'vol') {
+      focusRepsInput(channel, step);
+      return;
+    }
+    if (field === 'reps') {
+      focusNdInput(channel, step);
+      return;
+    }
+    if (channel < state.channels - 1) {
+      focusNoteCell(channel + 1, step);
+      return;
+    }
+    moveFocusToAdjacentCombineSegment('next', {
+      channel: 0,
+      field: 'note',
+      step,
+    }, 'arrowright');
+    return;
+  }
+
+  if (effectiveField !== 'note') {
     const key = e.key.toLowerCase();
-    const channel = parseInt(e.target.dataset.channel, 10);
-    const step = parseInt(e.target.dataset.step, 10);
-    const inVol = isVolInput;
-    const inReps = isRepsInput;
+    const channel = state.focusedChannel;
+    const step = state.focusedStep;
+    const inVol = effectiveField === 'vol';
+    const inReps = effectiveField === 'reps';
 
     if (e.shiftKey && (key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright')) {
       e.preventDefault();
@@ -2041,6 +2506,13 @@ function handleKeyDown(e) {
       } else if (inReps) {
         focusNdInput(channel, step);
       } else {
+        if (channel >= state.channels - 1 && moveFocusToAdjacentCombineSegment('next', {
+          channel: 0,
+          field: 'note',
+          step,
+        }, 'arrowright')) {
+          return;
+        }
         const nextChannel = Math.min(channel + 1, state.channels - 1);
         focusNoteCell(nextChannel, step);
       }
@@ -2110,6 +2582,12 @@ function handleKeyDown(e) {
     e.preventDefault();
     if (state.focusedChannel > 0) {
       focusNdInput(state.focusedChannel - 1, state.focusedStep);
+    } else if (moveFocusToAdjacentCombineSegment('previous', {
+      channel: Number.MAX_SAFE_INTEGER,
+      field: 'nd',
+      step: state.focusedStep,
+    }, 'arrowleft')) {
+      return;
     } else {
       setFocus(0, state.focusedStep, { domFocus: true });
     }
@@ -2221,7 +2699,7 @@ function handleKeyDown(e) {
         if (next && next !== current) {
           pushUndo();
           setNote(state.focusedChannel, state.focusedStep, next);
-          focusNoteCell(state.focusedChannel, state.focusedStep);
+          restoreFocusedNoteCellAfterInput(state.focusedChannel, state.focusedStep);
         }
       }
       e.preventDefault();
@@ -2238,6 +2716,7 @@ function handleKeyDown(e) {
     if (note) {
       pushUndo();
       setNote(state.focusedChannel, state.focusedStep, note);
+      restoreFocusedNoteCellAfterInput(state.focusedChannel, state.focusedStep);
     }
     return;
   }
@@ -2893,6 +3372,7 @@ function scheduleArrangementLiveEditUpdate() {
   if (!editMode.returnToArrangementsOnClose && !editMode.autoSaveOnInput) return;
   const hasTarget = !!editMode.blockFilename || Number.isInteger(editMode.arrangementInsertRowIndex);
   if (!hasTarget) return;
+  syncCurrentCombineSegmentState();
   if (liveArrangementUpdateTimeout) {
     clearTimeout(liveArrangementUpdateTimeout);
   }
@@ -2928,6 +3408,7 @@ export function flushTrackerSaveForBlockSwitch() {
   if (!editMode.returnToArrangementsOnClose && !editMode.autoSaveOnInput) return false;
   const hasTarget = !!editMode.blockFilename || Number.isInteger(editMode.arrangementInsertRowIndex);
   if (!hasTarget) return false;
+  syncCurrentCombineSegmentState();
   if (liveArrangementUpdateTimeout) {
     clearTimeout(liveArrangementUpdateTimeout);
     liveArrangementUpdateTimeout = null;
@@ -3223,6 +3704,13 @@ function emitTrackerPreviewInstruments({ playing = false, aliases = [] } = {}) {
 }
 
 function setPlayingStep(step) {
+  if (previewState.playingStepsByFilename) {
+    Object.entries(previewState.playingStepsByFilename).forEach(([filename, playingStep]) => {
+      clearPlayingStepForCombineSegment(filename, playingStep);
+    });
+    previewState.playingStepsByFilename = null;
+  }
+
   const prev = previewState.playingStep;
   if (prev != null) {
     document.querySelectorAll(`.tracker-cell[data-step="${prev}"]`).forEach(el => {
@@ -3247,6 +3735,47 @@ function setPlayingStep(step) {
   });
   const timeRow = document.querySelector(`.tracker-timetrack-row[data-step="${step}"]`);
   timeRow?.classList.add('playing-step');
+}
+
+function getCombineSegmentRoot(filename) {
+  return Array.from(elements.grid?.querySelectorAll('.combine-tracker-segment[data-filename]') || [])
+    .find((el) => el.dataset.filename === filename) || null;
+}
+
+function clearPlayingStepForCombineSegment(filename, step) {
+  if (step == null) return;
+  const root = getCombineSegmentRoot(filename);
+  if (!root) return;
+  root.querySelectorAll(`.tracker-cell[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
+  root.querySelectorAll(`.tracker-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
+  root.querySelectorAll(`.tracker-timetrack-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
+  root.querySelectorAll(`.combine-tracker-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
+  root.querySelectorAll(`.combine-tracker-time-row[data-step="${step}"]`).forEach((el) => el.classList.remove('playing-step'));
+}
+
+function setCombinePlayingSteps(stepsByFilename = null) {
+  const prevMap = previewState.playingStepsByFilename || {};
+  Object.entries(prevMap).forEach(([filename, step]) => {
+    clearPlayingStepForCombineSegment(filename, step);
+  });
+  previewState.playingStepsByFilename = null;
+  previewState.playingStep = null;
+
+  if (!stepsByFilename || typeof stepsByFilename !== 'object') return;
+
+  const nextMap = {};
+  Object.entries(stepsByFilename).forEach(([filename, step]) => {
+    if (!filename || step == null) return;
+    const root = getCombineSegmentRoot(filename);
+    if (!root) return;
+    root.querySelectorAll(`.tracker-cell[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
+    root.querySelectorAll(`.tracker-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
+    root.querySelectorAll(`.tracker-timetrack-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
+    root.querySelectorAll(`.combine-tracker-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
+    root.querySelectorAll(`.combine-tracker-time-row[data-step="${step}"]`).forEach((el) => el.classList.add('playing-step'));
+    nextMap[filename] = step;
+  });
+  previewState.playingStepsByFilename = Object.keys(nextMap).length ? nextMap : null;
 }
 
 /**
@@ -4003,14 +4532,29 @@ function handleArrangementPlayheadForTracker(detail = {}) {
     && rowIndex === editMode.arrangementInsertRowIndex;
 
   if (!matchesExistingBlock && !matchesNewBlockRow) {
-    setPlayingStep(null);
+    if (isCombineEditing()) setCombinePlayingSteps(null);
+    else setPlayingStep(null);
     return;
   }
 
-  const trackerSteps = Number.isInteger(state.steps) && state.steps > 0 ? state.steps : 16;
-  const cycleSteps = rowSteps || trackerSteps;
+  const fallbackTrackerSteps = Number.isInteger(state.steps) && state.steps > 0 ? state.steps : 16;
+  const cycleSteps = rowSteps || fallbackTrackerSteps;
   const progress = typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0;
   const arrangementStep = Math.floor(progress * cycleSteps);
+  if (isCombineEditing()) {
+    const stepsByFilename = {};
+    editMode.combineSegments.forEach((segment) => {
+      const segmentSteps = Number.isInteger(segment?.trackerState?.steps) && segment.trackerState.steps > 0
+        ? segment.trackerState.steps
+        : fallbackTrackerSteps;
+      const trackerStep = ((arrangementStep % segmentSteps) + segmentSteps) % segmentSteps;
+      stepsByFilename[segment.filename] = trackerStep;
+    });
+    setCombinePlayingSteps(stepsByFilename);
+    return;
+  }
+
+  const trackerSteps = fallbackTrackerSteps;
   const trackerStep = ((arrangementStep % trackerSteps) + trackerSteps) % trackerSteps;
   setPlayingStep(trackerStep);
 }
@@ -4868,7 +5412,18 @@ export function setArrangementLiveOverride({ filename, rowIndex, trackerState })
   if (Number.isInteger(rowIndex)) {
     arrangementPreviewState.overridesByRowIndex.set(rowIndex, trackerState);
   }
-  scheduleArrangementPreviewUpdate();
+  if (!arrangementPreviewState.isPlaying) {
+    scheduleArrangementPreviewUpdate();
+    return;
+  }
+  if (arrangementPreviewState.pendingUpdate) {
+    clearTimeout(arrangementPreviewState.pendingUpdate);
+    arrangementPreviewState.pendingUpdate = null;
+  }
+  updateArrangementPreview({
+    keepPosition: true,
+    liveSwapMode: 'step',
+  });
 }
 
 /**
@@ -4995,6 +5550,7 @@ export function openTracker(instrumentList, options = {}) {
   editMode.arrangementInsertRowIndex = Number.isInteger(options.arrangementInsertRowIndex)
     ? options.arrangementInsertRowIndex
     : null;
+  editMode.combineSegments = null;
   editMode.blockScope = 'user';
   editMode.denseRows = getDenseRowsPreference();
   state.bpm = 120;
@@ -5025,6 +5581,8 @@ export function openTracker(instrumentList, options = {}) {
  * Open the tracker modal in edit mode for an existing block
  */
 export function openTrackerForEdit(instrumentList, blockData) {
+  const modalAlreadyOpen = !!elements.modal?.classList.contains('open');
+
   // Save scroll and focus for the block we're leaving (if any)
   if (editMode.blockFilename) {
     const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
@@ -5048,11 +5606,14 @@ export function openTrackerForEdit(instrumentList, blockData) {
   editMode.arrangementInsertRowIndex = Number.isInteger(blockData.arrangementInsertRowIndex)
     ? blockData.arrangementInsertRowIndex
     : null;
+  editMode.combineSegments = Array.isArray(blockData.combineSegments) && blockData.combineSegments.length > 1
+    ? cloneCombineSegments(blockData.combineSegments)
+    : null;
   editMode.blockFilename = blockData.filename;
   editMode.blockName = blockData.name;
   editMode.blockDescription = blockData.description;
   editMode.blockScope = blockData.scope === 'system' ? 'system' : 'user';
-  editMode.denseRows = getDenseRowsPreference();
+  editMode.denseRows = editMode.combineSegments ? true : getDenseRowsPreference();
   undoStack = [];
   redoStack = [];
 
@@ -5075,9 +5636,7 @@ export function openTrackerForEdit(instrumentList, blockData) {
 
   lastSavedSnapshot = getSnapshot();
 
-  // Defer adding 'open' to next frame so the browser paints opacity-0 first;
-  // otherwise the fade-in transition can fail on first open.
-  requestAnimationFrame(() => {
+  const finalizeOpen = () => {
     cancelEffectPreview();
     elements.modal?.classList.add('open');
     trackerModalOpenedAt = Date.now();
@@ -5085,12 +5644,25 @@ export function openTrackerForEdit(instrumentList, blockData) {
     const channel = saved && Number.isInteger(saved.channel) ? Math.max(0, Math.min(saved.channel, state.channels - 1)) : 0;
     const step = saved && Number.isInteger(saved.step) ? Math.max(0, Math.min(saved.step, state.steps - 1)) : 0;
     setFocus(channel, step);
+    focusCombineTarget(pendingCombineFocusTarget);
+    if (pendingCombineFocusTarget?.filename === blockData.filename) {
+      pendingCombineFocusTarget = null;
+    }
     // Restore scroll after setFocus so it isn't overwritten by setFocus's scroll-into-view
     if (saved != null && saved.scrollTop != null) {
       const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
       if (bodyScroll) bodyScroll.scrollTop = saved.scrollTop;
     }
-  });
+  };
+
+  // On first open we still defer for the fade-in transition.
+  // During combine-mode block switching the modal is already open, so finalize immediately
+  // to avoid a stale-focus frame that can make held arrow navigation skip.
+  if (modalAlreadyOpen) {
+    finalizeOpen();
+  } else {
+    requestAnimationFrame(finalizeOpen);
+  }
 }
 
 /**
@@ -5127,7 +5699,9 @@ function resetEditMode() {
   editMode.returnToArrangementsOnClose = false;
   editMode.returnToBlocksOnClose = false;
   editMode.arrangementInsertRowIndex = null;
+  editMode.combineSegments = null;
   editMode.denseRows = true;
+  pendingCombineFocusTarget = null;
   lastSavedSnapshot = '';
   undoStack = [];
   redoStack = [];

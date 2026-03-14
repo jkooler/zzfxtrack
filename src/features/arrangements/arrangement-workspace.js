@@ -18,8 +18,11 @@ let deps = {
     dispatchResourceScopeOpen: () => {},
     emitArrangementStateChanged: () => {},
     escapeHtml: (value) => String(value),
+    flushTrackerSaveForBlockSwitch: () => false,
     getActiveArrangementBlockFilename: () => null,
+    getActiveArrangementRowIndex: () => null,
     getAppState: () => ({}),
+    getArrangementCombineMode: () => false,
     getArrangementDraftState: () => null,
     getArrangementReadonly: () => false,
     getArrangementWorkspace: () => null,
@@ -50,6 +53,8 @@ let deps = {
     saveCurrentArrangement: () => {},
     scheduleArrangementAutoSave: () => {},
     setActiveArrangementBlockFilename: () => {},
+    setActiveArrangementRowIndex: () => {},
+    setArrangementCombineMode: () => {},
     setArrangementWorkspacePlayhead: () => {},
     setArrangementWorkspacePlayingRowIndex: () => {},
     setBlocksLibraryCache: () => {},
@@ -379,6 +384,7 @@ export function renderArrangementWorkspaceShell({
     pane,
     draftName,
     bpm,
+    combineMode = false,
     readonly,
     isPreviewPlaying,
     escapeHtml,
@@ -418,6 +424,15 @@ export function renderArrangementWorkspaceShell({
                         class="bpm-input w-12 h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         ${readonly ? 'readonly' : ''}
                     >
+                    <button
+                        id="arrangementWorkspaceCombineBtn"
+                        type="button"
+                        aria-pressed="${combineMode ? 'true' : 'false'}"
+                        class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border h-8 px-3 ${combineMode ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'}"
+                        title="Toggle Combine mode"
+                    >
+                        Combine
+                    </button>
                     <button
                         id="arrangementWorkspaceAdvancedSettingsBtn"
                         type="button"
@@ -467,6 +482,7 @@ export function renderArrangementWorkspaceShell({
         bpmInput: pane.querySelector('#arrangementWorkspaceBpm'),
         addRowBtn: pane.querySelector('#arrangementWorkspaceAddRowBtn'),
         previewBtn: pane.querySelector('#arrangementWorkspacePreviewBtn'),
+        combineBtn: pane.querySelector('#arrangementWorkspaceCombineBtn'),
         advancedSettingsBtn: pane.querySelector('#arrangementWorkspaceAdvancedSettingsBtn'),
         rowsRoot: pane.querySelector('#arrangementWorkspaceRows'),
         trashDropzone: pane.querySelector('#arrangementWorkspaceTrashDropzone'),
@@ -478,18 +494,24 @@ export function bindArrangementWorkspaceTopControls({
     nameInput,
     bpmInput,
     addRowBtn,
+    combineBtn,
     advancedSettingsBtn,
     readonly,
     isDemoMode = false,
     getDraftState = () => null,
     getCurrentArrangementFilename = () => null,
+    getActiveArrangementBlockFilename = () => null,
+    getActiveArrangementRowIndex = () => null,
     getCurrentArrangementScope = () => 'user',
     normalizeScope = (value) => (value === 'system' ? 'system' : 'user'),
     dispatchResourceScopeOpen = () => {},
     getArrangementReadonly = () => false,
+    getArrangementCombineMode = () => false,
     saveCurrentArrangement = () => {},
     renameArrangement = () => {},
     setStatus = () => {},
+    setActiveArrangementRowIndex = () => {},
+    setArrangementCombineMode = () => {},
     updateArrangementDisplayName = () => {},
     scheduleArrangementAutoSave = () => {},
     emitArrangementStateChanged = () => {},
@@ -528,6 +550,23 @@ export function bindArrangementWorkspaceTopControls({
             });
         });
     }
+
+    combineBtn?.addEventListener('click', () => {
+        const next = !getArrangementCombineMode();
+        setArrangementCombineMode(next);
+        if (!next) {
+            setActiveArrangementRowIndex(null);
+        } else if (!Number.isInteger(getActiveArrangementRowIndex())) {
+            const draftState = getDraftState();
+            const activeFilename = getActiveArrangementBlockFilename();
+            const rows = Array.isArray(draftState?.rows) ? draftState.rows : [];
+            const rowIndex = activeFilename
+                ? rows.findIndex((row) => Array.isArray(row?.blocks) && row.blocks.includes(activeFilename))
+                : -1;
+            if (rowIndex >= 0) setActiveArrangementRowIndex(rowIndex);
+        }
+        renderArrangementWorkspace();
+    });
 
     if (nameInput) {
         nameInput.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; });
@@ -618,6 +657,15 @@ export function renderArrangementWorkspace() {
 
     const readonly = deps.getArrangementReadonly();
     const isPreviewPlaying = deps.isArrangementPreviewPlaying();
+    const combineMode = deps.getArrangementCombineMode();
+    let activeCombineRowIndex = deps.getActiveArrangementRowIndex();
+    if (combineMode && Number.isInteger(activeCombineRowIndex)) {
+        const rowsLength = Array.isArray(appState.arrangementDraftState?.rows) ? appState.arrangementDraftState.rows.length : 0;
+        if (activeCombineRowIndex < 0 || activeCombineRowIndex >= rowsLength) {
+            deps.setActiveArrangementRowIndex(null);
+            activeCombineRowIndex = null;
+        }
+    }
     // User arrangements can reference both user and system blocks. Showing the
     // full library keeps the add-block picker useful even before any user blocks exist.
     const blocksForPicker = sortBlocksForPicker(appState.blocksLibraryCache);
@@ -629,6 +677,7 @@ export function renderArrangementWorkspace() {
         pane,
         draftName: appState.arrangementDraftState.name,
         bpm: appState.arrangementDraftState.bpm,
+        combineMode,
         readonly,
         isPreviewPlaying,
         escapeHtml: deps.escapeHtml,
@@ -637,6 +686,7 @@ export function renderArrangementWorkspace() {
     const bpmInput = shell?.bpmInput;
     const addRowBtn = shell?.addRowBtn;
     const previewBtn = shell?.previewBtn;
+    const combineBtn = shell?.combineBtn;
     const advancedSettingsBtn = shell?.advancedSettingsBtn;
     const rowsRoot = shell?.rowsRoot;
 
@@ -644,18 +694,24 @@ export function renderArrangementWorkspace() {
         nameInput,
         bpmInput,
         addRowBtn,
+        combineBtn,
         advancedSettingsBtn,
         readonly,
         isDemoMode: deps.isDemoMode(),
         getDraftState: () => deps.getAppState().arrangementDraftState,
         getCurrentArrangementFilename: deps.getCurrentArrangementFilename,
+        getActiveArrangementBlockFilename: deps.getActiveArrangementBlockFilename,
+        getActiveArrangementRowIndex: deps.getActiveArrangementRowIndex,
         getCurrentArrangementScope: deps.getCurrentArrangementScope,
         normalizeScope: deps.normalizeScope,
         dispatchResourceScopeOpen: deps.dispatchResourceScopeOpen,
         getArrangementReadonly: deps.getArrangementReadonly,
+        getArrangementCombineMode: deps.getArrangementCombineMode,
         saveCurrentArrangement: deps.saveCurrentArrangement,
         renameArrangement: deps.renameArrangement,
         setStatus: deps.setStatus,
+        setActiveArrangementRowIndex: deps.setActiveArrangementRowIndex,
+        setArrangementCombineMode: deps.setArrangementCombineMode,
         updateArrangementDisplayName: deps.updateArrangementDisplayName,
         scheduleArrangementAutoSave: deps.scheduleArrangementAutoSave,
         emitArrangementStateChanged: deps.emitArrangementStateChanged,
@@ -791,6 +847,7 @@ export function renderArrangementWorkspace() {
             const rowEl = document.createElement('div');
             rowEl.className = 'arr-row';
             rowEl.dataset.rowIndex = String(rowIndex);
+            rowEl.classList.toggle('arr-row-combine-active', combineMode && activeCombineRowIndex === rowIndex);
             const rowDragOver = (event) => {
                 if (!event.dataTransfer || readonly) return;
                 event.preventDefault();
@@ -1074,7 +1131,7 @@ export function renderArrangementWorkspace() {
                 row.blocks.slice().sort(compareRowBlockFilenames).forEach((filename) => {
                     const block = deps.getBlockByFilename(filename);
                     const chip = document.createElement('div');
-                    chip.className = `arr-chip ${filename === deps.getActiveArrangementBlockFilename() ? 'ring-1 ring-primary' : ''}`;
+                    chip.className = `arr-chip ${!combineMode && filename === deps.getActiveArrangementBlockFilename() ? 'ring-1 ring-primary' : ''}`;
                     chip.dataset.filename = filename;
                     chip.dataset.blockSteps = String(getBlockSteps(block));
                     chip.draggable = !readonly;
@@ -1087,6 +1144,10 @@ export function renderArrangementWorkspace() {
                     chip.innerHTML = `<span class="arr-chip-label">${deps.escapeHtml(block?.name || filename)}</span><button type="button" class="arr-chip-del" title="Remove"><i data-lucide="x" class="w-3 h-3"></i></button>`;
                     chip.addEventListener('click', (event) => {
                         if (event.target?.closest('.arr-chip-del')) return;
+                        deps.flushTrackerSaveForBlockSwitch();
+                        if (combineMode) {
+                            deps.setActiveArrangementRowIndex(rowIndex);
+                        }
                         deps.setActiveArrangementBlockFilename(filename);
                         if (deps.getCurrentArrangementFilename()) deps.setSelectedBlockForArrangement(deps.getCurrentArrangementFilename(), filename);
                         renderArrangementWorkspace();

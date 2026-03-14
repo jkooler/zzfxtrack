@@ -123,7 +123,7 @@ function isTrackerDocked() {
     return Boolean(
         trackerModal?.classList.contains('workspace-docked')
         && dom.trackerWorkspacePane
-        && trackerModal.parentElement === dom.trackerWorkspacePane
+        && dom.trackerWorkspacePane.contains(trackerModal)
     );
 }
 

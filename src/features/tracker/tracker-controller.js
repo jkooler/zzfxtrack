@@ -81,6 +81,7 @@ export function scheduleTrackerAutoSave({ filename, trackerState, name: nameOver
                 activePayload.pattern,
                 activePayload.trackerState,
                 activePayload.scope,
+                { preserveFilename: true },
             );
             if (!result || result.ok === false) throw new Error(result?.error || 'Autosave failed');
 
@@ -177,6 +178,7 @@ export async function openTrackerModalForEdit(block, trackerState, options = {})
         scope: deps.normalizeScope(resolvedBlock.scope),
         trackerState: recoveredTrackerState,
         autoSaveOnInput: Boolean(options.autoSaveOnInput),
+        combineSegments: Array.isArray(options.combineSegments) ? options.combineSegments : null,
         returnToArrangementsOnClose: options.returnToArrangementsOnClose,
         returnToBlocksOnClose: options.returnToBlocksOnClose,
     };

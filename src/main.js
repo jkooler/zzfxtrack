@@ -590,6 +590,10 @@ configureArrangementWorkspace({
     createUntitledBlock,
     setActiveArrangementBlockFilename: (filename) => { appState.activeArrangementBlockFilename = filename; },
     getActiveArrangementBlockFilename: () => appState.activeArrangementBlockFilename,
+    getActiveArrangementRowIndex: () => appState.activeArrangementRowIndex,
+    setActiveArrangementRowIndex: (value) => { appState.activeArrangementRowIndex = value; },
+    getArrangementCombineMode: () => appState.arrangementCombineMode,
+    setArrangementCombineMode: (value) => { appState.arrangementCombineMode = Boolean(value); },
     getSelectedBlockForArrangement: (filename) => arrangementSelectedBlockByArrangement[filename],
     setSelectedBlockForArrangement: (filename, blockFilename) => { arrangementSelectedBlockByArrangement[filename] = blockFilename; },
     getBlockByFilename,
@@ -597,6 +601,7 @@ configureArrangementWorkspace({
     getBlocksLibraryCache: () => appState.blocksLibraryCache,
     setBlocksLibraryCache: (nextCache) => { appState.blocksLibraryCache = nextCache; },
     matchMedia: (query) => window.matchMedia(query),
+    flushTrackerSaveForBlockSwitch,
 });
 
 configureArrangementExportContext({
@@ -714,6 +719,10 @@ configureTrackerPreviewSync({
 configureTrackerWorkspace({
     getTrackerWorkspacePane: () => dom.trackerWorkspacePane,
     getActiveArrangementBlockFilename: () => appState.activeArrangementBlockFilename,
+    setActiveArrangementBlockFilename: (value) => { appState.activeArrangementBlockFilename = value; },
+    getActiveArrangementRowIndex: () => appState.activeArrangementRowIndex,
+    getArrangementCombineMode: () => appState.arrangementCombineMode,
+    getArrangementDraftState: () => appState.arrangementDraftState,
     getBlockByFilename,
     getTrackerWorkspaceLoadedFilename: () => trackerWorkspaceLoadedFilename,
     setTrackerWorkspaceLoadedFilename: (value) => { trackerWorkspaceLoadedFilename = value; },
@@ -729,6 +738,7 @@ configureTrackerWorkspace({
     setTrackerDockRestoreParent: (value) => { trackerDockRestoreParent = value; },
     getTrackerDockRestoreNextSibling: () => trackerDockRestoreNextSibling,
     setTrackerDockRestoreNextSibling: (value) => { trackerDockRestoreNextSibling = value; },
+    flushTrackerSaveForBlockSwitch,
 });
 
 configureBlockController({
@@ -2034,6 +2044,17 @@ function setupBlocksEventListeners() {
         document.addEventListener('tracker:stateChanged', (e) => {
             const { filename, trackerState, arrangementInsertRowIndex, name, pattern, immediate } = e.detail || {};
             if (!trackerState) return;
+            if (filename) {
+                upsertBlockLibraryCacheEntry({
+                    filename,
+                    name,
+                    pattern,
+                    trackerState,
+                });
+                if (arrangementPreviewContext?.trackerStateByFilename && typeof arrangementPreviewContext.trackerStateByFilename === 'object') {
+                    arrangementPreviewContext.trackerStateByFilename[filename] = trackerState;
+                }
+            }
             if (filename && (appState.currentArrangementFilename || appState.activeArrangementBlockFilename)) {
                 scheduleTrackerAutoSave({ filename, trackerState, name, pattern, immediate });
             }

@@ -19,4 +19,6 @@ export const appState = {
     arrangementDraftState: null,
     blocksLibraryCache: [],
     activeArrangementBlockFilename: null,
+    activeArrangementRowIndex: null,
+    arrangementCombineMode: false,
 };

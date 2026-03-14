@@ -2273,7 +2273,7 @@ export async function saveBlock(name, description, pattern, trackerState, scope 
 /**
  * Update an existing block with new data
  */
-export async function updateBlock(filename, name, description, pattern, trackerState, scope = 'user') {
+export async function updateBlock(filename, name, description, pattern, trackerState, scope = 'user', options = {}) {
   try {
     const sanitizeBase = (raw) => (raw || 'block')
       .toLowerCase()
@@ -2283,7 +2283,10 @@ export async function updateBlock(filename, name, description, pattern, trackerS
     const baseName = String(name || '').trim() || 'block';
     const uniqueName = baseName;
     const baseSlug = sanitizeBase(baseName);
-    const nextFilename = `${baseSlug}.js`;
+    const preserveFilename = Boolean(options?.preserveFilename);
+    const nextFilename = preserveFilename
+      ? filename
+      : `${baseSlug}.js`;
 
     const blockData = {
       filename,
@@ -2295,7 +2298,7 @@ export async function updateBlock(filename, name, description, pattern, trackerS
       scope: normalizeScope(scope),
     };
     
-    const response = await fetch(`/api/blocks/${filename}`, {
+    const response = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
       body: JSON.stringify(blockData),
