@@ -112,8 +112,8 @@ export function showArrangementWorkspace() {
     deps.refreshZzFXTrackPreviewControlsVisibility();
     deps.updateAdvancedSettingsButtonsVisibility();
     deps.updateFooterExportActionLabels();
-    deps.updateArrangementListScopeVisualizer();
     deps.updatePatternListVisualizer();
+    deps.updateArrangementListScopeVisualizer();
     updateArrangementWorkspacePreviewButtonState();
 }
 

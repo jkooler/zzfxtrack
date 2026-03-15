@@ -232,6 +232,7 @@ configurePatternList({
     icons,
     setStatus,
     getPlayingPatternFilename: () => playingPatternFilename,
+    isArrangementPreviewPlaying,
     getStrudelTabElement: () => dom.strudelTab,
     attachVisualizer,
 });
@@ -1700,12 +1701,10 @@ document.addEventListener('sidebar:viewChanged', async (e) => {
             showWelcome();
         }
     }
-    updateArrangementListScopeVisualizer();
-    updatePatternListVisualizer();
+    refreshSharedScopeVisualizers();
 });
 document.addEventListener('visualizer:ready', () => {
-    updateArrangementListScopeVisualizer();
-    updatePatternListVisualizer();
+    refreshSharedScopeVisualizers();
 });
 dom.newPatternName.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
@@ -1871,9 +1870,18 @@ function updatePlayState(isPlaying) {
     } else {
         playingPatternFilename = null;
     }
+    refreshSharedScopeVisualizers();
+    renderPlayButton();
+}
+
+function refreshSharedScopeVisualizers() {
+    if (isArrangementPreviewPlaying()) {
+        updatePatternListVisualizer();
+        updateArrangementListScopeVisualizer();
+        return;
+    }
     updateArrangementListScopeVisualizer();
     updatePatternListVisualizer();
-    renderPlayButton();
 }
 
 function renderPlayButton() {

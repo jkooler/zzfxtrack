@@ -24,6 +24,7 @@ let setStatus = () => {};
 let getPlayingPatternFilename = () => null;
 let getStrudelTabElement = () => null;
 let attachVisualizer = () => {};
+let isArrangementPreviewPlaying = () => false;
 
 function scrollListItemIntoView(item) {
     if (!item) return;
@@ -90,6 +91,7 @@ export function configurePatternList(options = {}) {
     if (typeof options.getPlayingPatternFilename === 'function') getPlayingPatternFilename = options.getPlayingPatternFilename;
     if (typeof options.getStrudelTabElement === 'function') getStrudelTabElement = options.getStrudelTabElement;
     if (typeof options.attachVisualizer === 'function') attachVisualizer = options.attachVisualizer;
+    if (typeof options.isArrangementPreviewPlaying === 'function') isArrangementPreviewPlaying = options.isArrangementPreviewPlaying;
 }
 
 /**
@@ -275,6 +277,7 @@ const TAB_VISUALIZER_CLASS = 'list-item-visualizer';
 export function updatePatternListVisualizer() {
     const patternList = getPatternListElement();
     const playingPatternFilename = getPlayingPatternFilename();
+    const arrangementPlaying = isArrangementPreviewPlaying();
     const listVisible = patternList && !patternList.classList.contains('hidden');
 
     if (!listVisible && playingPatternFilename) {
@@ -306,6 +309,7 @@ export function updatePatternListVisualizer() {
 
     if (!patternList) return;
     if (patternList.classList.contains('hidden')) {
+        if (arrangementPlaying) return;
         attachVisualizer(null);
         return;
     }
@@ -368,7 +372,7 @@ export function updatePatternListVisualizer() {
         }
     });
 
-    if (!visualizerAttached) {
+    if (!visualizerAttached && !arrangementPlaying) {
         attachVisualizer(null);
     }
 }
