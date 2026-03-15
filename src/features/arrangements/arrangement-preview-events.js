@@ -244,7 +244,6 @@ export function installArrangementPreviewEventListeners() {
             deps.applyArrangementWorkspacePlayhead(detail);
         }
         deps.updateArrangementPlaybackInstrumentAliases(detail);
-        deps.updateArrangementListScopeVisualizer();
     });
 
     document.addEventListener('arrangements:previewState', (e) => {

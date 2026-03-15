@@ -896,8 +896,6 @@ strudel-editor {
 
 .multitrack-tracker-segment-viewport {
   @apply flex gap-0;
-  transform: translateY(calc(var(--multitrack-scroll-top, 0px) * -1));
-  will-change: transform;
 }
 
 .multitrack-tracker-time-col {
@@ -926,6 +924,10 @@ strudel-editor {
   @apply flex flex-col gap-0 shrink-0;
   width: var(--multitrack-channel-width, calc(192px * 0.7));
   min-width: var(--multitrack-channel-width, calc(192px * 0.7));
+}
+
+.multitrack-tracker-spacer {
+  @apply shrink-0 pointer-events-none select-none;
 }
 
 .multitrack-tracker-segment-snapshot .tracker-channel-header {

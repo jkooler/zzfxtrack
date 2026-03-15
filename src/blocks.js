@@ -192,19 +192,30 @@ function setArrangementRowPlayingVisual(rowEl, isPlaying) {
   iconEl?.classList.toggle('hidden', !isPlaying);
 }
 
-function clearBlocksModalScopeVisualizer() {
+function clearBlocksModalScopeVisualizer({ detachSharedVisualizer = true } = {}) {
   document.querySelectorAll('#blocksList .block-item, #arrangementsList .block-item').forEach((item) => {
     item.classList.remove('relative', 'overflow-hidden');
     item.querySelector('canvas.list-item-visualizer')?.remove();
   });
-  attachVisualizer(null);
+  if (detachSharedVisualizer) attachVisualizer(null);
 }
 
 function isBlocksTabActive() {
   return !elements.blocksTabPanel?.classList.contains('hidden');
 }
 
+function isBlocksModalVisible() {
+  return Boolean(
+    elements.modal?.classList.contains('open')
+    && !elements.modal?.classList.contains('is-suspended')
+  );
+}
+
 function updateBlocksModalScopeVisualizer() {
+  if (!isBlocksModalVisible()) {
+    clearBlocksModalScopeVisualizer({ detachSharedVisualizer: false });
+    return;
+  }
   let target = null;
 
   if (isArrangementPreviewPlaying()) {
@@ -601,6 +612,7 @@ function setupEventListeners() {
   });
 
   document.addEventListener('arrangements:playhead', (e) => {
+    if (!isBlocksModalVisible()) return;
     const detail = e?.detail || {};
     const rowIndex = Number.isInteger(detail.rowIndex) ? detail.rowIndex : null;
     const progress = typeof detail.progress === 'number' ? detail.progress : 0;

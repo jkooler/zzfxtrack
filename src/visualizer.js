@@ -5,6 +5,10 @@ export class ScopeVisualizer {
         this.canvas = null;
         this.ctx = null;
         this.animationId = null;
+        this.dataArray = null;
+        this.cachedStroke = '';
+        this.cachedStrokeAt = 0;
+        this.lastDrawAt = 0;
         this.draw = this.draw.bind(this);
     }
 
@@ -21,6 +25,7 @@ export class ScopeVisualizer {
         
         if (canvas) {
             this.ctx = canvas.getContext('2d');
+            this.lastDrawAt = 0;
             this.draw();
         }
     }
@@ -30,6 +35,7 @@ export class ScopeVisualizer {
      */
     setAnalyser(analyser) {
         this.analyser = analyser;
+        this.dataArray = null;
     }
 
     draw() {
@@ -38,8 +44,15 @@ export class ScopeVisualizer {
 
         if (!this.analyser) return;
 
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        if (now - this.lastDrawAt < 33) return;
+        this.lastDrawAt = now;
+
         const bufferLength = this.analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+        if (!this.dataArray || this.dataArray.length !== bufferLength) {
+            this.dataArray = new Uint8Array(bufferLength);
+        }
+        const dataArray = this.dataArray;
         this.analyser.getByteTimeDomainData(dataArray);
 
         const width = this.canvas.width;
@@ -48,8 +61,11 @@ export class ScopeVisualizer {
 
         ctx.clearRect(0, 0, width, height);
         ctx.lineWidth = 2;
-        const scopeStroke = getComputedStyle(document.documentElement).getPropertyValue('--scope-stroke').trim();
-        ctx.strokeStyle = scopeStroke || '#ffffff';
+        if (!this.cachedStroke || now - this.cachedStrokeAt > 500) {
+            this.cachedStroke = getComputedStyle(document.documentElement).getPropertyValue('--scope-stroke').trim() || '#ffffff';
+            this.cachedStrokeAt = now;
+        }
+        ctx.strokeStyle = this.cachedStroke;
         ctx.beginPath();
 
         // Amplify deviation from center so quiet signals are visible (zoom into waveform)

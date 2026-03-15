@@ -209,6 +209,10 @@ let multitrackKeyboardTransitionLock = null;
 let multitrackBoundaryRepeatLockKey = null;
 let multitrackSharedScrollTop = 0;
 let multitrackSharedScrollLeft = 0;
+let multitrackSnapshotRenderRaf = null;
+
+const MULTITRACK_SNAPSHOT_OVERSCAN_STEPS = 8;
+const MULTITRACK_SNAPSHOT_ROW_PITCH_FALLBACK = 15;
 
 /** Snapshot of state when tracker was opened or last saved (for unsaved-changes detection) */
 let lastSavedSnapshot = '';
@@ -607,6 +611,7 @@ const arrangementPreviewState = {
   playheadRafId: null,
   playingRowIndex: null,
   playingRowProgress: null,
+  playingRowStep: null,
   arrangementState: null,
   trackerStateByFilename: null,
   instrumentList: null,
@@ -1391,7 +1396,170 @@ function scrollActiveMultitrackSegmentIntoView() {
 function syncMultitrackSnapshotScroll(scrollTop = 0) {
   if (!isMultitrackEditing() || !elements.grid) return;
   multitrackSharedScrollTop = Math.max(0, scrollTop);
-  elements.grid.style.setProperty('--multitrack-scroll-top', `${multitrackSharedScrollTop}px`);
+  requestMultitrackSnapshotRender();
+}
+
+function getMultitrackSnapshotRowPitch() {
+  const activeRows = elements.grid?.querySelectorAll('.multitrack-tracker-segment-live .tracker-row') || [];
+  if (activeRows.length >= 2) {
+    const pitch = Math.abs(activeRows[1].offsetTop - activeRows[0].offsetTop);
+    if (pitch > 0) return pitch;
+  }
+  const activeRow = activeRows[0];
+  if (activeRow) {
+    const style = window.getComputedStyle(activeRow);
+    const marginBottom = parseFloat(style.marginBottom || '0') || 0;
+    return activeRow.offsetHeight + marginBottom;
+  }
+  return MULTITRACK_SNAPSHOT_ROW_PITCH_FALLBACK;
+}
+
+function getMultitrackSnapshotViewportHeight() {
+  const activeBodyScroll = elements.grid?.querySelector('.multitrack-tracker-segment-live .tracker-body-scroll');
+  return activeBodyScroll?.clientHeight || 0;
+}
+
+function getMultitrackSnapshotRenderRange(totalSteps) {
+  const rowPitch = getMultitrackSnapshotRowPitch();
+  const viewportHeight = getMultitrackSnapshotViewportHeight();
+  const visibleSteps = Math.max(1, Math.ceil((viewportHeight || (rowPitch * 24)) / rowPitch));
+  const overscan = MULTITRACK_SNAPSHOT_OVERSCAN_STEPS;
+  const windowSize = Math.min(totalSteps, visibleSteps + overscan * 2);
+  const unclampedStart = Math.floor(multitrackSharedScrollTop / rowPitch) - overscan;
+  const start = Math.max(0, Math.min(unclampedStart, Math.max(0, totalSteps - windowSize)));
+  const end = Math.min(totalSteps, start + windowSize);
+  return {
+    start,
+    end,
+    rowPitch,
+    topOffset: start * rowPitch,
+    bottomOffset: Math.max(0, (totalSteps - end) * rowPitch),
+  };
+}
+
+function createMultitrackSnapshotSpacer(height) {
+  const spacer = document.createElement('div');
+  spacer.className = 'multitrack-tracker-spacer';
+  spacer.setAttribute('aria-hidden', 'true');
+  spacer.style.height = `${Math.max(0, height)}px`;
+  return spacer;
+}
+
+function renderMultitrackSnapshotRows(segmentEl, segment, { force = false } = {}) {
+  if (!segmentEl || !segment) return;
+  const trackerState = segment?.trackerState || {};
+  const channels = Number.isInteger(trackerState.channels) ? Math.min(Math.max(trackerState.channels, 1), MAX_CHANNELS) : 4;
+  const steps = Number.isInteger(trackerState.steps) ? Math.min(Math.max(trackerState.steps, 1), 256) : 16;
+  const grid = Array.isArray(trackerState.grid) ? trackerState.grid : [];
+  const vol = Array.isArray(trackerState.vol) ? trackerState.vol : [];
+  const reps = Array.isArray(trackerState.reps) ? trackerState.reps : [];
+  const nd = Array.isArray(trackerState.nd) ? trackerState.nd : [];
+  const timeColEl = segmentEl.querySelector('.multitrack-tracker-time-col');
+  const channelsEl = segmentEl.querySelector('.multitrack-tracker-snapshot-channels');
+  if (!timeColEl || !channelsEl) return;
+
+  const range = getMultitrackSnapshotRenderRange(steps);
+  if (!force
+    && Number(segmentEl.dataset.renderStart) === range.start
+    && Number(segmentEl.dataset.renderEnd) === range.end) {
+    return;
+  }
+  segmentEl.dataset.renderStart = String(range.start);
+  segmentEl.dataset.renderEnd = String(range.end);
+
+  timeColEl.innerHTML = '';
+  if (range.topOffset > 0) timeColEl.appendChild(createMultitrackSnapshotSpacer(range.topOffset));
+  for (let step = range.start; step < range.end; step++) {
+    const stepEl = document.createElement('div');
+    stepEl.className = 'tracker-timetrack-row multitrack-tracker-time-row';
+    stepEl.dataset.step = String(step);
+    if (step % 4 === 0) stepEl.classList.add('beat');
+    if (step % 16 === 0) stepEl.classList.add('bar');
+    if (previewState.playingStepsByFilename?.[segment.filename] === step) stepEl.classList.add('playing-step');
+    stepEl.textContent = String(step);
+    timeColEl.appendChild(stepEl);
+  }
+  if (range.bottomOffset > 0) timeColEl.appendChild(createMultitrackSnapshotSpacer(range.bottomOffset));
+
+  channelsEl.innerHTML = '';
+  for (let ch = 0; ch < channels; ch++) {
+    const channelEl = document.createElement('div');
+    channelEl.className = 'multitrack-tracker-snapshot-channel';
+    if (range.topOffset > 0) channelEl.appendChild(createMultitrackSnapshotSpacer(range.topOffset));
+
+    for (let step = range.start; step < range.end; step++) {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'multitrack-tracker-row';
+      rowEl.dataset.step = String(step);
+      if (step % 4 === 0) rowEl.classList.add('beat');
+      if (step % 16 === 0) rowEl.classList.add('bar');
+      if (previewState.playingStepsByFilename?.[segment.filename] === step) rowEl.classList.add('playing-step');
+
+      const noteValue = Array.isArray(grid[ch]) ? (grid[ch][step] || null) : null;
+      const volValue = Array.isArray(vol[ch]) ? vol[ch][step] : null;
+      const repsValue = Array.isArray(reps[ch]) ? reps[ch][step] : null;
+      const ndValue = Array.isArray(nd[ch]) ? nd[ch][step] : null;
+
+      const createCellButton = (field, value) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.tabIndex = -1;
+        button.className = field === 'note'
+          ? 'multitrack-tracker-cell'
+          : 'multitrack-tracker-fx';
+        if (field === 'note') {
+          if (value === '-') button.textContent = '-';
+          else if (value) button.textContent = formatNoteLabel(value);
+          else {
+            button.textContent = '·';
+            button.classList.add('multitrack-tracker-cell-empty');
+          }
+        } else {
+          button.textContent = value != null ? String(value) : '';
+        }
+        button.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          switchMultitrackActiveBlock(segment.filename, { channel: ch, step, field });
+        });
+        return button;
+      };
+
+      rowEl.appendChild(createCellButton('note', noteValue));
+      rowEl.appendChild(createCellButton('vol', volValue));
+      rowEl.appendChild(createCellButton('reps', repsValue));
+      rowEl.appendChild(createCellButton('nd', ndValue));
+      channelEl.appendChild(rowEl);
+    }
+
+    if (range.bottomOffset > 0) channelEl.appendChild(createMultitrackSnapshotSpacer(range.bottomOffset));
+    channelsEl.appendChild(channelEl);
+  }
+}
+
+function renderVisibleMultitrackSnapshotRows({ force = false } = {}) {
+  if (!isMultitrackEditing() || !elements.grid) return;
+  const segmentsByFilename = new Map((editMode.multitrackSegments || []).map((segment) => [segment.filename, segment]));
+  elements.grid.querySelectorAll('.multitrack-tracker-segment-snapshot[data-filename]').forEach((segmentEl) => {
+    const segment = segmentsByFilename.get(segmentEl.dataset.filename);
+    if (segment) renderMultitrackSnapshotRows(segmentEl, segment, { force });
+  });
+}
+
+function requestMultitrackSnapshotRender({ force = false } = {}) {
+  if (!isMultitrackEditing() || !elements.grid) return;
+  if (force) {
+    if (multitrackSnapshotRenderRaf != null) {
+      cancelAnimationFrame(multitrackSnapshotRenderRaf);
+      multitrackSnapshotRenderRaf = null;
+    }
+    renderVisibleMultitrackSnapshotRows({ force: true });
+    return;
+  }
+  if (multitrackSnapshotRenderRaf != null) return;
+  multitrackSnapshotRenderRaf = requestAnimationFrame(() => {
+    multitrackSnapshotRenderRaf = null;
+    renderVisibleMultitrackSnapshotRows();
+  });
 }
 
 function getMultitrackMaxSteps() {
@@ -1454,11 +1622,6 @@ function applyMultitrackVirtualScrollRange(timeTrackScroll, timeTrackEl, channel
 function buildMultitrackSnapshotSegment(segment) {
   const trackerState = segment?.trackerState || {};
   const channels = Number.isInteger(trackerState.channels) ? Math.min(Math.max(trackerState.channels, 1), MAX_CHANNELS) : 4;
-  const steps = Number.isInteger(trackerState.steps) ? Math.min(Math.max(trackerState.steps, 1), 256) : 16;
-  const grid = Array.isArray(trackerState.grid) ? trackerState.grid : [];
-  const vol = Array.isArray(trackerState.vol) ? trackerState.vol : [];
-  const reps = Array.isArray(trackerState.reps) ? trackerState.reps : [];
-  const nd = Array.isArray(trackerState.nd) ? trackerState.nd : [];
   const channelInstruments = Array.isArray(trackerState.channelInstruments) ? trackerState.channelInstruments : [];
 
   const segmentEl = document.createElement('div');
@@ -1531,69 +1694,15 @@ function buildMultitrackSnapshotSegment(segment) {
 
   const timeColEl = document.createElement('div');
   timeColEl.className = 'tracker-timetrack multitrack-tracker-time-col';
-  for (let step = 0; step < steps; step++) {
-    const stepEl = document.createElement('div');
-    stepEl.className = 'tracker-timetrack-row multitrack-tracker-time-row';
-    stepEl.dataset.step = String(step);
-    if (step % 4 === 0) stepEl.classList.add('beat');
-    if (step % 16 === 0) stepEl.classList.add('bar');
-    stepEl.textContent = String(step);
-    timeColEl.appendChild(stepEl);
-  }
   viewportEl.appendChild(timeColEl);
 
   const channelsEl = document.createElement('div');
   channelsEl.className = 'multitrack-tracker-snapshot-channels';
-  for (let ch = 0; ch < channels; ch++) {
-    const channelEl = document.createElement('div');
-    channelEl.className = 'multitrack-tracker-snapshot-channel';
-    for (let step = 0; step < steps; step++) {
-      const rowEl = document.createElement('div');
-      rowEl.className = 'multitrack-tracker-row';
-      rowEl.dataset.step = String(step);
-      if (step % 4 === 0) rowEl.classList.add('beat');
-      if (step % 16 === 0) rowEl.classList.add('bar');
-
-      const noteValue = Array.isArray(grid[ch]) ? (grid[ch][step] || null) : null;
-      const volValue = Array.isArray(vol[ch]) ? vol[ch][step] : null;
-      const repsValue = Array.isArray(reps[ch]) ? reps[ch][step] : null;
-      const ndValue = Array.isArray(nd[ch]) ? nd[ch][step] : null;
-
-      const createCellButton = (field, value) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.tabIndex = -1;
-        button.className = field === 'note'
-          ? 'multitrack-tracker-cell'
-          : 'multitrack-tracker-fx';
-        if (field === 'note') {
-          if (value === '-') button.textContent = '-';
-          else if (value) button.textContent = formatNoteLabel(value);
-          else {
-            button.textContent = '·';
-            button.classList.add('multitrack-tracker-cell-empty');
-          }
-        } else {
-          button.textContent = value != null ? String(value) : '';
-        }
-        button.addEventListener('mousedown', (event) => {
-          event.preventDefault();
-          switchMultitrackActiveBlock(segment.filename, { channel: ch, step, field });
-        });
-        return button;
-      };
-
-      rowEl.appendChild(createCellButton('note', noteValue));
-      rowEl.appendChild(createCellButton('vol', volValue));
-      rowEl.appendChild(createCellButton('reps', repsValue));
-      rowEl.appendChild(createCellButton('nd', ndValue));
-      channelEl.appendChild(rowEl);
-    }
-    channelsEl.appendChild(channelEl);
-  }
   viewportEl.appendChild(channelsEl);
   bodyEl.appendChild(viewportEl);
   segmentEl.appendChild(bodyEl);
+
+  renderMultitrackSnapshotRows(segmentEl, segment, { force: true });
 
   return segmentEl;
 }
@@ -1626,6 +1735,7 @@ function renderMultitrackGridAroundLiveSegment() {
   elements.grid.scrollLeft = multitrackSharedScrollLeft;
   const activeBodyScroll = elements.grid.querySelector('.multitrack-tracker-segment-live .tracker-body-scroll');
   syncMultitrackSnapshotScroll(activeBodyScroll?.scrollTop || 0);
+  requestMultitrackSnapshotRender({ force: true });
   elements.grid.onscroll = () => {
     if (elements.grid) multitrackSharedScrollLeft = elements.grid.scrollLeft;
   };
@@ -4653,13 +4763,14 @@ function computeArrangementRowBounds(arrangementState) {
   });
 }
 
-function emitArrangementPlayhead(rowIndex, progress, rowSteps = null, blocks = null) {
+function emitArrangementPlayhead(rowIndex, progress, rowSteps = null, blocks = null, rowStep = null) {
   document.dispatchEvent(new CustomEvent('arrangements:playhead', {
     detail: {
       rowIndex,
       progress,
       rowSteps,
       blocks,
+      rowStep: Number.isInteger(rowStep) ? rowStep : null,
     }
   }));
 }
@@ -4690,8 +4801,9 @@ function handleArrangementPlayheadForTracker(detail = {}) {
 
   const fallbackTrackerSteps = Number.isInteger(state.steps) && state.steps > 0 ? state.steps : 16;
   const cycleSteps = rowSteps || fallbackTrackerSteps;
-  const progress = typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0;
-  const arrangementStep = Math.floor(progress * cycleSteps);
+  const arrangementStep = Number.isInteger(detail.rowStep)
+    ? Math.max(0, Math.min(detail.rowStep, Math.max(cycleSteps - 1, 0)))
+    : Math.floor((typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0) * cycleSteps);
   if (isMultitrackEditing()) {
     const stepsByFilename = {};
     editMode.multitrackSegments.forEach((segment) => {
@@ -4718,6 +4830,7 @@ function stopArrangementPlayhead() {
   if (arrangementPreviewState.playingRowIndex != null) {
     arrangementPreviewState.playingRowIndex = null;
     arrangementPreviewState.playingRowProgress = null;
+    arrangementPreviewState.playingRowStep = null;
     emitArrangementPlayhead(null, 0);
   }
 }
@@ -4755,6 +4868,7 @@ function startArrangementPlayhead() {
       const clamped = Math.min(Math.max(progress, 0), 1);
       const prevIndex = arrangementPreviewState.playingRowIndex;
       const prevProgress = arrangementPreviewState.playingRowProgress;
+      const prevStep = arrangementPreviewState.playingRowStep;
       const justWrapped = prevProgress != null && prevProgress > 0.9 && clamped < 0.1;
       if (arrangementPreviewState._pendingLiveSwapRendered && pendingSwapMode === 'step' && stepProgressInRow < 0.08) {
         const stepKey = loopRow.start + stepInRow;
@@ -4797,15 +4911,17 @@ function startArrangementPlayhead() {
             crossfadeSeconds: ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS,
           });
         }
-      } else if (prevIndex !== loopRow.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
+      } else if (prevIndex !== loopRow.index || prevStep !== stepInRow) {
         const rowData = arrangementPreviewState.arrangementState?.rows?.[loopRow.index];
         arrangementPreviewState.playingRowIndex = loopRow.index;
         arrangementPreviewState.playingRowProgress = clamped;
+        arrangementPreviewState.playingRowStep = stepInRow;
         emitArrangementPlayhead(
           loopRow.index,
           clamped,
           loopRow.steps,
-          Array.isArray(rowData?.blocks) ? rowData.blocks : []
+          Array.isArray(rowData?.blocks) ? rowData.blocks : [],
+          stepInRow
         );
       }
       arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
@@ -4820,19 +4936,22 @@ function startArrangementPlayhead() {
         if (row.loop && elapsedStepsWrapped >= row.start) {
           current = row;
           const stepsInRow = ((elapsedStepsWrapped - row.start) % row.steps + row.steps) % row.steps;
+          const stepInRow = Math.floor(stepsInRow);
           const progress = row.steps > 0 ? stepsInRow / row.steps : 0;
           const clamped = Math.min(Math.max(progress, 0), 1);
           const prevIndex = arrangementPreviewState.playingRowIndex;
-          const prevProgress = arrangementPreviewState.playingRowProgress;
-          if (prevIndex !== current.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
+          const prevStep = arrangementPreviewState.playingRowStep;
+          if (prevIndex !== current.index || prevStep !== stepInRow) {
             const rowData = arrangementPreviewState.arrangementState?.rows?.[current.index];
             arrangementPreviewState.playingRowIndex = current.index;
             arrangementPreviewState.playingRowProgress = clamped;
+            arrangementPreviewState.playingRowStep = stepInRow;
             emitArrangementPlayhead(
               current.index,
               clamped,
               current.steps,
-              Array.isArray(rowData?.blocks) ? rowData.blocks : []
+              Array.isArray(rowData?.blocks) ? rowData.blocks : [],
+              stepInRow
             );
           }
           arrangementPreviewState.playheadRafId = requestAnimationFrame(tick);
@@ -4850,9 +4969,10 @@ function startArrangementPlayhead() {
     const clamped = Math.min(Math.max(progress, 0), 1);
     const prevIndex = arrangementPreviewState.playingRowIndex;
     const prevProgress = arrangementPreviewState.playingRowProgress;
+    const stepsInCurrentRow = Math.max(0, elapsedStepsWrapped - current.start);
+    const stepInCurrentRow = Math.floor(stepsInCurrentRow);
+    const prevStep = arrangementPreviewState.playingRowStep;
     if (arrangementPreviewState._pendingLiveSwapRendered && pendingSwapMode === 'step') {
-      const stepsInCurrentRow = Math.max(0, elapsedStepsWrapped - current.start);
-      const stepInCurrentRow = Math.floor(stepsInCurrentRow);
       const stepProgressInCurrentRow = stepsInCurrentRow - stepInCurrentRow;
       if (stepProgressInCurrentRow < 0.08) {
         const stepKey = current.start + stepInCurrentRow;
@@ -4918,15 +5038,17 @@ function startArrangementPlayhead() {
           crossfadeSeconds: ARRANGEMENT_LIVE_BOUNDARY_CROSSFADE_SECONDS,
         });
       }
-    } else if (prevIndex !== current.index || prevProgress == null || Math.abs(prevProgress - clamped) > 0.01) {
+    } else if (prevIndex !== current.index || prevStep !== stepInCurrentRow) {
       const row = arrangementPreviewState.arrangementState?.rows?.[current.index];
       arrangementPreviewState.playingRowIndex = current.index;
       arrangementPreviewState.playingRowProgress = clamped;
+      arrangementPreviewState.playingRowStep = stepInCurrentRow;
       emitArrangementPlayhead(
         current.index,
         clamped,
         current.steps,
-        Array.isArray(row?.blocks) ? row.blocks : []
+        Array.isArray(row?.blocks) ? row.blocks : [],
+        stepInCurrentRow
       );
     }
 
@@ -5320,11 +5442,13 @@ export function startArrangementPreview(arrangementState, trackerStateByFilename
       const rowData = arrangementPreviewState.arrangementState?.rows?.[startRowIndex];
       arrangementPreviewState.playingRowIndex = startRowIndex;
       arrangementPreviewState.playingRowProgress = 0;
+      arrangementPreviewState.playingRowStep = 0;
       emitArrangementPlayhead(
         startRowIndex,
         0,
         bound?.steps ?? 16,
-        Array.isArray(rowData?.blocks) ? rowData.blocks : []
+        Array.isArray(rowData?.blocks) ? rowData.blocks : [],
+        0
       );
     }
   }
@@ -5869,6 +5993,10 @@ function resetEditMode() {
   pendingMultitrackFocusTarget = null;
   multitrackSharedScrollTop = 0;
   multitrackSharedScrollLeft = 0;
+  if (multitrackSnapshotRenderRaf != null) {
+    cancelAnimationFrame(multitrackSnapshotRenderRaf);
+    multitrackSnapshotRenderRaf = null;
+  }
   lastSavedSnapshot = '';
   undoStack = [];
   redoStack = [];

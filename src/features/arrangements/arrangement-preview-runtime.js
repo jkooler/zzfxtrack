@@ -87,8 +87,9 @@ export function updateArrangementPlaybackInstrumentAliases(detail = {}) {
     const rowSteps = Number.isInteger(detail.rowSteps) && detail.rowSteps > 0
         ? detail.rowSteps
         : (Number.isInteger(row?.repeats) ? Math.min(Math.max(row.repeats, 1), 16) * 16 : 16);
-    const progress = typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0;
-    const rowStep = Math.floor(progress * rowSteps);
+    const rowStep = Number.isInteger(detail.rowStep)
+        ? Math.max(0, Math.min(detail.rowStep, Math.max(rowSteps - 1, 0)))
+        : Math.floor((typeof detail.progress === 'number' ? Math.max(0, Math.min(detail.progress, 0.999999)) : 0) * rowSteps);
     const sortedAliases = collectInstrumentAliasesFromRowStep(rowIndex, rowStep, blocks);
     const signature = `${rowIndex}|${rowStep}|${sortedAliases.join('|')}`;
     if (signature === deps.getLastArrangementPlaybackInstrumentSignature()) return;
