@@ -90,6 +90,7 @@ export async function deleteBlockFromLibrary(filename, displayName) {
         await deps.alertDialog({
             title: 'Cannot Delete Block',
             message: `This block is used in arrangements:\n${list}`,
+            hideCancelCompletely: true,
         });
         return;
     }
@@ -111,6 +112,7 @@ export async function deleteBlockFromLibrary(filename, displayName) {
             await deps.alertDialog({
                 title: 'Cannot Delete Block',
                 message: `This block is used in arrangements:\n${list}`,
+                hideCancelCompletely: true,
             });
             return;
         }

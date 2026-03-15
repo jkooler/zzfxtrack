@@ -31,11 +31,16 @@ let deps = {
 
 let multitrackActiveBlockListenerInstalled = false;
 let pendingArrangementMultitrackScrollFilename = null;
+let pendingTrackerWorkspaceAutofocusFilename = null;
 let workspaceMultitrackActiveFilename = null;
 
 export function requestTrackerWorkspaceMultitrackAutoscroll(filename = null) {
     pendingArrangementMultitrackScrollFilename = filename || null;
     if (filename) workspaceMultitrackActiveFilename = filename;
+}
+
+export function requestTrackerWorkspaceAutofocus(filename = null) {
+    pendingTrackerWorkspaceAutofocusFilename = filename || null;
 }
 
 function scrollTrackerWorkspaceMultitrackSegmentIntoView(filename) {
@@ -191,6 +196,13 @@ export function renderTrackerWorkspace() {
         : selectedBlock.filename;
     const shouldReload = deps.getTrackerWorkspaceLoadedFilename() !== workspaceLoadKey || !deps.isTrackerOpen();
     if (!shouldReload) {
+        if (pendingTrackerWorkspaceAutofocusFilename === selectedBlock.filename) {
+            pendingTrackerWorkspaceAutofocusFilename = null;
+            requestAnimationFrame(() => {
+                const activeCell = document.querySelector('#trackerModal .tracker-cell.active');
+                activeCell?.focus?.({ preventScroll: true });
+            });
+        }
         if (pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
             pendingArrangementMultitrackScrollFilename = null;
             requestAnimationFrame(() => scrollTrackerWorkspaceMultitrackSegmentIntoView(selectedBlock.filename));
@@ -204,6 +216,7 @@ export function renderTrackerWorkspace() {
 
     deps.openTrackerModalForEdit(selectedBlock, selectedBlock.trackerState || null, {
         autoSaveOnInput: true,
+        autofocusOnOpen: pendingTrackerWorkspaceAutofocusFilename === selectedBlock.filename,
         dockToWorkspace: true,
         multitrackSegments: multitrackMode && multitrackRowBlocks.length > 1
             ? multitrackRowBlocks.map((filename) => {
@@ -224,6 +237,9 @@ export function renderTrackerWorkspace() {
         returnToBlocksOnClose: false,
     }).then(() => {
         if (loadToken !== deps.getTrackerWorkspaceLoadToken()) return;
+        if (pendingTrackerWorkspaceAutofocusFilename === selectedBlock.filename) {
+            pendingTrackerWorkspaceAutofocusFilename = null;
+        }
         const trackerModal = document.getElementById('trackerModal');
         if (!trackerModal?.classList.contains('workspace-docked')) return;
         const trackerHeader = trackerModal.querySelector('h2');

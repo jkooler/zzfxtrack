@@ -56,7 +56,7 @@ import { applyArrangementWorkspacePlayhead, clearArrangementWorkspacePlayheadVis
 // --- Features: tracker ---
 import { configureTrackerController, openTrackerModal, openTrackerModalForEdit, scheduleTrackerAutoSave } from './features/tracker/tracker-controller.js';
 import { configureTrackerPreviewSync, scheduleTrackerPreviewInstrumentRefresh } from './features/tracker/tracker-preview-sync.js';
-import { configureTrackerWorkspace, renderTrackerWorkspace, requestTrackerWorkspaceMultitrackAutoscroll, undockTrackerModalFromWorkspace } from './features/tracker/tracker-workspace.js';
+import { configureTrackerWorkspace, renderTrackerWorkspace, requestTrackerWorkspaceAutofocus, requestTrackerWorkspaceMultitrackAutoscroll, undockTrackerModalFromWorkspace } from './features/tracker/tracker-workspace.js';
 
 // --- Features: blocks ---
 import { configureBlockLibrary, refreshBlocksLibrary } from './features/blocks/block-library.js';
@@ -474,6 +474,7 @@ configureArrangementController({
     setCurrentArrangementFilename: (filename) => { appState.currentArrangementFilename = filename; },
     setCurrentArrangementScope: (scope) => { appState.currentArrangementScope = scope; },
     setArrangementDraftState: (state) => { appState.arrangementDraftState = state; },
+    setArrangementFolderState: (state) => { arrangementFolderState = state; },
     setActiveArrangementBlockFilename: (filename) => { appState.activeArrangementBlockFilename = filename; },
     showWelcome,
     refreshArrangementList,
@@ -515,11 +516,13 @@ configureArrangementController({
     showArrangementWorkspace,
     scheduleArrangementPreviewPrime,
     normalizePatternBaseName,
+    requestTrackerWorkspaceAutofocus,
     getArrangementEntriesCache: () => appState.arrangementEntriesCache,
     getCurrentArrangementDraftState: () => appState.arrangementDraftState,
     getCurrentArrangementScope: () => appState.currentArrangementScope,
     getNewArrangementNameInput: () => dom.newArrangementName,
     getNewArrangementModal: () => dom.newArrangementModal,
+    saveArrangementFolderState: (state) => saveFolderState(ARRANGEMENT_FOLDER_STATE_KEY, state),
     setTimeout: (fn, ms) => setTimeout(fn, ms),
     clearArrangementAutoSaveTimeout: () => {
         if (arrangementAutoSaveTimeout) {

@@ -46,16 +46,19 @@ let deps = {
     renameArrangementFile: async () => {},
     renderArrangementWorkspace: () => {},
     renderTrackerWorkspace: () => {},
+    requestTrackerWorkspaceAutofocus: () => {},
     saveBlock: async () => null,
     saveCurrentArrangement: async () => {},
     scheduleArrangementAutoSave: () => {},
     scheduleArrangementPreviewPrime: () => {},
     setActiveArrangementBlockFilename: () => {},
     setArrangementDraftState: () => {},
+    setArrangementFolderState: () => {},
     setArrangementPreviewPlayingFilename: () => {},
     setCurrentArrangementFilename: () => {},
     setCurrentArrangementScope: () => {},
     setSelectedBlockForArrangement: () => {},
+    saveArrangementFolderState: () => {},
     setStatus: () => {},
     setTrackerWorkspaceLoadedFilename: () => {},
     setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -184,6 +187,8 @@ export async function createNewArrangement(name) {
         };
 
         await deps.createArrangement({ filename, name: normalizedBase, arrangementState, scope: 'user' });
+        deps.setArrangementFolderState({ user: true, system: true });
+        deps.saveArrangementFolderState({ user: true, system: true });
         await deps.refreshArrangementList();
         await loadArrangement(filename);
         closeNewArrangementModal();
@@ -192,6 +197,7 @@ export async function createNewArrangement(name) {
             deps.setActiveArrangementBlockFilename(initialBlockFilename);
             deps.setSelectedBlockForArrangement(filename, initialBlockFilename);
             await deps.refreshBlocksLibrary();
+            deps.requestTrackerWorkspaceAutofocus(initialBlockFilename);
             deps.renderArrangementWorkspace();
             deps.renderTrackerWorkspace();
             const payload = deps.buildArrangementStatePayload();

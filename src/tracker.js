@@ -5920,15 +5920,23 @@ export function openTrackerForEdit(instrumentList, blockData) {
     elements.modal?.classList.add('open');
     trackerModalOpenedAt = Date.now();
     const saved = blockData.filename ? blockScrollPositions.get(blockData.filename) : undefined;
-    const channel = saved && Number.isInteger(saved.channel) ? Math.max(0, Math.min(saved.channel, state.channels - 1)) : 0;
-    const step = saved && Number.isInteger(saved.step) ? Math.max(0, Math.min(saved.step, state.steps - 1)) : 0;
+    const channel = blockData.autofocusOnOpen
+      ? 0
+      : (saved && Number.isInteger(saved.channel) ? Math.max(0, Math.min(saved.channel, state.channels - 1)) : 0);
+    const step = blockData.autofocusOnOpen
+      ? 0
+      : (saved && Number.isInteger(saved.step) ? Math.max(0, Math.min(saved.step, state.steps - 1)) : 0);
     const restoreScrollTop = editMode.multitrackSegments
       ? existingMultitrackScrollTop
       : (saved?.scrollTop || 0);
     const restoreScrollLeft = editMode.multitrackSegments
       ? existingMultitrackScrollLeft
       : 0;
-    setFocus(channel, step, { scroll: !editMode.multitrackSegments });
+    if (blockData.autofocusOnOpen) {
+      focusNoteCell(channel, step);
+    } else {
+      setFocus(channel, step, { scroll: !editMode.multitrackSegments });
+    }
     focusMultitrackTarget(pendingMultitrackFocusTarget);
     if (pendingMultitrackFocusTarget?.filename === blockData.filename) {
       pendingMultitrackFocusTarget = null;

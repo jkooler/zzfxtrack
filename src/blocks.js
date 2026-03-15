@@ -2180,6 +2180,7 @@ async function confirmDeleteBlock() {
         await alertDialog({
           title: 'Cannot Delete Block',
           message: `This block is used in arrangements:\n${list}`,
+          hideCancelCompletely: true,
         });
         return;
       }

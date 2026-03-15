@@ -193,6 +193,7 @@ export async function openTrackerModalForEdit(block, trackerState, options = {})
         description: resolvedBlock.description,
         scope: deps.normalizeScope(resolvedBlock.scope),
         trackerState: recoveredTrackerState,
+        autofocusOnOpen: Boolean(options.autofocusOnOpen),
         autoSaveOnInput: Boolean(options.autoSaveOnInput),
         multitrackSegments: Array.isArray(options.multitrackSegments) ? options.multitrackSegments : null,
         returnToArrangementsOnClose: options.returnToArrangementsOnClose,

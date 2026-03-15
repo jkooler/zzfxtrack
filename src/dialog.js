@@ -75,6 +75,7 @@ function openDialog({
   confirmLabel = 'OK',
   cancelLabel = 'Cancel',
   showCancel = true,
+  hideCancelCompletely = false,
   variant = 'primary',
   confirmIcon = null,
   overlayLight = false,
@@ -126,6 +127,10 @@ function openDialog({
     el.cancel.textContent = String(cancelLabel || 'Cancel');
     el.cancel.className = BUTTON_SECONDARY_CLASS;
     el.cancel.classList.toggle('hidden', !showCancel);
+    el.cancel.hidden = Boolean(hideCancelCompletely);
+    el.cancel.disabled = Boolean(hideCancelCompletely);
+    el.cancel.tabIndex = hideCancelCompletely ? -1 : 0;
+    el.cancel.setAttribute('aria-hidden', hideCancelCompletely ? 'true' : 'false');
   }
 
   isAlertMode = !showCancel;
