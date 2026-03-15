@@ -210,6 +210,7 @@ let multitrackBoundaryRepeatLockKey = null;
 let multitrackSharedScrollTop = 0;
 let multitrackSharedScrollLeft = 0;
 let multitrackSnapshotRenderRaf = null;
+let multitrackScrollSyncLock = false;
 
 const MULTITRACK_SNAPSHOT_OVERSCAN_STEPS = 8;
 const MULTITRACK_SNAPSHOT_ROW_PITCH_FALLBACK = 15;
@@ -1219,6 +1220,14 @@ function getActiveMultitrackSegment() {
   return editMode.multitrackSegments.find((segment) => segment.filename === editMode.blockFilename) || null;
 }
 
+function getMultitrackLiveTimeScroll() {
+  return elements.grid?.querySelector('.multitrack-tracker-segment-live .tracker-timetrack-scroll') || null;
+}
+
+function getMultitrackLiveChannelsScroll() {
+  return elements.grid?.querySelector('.multitrack-tracker-segment-live .tracker-channels-scroll') || null;
+}
+
 function syncCurrentMultitrackSegmentState() {
   const segment = getActiveMultitrackSegment();
   if (!segment) return;
@@ -1318,7 +1327,7 @@ function loadMultitrackSegmentInPlace(segment) {
   if (!segment?.filename) return;
 
   if (editMode.blockFilename) {
-    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    const bodyScroll = getMultitrackLiveChannelsScroll();
     if (elements.grid) multitrackSharedScrollLeft = elements.grid.scrollLeft;
     if (bodyScroll) {
       multitrackSharedScrollTop = bodyScroll.scrollTop;
@@ -1355,7 +1364,7 @@ function loadMultitrackSegmentInPlace(segment) {
   if (pendingMultitrackFocusTarget?.filename === segment.filename) {
     pendingMultitrackFocusTarget = null;
   }
-  const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+  const bodyScroll = getMultitrackLiveChannelsScroll();
   if (bodyScroll) bodyScroll.scrollTop = multitrackSharedScrollTop;
   syncMultitrackSnapshotScroll(multitrackSharedScrollTop);
 }
@@ -1396,6 +1405,18 @@ function scrollActiveMultitrackSegmentIntoView() {
 function syncMultitrackSnapshotScroll(scrollTop = 0) {
   if (!isMultitrackEditing() || !elements.grid) return;
   multitrackSharedScrollTop = Math.max(0, scrollTop);
+  if (!multitrackScrollSyncLock) {
+    multitrackScrollSyncLock = true;
+    const liveChannelsScroll = getMultitrackLiveChannelsScroll();
+    const liveTimeScroll = getMultitrackLiveTimeScroll();
+    if (liveChannelsScroll && Math.abs(liveChannelsScroll.scrollTop - multitrackSharedScrollTop) > 1) {
+      liveChannelsScroll.scrollTop = multitrackSharedScrollTop;
+    }
+    if (liveTimeScroll && Math.abs(liveTimeScroll.scrollTop - multitrackSharedScrollTop) > 1) {
+      liveTimeScroll.scrollTop = multitrackSharedScrollTop;
+    }
+    multitrackScrollSyncLock = false;
+  }
   requestMultitrackSnapshotRender();
 }
 
@@ -1415,7 +1436,7 @@ function getMultitrackSnapshotRowPitch() {
 }
 
 function getMultitrackSnapshotViewportHeight() {
-  const activeBodyScroll = elements.grid?.querySelector('.multitrack-tracker-segment-live .tracker-body-scroll');
+  const activeBodyScroll = getMultitrackLiveChannelsScroll();
   return activeBodyScroll?.clientHeight || 0;
 }
 
@@ -1459,13 +1480,20 @@ function renderMultitrackSnapshotRows(segmentEl, segment, { force = false } = {}
   if (!timeColEl || !channelsEl) return;
 
   const range = getMultitrackSnapshotRenderRange(steps);
+  const localOffset = Math.max(0, multitrackSharedScrollTop - range.topOffset);
   if (!force
     && Number(segmentEl.dataset.renderStart) === range.start
-    && Number(segmentEl.dataset.renderEnd) === range.end) {
+    && Number(segmentEl.dataset.renderEnd) === range.end
+    && Number(segmentEl.dataset.renderOffset || '0') === Math.round(localOffset)) {
+    timeColEl.style.transform = `translateY(-${localOffset}px)`;
+    channelsEl.style.transform = `translateY(-${localOffset}px)`;
     return;
   }
   segmentEl.dataset.renderStart = String(range.start);
   segmentEl.dataset.renderEnd = String(range.end);
+  segmentEl.dataset.renderOffset = String(Math.round(localOffset));
+  timeColEl.style.transform = `translateY(-${localOffset}px)`;
+  channelsEl.style.transform = `translateY(-${localOffset}px)`;
 
   timeColEl.innerHTML = '';
   if (range.topOffset > 0) timeColEl.appendChild(createMultitrackSnapshotSpacer(range.topOffset));
@@ -1733,14 +1761,14 @@ function renderMultitrackGridAroundLiveSegment() {
   elements.grid.classList.toggle('tracker-grid-multitrack-mode', true);
   elements.grid.appendChild(stripEl);
   elements.grid.scrollLeft = multitrackSharedScrollLeft;
-  const activeBodyScroll = elements.grid.querySelector('.multitrack-tracker-segment-live .tracker-body-scroll');
+  const activeBodyScroll = getMultitrackLiveChannelsScroll();
   syncMultitrackSnapshotScroll(activeBodyScroll?.scrollTop || 0);
   requestMultitrackSnapshotRender({ force: true });
   elements.grid.onscroll = () => {
     if (elements.grid) multitrackSharedScrollLeft = elements.grid.scrollLeft;
   };
   elements.grid.onwheel = (event) => {
-    const activeBodyScroll = elements.grid?.querySelector('.multitrack-tracker-segment-live .tracker-body-scroll');
+    const activeBodyScroll = getMultitrackLiveChannelsScroll();
     if (!activeBodyScroll) return;
 
     const absDeltaY = Math.abs(event.deltaY);
@@ -5857,13 +5885,13 @@ export function openTracker(instrumentList, options = {}) {
  */
 export function openTrackerForEdit(instrumentList, blockData) {
   const modalAlreadyOpen = !!elements.modal?.classList.contains('open');
-  const existingBodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+  const existingBodyScroll = getMultitrackLiveChannelsScroll() || elements.grid?.querySelector('.tracker-body-scroll');
   const existingMultitrackScrollTop = existingBodyScroll ? existingBodyScroll.scrollTop : multitrackSharedScrollTop;
   const existingMultitrackScrollLeft = elements.grid?.scrollLeft ?? multitrackSharedScrollLeft;
 
   // Save scroll and focus for the block we're leaving (if any)
   if (editMode.blockFilename) {
-    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    const bodyScroll = getMultitrackLiveChannelsScroll() || elements.grid?.querySelector('.tracker-body-scroll');
     if (bodyScroll) {
       if (isMultitrackEditing()) multitrackSharedScrollTop = bodyScroll.scrollTop;
       blockScrollPositions.set(editMode.blockFilename, {
@@ -5942,7 +5970,7 @@ export function openTrackerForEdit(instrumentList, blockData) {
       pendingMultitrackFocusTarget = null;
     }
     // Restore scroll after setFocus so it isn't overwritten by setFocus's scroll-into-view
-    const bodyScroll = elements.grid?.querySelector('.tracker-body-scroll');
+    const bodyScroll = getMultitrackLiveChannelsScroll() || elements.grid?.querySelector('.tracker-body-scroll');
     if (bodyScroll) bodyScroll.scrollTop = restoreScrollTop;
     syncMultitrackSnapshotScroll(restoreScrollTop);
     if (elements.grid) {
