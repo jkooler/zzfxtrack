@@ -204,6 +204,7 @@ export function renderTrackerWorkspace() {
 
     deps.openTrackerModalForEdit(selectedBlock, selectedBlock.trackerState || null, {
         autoSaveOnInput: true,
+        dockToWorkspace: true,
         multitrackSegments: multitrackMode && multitrackRowBlocks.length > 1
             ? multitrackRowBlocks.map((filename) => {
                 const block = deps.getBlockByFilename(filename);

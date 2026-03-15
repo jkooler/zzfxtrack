@@ -32,6 +32,7 @@ let deps = {
     setSelectedBlockForArrangement: () => {},
     setStatus: () => {},
     setTrackerAutoSaveTimeout: () => {},
+    undockTrackerModalFromWorkspace: () => {},
     updateBlock: async () => ({ ok: false }),
 };
 
@@ -132,6 +133,9 @@ export function scheduleTrackerAutoSave({ filename, trackerState, name: nameOver
 }
 
 export async function openTrackerModal(options = {}) {
+    if (!options?.dockToWorkspace) {
+        deps.undockTrackerModalFromWorkspace();
+    }
     deps.setArrangementLiveEditSession(options?.returnToArrangementsOnClose
         ? { active: true, committed: false }
         : { active: false, committed: false });
@@ -146,6 +150,9 @@ export async function openTrackerModal(options = {}) {
 }
 
 export async function openTrackerModalForEdit(block, trackerState, options = {}) {
+    if (!options?.dockToWorkspace) {
+        deps.undockTrackerModalFromWorkspace();
+    }
     deps.setArrangementLiveEditSession(options?.returnToArrangementsOnClose
         ? { active: true, committed: false }
         : { active: false, committed: false });

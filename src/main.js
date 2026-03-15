@@ -697,6 +697,7 @@ configureTrackerController({
     getDefragmentedInstruments: async () => getDefragmentedInstruments(),
     getBlockDetailOrNull,
     readUnsavedBlockTrackerState,
+    undockTrackerModalFromWorkspace,
     logError: (...args) => console.error(...args),
 });
 
