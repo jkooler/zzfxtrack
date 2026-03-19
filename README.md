@@ -27,9 +27,17 @@ The **hosted** version is the quickest way to start (no install required), espec
 
 ## Hosted
 
-A hosted version is planned (likely via GitHub Pages) once this project is published publicly.
+The hosted demo is intended to run on GitHub Pages at [https://jkooler.github.io/zzfxtrack/](https://jkooler.github.io/zzfxtrack/).
 
-For now, the only supported way to run ZzFXTrack is locally (see **Developer's Quick Start** below). When a hosted build is available, its URL and any differences from local usage will be documented here.
+It is deployed as a static `demo` build, so file-backed editing APIs are not available there. Patterns, arrangements, and blocks behave like demo content and persist only in browser storage for that session unless exported.
+
+### GitHub Pages deployment
+
+1. In GitHub, open `Settings > Pages`.
+2. Set `Source` to `GitHub Actions`.
+3. Push to the default branch (`master` in this repo) or run the `Deploy to GitHub Pages` workflow manually.
+
+The workflow builds the hosted demo bundle and publishes `dist/` to Pages automatically.
 
 ## Local Development Requirements
 

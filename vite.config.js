@@ -1085,34 +1085,40 @@ const updateInstrumentsPlugin = () => ({
   }
 });
 
-export default defineConfig({
-  plugins: [tailwindcss(), apiPlugin(), updateInstrumentsPlugin()],
-  // Ensure we can import from src/
-  resolve: {
-    dedupe: [
-        '@strudel/core', 
-        '@strudel/web', 
-        '@strudel/repl',
-        '@strudel/webaudio',
-        '@strudel/transpiler',
-        '@strudel/codemirror',
-        '@strudel/draw',
-        '@strudel/mini'
-    ],
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@strudel/core': path.resolve(__dirname, 'node_modules/@strudel/core'),
-      '@strudel/webaudio': path.resolve(__dirname, 'node_modules/@strudel/webaudio'),
-      '@strudel/repl': path.resolve(__dirname, 'node_modules/@strudel/repl'),
-      'lucide': path.resolve(__dirname, 'node_modules/lucide/dist/esm/lucide/src/lucide.js')
+export default defineConfig(({ mode }) => {
+  const repoName = String(process.env.GITHUB_REPOSITORY || '').split('/')[1] || '';
+  const pagesBase = process.env.VITE_BASE_PATH || ((process.env.GITHUB_ACTIONS === 'true' && mode === 'demo' && repoName) ? `/${repoName}/` : '/');
+
+  return {
+    base: pagesBase,
+    plugins: [tailwindcss(), apiPlugin(), updateInstrumentsPlugin()],
+    // Ensure we can import from src/
+    resolve: {
+      dedupe: [
+          '@strudel/core', 
+          '@strudel/web', 
+          '@strudel/repl',
+          '@strudel/webaudio',
+          '@strudel/transpiler',
+          '@strudel/codemirror',
+          '@strudel/draw',
+          '@strudel/mini'
+      ],
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+        '@strudel/core': path.resolve(__dirname, 'node_modules/@strudel/core'),
+        '@strudel/webaudio': path.resolve(__dirname, 'node_modules/@strudel/webaudio'),
+        '@strudel/repl': path.resolve(__dirname, 'node_modules/@strudel/repl'),
+        'lucide': path.resolve(__dirname, 'node_modules/lucide/dist/esm/lucide/src/lucide.js')
+      }
+    },
+    server: {
+      port: 5173,
+      strictPort: false, // Allow using next available port if 5173 is taken
+      host: true, // Listen on all network interfaces for better accessibility
+      watch: {
+        ignored: ['**/patterns/**', '**/output/**', '**/instruments.js', '**/instruments.system.js', '**/blocks/**', '**/arrangements/**']
+      }
     }
-  },
-  server: {
-    port: 5173,
-    strictPort: false, // Allow using next available port if 5173 is taken
-    host: true, // Listen on all network interfaces for better accessibility
-    watch: {
-      ignored: ['**/patterns/**', '**/output/**', '**/instruments.js', '**/instruments.system.js', '**/blocks/**', '**/arrangements/**']
-    }
-  }
+  };
 });

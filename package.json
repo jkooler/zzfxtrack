@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:demo": "vite --mode demo",
+    "build": "vite build",
+    "build:pages": "vite build --mode demo",
     "export": "node export.js",
     "export:all": "node export.js --all",
     "sync-player": "node scripts/sync-player.js"
