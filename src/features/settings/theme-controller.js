@@ -6,7 +6,7 @@
 export const COLOR_THEME_KEY = 'zzfxtrack-color-theme';
 export const USER_COLOR_THEME = 'user';
 export const USER_THEME_VALUES_KEY = 'zzfxtrack-user-theme-values';
-const ALLOWED_THEME_VALUES = new Set(['', 'jester', 'phantom', 'mono', 'milk', USER_COLOR_THEME]);
+const ALLOWED_THEME_VALUES = new Set(['', 'jester', 'phantom', 'neo', 'ember', 'grove', 'glacier', 'petal', 'mono', 'milk', USER_COLOR_THEME]);
 
 const THEME_VAR_NAMES = [
     'background', 'foreground', 'card', 'card-foreground',

@@ -882,13 +882,13 @@
 
         <div class="text-sm space-y-4 overflow-y-auto pr-1">
           <p class="text-foreground/90 leading-relaxed">
-              <strong>ZzFXTrack</strong> is a music creation app that uses <strong>ZzFXMicro</strong> synthesis by <strong>Frank Force</strong>. It embeds <strong>Strudel</strong> for its REPL workflow and adds a custom made <strong>Arranger</strong> and <strong>Blocks</strong> with a tracker interface. The Arranger and Blocks is built upon Strudel's patterns and scheduling with one way integration support.</p>
+              <strong>ZzFXTrack</strong> is a music creation app that uses <strong>ZzFXMicro</strong> synthesis by <strong>Frank Force</strong>. It embeds <strong>Strudel</strong> for its REPL workflow and adds custom-made <strong>Arranger</strong> and <strong>Blocks</strong> tools with a tracker-style interface. The Arranger and Blocks are built on Strudel's patterns and scheduling, with one-way integration.</p>
               <p class="text-foreground/90 leading-relaxed">
-              <strong>Instruments</strong> can be created using a streamlined editor with scrub inputs. Instruments are audited by ZzFXMicro externally instead of Strudel's internal sound engine with ZzFX support. This is because the music needs to be exported to games or demos in an optimal and predictable way.
+              <strong>Instruments</strong> can be created using a streamlined editor with scrub inputs. Instrument playback is handled externally by ZzFXMicro instead of Strudel's internal sound engine. This keeps exported music optimal and predictable for games and demos.
           </p>
-          <p class="text-foreground/70 leading-relaxed"><strong>Exported</strong> music can be played with the bundled <strong>ZzFXTrack Player</strong> which takes its inspiration from <strong>ZzFXM</strong> by <strong>Keith Clark</strong> and <strong>Frank Force</strong>. Developers can freely use it their projects or build their own. WAV export is also supported.</p>
+          <p class="text-foreground/70 leading-relaxed"><strong>Exported</strong> music can be played with the bundled <strong>ZzFXTrack Player</strong>, which takes inspiration from <strong>ZzFXM</strong> by <strong>Keith Clark</strong> and <strong>Frank Force</strong>. Developers can freely use it in their projects or build their own player. WAV export is also supported.</p>
           <p class="text-foreground/50 text-xs leading-relaxed">
-            ZzFXTrack is not affiliated with or endorsed by creators of Strudel, creator of ZzFX (Frank Force) and ZzFXM (Keith Clark & Frank Force). It's usage is not designed for small game compos. It's solely made for my personal projects, but I'm always open to expand the idea and collaborate.
+            ZzFXTrack is not affiliated with or endorsed by the creators of Strudel, ZzFX (Frank Force), or ZzFXM (Keith Clark & Frank Force). It is not intended for small game compos. It was originally made for my personal projects, but I&apos;m open to expanding the idea and collaborating.
           </p>
 
           <div class="space-y-2">
@@ -897,7 +897,7 @@
               <li>Open an <strong>Arrangement</strong> or <strong>Pattern</strong> from the left sidebar and hit play.</li>
               <li>Select an <strong>Instrument</strong> from the left sidebar that is being used in the playback.</li>
               <li>Make some changes to the parameters to see how the sound changes.</li>
-              <li>After this you could try to modify <strong>Blocks</strong>, <strong>Arrangements</strong>, or the <strong>Strudel</strong> pattern.</li>
+              <li>After that, try modifying <strong>Blocks</strong>, <strong>Arrangements</strong>, or the <strong>Strudel</strong> pattern.</li>
               <li>You can then click <strong>Export</strong> in the footer and choose <strong>ZzFXTrack Player</strong>.</li>
               <li>Next you can click the play button to preview ZzFXTrack Player playback.</li>
               <li>The sound you hear now comes from the exported JSON file and ZzFXTrack Player.</li>
@@ -1489,10 +1489,10 @@
     <!-- App Dialog Modal -->
     <div
       id="appDialogModal"
-      class="modal-overlay fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
+      class="modal-overlay fixed inset-0 z-[95] bg-black/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 [&.open]:opacity-100 [&.open]:pointer-events-auto"
     >
       <div
-        class="modal fixed z-[71] grid w-full max-w-md gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
+        class="modal fixed z-[96] grid w-full max-w-md gap-4 border border-border bg-background p-4 shadow-lg sm:rounded-lg"
       >
         <h2
           id="appDialogTitle"
@@ -1920,7 +1920,7 @@
           External link
         </h2>
         <p class="text-sm text-muted-foreground">
-          Link will be opened in a new tab. Your work is safe.
+          This link will open in a new tab. Your work is safe.
         </p>
         <div class="flex flex-col gap-2 mt-2">
           <button
@@ -1972,7 +1972,7 @@
                 </span>
                 Define as system resource
               </span>
-              <span class="text-xs text-muted-foreground/90 leading-relaxed">Makes the resource part of the code base and subject to overwriting itself when app receives updates.</span>
+              <span class="text-xs text-muted-foreground/90 leading-relaxed">Makes the resource part of the codebase, so it may be overwritten when the app receives updates.</span>
             </span>
             <span class="relative inline-flex h-6 w-11 items-center shrink-0">
               <input
@@ -2081,11 +2081,16 @@
         <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 p-4">
         <div class="flex flex-col gap-2 p-3 rounded-md border border-input bg-card/40">
           <span class="text-sm text-foreground leading-snug">Color theme</span>
-          <div class="flex gap-1 rounded-md p-0.5 border border-input bg-background [&>button]:flex-1">
+          <div class="grid grid-cols-2 gap-1 rounded-md p-0.5 border border-input bg-background sm:grid-cols-3 xl:grid-cols-4 [&>button]:w-full">
             <button type="button" id="systemSettingsThemeUserBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="user">User</button>
             <button type="button" id="systemSettingsThemeDefaultBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="">Cigar</button>
             <button type="button" id="systemSettingsThemeLegacyBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="jester">Jester</button>
             <button type="button" id="systemSettingsThemeRomulanBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="phantom">Phantom</button>
+            <button type="button" id="systemSettingsThemeNeoBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="neo">Neo</button>
+            <button type="button" id="systemSettingsThemeEmberBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="ember">Ember</button>
+            <button type="button" id="systemSettingsThemeGroveBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="grove">Grove</button>
+            <button type="button" id="systemSettingsThemeGlacierBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="glacier">Glacier</button>
+            <button type="button" id="systemSettingsThemePetalBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="petal">Petal</button>
             <button type="button" id="systemSettingsThemeMonoBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="mono">Mono</button>
             <button type="button" id="systemSettingsThemeMilkBtn" class="theme-option-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors" data-theme="milk">Milk</button>
           </div>
@@ -2097,7 +2102,7 @@
             <i data-lucide="chevron-down" class="w-4 h-4 ml-auto text-muted-foreground shrink-0 transition-transform group-open:rotate-180"></i>
           </summary>
           <div class="px-3 pb-3 pt-0 space-y-2 border-t border-border mt-0">
-            <p class="text-xs text-muted-foreground pt-2">Editing theme colors switches to User and saves changes locally. User starts from Phantom by default.</p>
+            <p class="text-xs text-muted-foreground pt-2">Editing theme colors switches to the User theme and saves changes locally. The User theme starts from Phantom by default.</p>
             <div class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 items-center">
               <label class="text-sm text-foreground">Background</label>
               <input type="text" id="systemSettingsThemeBackground" data-coloris data-theme-var="background" class="theme-color-input min-w-[14rem] h-9 rounded border border-input bg-background px-2 py-1 text-sm font-mono text-foreground" autocomplete="off" />

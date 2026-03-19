@@ -1,25 +1,25 @@
 # ZzFXTrack
 
-**ZzFXTrack** is a music creation app that uses [**ZzFXMicro**](https://github.com/KilledByAPixel/ZzFX) synthesis by [**Frank Force**](https://github.com/KilledByAPixel). It embeds [**Strudel**](https://strudel.cc/) for its REPL workflow and adds a custom made **Arranger** and **Blocks** with a tracker interface. The Arranger and Blocks is built upon Strudel's patterns and scheduling with one way integration support.
+**ZzFXTrack** is a music creation app that uses [**ZzFXMicro**](https://github.com/KilledByAPixel/ZzFX) synthesis by [**Frank Force**](https://github.com/KilledByAPixel). It embeds [**Strudel**](https://strudel.cc/) for its REPL workflow and adds custom-made **Arranger** and **Blocks** tools with a tracker-style interface. The Arranger and Blocks are built on Strudel's patterns and scheduling, with one-way integration.
 
-**Instruments** can be created using a streamlined editor with scrub inputs. Instruments are audited by ZzFXMicro externally instead of Strudel's internal sound engine with ZzFX support. This is because the music needs to be exported to games or demos in an optimal and predictable way.
+**Instruments** can be created using a streamlined editor with scrub inputs. Instrument playback is handled externally by ZzFXMicro instead of Strudel's internal sound engine. This keeps exported music optimal and predictable for games and demos.
 
-Exported music can be played with the bundled **ZzFXTrack Player** which takes its inspiration from [**ZzFXM**](https://keithclark.github.io/ZzFXM) by [**Keith Clark**](https://github.com/keithclark) and **Frank Force**. Developers can freely use it their projects or build their own. WAV export is also supported.
+Exported music can be played with the bundled **ZzFXTrack Player**, which takes inspiration from [**ZzFXM**](https://keithclark.github.io/ZzFXM) by [**Keith Clark**](https://github.com/keithclark) and **Frank Force**. Developers can freely use it in their projects or build their own player. WAV export is also supported.
 
-Disclaimer: ZzFXTrack is not affiliated with or endorsed by creators of Strudel, creator of ZzFX (Frank Force) and ZzFXM (Keith Clark & Frank Force). It's usage is not designed for small game compos. It's solely made for my personal projects, but I'm always open to expand the idea and collaborate.
+Disclaimer: ZzFXTrack is not affiliated with or endorsed by the creators of Strudel, ZzFX (Frank Force), or ZzFXM (Keith Clark & Frank Force). It is not intended for small game compos. It was originally made for my personal projects, but I'm open to expanding the idea and collaborating.
 
 ## Creator's Quick Start
 
 1. Open an Arrangement or Pattern from the left sidebar and hit play.
 1. Select an Instrument from the left sidebar that is being used in the playback.
 1. Make some changes to the parameters to see how the sound changes.
-1. After this you could try to modify Blocks, Arrangements, or the Strudel pattern.
+1. After that, try modifying Blocks, Arrangements, or the Strudel pattern.
 1. You can then click Export in the footer and choose ZzFXTrack Player.
 1. Next you can click the play button to preview ZzFXTrack Player playback.
 1. The sound you hear now comes from the exported JSON file and ZzFXTrack Player.
 1. Click `Export WAV` if you want a quick audio file to share or test.
 
-Take your time and explore. There are lots of features that aren't explained directly, but to be discovered.
+Take your time and explore. There are many features to discover beyond what's explained directly.
 
 ## Installation and usage: Hosted vs Local
 
@@ -47,15 +47,15 @@ Disclaimer: This app was originally built for my personal projects, but it’s d
 ## Alpha Status / Expectations
 
 This is an **alpha**:
-- The exporter is the “product”. The Strudel REPL is the authoring UI. Visual Arranger is for those who like more traditional way.
+- The exporter is the “product”. The Strudel REPL is the authoring UI. The Visual Arranger is for those who prefer a more traditional workflow.
 - Some Strudel features may preview fine but not export 1:1 (the README includes export-safe tips below).
 - If something exports incorrectly, please open an issue with a minimal pattern reproduction.
-- Aimed to be stable with backwards compatibility, if updated in next release:
+- Intended to remain reasonably stable across upcoming releases:
    - Export: JSON/JS structure for the ZzFXTrack Player
    - Instrument parameters
    - Resources (Patterns, Arrangements, Blocks, Tracker)
 - Subject to change:
-   - UI/UX stuff
+   - UI/UX details
 
 ## Developer's Quick Start
 
@@ -190,4 +190,4 @@ See `THIRD_PARTY_NOTICES.md` for attribution details and upstream links.
 #### Jarno Koole
 
 My background is in 90s demoscene and especially late 90s tracker scene.
-To this day I'm interested anything related to digital music production.
+To this day, I'm interested in anything related to digital music production.

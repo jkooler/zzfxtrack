@@ -281,10 +281,13 @@ function setColorTheme(theme) {
     syncThemeColorPickers();
 }
 
+function getThemeOptionButtons() {
+    return Array.from(document.querySelectorAll('.theme-option-btn'));
+}
+
 function updateThemeOptionButtonsState() {
-    const dom = deps.getDom();
     const active = getActiveColorTheme();
-    [dom.systemSettingsThemeUserBtn, dom.systemSettingsThemeDefaultBtn, dom.systemSettingsThemeLegacyBtn, dom.systemSettingsThemeRomulanBtn, dom.systemSettingsThemeMonoBtn, dom.systemSettingsThemeMilkBtn].forEach((btn) => {
+    getThemeOptionButtons().forEach((btn) => {
         if (!btn) return;
         const value = (btn.getAttribute('data-theme') || '').trim();
         const isActive = value === active;
@@ -415,12 +418,11 @@ export function installSystemSettingsHandlers() {
     if (dom.systemSettingsThemeResetBtn) dom.systemSettingsThemeResetBtn.addEventListener('click', resetThemeToDefaults);
     if (dom.systemSettingsThemeCopyBtn) dom.systemSettingsThemeCopyBtn.addEventListener('click', () => { void copyThemeToClipboard(); });
     if (dom.systemSettingsThemeImportBtn) dom.systemSettingsThemeImportBtn.addEventListener('click', () => { void importThemeFromText(); });
-    if (dom.systemSettingsThemeUserBtn) dom.systemSettingsThemeUserBtn.addEventListener('click', () => setColorTheme(USER_COLOR_THEME));
-    if (dom.systemSettingsThemeDefaultBtn) dom.systemSettingsThemeDefaultBtn.addEventListener('click', () => setColorTheme(''));
-    if (dom.systemSettingsThemeLegacyBtn) dom.systemSettingsThemeLegacyBtn.addEventListener('click', () => setColorTheme('jester'));
-    if (dom.systemSettingsThemeRomulanBtn) dom.systemSettingsThemeRomulanBtn.addEventListener('click', () => setColorTheme('phantom'));
-    if (dom.systemSettingsThemeMonoBtn) dom.systemSettingsThemeMonoBtn.addEventListener('click', () => setColorTheme('mono'));
-    if (dom.systemSettingsThemeMilkBtn) dom.systemSettingsThemeMilkBtn.addEventListener('click', () => setColorTheme('milk'));
+    getThemeOptionButtons().forEach((btn) => {
+        btn.addEventListener('click', () => {
+            setColorTheme((btn.getAttribute('data-theme') || '').trim());
+        });
+    });
     if (dom.systemSettingsThemeWhiteDebugBtn) dom.systemSettingsThemeWhiteDebugBtn.addEventListener('click', setAllThemeColorsToWhite);
     if (dom.systemSettingsReplThemeSelect) {
         dom.systemSettingsReplThemeSelect.addEventListener('change', () => {

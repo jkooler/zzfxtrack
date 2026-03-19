@@ -71,12 +71,6 @@ export const dom = {
     systemSettingsThemeResetBtn: document.getElementById('systemSettingsThemeResetBtn'),
     systemSettingsThemeCopyBtn: document.getElementById('systemSettingsThemeCopyBtn'),
     systemSettingsThemeImportBtn: document.getElementById('systemSettingsThemeImportBtn'),
-    systemSettingsThemeUserBtn: document.getElementById('systemSettingsThemeUserBtn'),
-    systemSettingsThemeDefaultBtn: document.getElementById('systemSettingsThemeDefaultBtn'),
-    systemSettingsThemeLegacyBtn: document.getElementById('systemSettingsThemeLegacyBtn'),
-    systemSettingsThemeRomulanBtn: document.getElementById('systemSettingsThemeRomulanBtn'),
-    systemSettingsThemeMonoBtn: document.getElementById('systemSettingsThemeMonoBtn'),
-    systemSettingsThemeMilkBtn: document.getElementById('systemSettingsThemeMilkBtn'),
     systemSettingsThemeWhiteDebugBtn: document.getElementById('systemSettingsThemeWhiteDebugBtn'),
     systemSettingsReplThemeSelect: document.getElementById('systemSettingsReplThemeSelect'),
 
