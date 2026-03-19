@@ -34,7 +34,7 @@ blocks/*.js
 !blocks/cowbell.js
 !blocks/simple-drums.js
 !blocks/simple-chords.js
-!blcoks/simple-synths.js
+!blocks/simple-synths.js
 
 # Arrangements: ignore user-created by default
 arrangements/*.js
