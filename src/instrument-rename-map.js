@@ -4,6 +4,8 @@
  * channel instruments to the current names after renames.
  */
 
+import { getDefragmentedInstruments } from './instrument-manager.js';
+
 const STORAGE_KEY = 'zzfxtrack-instrument-rename-map';
 
 /**
@@ -64,12 +66,34 @@ export function resolveInstrumentAlias(alias) {
   return current;
 }
 
+function getAvailableInstrumentAliases() {
+  try {
+    return new Set(
+      getDefragmentedInstruments()
+        .map((instrument) => String(instrument?.strudelAlias || '').trim())
+        .filter(Boolean)
+    );
+  } catch (_e) {
+    return new Set();
+  }
+}
+
+function resolveInstrumentAliasAgainstAvailable(alias, availableAliases) {
+  if (!alias || typeof alias !== 'string') return alias;
+  const resolved = resolveInstrumentAlias(alias);
+  if (!availableAliases.size) return resolved;
+  if (resolved && availableAliases.has(resolved)) return resolved;
+  if (availableAliases.has(alias)) return alias;
+  return resolved;
+}
+
 /**
  * Resolve channelInstruments array through the rename map
  */
 export function resolveChannelInstruments(channelInstruments) {
   if (!Array.isArray(channelInstruments)) return channelInstruments;
-  return channelInstruments.map((id) => (id ? resolveInstrumentAlias(id) : id));
+  const availableAliases = getAvailableInstrumentAliases();
+  return channelInstruments.map((id) => (id ? resolveInstrumentAliasAgainstAvailable(id, availableAliases) : id));
 }
 
 /**
