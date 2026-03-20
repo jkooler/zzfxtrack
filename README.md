@@ -6,6 +6,8 @@
 
 ![zzfxtrack-vid-01](https://github.com/user-attachments/assets/8798e454-c7b8-4d67-893e-9270aa969edf)
 
+![zzfxtrack-vid-02](https://github.com/user-attachments/assets/03d793e6-de49-414b-a54f-4a6a65112774)
+
 
 Exported music can be played with the bundled **ZzFXTrack Player**, which takes inspiration from [**ZzFXM**](https://keithclark.github.io/ZzFXM) by [**Keith Clark**](https://github.com/keithclark) and **Frank Force**. Developers can freely use it in their projects or build their own player. WAV export is also supported.
 
