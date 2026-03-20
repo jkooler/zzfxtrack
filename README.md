@@ -4,7 +4,7 @@
 
 **Instruments** can be created using a streamlined editor with scrub inputs. Instrument playback is handled externally by ZzFXMicro instead of Strudel's internal sound engine. This keeps exported music optimal and predictable for games and demos.
 
-![zzfxtrack-vid-01](https://github.com/user-attachments/assets/ef8c4769-e546-445a-aefa-d4af6fe103ef)
+![zzfxtrack-vid-arranger](https://github.com/user-attachments/assets/14a05867-927c-4619-902c-eaafb3a1d8e2)
 
 Exported music can be played with the bundled **ZzFXTrack Player**, which takes inspiration from [**ZzFXM**](https://keithclark.github.io/ZzFXM) by [**Keith Clark**](https://github.com/keithclark) and **Frank Force**. Developers can freely use it in their projects or build their own player. WAV export is also supported.
 
