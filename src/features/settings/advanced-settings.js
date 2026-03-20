@@ -53,7 +53,7 @@ function getSettingsTitle(type) {
     if (type === 'arrangement') return 'Arrangement settings';
     if (type === 'block') return 'Block settings';
     if (type === 'pattern') return 'Pattern settings';
-    if (type === 'instrument') return 'Instrument settings';
+    if (type === 'instrument') return 'Instrument Settings';
     return 'Settings';
 }
 

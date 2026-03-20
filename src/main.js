@@ -59,7 +59,7 @@ import { configureTrackerPreviewSync, scheduleTrackerPreviewInstrumentRefresh } 
 import { configureTrackerWorkspace, renderTrackerWorkspace, requestTrackerWorkspaceAutofocus, requestTrackerWorkspaceMultitrackAutoscroll, undockTrackerModalFromWorkspace } from './features/tracker/tracker-workspace.js';
 
 // --- Features: blocks ---
-import { configureBlockLibrary, refreshBlocksLibrary } from './features/blocks/block-library.js';
+import { configureBlockLibrary, refreshBlocksLibrary, renderBlocksLibraryFromCache } from './features/blocks/block-library.js';
 import { configureBlockController, deleteBlockFromLibrary, setupBlocksEventListeners as setupBlocksFeatureEventListeners } from './features/blocks/block-controller.js';
 
 // --- Features: playback & export ---
@@ -188,11 +188,13 @@ configurePlaybackController({
 });
 
 configureViewSwitching({
+    closeTracker,
     getDom: () => dom,
     getLastExportedData: () => lastExportedData,
     getLastExportedContext: () => lastExportedContext,
     getCurrentPatternFilename: () => appState.currentPatternFilename,
     getCurrentArrangementFilename: () => appState.currentArrangementFilename,
+    isTrackerOpen,
     setCurrentPatternFilename: (value) => { appState.currentPatternFilename = value; },
     setCurrentPatternScope: (value) => { appState.currentPatternScope = value; },
     setCurrentArrangementFilename: (value) => { appState.currentArrangementFilename = value; },
@@ -579,6 +581,7 @@ configureArrangementWorkspace({
     dispatchResourceScopeOpen: (detail) => {
         document.dispatchEvent(new CustomEvent('resource-scope:open', { detail }));
     },
+    renderBlocksLibrary: renderBlocksLibraryFromCache,
     renderTrackerWorkspace,
     confirmDialog,
     applyArrangementPreviewAfterBlockRemoved,
@@ -799,6 +802,7 @@ configureBlockLibrary({
     getBlocksLibraryCache: () => appState.blocksLibraryCache,
     setBlocksLibraryCache: (value) => { appState.blocksLibraryCache = value; },
     getActiveArrangementBlockFilename: () => appState.activeArrangementBlockFilename,
+    getArrangementDraftState: () => appState.arrangementDraftState,
     setActiveArrangementBlockFilename: (value) => { appState.activeArrangementBlockFilename = value; },
     getCurrentArrangementFilename: () => appState.currentArrangementFilename,
     setSelectedBlockForArrangement: (filename, blockFilename) => { arrangementSelectedBlockByArrangement[filename] = blockFilename; },

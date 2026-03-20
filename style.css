@@ -184,7 +184,7 @@
     --accent-foreground: hsl(60 9.1% 97.8%);
     --destructive: hsl(0 84.2% 60.2%);
     --destructive-foreground: hsl(60 9.1% 97.8%);
-    --border: hsla(37, 100%, 69%, 0.18);
+    --border: hsl(152 100% 50% / 0.22);
     --input: hsla(20, 0%, 100%, 0.14);
     --ring: hsl(45 93% 47% / 0.5);
     --input-bg: hsla(180, 0%, 0%, 0.17);
@@ -591,6 +591,21 @@ input[readonly]:focus-visible {
 }
 .list-item.active {
   @apply bg-accent text-accent-foreground;
+}
+
+.block-library-arrangement-dot {
+  position: absolute;
+  top: 0.34rem;
+  left: 0.14rem;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 9999px;
+  background-color: var(--quaternary);
+  pointer-events: none;
+}
+
+.block-library-arrangement-label-offset {
+  margin-left: 0.275rem;
 }
 
 /* Introduction page selection: same highlight as selected pattern */
@@ -1011,7 +1026,7 @@ strudel-editor {
 }
 
 .multitrack-tracker-segment-snapshot {
-  @apply shrink-0 p-0 flex flex-col h-full min-h-0 opacity-80;
+  @apply shrink-0 p-0 flex flex-col h-full min-h-0 opacity-60;
 }
 
 .multitrack-tracker-segment-header {

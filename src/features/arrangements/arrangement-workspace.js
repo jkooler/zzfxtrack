@@ -50,6 +50,7 @@ let deps = {
     refreshZzFXTrackPreviewControlsVisibility: () => {},
     renameArrangement: () => {},
     renderTrackerWorkspace: () => {},
+    renderBlocksLibrary: () => {},
     requestTrackerWorkspaceMultitrackAutoscroll: () => {},
     saveCurrentArrangement: () => {},
     scheduleArrangementAutoSave: () => {},
@@ -653,9 +654,12 @@ export function renderArrangementWorkspace() {
                 Select an arrangement from the Blocks list to open the arranger workspace.
             </div>
         `;
+        deps.renderBlocksLibrary();
         deps.renderTrackerWorkspace();
         return;
     }
+
+    deps.renderBlocksLibrary();
 
     const readonly = deps.getArrangementReadonly();
     const isPreviewPlaying = deps.isArrangementPreviewPlaying();

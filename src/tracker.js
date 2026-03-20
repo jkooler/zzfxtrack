@@ -240,13 +240,7 @@ function trackerUndo() {
   renderGrid();
   updateSelectionHighlight();
   updateOutput();
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
   scheduleArrangementLiveEditUpdate();
   focusNoteCell(state.focusedChannel, state.focusedStep);
 }
@@ -259,13 +253,7 @@ function trackerRedo() {
   renderGrid();
   updateSelectionHighlight();
   updateOutput();
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
   scheduleArrangementLiveEditUpdate();
   focusNoteCell(state.focusedChannel, state.focusedStep);
 }
@@ -477,13 +465,7 @@ function pasteFromBuffer() {
 
   selLog('pasteFromBuffer: pasted', copyBuffer.length, 'cells (with relative offsets)');
   updateOutput();
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
   scheduleArrangementLiveEditUpdate();
 }
 
@@ -529,13 +511,7 @@ function deleteSelectionWithShift() {
   updateSelectionHighlight();
   updateOutput();
 
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
 
   scheduleArrangementLiveEditUpdate();
 }
@@ -572,13 +548,7 @@ function clearSelectionNotes() {
   }
   updateSelectionHighlight();
   updateOutput();
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
   scheduleArrangementLiveEditUpdate();
 }
 
@@ -588,6 +558,7 @@ let previewState = {
   playingSource: null,
   isPlaying: false,
   playheadRafId: null,
+  playingBlockFilename: null,
   playingStep: null,
   playingStepsByFilename: null,
   instrumentSignature: '',
@@ -657,6 +628,28 @@ const arrangementPreviewState = {
     lastError: null,
   },
 };
+
+function getCurrentPreviewBlockFilename() {
+  return editMode.blockFilename || null;
+}
+
+function isCurrentBlockTrackerPreviewPlaying() {
+  return previewState.isPlaying && previewState.playingBlockFilename === getCurrentPreviewBlockFilename();
+}
+
+function getCurrentTrackerPreviewOffset() {
+  if (!isCurrentBlockTrackerPreviewPlaying() || !previewState.audioContext) return 0;
+  const ctx = previewState.audioContext;
+  const duration = previewState.bufferDuration || 2.0;
+  const elapsed = ctx.currentTime - previewState.startTime;
+  return elapsed > 0 ? elapsed % duration : 0;
+}
+
+function refreshCurrentBlockPreviewPlayback() {
+  if (!isCurrentBlockTrackerPreviewPlaying() || !previewState.audioContext) return false;
+  playPreview(getCurrentTrackerPreviewOffset());
+  return true;
+}
 
 function getMixSettingsSignature(mixSettings) {
   const settings = sanitizePlaybackMixSettings(mixSettings || arrangementPreviewState.mixSettings);
@@ -1010,13 +1003,7 @@ function setSteps(nextSteps, options = {}) {
     renderGrid();
     updateOutput();
 
-    if (previewState.isPlaying && previewState.audioContext) {
-      const ctx = previewState.audioContext;
-      const duration = previewState.bufferDuration || 2.0;
-      const elapsed = ctx.currentTime - previewState.startTime;
-      const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-      playPreview(currentOffset);
-    }
+    refreshCurrentBlockPreviewPlayback();
     if (!options.skipFocus) focusNoteCell(state.focusedChannel, state.focusedStep);
     return;
   }
@@ -1044,13 +1031,7 @@ function setSteps(nextSteps, options = {}) {
   renderGrid();
   updateOutput();
 
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
 
   if (!options.skipFocus) focusNoteCell(state.focusedChannel, state.focusedStep);
 }
@@ -1353,6 +1334,7 @@ function loadMultitrackSegmentInPlace(segment) {
   }
 
   updateEditModeUI();
+  updatePreviewUI();
   updateDenseRowsToggleUI();
   lastSavedSnapshot = getSnapshot();
 
@@ -1846,13 +1828,7 @@ function renderSingleGrid() {
     selectEl.addEventListener('change', (e) => {
       state.channelInstruments[ch] = e.target.value;
       updateOutput();
-      if (previewState.isPlaying && previewState.audioContext) {
-        const ctx = previewState.audioContext;
-        const duration = previewState.bufferDuration || 2.0;
-        const elapsed = ctx.currentTime - previewState.startTime;
-        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-        playPreview(currentOffset);
-      }
+      refreshCurrentBlockPreviewPlayback();
     });
 
     const repsLabelEl = document.createElement('div');
@@ -1999,13 +1975,7 @@ function renderSingleGrid() {
           if (clamped === 0) e.target.value = '';
         }
         updateOutput();
-        if (previewState.isPlaying && previewState.audioContext) {
-          const ctx = previewState.audioContext;
-          const duration = previewState.bufferDuration || 2.0;
-          const elapsed = ctx.currentTime - previewState.startTime;
-          const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-          playPreview(currentOffset);
-        } else {
+        if (!refreshCurrentBlockPreviewPlayback()) {
           scheduleEffectPreview(ch, step);
         }
       });
@@ -2046,13 +2016,7 @@ function renderSingleGrid() {
           if (clamped === 0) e.target.value = '';
         }
         updateOutput();
-        if (previewState.isPlaying && previewState.audioContext) {
-          const ctx = previewState.audioContext;
-          const duration = previewState.bufferDuration || 2.0;
-          const elapsed = ctx.currentTime - previewState.startTime;
-          const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-          playPreview(currentOffset);
-        } else {
+        if (!refreshCurrentBlockPreviewPlayback()) {
           scheduleEffectPreview(ch, step);
         }
       });
@@ -2093,13 +2057,7 @@ function renderSingleGrid() {
           if (clamped === 0) e.target.value = '';
         }
         updateOutput();
-        if (previewState.isPlaying && previewState.audioContext) {
-          const ctx = previewState.audioContext;
-          const duration = previewState.bufferDuration || 2.0;
-          const elapsed = ctx.currentTime - previewState.startTime;
-          const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-          playPreview(currentOffset);
-        } else {
+        if (!refreshCurrentBlockPreviewPlayback()) {
           scheduleEffectPreview(ch, step);
         }
       });
@@ -2351,6 +2309,15 @@ function restoreFocusedNoteCellAfterInput(channel = state.focusedChannel, step =
   });
 }
 
+function isTrackerModalVisible() {
+  const modal = elements.modal;
+  if (!modal?.classList.contains('open')) return false;
+  if (modal.getClientRects().length === 0) return false;
+  const style = window.getComputedStyle(modal);
+  if (style.display === 'none' || style.visibility === 'hidden') return false;
+  return true;
+}
+
 /**
  * Setup keyboard event listeners
  */
@@ -2452,13 +2419,7 @@ function setupEventListeners() {
       const clamped = Math.min(Math.max(parsed, 20), 300);
       state.bpm = clamped;
       scheduleArrangementLiveEditUpdate();
-      if (previewState.isPlaying && previewState.audioContext) {
-        const ctx = previewState.audioContext;
-        const duration = previewState.bufferDuration || 2.0;
-        const elapsed = ctx.currentTime - previewState.startTime;
-        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-        playPreview(currentOffset);
-      }
+      refreshCurrentBlockPreviewPlayback();
     });
 
     elements.blockBpmInput.addEventListener('blur', (e) => {
@@ -2573,8 +2534,8 @@ function setupEventListeners() {
  * Handle keyboard input
  */
 function handleKeyDown(e) {
-  // Only process if tracker is open
-  if (!elements.modal?.classList.contains('open')) return;
+  // Only process if the tracker is actually visible on screen.
+  if (!isTrackerModalVisible()) return;
 
   const normalizedKey = e.key.toLowerCase();
   if (
@@ -2962,13 +2923,7 @@ function handleKeyDown(e) {
         renderGrid();
         updateSelectionHighlight();
         updateOutput();
-        if (previewState.isPlaying && previewState.audioContext) {
-          const ctx = previewState.audioContext;
-          const duration = previewState.bufferDuration || 2.0;
-          const elapsed = ctx.currentTime - previewState.startTime;
-          const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-          playPreview(currentOffset);
-        }
+        refreshCurrentBlockPreviewPlayback();
         scheduleArrangementLiveEditUpdate();
         // Keep grid focused so consecutive octave changes work.
         const cell = document.querySelector(
@@ -3067,13 +3022,7 @@ function handleKeyDown(e) {
       renderGrid();
       updateSelectionHighlight();
       updateOutput();
-      if (previewState.isPlaying && previewState.audioContext) {
-        const ctx = previewState.audioContext;
-        const duration = previewState.bufferDuration || 2.0;
-        const elapsed = ctx.currentTime - previewState.startTime;
-        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-        playPreview(currentOffset);
-      }
+      refreshCurrentBlockPreviewPlayback();
       scheduleArrangementLiveEditUpdate();
     } else {
       insertBlankRowAtStep(state.focusedChannel, state.focusedStep);
@@ -3252,13 +3201,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
       updateNoteCellInDOM(ch, step);
       updateOutput();
       lastPaintedCell = `${ch},${step}`;
-      if (previewState.isPlaying && previewState.audioContext) {
-        const ctx = previewState.audioContext;
-        const duration = previewState.bufferDuration || 2.0;
-        const elapsed = ctx.currentTime - previewState.startTime;
-        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-        playPreview(currentOffset);
-      }
+      refreshCurrentBlockPreviewPlayback();
       const onPaintMove = (moveE) => {
         const under = document.elementFromPoint(moveE.clientX, moveE.clientY);
         const targetCell = under?.closest?.('.tracker-cell');
@@ -3281,13 +3224,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
         paintUpHandler = null;
         paintAction = null;
         lastPaintedCell = null;
-        if (previewState.isPlaying && previewState.audioContext) {
-          const ctx = previewState.audioContext;
-          const duration = previewState.bufferDuration || 2.0;
-          const elapsed = ctx.currentTime - previewState.startTime;
-          const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-          playPreview(currentOffset);
-        }
+        refreshCurrentBlockPreviewPlayback();
       };
       paintMoveHandler = onPaintMove;
       paintUpHandler = onPaintUp;
@@ -3334,13 +3271,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
     clearScrubPreview();
     if (isDragging) {
       renderGrid();
-      if (previewState.isPlaying && previewState.audioContext) {
-        const ctx = previewState.audioContext;
-        const duration = previewState.bufferDuration || 2.0;
-        const elapsed = ctx.currentTime - previewState.startTime;
-        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-        playPreview(currentOffset);
-      }
+      refreshCurrentBlockPreviewPlayback();
     }
     isDragging = false;
   };
@@ -3384,13 +3315,7 @@ function setupNoteCellScrub(cellEl, ch, step) {
     clearScrubPreview();
     if (isDragging) {
       renderGrid();
-      if (previewState.isPlaying && previewState.audioContext) {
-        const ctx = previewState.audioContext;
-        const duration = previewState.bufferDuration || 2.0;
-        const elapsed = ctx.currentTime - previewState.startTime;
-        const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-        playPreview(currentOffset);
-      }
+      refreshCurrentBlockPreviewPlayback();
     } else {
       setFocus(ch, step);
       cellEl.focus();
@@ -3432,13 +3357,8 @@ function setNote(channel, step, note, options = {}) {
   if (options.skipRender) return;
 
   // If preview is playing, update the loop seamlessly
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    
-    playPreview(currentOffset);
+  if (refreshCurrentBlockPreviewPlayback()) {
+    return;
   } else {
     // Otherwise play single note preview if it's a valid note
     if (note && note !== '~' && note !== '-') {
@@ -3467,14 +3387,7 @@ function shiftColumnUpFromStep(channel, startStep) {
   renderGrid();
   updateOutput();
 
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
 }
 
 function insertBlankRowAtStep(channel, startStep) {
@@ -3497,14 +3410,7 @@ function insertBlankRowAtStep(channel, startStep) {
   renderGrid();
   updateOutput();
 
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
 }
 
 /**
@@ -3579,13 +3485,7 @@ function clearGridContent() {
   }
   renderGrid();
   updateOutput();
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
   focusNoteCell(state.focusedChannel, state.focusedStep);
 }
 
@@ -3597,13 +3497,7 @@ function clearAll() {
   state.channelInstruments = Array(MAX_CHANNELS).fill('');
   renderGrid();
   updateOutput();
-  if (previewState.isPlaying && previewState.audioContext) {
-    const ctx = previewState.audioContext;
-    const duration = previewState.bufferDuration || 2.0;
-    const elapsed = ctx.currentTime - previewState.startTime;
-    const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-    playPreview(currentOffset);
-  }
+  refreshCurrentBlockPreviewPlayback();
 }
 
 /**
@@ -3789,7 +3683,7 @@ async function copyToClipboard() {
  * Toggle preview playback
  */
 function togglePreview() {
-  if (previewState.isPlaying) {
+  if (isCurrentBlockTrackerPreviewPlaying()) {
     stopPreview();
   } else {
     // Avoid accidental start from click-through or focus when modal just opened
@@ -3866,6 +3760,7 @@ function playPreview(startOffset = 0) {
 
   previewState.playingSource = source;
   previewState.isPlaying = true;
+  previewState.playingBlockFilename = getCurrentPreviewBlockFilename();
   previewState.bufferDuration = audioBuffer.duration;
   // Calculate when the loop effectively started to track position for future updates
   previewState.startTime = ctx.currentTime - offset;
@@ -3904,6 +3799,7 @@ function stopPreview() {
   }
   stopPlayhead();
   previewState.isPlaying = false;
+  previewState.playingBlockFilename = null;
   updatePreviewUI();
   emitTrackerPreviewInstruments({ playing: false, aliases: [] });
 }
@@ -3993,6 +3889,15 @@ function emitTrackerPreviewInstruments({ playing = false, aliases = [] } = {}) {
 }
 
 function setPlayingStep(step) {
+  if (isMultitrackEditing()) {
+    if (step == null || !previewState.playingBlockFilename) {
+      setMultitrackPlayingSteps(null);
+    } else {
+      setMultitrackPlayingSteps({ [previewState.playingBlockFilename]: step });
+    }
+    return;
+  }
+
   if (previewState.playingStepsByFilename) {
     Object.entries(previewState.playingStepsByFilename).forEach(([filename, playingStep]) => {
       clearPlayingStepForMultitrackSegment(filename, playingStep);
@@ -4073,7 +3978,7 @@ function setMultitrackPlayingSteps(stepsByFilename = null) {
 function updatePreviewUI() {
   if (!elements.previewBtn) return;
 
-  if (previewState.isPlaying) {
+  if (isCurrentBlockTrackerPreviewPlaying()) {
     elements.previewBtn.innerHTML = '<i data-lucide="square" class="w-[18px] h-5 fill-current"></i>';
   } else {
     elements.previewBtn.innerHTML = '<i data-lucide="play" class="w-[18px] h-5 fill-current"></i>';
@@ -4228,6 +4133,7 @@ function playMixBuffer(mixBuffer, sampleRate, { sourceGain = 1, outputNode = nul
 
   previewState.playingSource = source;
   previewState.isPlaying = true;
+  previewState.playingBlockFilename = getCurrentPreviewBlockFilename();
   previewState.bufferDuration = audioBuffer.duration;
   previewState.startTime = ctx.currentTime;
   updatePreviewUI();
@@ -4236,6 +4142,7 @@ function playMixBuffer(mixBuffer, sampleRate, { sourceGain = 1, outputNode = nul
     if (previewState.playingSource === source) {
       previewState.playingSource = null;
       previewState.isPlaying = false;
+      previewState.playingBlockFilename = null;
       updatePreviewUI();
       emitTrackerPreviewInstruments({ playing: false, aliases: [] });
     }
@@ -5926,6 +5833,7 @@ export function openTrackerForEdit(instrumentList, blockData) {
 
   // Update UI for edit mode
   updateEditModeUI();
+  updatePreviewUI();
   updateDenseRowsToggleUI();
 
   // Clear and reset state first
@@ -6293,12 +6201,8 @@ export function isTrackerPreviewPlaying() {
  * Call when instruments or params change during playback.
  */
 export function refreshTrackerPreview() {
-  if (!previewState.isPlaying || !previewState.audioContext) return false;
-  const ctx = previewState.audioContext;
-  const duration = previewState.bufferDuration || 2.0;
-  const elapsed = ctx.currentTime - previewState.startTime;
-  const currentOffset = elapsed > 0 ? elapsed % duration : 0;
-  playPreview(currentOffset);
+  if (!isCurrentBlockTrackerPreviewPlaying() || !previewState.audioContext) return false;
+  playPreview(getCurrentTrackerPreviewOffset());
   return true;
 }
 

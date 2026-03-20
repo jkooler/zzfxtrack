@@ -10,6 +10,7 @@ let deps = {
     escapeHtml: (value) => String(value || ''),
     flushTrackerSaveForBlockSwitch: () => {},
     getActiveArrangementBlockFilename: () => null,
+    getArrangementDraftState: () => null,
     getBlocksFolderStateKey: () => 'blocks-folder-state',
     getBlocksLibraryCache: () => [],
     getBlocksLibraryList: () => null,
@@ -95,6 +96,17 @@ export function renderBlocksLibraryFromCache() {
     if (!listEl) return;
     listEl.innerHTML = '';
 
+    const usedInArrangement = new Set();
+    const arrangementRows = deps.getArrangementDraftState()?.rows;
+    if (Array.isArray(arrangementRows)) {
+        arrangementRows.forEach((row) => {
+            if (!Array.isArray(row?.blocks)) return;
+            row.blocks.forEach((filename) => {
+                if (typeof filename === 'string' && filename) usedInArrangement.add(filename);
+            });
+        });
+    }
+
     const blocksCache = deps.getBlocksLibraryCache();
     if (!blocksCache.length) {
         listEl.innerHTML = '<div class="text-xs text-muted-foreground px-2 py-2">No blocks available.</div>';
@@ -141,6 +153,7 @@ export function renderBlocksLibraryFromCache() {
         entries.forEach((block) => {
             const isSystem = deps.normalizeScope(block.scope) === 'system';
             const canDelete = !isSystem || deps.isDeveloperModeEnabled();
+            const isUsedInArrangement = usedInArrangement.has(block.filename);
             const deleteActionMarkup = canDelete
                 ? `<button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(block.name || block.filename)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
                 : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
@@ -150,7 +163,8 @@ export function renderBlocksLibraryFromCache() {
             li.tabIndex = 0;
             li.dataset.filename = block.filename;
             li.innerHTML = `
-                <span class="font-medium text-xs">${deps.escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
+                ${isUsedInArrangement ? '<span class="block-library-arrangement-dot" aria-hidden="true"></span>' : ''}
+                <span class="font-medium text-xs ${isUsedInArrangement ? 'block-library-arrangement-label-offset' : ''}">${deps.escapeHtml(block.name || block.filename.replace(/\.js$/i, ''))}</span>
                 <div class="list-item-actions">${deleteActionMarkup}</div>
             `;
             li.draggable = true;

@@ -6,11 +6,13 @@
 
 let deps = {
     clearZzFXTrackPreviewData: () => {},
+    closeTracker: () => {},
     getCurrentArrangementFilename: () => null,
     getCurrentPatternFilename: () => null,
     getDom: () => ({}),
     getLastExportedContext: () => ({ type: null, filename: null }),
     getLastExportedData: () => null,
+    isTrackerOpen: () => false,
     refreshArrangementListActiveState: () => {},
     renderArrangementWorkspace: () => {},
     renderPlayButton: () => {},
@@ -201,10 +203,11 @@ export function showIntroduction() {
 export function showEditor() {
     const dom = deps.getDom();
     closeExportMenu();
-    if (!isTrackerDocked()) deps.undockTrackerModalFromWorkspace();
     dom.welcomeView.style.display = 'none';
     dom.editorContainer.style.display = 'flex';
     if (dom.arrangementWorkspace) dom.arrangementWorkspace.style.display = 'none';
+    if (deps.isTrackerOpen()) deps.closeTracker();
+    if (isTrackerDocked()) deps.undockTrackerModalFromWorkspace();
     if (dom.mainHeader) dom.mainHeader.classList.remove('hidden');
     if (dom.mainFooter) {
         dom.mainFooter.classList.remove('hidden');

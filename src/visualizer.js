@@ -12,17 +12,27 @@ export class ScopeVisualizer {
         this.draw = this.draw.bind(this);
     }
 
+    clearCanvas(canvas = this.canvas) {
+        if (!canvas) return;
+        const ctx = canvas === this.canvas ? this.ctx : canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
     attach(canvas) {
         if (this.canvas === canvas) return;
-        
+
         // Cleanup old
         if (this.animationId) {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
         }
 
+        this.clearCanvas();
+
         this.canvas = canvas;
-        
+        this.ctx = null;
+
         if (canvas) {
             this.ctx = canvas.getContext('2d');
             this.lastDrawAt = 0;

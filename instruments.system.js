@@ -123,8 +123,8 @@ export const instrumentScope = {
     "tap-s": "system"
 };
 export const instrumentType = {
-    "cp-s": "synth",
-    "enterprise-s": "synth",
+    "cp-s": "other",
+    "enterprise-s": "other",
     "sine-s": "synth",
     "tri-s": "synth",
     "saw-s": "synth",
@@ -144,7 +144,7 @@ export const instrumentType = {
     "elpiano-s": "synth",
     "horn-s": "synth",
     "saw2-s": "synth",
-    "tap-s": "other"
+    "tap-s": "drums"
 };
 export const instrumentArray = [
     zzfxtrack_cp_s,

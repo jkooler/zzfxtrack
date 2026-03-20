@@ -161,17 +161,28 @@ export function renderTrackerWorkspace() {
     const multitrackRowBlocks = multitrackMode && rowBlocks.length
         ? rowBlocks.slice().sort(compareRowBlockFilenames)
         : [];
+    const explicitSelectionFilename = deps.getActiveArrangementBlockFilename();
     let activeFilename = multitrackMode
-        ? (workspaceMultitrackActiveFilename || deps.getActiveArrangementBlockFilename())
-        : deps.getActiveArrangementBlockFilename();
-    if (multitrackMode && multitrackRowBlocks.length && !multitrackRowBlocks.includes(activeFilename)) {
-        activeFilename = multitrackRowBlocks[0];
-        workspaceMultitrackActiveFilename = activeFilename;
-    } else if (!multitrackMode) {
+        ? (explicitSelectionFilename || workspaceMultitrackActiveFilename)
+        : explicitSelectionFilename;
+    if (multitrackMode) {
+        if (!activeFilename && multitrackRowBlocks.length) {
+            activeFilename = multitrackRowBlocks[0];
+            workspaceMultitrackActiveFilename = activeFilename;
+        } else if (activeFilename && multitrackRowBlocks.includes(activeFilename)) {
+            workspaceMultitrackActiveFilename = activeFilename;
+        }
+    } else {
         workspaceMultitrackActiveFilename = null;
     }
-    if (multitrackMode && activeFilename) workspaceMultitrackActiveFilename = activeFilename;
     const selectedBlock = activeFilename ? deps.getBlockByFilename(activeFilename) : null;
+    const showMultitrackContext = Boolean(
+        multitrackMode
+        && selectedBlock
+        && activeFilename
+        && multitrackRowBlocks.includes(activeFilename)
+        && multitrackRowBlocks.length > 1
+    );
     if (!selectedBlock) {
         workspaceMultitrackActiveFilename = null;
         deps.setTrackerWorkspaceLoadedFilename(null);
@@ -191,7 +202,7 @@ export function renderTrackerWorkspace() {
     pane.innerHTML = '<div data-tracker-dock-host class="min-h-0 h-full"></div>';
 
     dockTrackerModalToWorkspace();
-    const workspaceLoadKey = multitrackMode && multitrackRowBlocks.length > 1
+    const workspaceLoadKey = showMultitrackContext
         ? `${selectedBlock.filename}::multitrack::${multitrackRowBlocks.join('|')}`
         : selectedBlock.filename;
     const shouldReload = deps.getTrackerWorkspaceLoadedFilename() !== workspaceLoadKey || !deps.isTrackerOpen();
@@ -203,9 +214,11 @@ export function renderTrackerWorkspace() {
                 activeCell?.focus?.({ preventScroll: true });
             });
         }
-        if (pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
+        if (showMultitrackContext && pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
             pendingArrangementMultitrackScrollFilename = null;
             requestAnimationFrame(() => scrollTrackerWorkspaceMultitrackSegmentIntoView(selectedBlock.filename));
+        } else if (!showMultitrackContext && pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
+            pendingArrangementMultitrackScrollFilename = null;
         }
         return;
     }
@@ -218,7 +231,7 @@ export function renderTrackerWorkspace() {
         autoSaveOnInput: true,
         autofocusOnOpen: pendingTrackerWorkspaceAutofocusFilename === selectedBlock.filename,
         dockToWorkspace: true,
-        multitrackSegments: multitrackMode && multitrackRowBlocks.length > 1
+        multitrackSegments: showMultitrackContext
             ? multitrackRowBlocks.map((filename) => {
                 const block = deps.getBlockByFilename(filename);
                 return block
@@ -256,9 +269,11 @@ export function renderTrackerWorkspace() {
                 e.dataTransfer.setData('text/plain', filename);
             });
         }
-        if (pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
+        if (showMultitrackContext && pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
             pendingArrangementMultitrackScrollFilename = null;
             requestAnimationFrame(() => scrollTrackerWorkspaceMultitrackSegmentIntoView(selectedBlock.filename));
+        } else if (!showMultitrackContext && pendingArrangementMultitrackScrollFilename === selectedBlock.filename) {
+            pendingArrangementMultitrackScrollFilename = null;
         }
     }).catch((err) => {
         if (loadToken !== deps.getTrackerWorkspaceLoadToken()) return;

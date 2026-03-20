@@ -274,11 +274,32 @@ export async function refreshPatternList() {
 
 const TAB_VISUALIZER_CLASS = 'list-item-visualizer';
 
+function clearPatternScopeVisualizers(patternList = getPatternListElement()) {
+    const strudelTab = getStrudelTabElement();
+    if (strudelTab) {
+        const tabCanvas = strudelTab.querySelector(`canvas.${TAB_VISUALIZER_CLASS}`);
+        if (tabCanvas) tabCanvas.remove();
+        strudelTab.classList.remove('relative');
+    }
+
+    if (!patternList) return;
+
+    Array.from(patternList.querySelectorAll('canvas.list-item-visualizer')).forEach((canvas) => canvas.remove());
+    Array.from(patternList.children).forEach((row) => {
+        row.classList.remove('relative', 'overflow-hidden');
+    });
+}
+
 export function updatePatternListVisualizer() {
     const patternList = getPatternListElement();
     const playingPatternFilename = getPlayingPatternFilename();
     const arrangementPlaying = isArrangementPreviewPlaying();
     const listVisible = patternList && !patternList.classList.contains('hidden');
+
+    if (arrangementPlaying) {
+        clearPatternScopeVisualizers(patternList);
+        return;
+    }
 
     if (!listVisible && playingPatternFilename) {
         const strudelTab = getStrudelTabElement();
@@ -298,18 +319,10 @@ export function updatePatternListVisualizer() {
         }
     }
 
-    const strudelTab = getStrudelTabElement();
-    if (strudelTab) {
-        const tabCanvas = strudelTab.querySelector(`canvas.${TAB_VISUALIZER_CLASS}`);
-        if (tabCanvas) {
-            tabCanvas.remove();
-            strudelTab.classList.remove('relative');
-        }
-    }
+    clearPatternScopeVisualizers(patternList);
 
     if (!patternList) return;
     if (patternList.classList.contains('hidden')) {
-        if (arrangementPlaying) return;
         attachVisualizer(null);
         return;
     }

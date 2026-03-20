@@ -1463,7 +1463,7 @@ function renderInstrumentList() {
             li.dataset.iconPlaying = 'false';
 
             li.innerHTML = `
-                <div class="usage-indicator absolute top-2 right-2 w-1 h-1 rounded-full bg-white hidden opacity-40"></div>
+                <div class="usage-indicator absolute top-1 left-1 w-1 h-1 rounded-full bg-tertiary hidden"></div>
                 <div class="instrument-info flex items-center gap-1 cursor-move">
                     <span class="instrument-type-icon-wrap inline-flex items-center justify-center w-[1.6rem] h-[1.6rem] text-muted-foreground opacity-80 transition-colors shrink-0">
                         <i data-lucide="${typeMeta.icon}" class="w-4 h-4 shrink-0"></i>
