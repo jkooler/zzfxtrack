@@ -71,7 +71,7 @@ import { applyPlaybackMixSettingsToInputs, configureExportSettings, getPlaybackM
 import { configureExportWav, exportArrangementWav, exportPatternWav } from './features/playback/export-wav.js';
 
 // --- Features: project (import/export bundle) ---
-import { buildArrangementSourceFromApi, buildBlockSourceFromApi, parseBlockSource } from './features/project/bundle-utils.js';
+import { buildArrangementSourceFromApi, buildBlockSourceFromApi, parseArrangementSource, parseBlockSource } from './features/project/bundle-utils.js';
 import { configureProjectExport, installProjectExportHandlers } from './features/project/project-export.js';
 import { configureProjectImport, installProjectImportHandlers } from './features/project/project-import.js';
 
@@ -125,6 +125,19 @@ const demoArrangementSourceByFile = new Map(
         .filter(([modulePath]) => !modulePath.endsWith('/index.js'))
         .map(([modulePath, source]) => [modulePath.split('/').pop(), source])
 );
+
+function getDemoArrangementDetailOrNull(filename) {
+    const source = demoArrangementSourceByFile.get(filename);
+    if (!source) return null;
+    const parsed = parseArrangementSource(source);
+    return {
+        filename,
+        name: parsed.name,
+        scope: parsed.scope,
+        bpm: Number.isFinite(Number(parsed?.arrangementState?.bpm)) ? Number(parsed.arrangementState.bpm) : 120,
+        arrangementState: parsed.arrangementState,
+    };
+}
 
 // --- Global State ---
 let currentPatternDisplayName = ''; // Store the display name for restoration
@@ -510,7 +523,7 @@ configureArrangementController({
     },
     clearArrangementRenameDebounceTimeout: () => { arrangementRenameDebounceTimeout = null; },
     getArrangementWorkspaceNameInput: () => document.getElementById('arrangementWorkspaceName'),
-    getArrangementOrNull,
+    getArrangementOrNull: async (filename) => (DEMO_MODE ? getDemoArrangementDetailOrNull(filename) : getArrangementOrNull(filename)),
     readUnsavedArrangementState,
     cloneArrangementState,
     clearArrangementWorkspacePlayheadVisuals,

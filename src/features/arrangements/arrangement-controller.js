@@ -313,8 +313,10 @@ export async function loadArrangement(filename) {
     if (isSwitching) deps.clearArrangementWorkspacePlayheadVisuals();
 
     try {
-        const loadedScope = deps.isDemoMode() ? 'system' : deps.normalizeScope(deps.getArrangementEntry(filename)?.scope);
-        const detail = deps.isDemoMode() ? null : await deps.getArrangementOrNull(filename);
+        const detail = await deps.getArrangementOrNull(filename);
+        const loadedScope = deps.isDemoMode()
+            ? deps.normalizeScope(detail?.scope || 'system')
+            : deps.normalizeScope(deps.getArrangementEntry(filename)?.scope);
         let arrangementState = deps.cloneArrangementState(detail?.arrangementState || {
             name: decodeURIComponent(filename.replace(/\.js$/i, '')),
             bpm: 120,
