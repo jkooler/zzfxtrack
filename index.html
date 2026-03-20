@@ -562,6 +562,12 @@
           </div>
           <div class="flex items-center justify-center gap-2">
             <button
+              id="introDemoModeBtn"
+              class="hidden inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
+            >
+              Demo Mode
+            </button>
+            <button
               id="openAboutModalBtn"
               class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 py-1"
             >
@@ -1079,10 +1085,10 @@
         </div>
         <div class="text-sm text-muted-foreground space-y-4 overflow-y-auto pr-1">
           <div class="border border-border rounded-md p-3 bg-card/50">
-            <p class="text-foreground font-semibold">v0.1.0-alpha.1</p>
+            <p class="text-foreground font-semibold">v0.1.0-alpha.2</p>
             <p class="text-xs opacity-80">Q2/2026</p>
             <ul class="list-disc pl-5 mt-2 space-y-1">
-              <li>First public alpha release.</li>
+              <li>Public alpha release.</li>
               <li>Strudel composition workflow with external ZzFXMicro instrument support.</li>
               <li>Arranger and Blocks with tracker style workflow.</li>
               <li>ZzFX instrument loading, preview, and editing flow.</li>
@@ -1129,13 +1135,13 @@
         </div>
         <div class="text-sm text-muted-foreground space-y-3">
           <p>
-            In demo mode, pattern edits are kept only in your browser memory for this session.
+            In demo mode, your user patterns, blocks, arrangements, and instruments are stored in this browser.
           </p>
           <p>
-            Changes are not written to project files or the <code>output/</code> directory.
+            Changes are not written to project files or the <code>output/</code> directory. Use <strong>Download</strong> to export a ZIP for backup or transfer.
           </p>
           <p>
-            You can still use <strong>Download</strong> (project ZIP) to export patterns, blocks, arrangements, and <code>instruments.js</code>. Extract it into your app root folder to place files under the correct directories.
+            Import and download ZIP bundles to move your data between browsers, devices, or the local version.
           </p>
           <p>
             Source code for this app is available at <a href="https://github.com/jkooler/zzfxtrack" target="_blank" class="text-primary hover:underline">github.com/jkooler/zzfxtrack</a>.

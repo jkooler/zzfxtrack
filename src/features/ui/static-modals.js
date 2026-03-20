@@ -31,6 +31,10 @@ function wireModal({ openBtn, closeBtn, closeBottomBtn, modal, onOpen }) {
 
 export function installStaticModalHandlers() {
     const dom = deps.getDom();
+    const openDemoModeModal = () => {
+        if (!deps.isDemoMode()) return;
+        dom.demoModeModal?.classList.add('open');
+    };
     wireModal({
         openBtn: dom.openAboutModalBtn,
         closeBtn: dom.closeAboutModalBtn,
@@ -58,11 +62,9 @@ export function installStaticModalHandlers() {
         modal: dom.changelogModal,
     });
     if (dom.demoModeBadge) {
-        dom.demoModeBadge.addEventListener('click', () => {
-            if (!deps.isDemoMode()) return;
-            dom.demoModeModal?.classList.add('open');
-        });
+        dom.demoModeBadge.addEventListener('click', openDemoModeModal);
     }
+    if (dom.introDemoModeBtn) dom.introDemoModeBtn.addEventListener('click', openDemoModeModal);
     if (dom.closeDemoModeModalBtn) dom.closeDemoModeModalBtn.addEventListener('click', () => dom.demoModeModal?.classList.remove('open'));
     if (dom.closeDemoModeModalBottomBtn) dom.closeDemoModeModalBottomBtn.addEventListener('click', () => dom.demoModeModal?.classList.remove('open'));
     if (dom.demoModeModal) {

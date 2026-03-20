@@ -6,6 +6,7 @@
 
 let deps = {
     alertDialog: async () => {},
+    closeTracker: () => {},
     confirmDialog: async () => false,
     deleteBlockByFilenameWithConflictInfo: async () => ({ ok: false }),
     dispatchBlocksTargetPatternScope: () => {},
@@ -22,6 +23,7 @@ let deps = {
     getCurrentArrangementScope: () => 'user',
     getCurrentPatternFilename: () => null,
     getCurrentPatternScope: () => 'user',
+    getTrackerWorkspaceLoadedFilename: () => null,
     getDefragmentedInstruments: async () => [],
     getDeveloperModeHeaders: () => ({}),
     getPlaybackMixSettings: () => ({}),
@@ -42,6 +44,7 @@ let deps = {
     restoreSuspendedBlocksModals: () => {},
     savePatternSource: async () => {},
     setActiveArrangementBlockFilename: () => {},
+    setTrackerWorkspaceLoadedFilename: () => {},
     setStatus: () => {},
     slugify: (value) => String(value || ''),
     stopTrackerPreviewPlayback: () => {},
@@ -118,9 +121,14 @@ export async function deleteBlockFromLibrary(filename, displayName) {
         }
         if (deps.getActiveArrangementBlockFilename() === filename) {
             deps.setActiveArrangementBlockFilename(null);
-            deps.renderTrackerWorkspace();
+        }
+        const trackerWorkspaceLoadedFilename = String(deps.getTrackerWorkspaceLoadedFilename() || '');
+        if (trackerWorkspaceLoadedFilename === filename || trackerWorkspaceLoadedFilename.startsWith(`${filename}::`)) {
+            deps.setTrackerWorkspaceLoadedFilename(null);
+            deps.closeTracker();
         }
         await deps.refreshBlocksLibrary();
+        deps.renderTrackerWorkspace();
         deps.setStatus('Block deleted', 'success');
     } catch (err) {
         deps.logError('[Blocks] Delete failed:', err);

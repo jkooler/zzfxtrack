@@ -25,6 +25,7 @@ export const dom = {
     statusMsg: document.getElementById('statusMsg'),
     footerStatusRow: document.getElementById('footerStatusRow'),
     demoModeBadge: document.getElementById('demoModeBadge'),
+    introDemoModeBtn: document.getElementById('introDemoModeBtn'),
     devModeToolbarLabel: document.getElementById('devModeToolbarLabel'),
 
     // Views

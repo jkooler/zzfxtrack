@@ -833,6 +833,7 @@ configureBlockController({
     normalizeScope,
     isDeveloperModeEnabled,
     setStatus,
+    closeTracker,
     getArrangementEntriesCache: () => appState.arrangementEntriesCache,
     getCurrentArrangementFilename: () => appState.currentArrangementFilename,
     getArrangementDraftState: () => appState.arrangementDraftState,
@@ -842,7 +843,9 @@ configureBlockController({
     deleteBlockByFilenameWithConflictInfo,
     getDeveloperModeHeaders,
     getActiveArrangementBlockFilename: () => appState.activeArrangementBlockFilename,
+    getTrackerWorkspaceLoadedFilename: () => trackerWorkspaceLoadedFilename,
     setActiveArrangementBlockFilename: (value) => { appState.activeArrangementBlockFilename = value; },
+    setTrackerWorkspaceLoadedFilename: (value) => { trackerWorkspaceLoadedFilename = value; },
     renderTrackerWorkspace,
     refreshBlocksLibrary,
     logError: (...args) => console.error(...args),
@@ -1266,6 +1269,11 @@ async function init() {
         dom.demoModeBadge.hidden = !DEMO_MODE;
         dom.demoModeBadge.style.display = DEMO_MODE ? 'inline-flex' : 'none';
         dom.demoModeBadge.classList.toggle('hidden', !DEMO_MODE);
+    }
+    if (dom.introDemoModeBtn) {
+        dom.introDemoModeBtn.hidden = !DEMO_MODE;
+        dom.introDemoModeBtn.style.display = DEMO_MODE ? 'inline-flex' : 'none';
+        dom.introDemoModeBtn.classList.toggle('hidden', !DEMO_MODE);
     }
     updateDevModeToolbarLabelVisibility();
     
