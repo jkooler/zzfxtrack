@@ -4,7 +4,11 @@
 
 **Instruments** can be created using a streamlined editor with scrub inputs. Instrument playback is handled externally by ZzFXMicro instead of Strudel's internal sound engine. This keeps exported music optimal and predictable for games and demos.
 
+#### Instrument editor, Arranger and Blocks
+
 ![zzfxtrack-vid-01](https://github.com/user-attachments/assets/8798e454-c7b8-4d67-893e-9270aa969edf)
+
+#### Strudel REPL
 
 ![zzfxtrack-vid-02](https://github.com/user-attachments/assets/03d793e6-de49-414b-a54f-4a6a65112774)
 
