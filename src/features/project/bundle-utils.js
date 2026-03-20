@@ -97,6 +97,14 @@ export function getFilenameFromSection(pathname, section) {
     return file;
 }
 
+export function getPatternMetaFilenameFromSection(pathname) {
+    const match = pathname.match(/(?:^|\/)patterns\/(.+\.meta\.json)$/i);
+    if (!match) return '';
+    const file = match[1].split('/').pop() || '';
+    if (!file || file.includes('..') || !file.endsWith('.meta.json')) return '';
+    return file.replace(/\.meta\.json$/i, '.js');
+}
+
 export function describeUploadBundle(bundle) {
     if (!bundle) return '';
     const instrumentLabels = [];

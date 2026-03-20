@@ -5,7 +5,7 @@
  */
 
 import JSZip from 'jszip';
-import { buildArrangementSourceFromApi, buildBlockSourceFromApi, describeUploadBundle, getFilenameFromSection, normalizeZipEntryPath, parseArrangementSource, parseBlockSource, validateUploadBundle } from './bundle-utils.js';
+import { buildArrangementSourceFromApi, buildBlockSourceFromApi, describeUploadBundle, getFilenameFromSection, getPatternMetaFilenameFromSection, normalizeZipEntryPath, parseArrangementSource, parseBlockSource, validateUploadBundle } from './bundle-utils.js';
 import { applyInitialColorTheme, clearStoredUserThemeValues, writeStoredColorTheme, writeStoredUserThemeValues } from '../settings/theme-controller.js';
 import { migrateFromFile, migrateSystemFromFile } from '../../instrument-manager.js';
 
@@ -32,6 +32,7 @@ let deps = {
     reloadInstruments: async () => {},
     saveArrangement: async () => {},
     saveBlockDetail: async () => {},
+    savePatternMetaRecord: async () => {},
     savePatternSource: async () => {},
     setStatus: () => {},
     updateInstrumentsSourceFile: async () => {},
@@ -70,6 +71,7 @@ async function buildUploadBundle(file) {
     const entries = Object.values(zip.files).filter((entry) => !entry.dir);
 
     const patterns = new Map();
+    const patternMetas = new Map();
     const blocks = new Map();
     const arrangements = new Map();
     let userInstrumentsContent = '';
@@ -115,6 +117,12 @@ async function buildUploadBundle(file) {
             continue;
         }
 
+        const patternMetaFile = getPatternMetaFilenameFromSection(normalized);
+        if (patternMetaFile) {
+            patternMetas.set(patternMetaFile, content);
+            continue;
+        }
+
         const blockFile = getFilenameFromSection(normalized, 'blocks');
         if (blockFile) {
             blocks.set(blockFile, content);
@@ -133,6 +141,7 @@ async function buildUploadBundle(file) {
     return {
         fileName: file.name || 'upload.zip',
         patterns: Array.from(patterns, ([filename, content]) => ({ filename, content })),
+        patternMetas: Array.from(patternMetas, ([filename, content]) => ({ filename, content })),
         blocks: Array.from(blocks, ([filename, content]) => ({ filename, content })),
         arrangements: Array.from(arrangements, ([filename, content]) => ({ filename, content })),
         userInstrumentsContent,
@@ -284,7 +293,7 @@ function openUploadProjectModal() {
 }
 
 async function importSectionItems(section, items, include, mode, existingSet) {
-    const stats = { written: 0, renamed: 0, replaced: 0, skipped: 0 };
+    const stats = { written: 0, renamed: 0, replaced: 0, skipped: 0, filenameMap: new Map() };
     if (!include || !Array.isArray(items) || !items.length) return stats;
 
     for (const item of items) {
@@ -295,6 +304,7 @@ async function importSectionItems(section, items, include, mode, existingSet) {
             const existingContent = await fetchExistingContent(section, originalFilename);
             if (normalizeContent(existingContent) === normalizeContent(item.content)) {
                 stats.skipped++;
+                stats.filenameMap.set(originalFilename, originalFilename);
                 continue;
             }
             targetFilename = makeImportedFilename(originalFilename, existingSet);
@@ -307,9 +317,27 @@ async function importSectionItems(section, items, include, mode, existingSet) {
         if (ok) {
             stats.written++;
             existingSet.add(targetFilename.toLowerCase());
+            stats.filenameMap.set(originalFilename, targetFilename);
         }
     }
     return stats;
+}
+
+async function applyPatternMetaItems(items, filenameMap) {
+    if (!Array.isArray(items) || !items.length) return 0;
+    let applied = 0;
+    for (const item of items) {
+        const targetFilename = filenameMap.get(item.filename);
+        if (!targetFilename) continue;
+        try {
+            const parsed = JSON.parse(item.content);
+            await deps.savePatternMetaRecord(targetFilename, parsed);
+            applied++;
+        } catch (_e) {
+            // Ignore malformed meta entries and continue.
+        }
+    }
+    return applied;
 }
 
 async function applyUploadProject() {
@@ -332,6 +360,7 @@ async function applyUploadProject() {
         const patternsStats = await importSectionItems('patterns', pendingUploadBundle.patterns, includePatterns, mode, existing.patterns);
         const blocksStats = await importSectionItems('blocks', pendingUploadBundle.blocks, includeBlocks, mode, existing.blocks);
         const arrangementsStats = await importSectionItems('arrangements', pendingUploadBundle.arrangements, includeArrangements, mode, existing.arrangements);
+        const patternMetaImported = await applyPatternMetaItems(pendingUploadBundle.patternMetas, patternsStats.filenameMap);
 
         let userInstrumentsImported = 0;
         let systemInstrumentsImported = 0;
@@ -387,7 +416,7 @@ async function applyUploadProject() {
         if (userInstrumentsImported || systemInstrumentsImported) await deps.reloadInstruments();
 
         deps.setStatus(
-            `Imported patterns ${patternsStats.written} (renamed ${patternsStats.renamed}, skipped ${patternsStats.skipped}), blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), user instruments ${userInstrumentsImported}, system instruments ${systemInstrumentsImported}, theme ${themeImported}`,
+            `Imported patterns ${patternsStats.written} (renamed ${patternsStats.renamed}, skipped ${patternsStats.skipped}), pattern metadata ${patternMetaImported}, blocks ${blocksStats.written} (renamed ${blocksStats.renamed}, skipped ${blocksStats.skipped}), arrangements ${arrangementsStats.written} (renamed ${arrangementsStats.renamed}, skipped ${arrangementsStats.skipped}), user instruments ${userInstrumentsImported}, system instruments ${systemInstrumentsImported}, theme ${themeImported}`,
             'success'
         );
         closeUploadProjectModal();
