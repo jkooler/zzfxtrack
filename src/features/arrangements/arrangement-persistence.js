@@ -51,7 +51,8 @@ export function getArrangementReadonly() {
 }
 
 export function canRecoverUnsavedForScope(scope) {
-    return true;
+    if (deps.isDemoMode()) return false;
+    return deps.normalizeScope(scope) !== 'system';
 }
 
 export function cloneArrangementState(value) {
