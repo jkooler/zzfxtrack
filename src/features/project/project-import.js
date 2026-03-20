@@ -46,24 +46,31 @@ export function configureProjectImport(options = {}) {
 }
 
 function parseInstrumentModuleContent(content) {
-    const readObject = (exportName) => {
-        const match = String(content || '').match(new RegExp(`export\\s+const\\s+${exportName}\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*;`));
-        if (!match) return {};
-        try {
-            // Parse generated app bundle objects without depending on module loading.
-            // eslint-disable-next-line no-new-func
-            return Function(`"use strict"; return (${match[1]});`)();
-        } catch (_e) {
-            return {};
-        }
-    };
-    return {
-        instrumentMapping: readObject('instrumentMapping'),
-        instruments: readObject('instruments'),
-        instrumentMonophonic: readObject('instrumentMonophonic'),
-        instrumentScope: readObject('instrumentScope'),
-        instrumentType: readObject('instrumentType'),
-    };
+    const source = String(content || '').trim();
+    if (!source) {
+        return {
+            instrumentMapping: {},
+            instruments: {},
+            instrumentMonophonic: {},
+            instrumentScope: {},
+            instrumentType: {},
+        };
+    }
+    try {
+        const executable = `${source.replace(/\bexport\s+const\b/g, 'const')}\nreturn {\n  instrumentMapping: typeof instrumentMapping !== 'undefined' ? instrumentMapping : {},\n  instruments: typeof instruments !== 'undefined' ? instruments : {},\n  instrumentMonophonic: typeof instrumentMonophonic !== 'undefined' ? instrumentMonophonic : {},\n  instrumentScope: typeof instrumentScope !== 'undefined' ? instrumentScope : {},\n  instrumentType: typeof instrumentType !== 'undefined' ? instrumentType : {},\n};`;
+        // Evaluate the generated instruments module source so object exports can
+        // reference earlier array constants like `zzfxtrack_pad_s`.
+        // eslint-disable-next-line no-new-func
+        return Function(`"use strict";\n${executable}`)();
+    } catch (_e) {
+        return {
+            instrumentMapping: {},
+            instruments: {},
+            instrumentMonophonic: {},
+            instrumentScope: {},
+            instrumentType: {},
+        };
+    }
 }
 
 async function buildUploadBundle(file) {
