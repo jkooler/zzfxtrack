@@ -591,6 +591,7 @@ configureArrangementWorkspace({
     updatePatternListVisualizer,
     createIcons,
     icons,
+    primePreviewAudioContext,
     getArrangementWorkspacePane: () => dom.arrangementWorkspacePane,
     isArrangementPreviewPlaying,
     getArrangementPreviewPlayingFilename: () => arrangementPreviewPlayingFilename,

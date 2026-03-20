@@ -47,6 +47,7 @@ let deps = {
     isPreviewPlaying: () => false,
     matchMedia: (query) => window.matchMedia(query),
     normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
+    primePreviewAudioContext: () => {},
     refreshZzFXTrackPreviewControlsVisibility: () => {},
     renameArrangement: () => {},
     renderTrackerWorkspace: () => {},
@@ -840,6 +841,7 @@ export function renderArrangementWorkspace() {
             deps.dispatchArrangementPreviewState({ playing: false });
             return;
         }
+        deps.primePreviewAudioContext();
         deps.stopAllPlaybackForSelectionChange();
         deps.dispatchArrangementPreview({
             arrangement: { name: appState.arrangementDraftState.name, arrangementState: deps.buildArrangementStatePayload() },
@@ -964,6 +966,7 @@ export function renderArrangementWorkspace() {
             }
             rowNumberEl.addEventListener('click', () => {
                 if (window.__arrRowDragJustEnded) return;
+                deps.primePreviewAudioContext();
                 deps.stopAllPlaybackForSelectionChange();
                 const payload = deps.buildArrangementStatePayload();
                 deps.dispatchArrangementPreview({
