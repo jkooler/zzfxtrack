@@ -101,6 +101,12 @@ export async function deleteArrangement(filename) {
     if (!confirmed) return;
 
     try {
+        if (deps.getArrangementPreviewPlayingFilename() === filename) {
+            deps.stopAllPlaybackForSelectionChange();
+            deps.setArrangementPreviewPlayingFilename(null);
+            deps.updateArrangementWorkspacePreviewButtonState();
+            deps.clearArrangementWorkspacePlayheadVisuals();
+        }
         await deps.deleteArrangementByFilename(filename, deps.getDeveloperModeHeaders());
         if (deps.getCurrentArrangementFilename() === filename) {
             deps.setCurrentArrangementFilename(null);

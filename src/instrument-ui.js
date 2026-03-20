@@ -1663,6 +1663,7 @@ function handleDrop(e) {
             renderInstrumentList();
             autoUpdateInstrumentsFile();
             reloadInstruments(); // Reload instruments into Strudel
+            document.dispatchEvent(new CustomEvent('instruments:updated', { detail: { structureChanged: true } }));
             console.log('[InstrumentUI] Reordered user instruments');
         });
     }
@@ -1955,6 +1956,7 @@ function handleCreateInstrument() {
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
+    document.dispatchEvent(new CustomEvent('instruments:updated', { detail: { structureChanged: true } }));
     
     // Open drawer to edit
     openDrawer(newInst.id);
@@ -2007,6 +2009,7 @@ function handleDeleteInstrument() {
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
+    document.dispatchEvent(new CustomEvent('instruments:updated', { detail: { structureChanged: true } }));
 }
 
 /**
