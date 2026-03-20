@@ -74,6 +74,14 @@ import { configureExportWav, exportArrangementWav, exportPatternWav } from './fe
 import { buildArrangementSourceFromApi, buildBlockSourceFromApi, parseArrangementSource, parseBlockSource } from './features/project/bundle-utils.js';
 import { configureProjectExport, installProjectExportHandlers } from './features/project/project-export.js';
 import { configureProjectImport, installProjectImportHandlers } from './features/project/project-import.js';
+import {
+    getHostedArrangementSourceOrNull,
+    getHostedBlockSourceOrNull,
+    getHostedPatternSourceOrNull,
+    listHostedArrangements,
+    listHostedBlocks,
+    listHostedPatternEntries,
+} from './features/project/hosted-resource-storage.js';
 
 // --- Features: settings ---
 import { configureAdvancedSettings, installAdvancedSettingsHandlers, openAdvancedSettingsModal } from './features/settings/advanced-settings.js';
@@ -127,7 +135,7 @@ const demoArrangementSourceByFile = new Map(
 );
 
 function getDemoArrangementDetailOrNull(filename) {
-    const source = demoArrangementSourceByFile.get(filename);
+    const source = getHostedArrangementSourceOrNull(filename) || demoArrangementSourceByFile.get(filename);
     if (!source) return null;
     const parsed = parseArrangementSource(source);
     return {
@@ -140,7 +148,7 @@ function getDemoArrangementDetailOrNull(filename) {
 }
 
 function getDemoBlockDetailOrNull(filename) {
-    const source = demoBlockSourceByFile.get(filename);
+    const source = getHostedBlockSourceOrNull(filename) || demoBlockSourceByFile.get(filename);
     if (!source) return null;
     const parsed = parseBlockSource(source);
     return {
@@ -154,11 +162,44 @@ function getDemoBlockDetailOrNull(filename) {
 }
 
 async function getArrangementDetailOrNullForCurrentMode(filename) {
-    return DEMO_MODE ? getDemoArrangementDetailOrNull(filename) : getArrangementOrNull(filename);
+    if (!DEMO_MODE) return getArrangementOrNull(filename);
+    return (await getArrangementOrNull(filename)) || getDemoArrangementDetailOrNull(filename);
 }
 
 async function getBlockDetailOrNullForCurrentMode(filename) {
-    return DEMO_MODE ? getDemoBlockDetailOrNull(filename) : getBlockDetailOrNull(filename);
+    if (!DEMO_MODE) return getBlockDetailOrNull(filename);
+    return (await getBlockDetailOrNull(filename)) || getDemoBlockDetailOrNull(filename);
+}
+
+function getDemoPatternSourceForCurrentMode(filename) {
+    return getHostedPatternSourceOrNull(filename) || demoPatternSourceByFile.get(filename) || '';
+}
+
+function getCombinedDemoPatternSourceByFile() {
+    const combined = new Map(demoPatternSourceByFile);
+    listHostedPatternEntries().forEach((entry) => {
+        const source = getHostedPatternSourceOrNull(entry.filename);
+        if (typeof source === 'string') combined.set(entry.filename, source);
+    });
+    return combined;
+}
+
+function getCombinedDemoBlockSourceByFile() {
+    const combined = new Map(demoBlockSourceByFile);
+    listHostedBlocks(parseBlockSource).forEach((entry) => {
+        const source = getHostedBlockSourceOrNull(entry.filename);
+        if (typeof source === 'string') combined.set(entry.filename, source);
+    });
+    return combined;
+}
+
+function getCombinedDemoArrangementSourceByFile() {
+    const combined = new Map(demoArrangementSourceByFile);
+    listHostedArrangements(parseArrangementSource).forEach((entry) => {
+        const source = getHostedArrangementSourceOrNull(entry.filename);
+        if (typeof source === 'string') combined.set(entry.filename, source);
+    });
+    return combined;
 }
 
 // --- Global State ---
@@ -281,7 +322,7 @@ configurePatternMeta({
     setCurrentPatternScope: (scope) => { appState.currentPatternScope = scope; },
     setCurrentPatternMetadata: (metadata) => { appState.currentPatternMetadata = metadata; },
     updatePatternNameReadOnly: () => {
-        dom.patternNameInput.readOnly = DEMO_MODE;
+        dom.patternNameInput.readOnly = DEMO_MODE && appState.currentPatternScope === 'system';
     },
     sanitizePlaybackMixSettings,
     applyPlaybackMixSettingsToInputs,
@@ -370,7 +411,7 @@ configurePatternController({
     getDeveloperModeHeaders,
     getPatternSource,
     fileToEditor,
-    getDemoPatternSource: (filename) => demoPatternSourceByFile.get(filename),
+    getDemoPatternSource: getDemoPatternSourceForCurrentMode,
     getUnsavedPatternCode: (filename) => localStorage.getItem(`unsaved_${filename}`),
     clearUnsavedPatternCode: (filename) => localStorage.removeItem(`unsaved_${filename}`),
     saveCurrentPattern,
@@ -654,7 +695,7 @@ configureArrangementExportContext({
     buildArrangementStatePayload,
     getBlocksLibraryCache: () => appState.blocksLibraryCache,
     isDemoMode: () => DEMO_MODE,
-    getDemoBlockSource: (filename) => demoBlockSourceByFile.get(filename),
+    getDemoBlockSource: (filename) => getHostedBlockSourceOrNull(filename) || demoBlockSourceByFile.get(filename),
     parseBlockSource,
     normalizeScope,
     getBlockDetailOrNull: getBlockDetailOrNullForCurrentMode,
@@ -940,9 +981,9 @@ configureExportExecution({
 configureProjectExport({
     getDom: () => dom,
     isDemoMode: () => DEMO_MODE,
-    getDemoPatternSourceByFile: () => demoPatternSourceByFile,
-    getDemoBlockSourceByFile: () => demoBlockSourceByFile,
-    getDemoArrangementSourceByFile: () => demoArrangementSourceByFile,
+    getDemoPatternSourceByFile: getCombinedDemoPatternSourceByFile,
+    getDemoBlockSourceByFile: getCombinedDemoBlockSourceByFile,
+    getDemoArrangementSourceByFile: getCombinedDemoArrangementSourceByFile,
     getGeneratedUserInstrumentsContent: generateUserInstrumentsFile,
     getGeneratedSystemInstrumentsContent: generateSystemInstrumentsFile,
     normalizePatternEntries,
@@ -968,9 +1009,9 @@ configureProjectExport({
 configureProjectImport({
     getDom: () => dom,
     isDemoMode: () => DEMO_MODE,
-    getDemoPatternSourceByFile: () => demoPatternSourceByFile,
-    getDemoBlockSourceByFile: () => demoBlockSourceByFile,
-    getDemoArrangementSourceByFile: () => demoArrangementSourceByFile,
+    getDemoPatternSourceByFile: getCombinedDemoPatternSourceByFile,
+    getDemoBlockSourceByFile: getCombinedDemoBlockSourceByFile,
+    getDemoArrangementSourceByFile: getCombinedDemoArrangementSourceByFile,
     listPatterns,
     normalizePatternEntries,
     listBlocksOrEmpty,
@@ -986,6 +1027,8 @@ configureProjectImport({
     updateSystemInstrumentsSourceFile,
     reloadInstruments,
     refreshPatternList,
+    refreshBlocksLibrary,
+    refreshArrangementList,
     setStatus,
     getBundleManifestName: () => UPLOAD_BUNDLE_MANIFEST_NAME,
     getBundleKind: () => UPLOAD_BUNDLE_KIND,
@@ -1013,7 +1056,7 @@ configureSystemSettings({
     },
     setPatternNameReadOnlyForDevMode: () => {
         if (dom.patternNameInput) {
-            dom.patternNameInput.readOnly = DEMO_MODE;
+            dom.patternNameInput.readOnly = DEMO_MODE && appState.currentPatternScope === 'system';
         }
     },
     updateAdvancedSettingsButtonsVisibility,
@@ -1044,7 +1087,7 @@ configureAdvancedSettings({
     setCurrentPatternScope: (scope) => { appState.currentPatternScope = scope; },
     setCurrentPatternMetadata: (metadata) => { appState.currentPatternMetadata = metadata; },
     setPatternNameReadOnly: () => {
-        dom.patternNameInput.readOnly = DEMO_MODE;
+        dom.patternNameInput.readOnly = DEMO_MODE && appState.currentPatternScope === 'system';
     },
     refreshPatternList,
     updateInstrument,
@@ -1218,9 +1261,6 @@ async function init() {
     await refreshPatternList();
     await refreshArrangementList();
     await refreshBlocksLibrary();
-    if (DEMO_MODE && dom.newPatternBtn) {
-        dom.newPatternBtn.style.display = 'none';
-    }
     if (dom.demoModeBadge) {
         dom.demoModeBadge.hidden = !DEMO_MODE;
         dom.demoModeBadge.style.display = DEMO_MODE ? 'inline-flex' : 'none';
@@ -1321,12 +1361,10 @@ function syncThemeColors() {
 }
 
 registerBeforeUnloadConfirmer(() => {
-    if (DEMO_MODE) return false;
     return Boolean(autoSaveTimeout && appState.currentPatternFilename);
 });
 
 registerBeforeUnloadFlusher(() => {
-    if (DEMO_MODE) return;
     if (!(autoSaveTimeout && appState.currentPatternFilename)) return;
 
     clearTimeout(autoSaveTimeout);
@@ -1338,6 +1376,15 @@ registerBeforeUnloadFlusher(() => {
     // Use sendBeacon for reliable delivery even as page closes.
     // Note: sendBeacon cannot send custom headers, so for developer mode (which needs a header)
     // we use fetch({ keepalive: true }) instead.
+    if (DEMO_MODE) {
+        try {
+            localStorage.setItem(`unsaved_${appState.currentPatternFilename}`, editorCode);
+        } catch (_e) {
+            // Ignore storage failures.
+        }
+        return;
+    }
+
     if (appState.currentPatternScope === 'system' && isDeveloperModeEnabled()) {
         savePatternSourceKeepalive(appState.currentPatternFilename, fileCode, getDeveloperModeHeaders()).catch(() => {});
     } else {
@@ -1353,14 +1400,11 @@ registerBeforeUnloadFlusher(() => {
 });
 
 registerBeforeUnloadConfirmer(() => {
-    if (DEMO_MODE) return false;
     if (arrangementAutoSaveTimeout && appState.currentArrangementFilename && !getArrangementReadonly()) return true;
     return Boolean(trackerAutoSaveTimeout && pendingTrackerSavePayload);
 });
 
 registerBeforeUnloadFlusher(() => {
-    if (DEMO_MODE) return;
-
     if (arrangementAutoSaveTimeout && appState.currentArrangementFilename && !getArrangementReadonly()) {
         clearTimeout(arrangementAutoSaveTimeout);
         arrangementAutoSaveTimeout = null;
@@ -1370,7 +1414,11 @@ registerBeforeUnloadFlusher(() => {
             arrangementState,
             scope: appState.currentArrangementScope,
         };
-        saveArrangementKeepalive(appState.currentArrangementFilename, payload, getDeveloperModeHeaders()).catch(() => {});
+        if (DEMO_MODE) {
+            saveArrangement(appState.currentArrangementFilename, payload, getDeveloperModeHeaders()).catch(() => {});
+        } else {
+            saveArrangementKeepalive(appState.currentArrangementFilename, payload, getDeveloperModeHeaders()).catch(() => {});
+        }
         try {
             localStorage.setItem(`unsaved_arrangement_${appState.currentArrangementFilename}`, JSON.stringify(arrangementState));
         } catch (_e) {
@@ -1383,7 +1431,11 @@ registerBeforeUnloadFlusher(() => {
         trackerAutoSaveTimeout = null;
         const payload = pendingTrackerSavePayload;
         pendingTrackerSavePayload = null;
-        saveBlockDetailKeepalive(payload.filename, payload, getDeveloperModeHeaders()).catch(() => {});
+        if (DEMO_MODE) {
+            saveBlockDetail(payload.filename, payload, getDeveloperModeHeaders()).catch(() => {});
+        } else {
+            saveBlockDetailKeepalive(payload.filename, payload, getDeveloperModeHeaders()).catch(() => {});
+        }
         try {
             localStorage.setItem(`unsaved_block_${payload.filename}`, JSON.stringify(payload.trackerState || {}));
         } catch (_e) {
@@ -1521,7 +1573,8 @@ async function updateBlockScope(filename, scope) {
 }
 
 async function updateArrangementScope(filename, scope) {
-    const detail = await getArrangement(filename);
+    const detail = await getArrangementDetailOrNullForCurrentMode(filename);
+    if (!detail) throw new Error('Failed to load arrangement details');
     await saveArrangement(filename, {
         name: detail?.name || filename.replace(/\.js$/, ''),
         arrangementState: detail?.arrangementState ?? null,
@@ -1800,14 +1853,14 @@ let originalPatternName = '';
 // Input: do not save; draft is the input value. Save/rename only on blur (or Enter → blur).
 dom.patternNameInput.addEventListener('input', () => {
     if (!appState.currentPatternFilename) return;
-    if (DEMO_MODE) return;
+    if (DEMO_MODE && appState.currentPatternScope === 'system') return;
     // No-op: name is saved on blur only.
 });
 
 // Save/rename when leaving the input (only renames if name actually changed).
 dom.patternNameInput.addEventListener('blur', () => {
     if (!appState.currentPatternFilename) return;
-    if (DEMO_MODE) return;
+    if (DEMO_MODE && appState.currentPatternScope === 'system') return;
     renamePattern({ quiet: true });
 });
 
@@ -1833,8 +1886,8 @@ installExportPreviewHandlers();
 document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        if (DEMO_MODE) {
-            setStatus('Demo mode: save is disabled', 'normal');
+        if (DEMO_MODE && appState.currentPatternScope === 'system') {
+            setStatus('System patterns are read-only in the hosted version.', 'normal');
         } else {
             saveCurrentPattern();
         }

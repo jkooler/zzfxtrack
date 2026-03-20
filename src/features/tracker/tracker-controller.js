@@ -41,9 +41,10 @@ export function configureTrackerController(options = {}) {
 }
 
 export function scheduleTrackerAutoSave({ filename, trackerState, name: nameOverride, pattern: patternOverride, immediate }) {
-    if (!filename || !trackerState || deps.isDemoMode()) return;
+    if (!filename || !trackerState) return;
     const block = deps.getBlockByFilename(filename);
     if (!block) return;
+    if (deps.isDemoMode() && deps.normalizeScope(block.scope) === 'system') return;
 
     const nextName = nameOverride != null
         ? String(nameOverride).trim() || block.name || filename.replace(/\.js$/i, '')

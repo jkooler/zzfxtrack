@@ -90,7 +90,7 @@ function setInstrumentTypeInputs(dom, value = 'synth') {
     const normalized = normalizeInstrumentType(value);
     dom.advancedSettingsModal?.querySelectorAll('input[name="advancedSettingsInstrumentType"]').forEach((input) => {
         input.checked = input.value === normalized;
-        input.disabled = deps.isDemoMode();
+        input.disabled = false;
     });
 }
 
@@ -121,7 +121,7 @@ export function openAdvancedSettingsModal(context) {
     }
     if (dom.advancedSettingsSystemToggle) {
         dom.advancedSettingsSystemToggle.checked = pendingAdvancedSettingsContext.scope === 'system';
-        dom.advancedSettingsSystemToggle.disabled = deps.isDemoMode();
+        dom.advancedSettingsSystemToggle.disabled = false;
     }
     if (dom.advancedSettingsSystemLockIcon) {
         dom.advancedSettingsSystemLockIcon.classList.add('hidden');
@@ -140,7 +140,7 @@ export function openAdvancedSettingsModal(context) {
     }
     setArrangementMetadataInputs(dom, pendingAdvancedSettingsContext.metadata);
     setInstrumentTypeInputs(dom, pendingAdvancedSettingsContext.instrumentType);
-    if (dom.saveAdvancedSettingsBtn) dom.saveAdvancedSettingsBtn.disabled = deps.isDemoMode();
+    if (dom.saveAdvancedSettingsBtn) dom.saveAdvancedSettingsBtn.disabled = false;
     dom.advancedSettingsModal?.querySelectorAll('details').forEach((el) => {
         el.open = false;
     });
@@ -156,11 +156,6 @@ export function closeAdvancedSettingsModal() {
 async function applyAdvancedSettings() {
     const dom = deps.getDom();
     if (!pendingAdvancedSettingsContext) return;
-    if (deps.isDemoMode()) {
-        deps.setStatus('Demo mode: settings are disabled', 'normal');
-        closeAdvancedSettingsModal();
-        return;
-    }
     const nextScope = dom.advancedSettingsSystemToggle?.checked ? 'system' : 'user';
     const context = pendingAdvancedSettingsContext;
     const nextInstrumentType = context.type === 'instrument'

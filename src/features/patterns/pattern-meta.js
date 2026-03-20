@@ -73,7 +73,6 @@ export async function updatePatternAdvancedSettings(filename, { scope, metadata 
 
 export async function loadPatternMeta(filename) {
     metaDeps.setCurrentPatternMetadata(normalizePatternMetadata());
-    if (metaDeps.isDemoMode()) return;
     try {
         const data = await getPatternMetaOrNull(filename);
         metaDeps.setCurrentPatternMetadata(normalizePatternMetadata(data?.metadata));
@@ -102,7 +101,6 @@ export async function loadPatternMeta(filename) {
 }
 
 export async function savePatternMeta() {
-    if (metaDeps.isDemoMode()) return;
     const filename = metaDeps.getCurrentPatternFilename();
     if (!filename) return;
 

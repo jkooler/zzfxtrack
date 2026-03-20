@@ -4,6 +4,7 @@
  */
 
 import { confirmDialog } from '../../dialog.js';
+import { getBlockDetailOrNull, getPatternSource, listBlocksOrEmpty, listPatterns, savePatternSource } from '../../app/api.js';
 
 let getDeveloperModeHeaders = () => ({});
 let refreshPatternList = async () => {};
@@ -68,18 +69,13 @@ export function configureInstrumentReferenceSync(options = {}) {
  * Only touches user-scope files. Shows confirmation before bulk edit.
  */
 export async function updateInstrumentReferencesInPatternsAndBlocks(oldAlias, newAlias) {
-    if (isDemoMode()) return;
     if (!oldAlias || !newAlias || oldAlias === newAlias) return;
 
     try {
-        const [patternsRes, blocksRes] = await Promise.all([
-            fetch('/api/patterns'),
-            fetch('/api/blocks'),
+        const [patternsPayload, blocksPayload] = await Promise.all([
+            listPatterns().catch(() => []),
+            listBlocksOrEmpty().catch(() => []),
         ]);
-        if (!patternsRes.ok || !blocksRes.ok) return;
-
-        const patternsPayload = await patternsRes.json();
-        const blocksPayload = await blocksRes.json();
         const patternEntries = normalizePatternEntries(patternsPayload).filter((e) => normalizeScope(e?.scope) !== 'system');
         const blockItems = (Array.isArray(blocksPayload) ? blocksPayload : []).filter((b) => normalizeScope(b?.scope) !== 'system');
 
@@ -89,9 +85,8 @@ export async function updateInstrumentReferencesInPatternsAndBlocks(oldAlias, ne
         for (const entry of patternEntries) {
             const filename = entry?.filename;
             if (!filename) continue;
-            const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`);
-            if (!res.ok) continue;
-            const content = await res.text();
+            const content = await getPatternSource(filename).catch(() => '');
+            if (!content) continue;
             if (content.includes(`"${oldAlias}"`) || content.includes(`'${oldAlias}'`)) {
                 patternsToUpdate.push({ filename, content });
             }
@@ -100,9 +95,8 @@ export async function updateInstrumentReferencesInPatternsAndBlocks(oldAlias, ne
         for (const block of blockItems) {
             const filename = block?.filename;
             if (!filename) continue;
-            const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
-            if (!res.ok) continue;
-            const detail = await res.json();
+            const detail = await getBlockDetailOrNull(filename).catch(() => null);
+            if (!detail) continue;
             const pattern = detail?.pattern || '';
             const channelInstruments = Array.isArray(detail?.trackerState?.channelInstruments) ? detail.trackerState.channelInstruments : [];
             const patternHasAlias = pattern.includes(`"${oldAlias}"`) || pattern.includes(`'${oldAlias}'`);
@@ -125,12 +119,11 @@ export async function updateInstrumentReferencesInPatternsAndBlocks(oldAlias, ne
 
         for (const { filename, content } of patternsToUpdate) {
             const updated = replaceAliasInCode(content, oldAlias, newAlias);
-            const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`, {
-                method: 'POST',
-                headers: getDeveloperModeHeaders(),
-                body: updated,
-            });
-            if (!res.ok) console.warn('[InstrumentRefSync] Failed to update pattern:', filename);
+            try {
+                await savePatternSource(filename, updated, getDeveloperModeHeaders());
+            } catch (_e) {
+                console.warn('[InstrumentRefSync] Failed to update pattern:', filename);
+            }
         }
 
         const { updateBlock } = await import('../../blocks.js');

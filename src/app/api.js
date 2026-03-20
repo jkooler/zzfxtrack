@@ -3,11 +3,35 @@
  * Purpose: Central API wrapper layer for patterns, blocks, arrangements, and export persistence.
  */
 
+import {
+    deleteHostedArrangement,
+    deleteHostedBlock,
+    deleteHostedPattern,
+    getHostedArrangementDetailOrNull,
+    getHostedBlockDetailOrNull,
+    getHostedPatternMetaOrNull,
+    getHostedPatternSourceOrNull,
+    listHostedArrangements,
+    listHostedBlocks,
+    listHostedPatternEntries,
+    renameHostedArrangement,
+    renameHostedBlock,
+    renameHostedPattern,
+    saveHostedArrangementDetail,
+    saveHostedBlockDetail,
+    saveHostedPatternMetaRecord,
+    saveHostedPatternSource,
+} from '../features/project/hosted-resource-storage.js';
+import { buildArrangementSourceFromApi, buildBlockSourceFromApi, parseArrangementSource, parseBlockSource } from '../features/project/bundle-utils.js';
+
+const DEMO_MODE = import.meta.env.MODE === 'demo';
+
 function buildApiError(action, response) {
     return new Error(`${action} (HTTP ${response.status})`);
 }
 
 export async function listPatterns() {
+    if (DEMO_MODE) return listHostedPatternEntries();
     const res = await fetch('/api/patterns');
     if (!res.ok) throw buildApiError('Failed to list patterns', res);
     const payload = await res.json();
@@ -15,6 +39,11 @@ export async function listPatterns() {
 }
 
 export async function getPatternSource(filename) {
+    if (DEMO_MODE) {
+        const source = getHostedPatternSourceOrNull(filename);
+        if (typeof source !== 'string') throw new Error('Failed to load pattern');
+        return source;
+    }
     const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`);
     if (!res.ok) throw buildApiError('Failed to load pattern', res);
     return await res.text();
@@ -29,6 +58,10 @@ export async function getPatternSourceOrEmpty(filename) {
 }
 
 export async function savePatternSource(filename, content, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        saveHostedPatternSource(filename, content);
+        return;
+    }
     const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`, {
         method: 'POST',
         headers: { ...extraHeaders },
@@ -38,6 +71,10 @@ export async function savePatternSource(filename, content, extraHeaders = {}) {
 }
 
 export async function savePatternSourceKeepalive(filename, content, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        saveHostedPatternSource(filename, content);
+        return;
+    }
     const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`, {
         method: 'POST',
         headers: { ...extraHeaders },
@@ -48,11 +85,19 @@ export async function savePatternSourceKeepalive(filename, content, extraHeaders
 }
 
 export function sendPatternSourceBeacon(filename, content) {
+    if (DEMO_MODE) {
+        saveHostedPatternSource(filename, content);
+        return true;
+    }
     const blob = new Blob([content], { type: 'text/plain' });
     return navigator.sendBeacon(`/api/pattern/${encodeURIComponent(filename)}`, blob);
 }
 
 export async function renamePatternFile(oldName, newName, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        if (!renameHostedPattern(oldName, newName)) throw new Error('Failed to rename pattern');
+        return;
+    }
     const res = await fetch('/api/rename-pattern', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...extraHeaders },
@@ -62,6 +107,10 @@ export async function renamePatternFile(oldName, newName, extraHeaders = {}) {
 }
 
 export async function deletePatternByFilename(filename, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        if (!deleteHostedPattern(filename)) throw new Error('Failed to delete pattern');
+        return;
+    }
     const res = await fetch(`/api/pattern/${encodeURIComponent(filename)}`, {
         method: 'DELETE',
         headers: { ...extraHeaders },
@@ -70,12 +119,17 @@ export async function deletePatternByFilename(filename, extraHeaders = {}) {
 }
 
 export async function getPatternMetaOrNull(filename) {
+    if (DEMO_MODE) return getHostedPatternMetaOrNull(filename);
     const res = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
     if (!res.ok) return null;
     return await res.json();
 }
 
 export async function savePatternMetaRecord(filename, payload) {
+    if (DEMO_MODE) {
+        saveHostedPatternMetaRecord(filename, payload);
+        return;
+    }
     const res = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,6 +139,7 @@ export async function savePatternMetaRecord(filename, payload) {
 }
 
 export async function listArrangements() {
+    if (DEMO_MODE) return listHostedArrangements(parseArrangementSource);
     const res = await fetch('/api/arrangements');
     if (!res.ok) throw buildApiError('Failed to list arrangements', res);
     const payload = await res.json();
@@ -101,6 +156,7 @@ export async function listArrangementsOrEmpty() {
 
 export async function getArrangementOrNull(filename) {
     if (!filename) return null;
+    if (DEMO_MODE) return getHostedArrangementDetailOrNull(filename, parseArrangementSource);
     const res = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`);
     if (!res.ok) return null;
     return await res.json();
@@ -113,6 +169,10 @@ export async function getArrangement(filename) {
 }
 
 export async function createArrangement(payload) {
+    if (DEMO_MODE) {
+        saveHostedArrangementDetail(payload?.filename, payload, buildArrangementSourceFromApi);
+        return;
+    }
     const res = await fetch('/api/arrangements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,6 +182,10 @@ export async function createArrangement(payload) {
 }
 
 export async function saveArrangement(filename, payload, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        saveHostedArrangementDetail(filename, payload, buildArrangementSourceFromApi);
+        return;
+    }
     const res = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...extraHeaders },
@@ -131,6 +195,10 @@ export async function saveArrangement(filename, payload, extraHeaders = {}) {
 }
 
 export async function saveArrangementKeepalive(filename, payload, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        saveHostedArrangementDetail(filename, payload, buildArrangementSourceFromApi);
+        return;
+    }
     const res = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...extraHeaders },
@@ -141,6 +209,10 @@ export async function saveArrangementKeepalive(filename, payload, extraHeaders =
 }
 
 export async function deleteArrangementByFilename(filename, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        if (!deleteHostedArrangement(filename)) throw new Error('Failed to delete arrangement');
+        return;
+    }
     const res = await fetch(`/api/arrangements/${encodeURIComponent(filename)}`, {
         method: 'DELETE',
         headers: { ...extraHeaders },
@@ -149,6 +221,10 @@ export async function deleteArrangementByFilename(filename, extraHeaders = {}) {
 }
 
 export async function renameArrangementFile(oldName, newName, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        if (!renameHostedArrangement(oldName, newName)) throw new Error('Failed to rename arrangement');
+        return;
+    }
     const res = await fetch('/api/rename-arrangement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...extraHeaders },
@@ -166,6 +242,7 @@ export async function listBlocksOrEmpty() {
 }
 
 export async function listBlocks() {
+    if (DEMO_MODE) return listHostedBlocks(parseBlockSource);
     const res = await fetch('/api/blocks');
     if (!res.ok) throw buildApiError('Failed to list blocks', res);
     const payload = await res.json();
@@ -174,6 +251,7 @@ export async function listBlocks() {
 
 export async function getBlockDetailOrNull(filename) {
     if (!filename) return null;
+    if (DEMO_MODE) return getHostedBlockDetailOrNull(filename, parseBlockSource);
     const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`);
     if (!res.ok) return null;
     return await res.json();
@@ -186,6 +264,10 @@ export async function getBlockDetail(filename) {
 }
 
 export async function saveBlockDetail(filename, payload, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        saveHostedBlockDetail(filename, payload, buildBlockSourceFromApi);
+        return;
+    }
     const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...extraHeaders },
@@ -195,6 +277,10 @@ export async function saveBlockDetail(filename, payload, extraHeaders = {}) {
 }
 
 export async function saveBlockDetailKeepalive(filename, payload, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        saveHostedBlockDetail(filename, payload, buildBlockSourceFromApi);
+        return;
+    }
     const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...extraHeaders },
@@ -205,6 +291,10 @@ export async function saveBlockDetailKeepalive(filename, payload, extraHeaders =
 }
 
 export async function deleteBlockByFilename(filename, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        if (!deleteHostedBlock(filename)) throw new Error('Failed to delete block');
+        return;
+    }
     const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
         method: 'DELETE',
         headers: { ...extraHeaders },
@@ -213,6 +303,19 @@ export async function deleteBlockByFilename(filename, extraHeaders = {}) {
 }
 
 export async function deleteBlockByFilenameWithConflictInfo(filename, extraHeaders = {}) {
+    if (DEMO_MODE) {
+        const arrangements = listHostedArrangements(parseArrangementSource);
+        const usedBy = arrangements.filter((entry) =>
+            Array.isArray(entry?.arrangementState?.rows)
+            && entry.arrangementState.rows.some((row) => Array.isArray(row?.blocks) && row.blocks.includes(filename))
+        );
+        if (usedBy.length) {
+            return { ok: false, status: 409, usedBy };
+        }
+        return deleteHostedBlock(filename)
+            ? { ok: true, status: 200, usedBy: [] }
+            : { ok: false, status: 404, usedBy: [] };
+    }
     const res = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
         method: 'DELETE',
         headers: { ...extraHeaders },
@@ -266,6 +369,10 @@ export async function updateSystemInstrumentsSourceFile(content) {
 }
 
 export async function getPatternMetaTextOrNull(filename) {
+    if (DEMO_MODE) {
+        const payload = getHostedPatternMetaOrNull(filename);
+        return payload ? JSON.stringify(payload, null, 2) : null;
+    }
     const res = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
     if (!res.ok) return null;
     return await res.text();

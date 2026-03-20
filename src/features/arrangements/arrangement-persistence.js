@@ -47,11 +47,12 @@ export function configureArrangementPersistence(options = {}) {
 }
 
 export function getArrangementReadonly() {
-    return deps.isDemoMode();
+    return deps.isDemoMode()
+        ? deps.normalizeScope(deps.getCurrentArrangementScope()) === 'system'
+        : false;
 }
 
 export function canRecoverUnsavedForScope(scope) {
-    if (deps.isDemoMode()) return false;
     return deps.normalizeScope(scope) !== 'system';
 }
 

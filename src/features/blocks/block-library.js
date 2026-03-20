@@ -249,19 +249,30 @@ export async function refreshBlocksLibrary() {
                 .filter((block) => block?.filename)
                 .map((block) => [block.filename, block])
         );
+        const listedBlocks = await deps.listBlocksOrEmpty();
+        const userBlocks = Array.isArray(listedBlocks) ? listedBlocks : [];
         const list = deps.isDemoMode()
-            ? deps.getDemoBlockSourceKeys().map((filename) => {
-                const parsed = deps.parseBlockSource(deps.getDemoBlockSource(filename) || '');
-                return {
-                    filename,
-                    name: parsed?.name || decodeURIComponent(filename.replace(/\.js$/i, '')),
-                    description: parsed?.description || '',
-                    pattern: parsed?.pattern || '',
-                    scope: deps.normalizeScope(parsed?.scope),
-                    trackerState: parsed?.trackerState ?? null,
-                };
-            })
-            : await deps.listBlocksOrEmpty();
+            ? (() => {
+                const merged = new Map(
+                    userBlocks
+                        .filter((block) => block?.filename)
+                        .map((block) => [block.filename, block])
+                );
+                deps.getDemoBlockSourceKeys().forEach((filename) => {
+                    if (merged.has(filename)) return;
+                    const parsed = deps.parseBlockSource(deps.getDemoBlockSource(filename) || '');
+                    merged.set(filename, {
+                        filename,
+                        name: parsed?.name || decodeURIComponent(filename.replace(/\.js$/i, '')),
+                        description: parsed?.description || '',
+                        pattern: parsed?.pattern || '',
+                        scope: deps.normalizeScope(parsed?.scope),
+                        trackerState: parsed?.trackerState ?? null,
+                    });
+                });
+                return Array.from(merged.values());
+            })()
+            : userBlocks;
         const nextCache = (Array.isArray(list) ? list : []).map((block) => {
             const previous = previousBlocksByFilename.get(block?.filename);
             if (!previous) return block;

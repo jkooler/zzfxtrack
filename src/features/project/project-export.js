@@ -125,15 +125,13 @@ export async function downloadProjectBundle({ identifier = '' } = {}) {
             zip.file(`patterns/${decodeURIComponent(filename)}`, fileCode);
             downloadedPatterns++;
 
-            if (deps.isDemoMode()) {
+            const metaText = await deps.getPatternMetaTextOrNull(filename);
+            if (metaText) {
+                const metaFilename = filename.replace(/\.js$/i, '.meta.json');
+                zip.file(`patterns/${decodeURIComponent(metaFilename)}`, metaText);
+            } else if (deps.isDemoMode()) {
                 const metaFilename = filename.replace(/\.js$/i, '.meta.json');
                 zip.file(`patterns/${decodeURIComponent(metaFilename)}`, JSON.stringify({ scope: 'system' }, null, 2));
-            } else {
-                const metaText = await deps.getPatternMetaTextOrNull(filename);
-                if (metaText) {
-                    const metaFilename = filename.replace(/\.js$/i, '.meta.json');
-                    zip.file(`patterns/${decodeURIComponent(metaFilename)}`, metaText);
-                }
             }
         }
 

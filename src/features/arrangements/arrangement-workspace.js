@@ -967,7 +967,11 @@ export function renderArrangementWorkspace() {
             rowNumberEl.addEventListener('click', () => {
                 if (window.__arrRowDragJustEnded) return;
                 deps.primePreviewAudioContext();
-                deps.stopAllPlaybackForSelectionChange();
+                const replayingCurrentArrangement = deps.isArrangementPreviewPlaying()
+                    && deps.getArrangementPreviewPlayingFilename() === deps.getCurrentArrangementFilename();
+                if (!replayingCurrentArrangement) {
+                    deps.stopAllPlaybackForSelectionChange();
+                }
                 const payload = deps.buildArrangementStatePayload();
                 deps.dispatchArrangementPreview({
                     arrangement: { name: deps.getAppState().arrangementDraftState.name, arrangementState: payload },

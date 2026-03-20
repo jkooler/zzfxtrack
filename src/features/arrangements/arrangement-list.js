@@ -228,16 +228,22 @@ export async function refreshArrangementList() {
             };
             return padNum(a.filename || '').localeCompare(padNum(b.filename || ''));
         };
+        const userEntries = normalizeArrangementEntries(await deps.listArrangements());
         const entries = deps.isDemoMode()
-            ? deps.getDemoArrangementFiles()
-                .map((filename) => ({ filename, name: decodeURIComponent(filename.replace(/\.js$/i, '')), scope: 'system' }))
-                .sort(sortByLeadingNumber)
-            : await (async () => {
-                const payload = await deps.listArrangements();
-                const normalized = normalizeArrangementEntries(payload);
-                normalized.sort(sortByLeadingNumber);
-                return normalized;
-            })();
+            ? (() => {
+                const merged = new Map(userEntries.map((entry) => [entry.filename, entry]));
+                deps.getDemoArrangementFiles().forEach((filename) => {
+                    if (!merged.has(filename)) {
+                        merged.set(filename, {
+                            filename,
+                            name: decodeURIComponent(filename.replace(/\.js$/i, '')),
+                            scope: 'system',
+                        });
+                    }
+                });
+                return Array.from(merged.values()).sort(sortByLeadingNumber);
+            })()
+            : userEntries.sort(sortByLeadingNumber);
 
         deps.setEntriesCache(entries);
         arrangementList.innerHTML = '';
@@ -282,7 +288,7 @@ export async function refreshArrangementList() {
 
             items.forEach((entry) => {
                 const isSystem = deps.normalizeScope(entry.scope) === 'system';
-                const canDelete = !deps.isDemoMode() && (!isSystem || deps.isDeveloperModeEnabled());
+                const canDelete = !isSystem || deps.isDeveloperModeEnabled();
                 const displayName = decodeURIComponent((entry.filename || '').replace(/\.js$/i, ''));
                 const deleteActionMarkup = canDelete
                     ? `<button class="sidebar-del-btn" title="Delete ${deps.escapeHtml(displayName)}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`

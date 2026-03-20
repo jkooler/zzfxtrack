@@ -689,6 +689,44 @@ export function migrateFromFile(importedData) {
   return userOnly;
 }
 
+export function migrateSystemFromFile(importedData) {
+  console.log("[InstrumentManager] Migrating system instruments from file");
+
+  const monophonicFromFile = importedData?.instrumentMonophonic || {};
+  const typeFromFile = importedData?.instrumentType || {};
+  const nextSystemRecords = [];
+
+  if (importedData?.instrumentMapping) {
+    Object.entries(importedData.instrumentMapping).forEach(([alias], idx) => {
+      let params = importedData.instruments?.[alias];
+      if (!params && importedData.instruments) {
+        params =
+          importedData.instruments[alias.toLowerCase()] ||
+          importedData.instruments[alias.toUpperCase()];
+      }
+      if (!params || !Array.isArray(params)) return;
+
+      const monoFromFile =
+        monophonicFromFile[alias] ?? monophonicFromFile[alias.toLowerCase()] ?? monophonicFromFile[alias.toUpperCase()];
+      const fileType = typeFromFile[alias] ?? typeFromFile[alias.toLowerCase()] ?? typeFromFile[alias.toUpperCase()];
+
+      nextSystemRecords.push({
+        exportName: aliasToExportName(alias),
+        strudelAlias: alias,
+        channel: idx,
+        params,
+        monophonic: parseMonophonicFlag(monoFromFile, false),
+        type: normalizeInstrumentType(fileType),
+        scope: "system",
+      });
+    });
+  }
+
+  saveSystemInstrumentStore(nextSystemRecords);
+  console.log("[InstrumentManager] Migrated", nextSystemRecords.length, "system instruments");
+  return getSystemInstrumentRecords();
+}
+
 /**
  * Check if migration is needed (no user instruments in localStorage)
  * @returns {boolean}

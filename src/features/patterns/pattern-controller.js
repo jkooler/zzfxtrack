@@ -13,10 +13,10 @@ export function configurePatternController(config) {
 
 export async function saveCurrentPattern() {
     if (!deps) throw new Error('Pattern controller not configured');
-    if (deps.isDemoMode()) return;
 
     const currentPatternFilename = deps.getCurrentPatternFilename();
     if (!currentPatternFilename) return;
+    if (deps.isDemoMode() && deps.getCurrentPatternScope() === 'system') return;
 
     try {
         const editorCode = deps.getEditorCode();
@@ -29,10 +29,6 @@ export async function saveCurrentPattern() {
 
 export async function createNewPattern(name) {
     if (!deps) throw new Error('Pattern controller not configured');
-    if (deps.isDemoMode()) {
-        deps.setStatus('Demo mode: creating patterns is disabled', 'normal');
-        return;
-    }
 
     const normalizedBase = normalizePatternBaseName(name);
     if (!normalizedBase) {
@@ -43,6 +39,10 @@ export async function createNewPattern(name) {
         deps.setStatus(`Using normalized name: ${normalizedBase}`, 'normal');
     }
     const filename = `${normalizedBase}.js`;
+    if (deps.getPatternEntry(filename)) {
+        deps.setStatus('A pattern with that name already exists', 'error');
+        return;
+    }
 
     try {
         const payload = await deps.listPatterns();
@@ -83,9 +83,7 @@ export async function loadPattern(filename) {
 
     try {
         let fileCode = '';
-        const loadedPatternScope = deps.isDemoMode()
-            ? 'system'
-            : deps.normalizeScope(deps.getPatternEntry(filename)?.scope);
+        const loadedPatternScope = deps.normalizeScope(deps.getPatternEntry(filename)?.scope);
 
         if (deps.isDemoMode()) {
             fileCode = deps.getDemoPatternSource(filename);
@@ -114,7 +112,7 @@ export async function loadPattern(filename) {
         const displayName = decodeURIComponent(filename.replace('.js', ''));
         deps.setPatternDisplayNames(displayName, displayName);
         deps.setPatternNameInputValue(displayName);
-        deps.setPatternNameInputReadOnly(deps.isDemoMode());
+        deps.setPatternNameInputReadOnly(deps.isDemoMode() && loadedPatternScope === 'system');
         deps.setPatternNameInputPlaceholder('');
         deps.updateAdvancedSettingsButtonsVisibility();
         deps.refreshPatternListDomActiveState(filename);
@@ -138,12 +136,12 @@ export async function loadPattern(filename) {
 export async function renamePattern(options = {}) {
     if (!deps) throw new Error('Pattern controller not configured');
     const { quiet = false } = options;
-    if (deps.isDemoMode()) {
-        if (!quiet) deps.setStatus('Demo mode: renaming patterns is disabled', 'normal');
-        return;
-    }
     const currentPatternFilename = deps.getCurrentPatternFilename();
     if (!currentPatternFilename) return;
+    if (deps.isDemoMode() && deps.getCurrentPatternScope() === 'system') {
+        if (!quiet) deps.setStatus('System patterns are read-only in the hosted version.', 'normal');
+        return;
+    }
 
     const rawName = deps.getPatternNameInputValue().trim();
     const newName = normalizePatternBaseName(rawName);
@@ -157,6 +155,11 @@ export async function renamePattern(options = {}) {
     if (newName === deps.getOriginalPatternName()) return;
 
     const newFilename = `${newName}.js`;
+    const existingEntry = deps.getPatternEntry(newFilename);
+    if (existingEntry && newFilename !== currentPatternFilename) {
+        if (!quiet) deps.setStatus('A pattern with that name already exists', 'error');
+        return;
+    }
 
     try {
         const payload = await deps.listPatterns();
@@ -191,10 +194,6 @@ export async function renamePattern(options = {}) {
 
 export async function deletePattern(filename) {
     if (!deps) throw new Error('Pattern controller not configured');
-    if (deps.isDemoMode()) {
-        deps.setStatus('Demo mode: deleting patterns is disabled', 'normal');
-        return;
-    }
     if (deps.normalizeScope(deps.getPatternEntry(filename)?.scope) === 'system' && !deps.isDeveloperModeEnabled()) {
         deps.setStatus('System patterns cannot be deleted. Enable developer mode to delete them.', 'normal');
         return;

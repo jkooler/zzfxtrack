@@ -154,11 +154,6 @@ export function configurePatternEditor(options = {}) {
 }
 
 export function setupPatternEditorAutosave() {
-    if (editorDeps.isDemoMode()) {
-        editorDeps.logInfo('ℹ️ Demo mode: auto-save disabled');
-        return;
-    }
-
     let checkCount = 0;
     const checkEditor = setInterval(() => {
         checkCount++;
@@ -170,6 +165,7 @@ export function setupPatternEditorAutosave() {
             const observer = new MutationObserver(() => {
                 const currentPatternFilename = editorDeps.getCurrentPatternFilename();
                 if (!currentPatternFilename || !view.hasFocus) return;
+                if (editorDeps.isDemoMode() && editorDeps.getCurrentPatternScope() === 'system') return;
 
                 const currentCode = view.state.doc.toString();
                 if (currentCode === lastCode) return;

@@ -7,6 +7,7 @@
 import JSZip from 'jszip';
 import { buildArrangementSourceFromApi, buildBlockSourceFromApi, describeUploadBundle, getFilenameFromSection, normalizeZipEntryPath, parseArrangementSource, parseBlockSource, validateUploadBundle } from './bundle-utils.js';
 import { applyInitialColorTheme, clearStoredUserThemeValues, writeStoredColorTheme, writeStoredUserThemeValues } from '../settings/theme-controller.js';
+import { migrateFromFile, migrateSystemFromFile } from '../../instrument-manager.js';
 
 let deps = {
     getArrangementOrNull: async () => null,
@@ -25,6 +26,8 @@ let deps = {
     listPatterns: async () => [],
     logError: () => {},
     normalizePatternEntries: (list) => list || [],
+    refreshArrangementList: async () => {},
+    refreshBlocksLibrary: async () => {},
     refreshPatternList: async () => {},
     reloadInstruments: async () => {},
     saveArrangement: async () => {},
@@ -39,6 +42,27 @@ let pendingUploadBundle = null;
 
 export function configureProjectImport(options = {}) {
     deps = { ...deps, ...options };
+}
+
+function parseInstrumentModuleContent(content) {
+    const readObject = (exportName) => {
+        const match = String(content || '').match(new RegExp(`export\\s+const\\s+${exportName}\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*;`));
+        if (!match) return {};
+        try {
+            // Parse generated app bundle objects without depending on module loading.
+            // eslint-disable-next-line no-new-func
+            return Function(`"use strict"; return (${match[1]});`)();
+        } catch (_e) {
+            return {};
+        }
+    };
+    return {
+        instrumentMapping: readObject('instrumentMapping'),
+        instruments: readObject('instruments'),
+        instrumentMonophonic: readObject('instrumentMonophonic'),
+        instrumentScope: readObject('instrumentScope'),
+        instrumentType: readObject('instrumentType'),
+    };
 }
 
 async function buildUploadBundle(file) {
@@ -214,13 +238,6 @@ async function fetchExistingContent(section, filename) {
 }
 
 async function writeImportedFile(section, filename, content) {
-    if (deps.isDemoMode()) {
-        if (section === 'patterns') deps.getDemoPatternSourceByFile().set(filename, content);
-        if (section === 'blocks') deps.getDemoBlockSourceByFile().set(filename, content);
-        if (section === 'arrangements') deps.getDemoArrangementSourceByFile().set(filename, content);
-        return true;
-    }
-
     if (section === 'patterns') {
         try {
             await deps.savePatternSource(filename, content, deps.getDeveloperModeHeaders());
@@ -321,7 +338,7 @@ async function applyUploadProject() {
         let themeImported = 0;
         if (includeUserInstruments && pendingUploadBundle.userInstrumentsContent && replaceInstruments) {
             if (deps.isDemoMode()) {
-                sessionStorage.setItem('instruments-js-content', pendingUploadBundle.userInstrumentsContent);
+                migrateFromFile(parseInstrumentModuleContent(pendingUploadBundle.userInstrumentsContent));
                 userInstrumentsImported = 1;
             } else {
                 try {
@@ -335,7 +352,7 @@ async function applyUploadProject() {
 
         if (includeSystemInstruments && pendingUploadBundle.systemInstrumentsContent && replaceInstruments) {
             if (deps.isDemoMode()) {
-                sessionStorage.setItem('instruments-system-js-content', pendingUploadBundle.systemInstrumentsContent);
+                migrateSystemFromFile(parseInstrumentModuleContent(pendingUploadBundle.systemInstrumentsContent));
                 systemInstrumentsImported = 1;
             } else {
                 try {
@@ -365,6 +382,8 @@ async function applyUploadProject() {
         }
 
         await deps.refreshPatternList();
+        await deps.refreshBlocksLibrary();
+        await deps.refreshArrangementList();
         if (userInstrumentsImported || systemInstrumentsImported) await deps.reloadInstruments();
 
         deps.setStatus(

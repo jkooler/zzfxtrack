@@ -138,17 +138,21 @@ export async function refreshPatternList() {
     const patternList = getPatternListElement();
     if (!patternList) return;
     try {
+        const collator = typeof Intl !== 'undefined' && Intl.Collator
+            ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+            : null;
+        const compareEntries = (a, b) =>
+            collator ? collator.compare(a.filename, b.filename) : a.filename.localeCompare(b.filename);
+        const userEntries = normalizePatternEntries(await listPatterns());
         const entries = isDemoMode()
-            ? getDemoPatternFiles().sort().map((filename) => ({ filename, scope: 'system' }))
-            : await (async () => {
-                const payload = await listPatterns();
-                const collator = typeof Intl !== 'undefined' && Intl.Collator
-                    ? new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
-                    : null;
-                return normalizePatternEntries(payload).sort((a, b) =>
-                    collator ? collator.compare(a.filename, b.filename) : a.filename.localeCompare(b.filename)
-                );
-            })();
+            ? (() => {
+                const merged = new Map(userEntries.map((entry) => [entry.filename, entry]));
+                getDemoPatternFiles().sort().forEach((filename) => {
+                    if (!merged.has(filename)) merged.set(filename, { filename, scope: 'system' });
+                });
+                return Array.from(merged.values()).sort(compareEntries);
+            })()
+            : userEntries.sort(compareEntries);
 
         setPatternEntriesCache(entries);
         patternList.innerHTML = '';
@@ -204,7 +208,7 @@ export async function refreshPatternList() {
                 const fileName = decodeURIComponent(file.replace('.js', ''));
                 const isSystem = normalizeScope(entry.scope) === 'system';
                 const devMode = isDeveloperModeEnabled();
-                const canDelete = !isDemoMode() && (!isSystem || devMode);
+                const canDelete = !isSystem || devMode;
                 const deleteActionMarkup = canDelete
                     ? `<button class="sidebar-del-btn" title="Delete ${fileName}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`
                     : '<button class="sidebar-del-btn invisible pointer-events-none" type="button" tabindex="-1" aria-hidden="true"><i data-lucide="trash-2" class="w-4 h-4"></i></button>';
@@ -260,10 +264,8 @@ export async function refreshPatternList() {
             patternList.appendChild(folderLi);
         };
 
-        const userEntries = entries.filter((entry) => normalizeScope(entry.scope) !== 'system');
-        const systemEntries = entries.filter((entry) => normalizeScope(entry.scope) === 'system');
-        appendFolder('user', 'Your patterns', userEntries);
-        appendFolder('system', 'System', systemEntries);
+        appendFolder('user', 'Your patterns', entries.filter((entry) => normalizeScope(entry.scope) !== 'system'));
+        appendFolder('system', 'System', entries.filter((entry) => normalizeScope(entry.scope) === 'system'));
         scrollListItemIntoView(patternList.querySelector('.list-item.active'));
         updatePatternListVisualizer();
         createIcons({ icons });

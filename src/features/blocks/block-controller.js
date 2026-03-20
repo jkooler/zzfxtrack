@@ -76,7 +76,7 @@ export function getArrangementReferencesForBlock(filename) {
 }
 
 export async function deleteBlockFromLibrary(filename, displayName) {
-    if (!filename || deps.isDemoMode()) return;
+    if (!filename) return;
     const block = deps.getBlockByFilename(filename);
     if (!block) return;
     if (deps.normalizeScope(block?.scope) === 'system' && !deps.isDeveloperModeEnabled()) {

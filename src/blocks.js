@@ -3,6 +3,17 @@ import { setupScrubInteraction } from './instrument-ui.js';
 import { primePreviewAudioContext, isArrangementPreviewPlaying, stopArrangementPreview, stopTrackerPreviewPlayback } from './tracker.js';
 import { attachVisualizer } from './visualizer.js';
 import { alertDialog } from './dialog.js';
+import { buildArrangementSourceFromApi, buildBlockSourceFromApi, parseArrangementSource, parseBlockSource } from './features/project/bundle-utils.js';
+import {
+  deleteHostedArrangement,
+  deleteHostedBlock,
+  listHostedArrangements,
+  listHostedBlocks,
+  renameHostedArrangement,
+  renameHostedBlock,
+  saveHostedArrangementDetail,
+  saveHostedBlockDetail,
+} from './features/project/hosted-resource-storage.js';
 
 /**
  * Blocks Module
@@ -43,9 +54,74 @@ let arrangementFolderState = loadFolderState(ARRANGEMENTS_FOLDER_STATE_KEY, { us
 const DEVELOPER_MODE_KEY = 'zzfxtrack-developer-mode';
 const DEMO_MODE = import.meta.env.MODE === 'demo';
 let targetPatternScope = 'user';
+const demoBlockModules = import.meta.glob('../blocks/*.js', {
+  query: '?raw',
+  import: 'default',
+  eager: true
+});
+const demoArrangementModules = import.meta.glob('../arrangements/*.js', {
+  query: '?raw',
+  import: 'default',
+  eager: true
+});
+const demoBlockSourceByFile = new Map(
+  Object.entries(demoBlockModules)
+    .filter(([modulePath]) => !modulePath.endsWith('/index.js'))
+    .map(([modulePath, source]) => [modulePath.split('/').pop(), source])
+);
+const demoArrangementSourceByFile = new Map(
+  Object.entries(demoArrangementModules)
+    .filter(([modulePath]) => !modulePath.endsWith('/index.js'))
+    .map(([modulePath, source]) => [modulePath.split('/').pop(), source])
+);
 
 function normalizeScope(value) {
   return value === 'system' ? 'system' : 'user';
+}
+
+function listDemoBlocks() {
+  const merged = new Map(
+    listHostedBlocks(parseBlockSource)
+      .filter((block) => block?.filename)
+      .map((block) => [block.filename, block])
+  );
+  demoBlockSourceByFile.forEach((source, filename) => {
+    if (merged.has(filename)) return;
+    const parsed = parseBlockSource(source || '');
+    merged.set(filename, {
+      filename,
+      name: parsed?.name || decodeURIComponent(filename.replace(/\.js$/i, '')),
+      description: parsed?.description || '',
+      pattern: parsed?.pattern || '',
+      trackerState: parsed?.trackerState ?? null,
+      scope: normalizeScope(parsed?.scope),
+    });
+  });
+  return Array.from(merged.values());
+}
+
+function listDemoArrangements() {
+  const merged = new Map(
+    listHostedArrangements(parseArrangementSource)
+      .filter((arrangement) => arrangement?.filename)
+      .map((arrangement) => [arrangement.filename, arrangement])
+  );
+  demoArrangementSourceByFile.forEach((source, filename) => {
+    if (merged.has(filename)) return;
+    const parsed = parseArrangementSource(source || '');
+    merged.set(filename, {
+      filename,
+      name: parsed?.name || decodeURIComponent(filename.replace(/\.js$/i, '')),
+      scope: normalizeScope(parsed?.scope),
+      bpm: Number.isFinite(Number(parsed?.arrangementState?.bpm)) ? Number(parsed.arrangementState.bpm) : 120,
+      arrangementState: parsed?.arrangementState ?? null,
+    });
+  });
+  return Array.from(merged.values());
+}
+
+function getDemoBlockDetail(filename) {
+  return listDemoBlocks().find((block) => block?.filename === filename) || null;
 }
 
 function normalizeArrangementMetadata(value) {
@@ -71,7 +147,7 @@ function getDeveloperModeHeaders() {
 
 function updateArrangementAdvancedSettingsVisibility() {
   if (!elements.arrangementAdvancedSettingsBtn) return;
-  const shouldShow = !DEMO_MODE && elements.arrangementModal?.classList.contains('open');
+  const shouldShow = elements.arrangementModal?.classList.contains('open');
   elements.arrangementAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
 }
 
@@ -445,7 +521,6 @@ function setupEventListeners() {
     arrangementDraft.name = newName;
   });
   elements.arrangementAdvancedSettingsBtn?.addEventListener('click', () => {
-    if (DEMO_MODE) return;
     const name = (elements.arrangementName?.value || arrangementDraft.name || '').trim();
     document.dispatchEvent(new CustomEvent('resource-scope:open', {
       detail: {
@@ -709,9 +784,13 @@ function setActiveTab(tab) {
 
 async function loadArrangementsList() {
   try {
-    const response = await fetch('/api/arrangements');
-    if (!response.ok) throw new Error('Failed to load arrangements');
-    arrangementsCache = await response.json();
+    if (DEMO_MODE) {
+      arrangementsCache = listDemoArrangements();
+    } else {
+      const response = await fetch('/api/arrangements');
+      if (!response.ok) throw new Error('Failed to load arrangements');
+      arrangementsCache = await response.json();
+    }
   } catch (err) {
     console.error('[Arranger] Failed to load arrangements:', err);
     arrangementsCache = [];
@@ -916,8 +995,12 @@ async function deleteArrangementByIndex(index) {
 		    return;
 		  }
 		  try {
-	    const res = await fetch(`/api/arrangements/${arr.filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
-	    if (!res.ok) throw new Error('Delete failed');
+      if (DEMO_MODE) {
+        if (!deleteHostedArrangement(arr.filename)) throw new Error('Delete failed');
+      } else {
+	      const res = await fetch(`/api/arrangements/${arr.filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
+	      if (!res.ok) throw new Error('Delete failed');
+      }
 	    await loadArrangementsList();
 	  } catch (err) {
 	    console.error('[Arranger] Delete failed:', err);
@@ -992,8 +1075,12 @@ async function confirmDeleteArrangement() {
   const filename = arrangementToDelete.filename;
   closeDeleteArrangementModal();
 		  try {
-		    const res = await fetch(`/api/arrangements/${filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
-		    if (!res.ok) throw new Error('Delete failed');
+        if (DEMO_MODE) {
+          if (!deleteHostedArrangement(filename)) throw new Error('Delete failed');
+        } else {
+		      const res = await fetch(`/api/arrangements/${filename}`, { method: 'DELETE', headers: getDeveloperModeHeaders() });
+		      if (!res.ok) throw new Error('Delete failed');
+        }
 		    await loadArrangementsList();
 		  } catch (err) {
 		    console.error('[Arranger] Delete failed:', err);
@@ -1060,7 +1147,7 @@ async function openArrangementEditor(arrangement = null) {
   await ensureBlocksLoaded();
   console.log('[Arranger] Opening editor. blocksCache:', blocksCache?.length || 0);
   if (!blocksCache?.length) {
-    emitStatus('No blocks available (failed to load /api/blocks).', 'error');
+    emitStatus('No blocks available.', 'error');
   }
 
   arrangementEditMode.isEditing = !!arrangement;
@@ -1582,7 +1669,9 @@ async function saveArrangementFromEditor() {
   arrangementDraft.name = rawName;
   arrangementDraft.bpm = Number.isFinite(bpmVal) ? Math.min(Math.max(bpmVal, 20), 300) : 120;
 
-  const existing = await fetch('/api/arrangements').then(r => r.ok ? r.json() : []).catch(() => []);
+  const existing = DEMO_MODE
+    ? listDemoArrangements()
+    : await fetch('/api/arrangements').then(r => r.ok ? r.json() : []).catch(() => []);
   const currentFilename = arrangementEditMode.filename ? arrangementEditMode.filename.toLowerCase() : null;
   const existingNames = new Set(
     existing
@@ -1630,20 +1719,28 @@ async function saveArrangementFromEditor() {
 	      }
 	      const newFilename = `${uniqueSlug}.js`;
 	      if (newFilename.toLowerCase() !== targetFilename.toLowerCase()) {
-	        const renameRes = await fetch('/api/rename-arrangement', {
-	          method: 'POST',
-	          headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
-	          body: JSON.stringify({ oldName: targetFilename, newName: newFilename }),
-	        });
-	        if (!renameRes.ok) throw new Error('Rename failed');
+          if (DEMO_MODE) {
+            if (!renameHostedArrangement(targetFilename, newFilename)) throw new Error('Rename failed');
+          } else {
+	          const renameRes = await fetch('/api/rename-arrangement', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
+	            body: JSON.stringify({ oldName: targetFilename, newName: newFilename }),
+	          });
+	          if (!renameRes.ok) throw new Error('Rename failed');
+          }
 	        arrangementEditMode.filename = newFilename;
 	      }
-	      const res = await fetch(`/api/arrangements/${encodeURIComponent(arrangementEditMode.filename)}`, {
-	        method: 'PUT',
-	        headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
-	        body: JSON.stringify({ name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope })
-	      });
-	      if (!res.ok) throw new Error('Update failed');
+        if (DEMO_MODE) {
+          saveHostedArrangementDetail(arrangementEditMode.filename, { name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope }, buildArrangementSourceFromApi);
+        } else {
+	        const res = await fetch(`/api/arrangements/${encodeURIComponent(arrangementEditMode.filename)}`, {
+	          method: 'PUT',
+	          headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
+	          body: JSON.stringify({ name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope })
+	        });
+	        if (!res.ok) throw new Error('Update failed');
+        }
 	    } else {
       const existingFilenames = new Set(existing.map(a => String(a?.filename || '').toLowerCase()));
       const baseSlug = sanitizeBase(arrangementDraft.name);
@@ -1654,12 +1751,16 @@ async function saveArrangementFromEditor() {
         uniqueSlug = `${baseSlug}-${suffix}`;
       }
       const filename = `${uniqueSlug}.js`;
-      const res = await fetch('/api/arrangements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope || 'user' })
-      });
-      if (!res.ok) throw new Error('Save failed');
+      if (DEMO_MODE) {
+        saveHostedArrangementDetail(filename, { filename, name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope || 'user' }, buildArrangementSourceFromApi);
+      } else {
+        const res = await fetch('/api/arrangements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename, name: arrangementDraft.name, arrangementState, scope: arrangementEditMode.scope || 'user' })
+        });
+        if (!res.ok) throw new Error('Save failed');
+      }
       arrangementEditMode.filename = filename;
       arrangementEditMode.isEditing = true;
     }
@@ -1683,10 +1784,13 @@ async function saveArrangementFromEditor() {
  */
 async function loadBlocksList() {
   try {
-    const response = await fetch('/api/blocks');
-    if (!response.ok) throw new Error('Failed to load blocks');
-    
-    blocksCache = await response.json();
+    if (DEMO_MODE) {
+      blocksCache = listDemoBlocks();
+    } else {
+      const response = await fetch('/api/blocks');
+      if (!response.ok) throw new Error('Failed to load blocks');
+      blocksCache = await response.json();
+    }
     renderBlocksList();
   } catch (err) {
     console.error('[Blocks] Failed to load blocks:', err);
@@ -1902,14 +2006,18 @@ function selectBlock(index, { preview = true } = {}) {
 async function previewBlock(block) {
   let trackerState = block.trackerState;
   if (!trackerState && block.filename) {
-    try {
-      const response = await fetch(`/api/blocks/${block.filename}`);
-      if (response.ok) {
-        const fullBlock = await response.json();
-        trackerState = fullBlock.trackerState;
+    if (DEMO_MODE) {
+      trackerState = getDemoBlockDetail(block.filename)?.trackerState ?? trackerState;
+    } else {
+      try {
+        const response = await fetch(`/api/blocks/${block.filename}`);
+        if (response.ok) {
+          const fullBlock = await response.json();
+          trackerState = fullBlock.trackerState;
+        }
+      } catch (err) {
+        console.warn('[Blocks] Could not fetch block for preview:', err);
       }
-    } catch (err) {
-      console.warn('[Blocks] Could not fetch block for preview:', err);
     }
   }
 
@@ -1944,16 +2052,25 @@ async function duplicateBlockByIndex(index) {
   let scope = block.scope;
 
   if (block.filename) {
-    try {
-      const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
-      if (response.ok) {
-        const fullBlock = await response.json();
+    if (DEMO_MODE) {
+      const fullBlock = getDemoBlockDetail(block.filename);
+      if (fullBlock) {
         trackerState = fullBlock?.trackerState ?? trackerState;
         description = fullBlock?.description ?? description;
         scope = fullBlock?.scope ?? scope;
       }
-    } catch (err) {
-      console.warn('[Blocks] Could not fetch full block data for duplication:', err);
+    } else {
+      try {
+        const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
+        if (response.ok) {
+          const fullBlock = await response.json();
+          trackerState = fullBlock?.trackerState ?? trackerState;
+          description = fullBlock?.description ?? description;
+          scope = fullBlock?.scope ?? scope;
+        }
+      } catch (err) {
+        console.warn('[Blocks] Could not fetch full block data for duplication:', err);
+      }
     }
   }
 
@@ -2010,16 +2127,25 @@ async function openTrackerForEdit(index = null) {
   // Always fetch full block data so we get trackerState, scope, denseRows, etc.
   let trackerState = block.trackerState;
   if (block.filename) {
-    try {
-      const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
-      if (response.ok) {
-        const fullBlock = await response.json();
+    if (DEMO_MODE) {
+      const fullBlock = getDemoBlockDetail(block.filename);
+      if (fullBlock) {
         trackerState = fullBlock.trackerState ?? trackerState;
         block = { ...block };
         if (fullBlock?.scope !== undefined) block.scope = fullBlock.scope;
       }
-    } catch (err) {
-      console.warn('[Blocks] Could not fetch full block data:', err);
+    } else {
+      try {
+        const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
+        if (response.ok) {
+          const fullBlock = await response.json();
+          trackerState = fullBlock.trackerState ?? trackerState;
+          block = { ...block };
+          if (fullBlock?.scope !== undefined) block.scope = fullBlock.scope;
+        }
+      } catch (err) {
+        console.warn('[Blocks] Could not fetch full block data:', err);
+      }
     }
   }
 
@@ -2041,18 +2167,29 @@ async function openTrackerForArrangementBlock(filename) {
   let trackerState = block.trackerState;
 
   if (block.filename) {
-    try {
-      const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
-      if (response.ok) {
-        const fullBlock = await response.json();
+    if (DEMO_MODE) {
+      const fullBlock = getDemoBlockDetail(block.filename);
+      if (fullBlock) {
         trackerState = fullBlock.trackerState ?? trackerState;
         block = { ...block };
         if (fullBlock?.scope !== undefined) block.scope = fullBlock.scope;
         if (fullBlock?.name !== undefined) block.name = fullBlock.name;
         if (fullBlock?.description !== undefined) block.description = fullBlock.description;
       }
-    } catch (err) {
-      console.warn('[Arranger] Could not fetch full block data:', err);
+    } else {
+      try {
+        const response = await fetch(`/api/blocks/${encodeURIComponent(block.filename)}`);
+        if (response.ok) {
+          const fullBlock = await response.json();
+          trackerState = fullBlock.trackerState ?? trackerState;
+          block = { ...block };
+          if (fullBlock?.scope !== undefined) block.scope = fullBlock.scope;
+          if (fullBlock?.name !== undefined) block.name = fullBlock.name;
+          if (fullBlock?.description !== undefined) block.description = fullBlock.description;
+        }
+      } catch (err) {
+        console.warn('[Arranger] Could not fetch full block data:', err);
+      }
     }
   }
 
@@ -2087,15 +2224,21 @@ async function insertSelectedBlock() {
   let blockBpm = block.trackerState?.bpm;
   let blockSteps = block.trackerState?.steps;
   if (((preserveBlockBpm && !blockBpm) || !blockSteps) && block.filename) {
-    try {
-      const response = await fetch(`/api/blocks/${block.filename}`);
-      if (response.ok) {
-        const fullBlock = await response.json();
-        blockBpm = fullBlock?.trackerState?.bpm;
-        blockSteps = fullBlock?.trackerState?.steps;
+    if (DEMO_MODE) {
+      const fullBlock = getDemoBlockDetail(block.filename);
+      blockBpm = fullBlock?.trackerState?.bpm;
+      blockSteps = fullBlock?.trackerState?.steps;
+    } else {
+      try {
+        const response = await fetch(`/api/blocks/${block.filename}`);
+        if (response.ok) {
+          const fullBlock = await response.json();
+          blockBpm = fullBlock?.trackerState?.bpm;
+          blockSteps = fullBlock?.trackerState?.steps;
+        }
+      } catch (err) {
+        console.warn('[Blocks] Could not fetch block BPM:', err);
       }
-    } catch (err) {
-      console.warn('[Blocks] Could not fetch block BPM:', err);
     }
   }
   
@@ -2160,20 +2303,12 @@ async function confirmDeleteBlock() {
     return;
   }
   try {
-    const response = await fetch(`/api/blocks/${block.filename}`, {
-      method: 'DELETE',
-      headers: getDeveloperModeHeaders(),
-    });
-
-    if (!response.ok) {
-      if (response.status === 409) {
-        let usedBy = [];
-        try {
-          const payload = await response.json();
-          usedBy = Array.isArray(payload?.usedBy) ? payload.usedBy : [];
-        } catch (_e) {
-          usedBy = [];
-        }
+    if (DEMO_MODE) {
+      const usedBy = listDemoArrangements().filter((entry) =>
+        Array.isArray(entry?.arrangementState?.rows)
+        && entry.arrangementState.rows.some((row) => Array.isArray(row?.blocks) && row.blocks.includes(block.filename))
+      );
+      if (usedBy.length) {
         const list = usedBy.length
           ? usedBy.map((entry) => `${entry.name || entry.filename} (${entry.filename})`).join(', ')
           : 'one or more arrangements';
@@ -2184,7 +2319,34 @@ async function confirmDeleteBlock() {
         });
         return;
       }
-      throw new Error('Delete failed');
+      if (!deleteHostedBlock(block.filename)) throw new Error('Delete failed');
+    } else {
+      const response = await fetch(`/api/blocks/${block.filename}`, {
+        method: 'DELETE',
+        headers: getDeveloperModeHeaders(),
+      });
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          let usedBy = [];
+          try {
+            const payload = await response.json();
+            usedBy = Array.isArray(payload?.usedBy) ? payload.usedBy : [];
+          } catch (_e) {
+            usedBy = [];
+          }
+          const list = usedBy.length
+            ? usedBy.map((entry) => `${entry.name || entry.filename} (${entry.filename})`).join(', ')
+            : 'one or more arrangements';
+          await alertDialog({
+            title: 'Cannot Delete Block',
+            message: `This block is used in arrangements:\n${list}`,
+            hideCancelCompletely: true,
+          });
+          return;
+        }
+        throw new Error('Delete failed');
+      }
     }
     
     // Reload the list
@@ -2222,7 +2384,9 @@ export async function saveBlock(name, description, pattern, trackerState, scope 
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '') || 'block';
 
-    const existing = await fetch('/api/blocks').then(r => r.ok ? r.json() : []).catch(() => []);
+    const existing = DEMO_MODE
+      ? listDemoBlocks()
+      : await fetch('/api/blocks').then(r => r.ok ? r.json() : []).catch(() => []);
     const existingNames = new Set(existing.map(b => String(b?.name || '').toLowerCase()));
     const existingFilenames = new Set(existing.map(b => String(b?.filename || '').toLowerCase()));
 
@@ -2265,13 +2429,16 @@ export async function saveBlock(name, description, pattern, trackerState, scope 
       trackerState,
       scope: normalizeScope(scope),
     };
-    const response = await fetch('/api/blocks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(blockData),
-    });
-    
-    if (!response.ok) throw new Error('Save failed');
+    if (DEMO_MODE) {
+      saveHostedBlockDetail(filename, blockData, buildBlockSourceFromApi);
+    } else {
+      const response = await fetch('/api/blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(blockData),
+      });
+      if (!response.ok) throw new Error('Save failed');
+    }
     
     // Reload the list
     await loadBlocksList();
@@ -2311,21 +2478,29 @@ export async function updateBlock(filename, name, description, pattern, trackerS
       scope: normalizeScope(scope),
     };
     
-    const response = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
-      body: JSON.stringify(blockData),
-    });
-    
-    if (!response.ok) {
-      const msg = await response.text().catch(() => 'Update failed');
-      throw new Error(msg || 'Update failed');
-    }
     let payload = null;
-    try {
-      payload = await response.json();
-    } catch (_e) {
-      payload = null;
+    if (DEMO_MODE) {
+      if (nextFilename !== filename) {
+        if (!renameHostedBlock(filename, nextFilename)) throw new Error('Rename failed');
+      }
+      saveHostedBlockDetail(nextFilename, { ...blockData, filename: nextFilename }, buildBlockSourceFromApi);
+      payload = { filename: nextFilename, previousFilename: filename };
+    } else {
+      const response = await fetch(`/api/blocks/${encodeURIComponent(filename)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getDeveloperModeHeaders() },
+        body: JSON.stringify(blockData),
+      });
+      
+      if (!response.ok) {
+        const msg = await response.text().catch(() => 'Update failed');
+        throw new Error(msg || 'Update failed');
+      }
+      try {
+        payload = await response.json();
+      } catch (_e) {
+        payload = null;
+      }
     }
     const updatedFilename = payload?.filename || nextFilename;
     const previousFilename = payload?.previousFilename || filename;

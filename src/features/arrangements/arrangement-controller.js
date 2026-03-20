@@ -84,7 +84,7 @@ function sanitizeArrangementBaseName(input) {
 }
 
 export async function deleteArrangement(filename) {
-    if (!filename || deps.isDemoMode()) return;
+    if (!filename) return;
     const scope = deps.normalizeScope(deps.getArrangementEntry(filename)?.scope);
     if (scope === 'system' && !deps.isDeveloperModeEnabled()) {
         deps.setStatus('System arrangements cannot be deleted. Enable developer mode to delete them.', 'normal');
@@ -119,14 +119,13 @@ export async function deleteArrangement(filename) {
 }
 
 export async function createNewArrangement(name) {
-    if (deps.isDemoMode()) {
-        deps.setStatus('Demo mode: creating arrangements is disabled', 'normal');
-        return;
-    }
-
     const normalizedBase = normalizeArrangementBaseName(name);
     if (!normalizedBase) {
         deps.setStatus('Invalid arrangement name', 'error');
+        return;
+    }
+    if (deps.getArrangementEntry(`${normalizedBase}.js`)) {
+        deps.setStatus('An arrangement with that name already exists', 'error');
         return;
     }
 
@@ -225,11 +224,6 @@ export function getNextUntitledBlockName() {
 }
 
 export async function createUntitledBlock({ rowIndex = null } = {}) {
-    if (deps.isDemoMode()) {
-        deps.setStatus('Demo mode: creating blocks is disabled', 'normal');
-        return null;
-    }
-
     await deps.refreshBlocksLibrary();
     const name = getNextUntitledBlockName();
     const result = await deps.saveBlock(name, 'Created from arrangement workspace', 'silence', null, 'user');
@@ -266,6 +260,11 @@ export async function renameArrangement(options = {}) {
     const newFilename = `${baseName}.js`;
     const oldFilename = deps.getCurrentArrangementFilename();
     if (newFilename === oldFilename) return;
+    const existingEntry = deps.getArrangementEntry(newFilename);
+    if (existingEntry && newFilename.toLowerCase() !== oldFilename.toLowerCase()) {
+        if (!quiet) deps.setStatus('An arrangement with that name already exists', 'error');
+        return;
+    }
 
     try {
         const list = await deps.listArrangements();
@@ -363,10 +362,6 @@ export async function loadArrangement(filename) {
 }
 
 export function openNewArrangementModal() {
-    if (deps.isDemoMode()) {
-        deps.setStatus('Demo mode: creating arrangements is disabled', 'normal');
-        return;
-    }
     const suggested = `arrangement-${deps.getArrangementEntriesCache().filter((entry) => deps.normalizeScope(entry.scope) === 'user').length + 1}`;
     const input = deps.getNewArrangementNameInput();
     if (input) input.value = suggested;
