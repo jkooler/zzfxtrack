@@ -2399,7 +2399,6 @@ function setupEventListeners() {
   elements.previewBtn?.addEventListener('click', togglePreview);
   elements.blockAdvancedSettingsBtn?.addEventListener('click', () => {
     if (!editMode.isEditing) return;
-    if (DEMO_MODE) return;
     const name = (elements.blockNameInput?.value || editMode.blockName || '').trim();
     document.dispatchEvent(new CustomEvent('resource-scope:open', {
       detail: {
@@ -5996,7 +5995,7 @@ function updateEditModeUI() {
   }
 
   if (elements.blockAdvancedSettingsBtn) {
-    const shouldShow = editMode.isEditing && !DEMO_MODE;
+    const shouldShow = editMode.isEditing;
     elements.blockAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
   }
 

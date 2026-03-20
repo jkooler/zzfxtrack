@@ -26,7 +26,6 @@ export function configureDevMode(options = {}) {
 }
 
 export function isDeveloperModeEnabled() {
-    if (isDemoMode()) return false;
     try {
         return localStorage.getItem(DEVELOPER_MODE_KEY) === '1';
     } catch (_e) {
@@ -35,7 +34,6 @@ export function isDeveloperModeEnabled() {
 }
 
 export function setDeveloperModeEnabled(enabled) {
-    if (isDemoMode()) return;
     try {
         localStorage.setItem(DEVELOPER_MODE_KEY, enabled ? '1' : '0');
     } catch (_e) {
@@ -51,16 +49,14 @@ export function getDeveloperModeHeaders() {
 export function updateAdvancedSettingsButtonsVisibility() {
     const dom = getDom();
     if (!dom) return;
-    const show = !isDemoMode();
     if (dom.openPatternAdvancedSettingsBtn) {
-        const shouldShow = show
-            && Boolean(getCurrentPatternFilename())
+        const shouldShow = Boolean(getCurrentPatternFilename())
             && !dom.patternNameInput?.classList.contains('hidden');
         dom.openPatternAdvancedSettingsBtn.classList.toggle('dev-only-hidden', !shouldShow);
     }
     const arrangementWorkspaceSettingsBtn = dom.arrangementWorkspacePane?.querySelector('#arrangementWorkspaceAdvancedSettingsBtn');
     if (arrangementWorkspaceSettingsBtn) {
-        const shouldShowArrangement = show && Boolean(getCurrentArrangementFilename());
+        const shouldShowArrangement = Boolean(getCurrentArrangementFilename());
         arrangementWorkspaceSettingsBtn.classList.toggle('dev-only-hidden', !shouldShowArrangement);
     }
 }
@@ -68,6 +64,6 @@ export function updateAdvancedSettingsButtonsVisibility() {
 export function updateDevModeToolbarLabelVisibility() {
     const dom = getDom();
     if (!dom?.devModeToolbarLabel) return;
-    const show = !isDemoMode() && isDeveloperModeEnabled();
+    const show = isDeveloperModeEnabled();
     dom.devModeToolbarLabel.classList.toggle('hidden', !show);
 }

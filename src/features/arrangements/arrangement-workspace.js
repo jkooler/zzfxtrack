@@ -525,7 +525,6 @@ export function bindArrangementWorkspaceTopControls({
 } = {}) {
     if (advancedSettingsBtn) {
         advancedSettingsBtn.addEventListener('click', () => {
-            if (isDemoMode) return;
             const draftState = getDraftState();
             const name = String(nameInput?.value ?? draftState?.name ?? '').trim();
             dispatchResourceScopeOpen({

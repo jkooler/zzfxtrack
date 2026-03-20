@@ -371,7 +371,7 @@ function openSystemSettingsModal() {
     if (!dom.systemSettingsModal) return;
     if (dom.systemSettingsDevModeToggle) {
         dom.systemSettingsDevModeToggle.checked = deps.isDeveloperModeEnabled();
-        dom.systemSettingsDevModeToggle.disabled = deps.isDemoMode();
+        dom.systemSettingsDevModeToggle.disabled = false;
     }
     updateThemeOptionButtonsState();
     syncThemeColorPickers();
