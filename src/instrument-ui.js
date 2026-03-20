@@ -1953,6 +1953,8 @@ function handleCreateInstrument() {
     }
     
     closeNewInstrumentModal();
+    instrumentFolderState.user = true;
+    saveFolderState(INSTRUMENT_FOLDER_STATE_KEY, instrumentFolderState);
     renderInstrumentList();
     autoUpdateInstrumentsFile();
     reloadInstruments(); // Reload instruments into Strudel
