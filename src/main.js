@@ -139,6 +139,28 @@ function getDemoArrangementDetailOrNull(filename) {
     };
 }
 
+function getDemoBlockDetailOrNull(filename) {
+    const source = demoBlockSourceByFile.get(filename);
+    if (!source) return null;
+    const parsed = parseBlockSource(source);
+    return {
+        filename,
+        name: parsed.name,
+        description: parsed.description,
+        pattern: parsed.pattern,
+        trackerState: parsed.trackerState,
+        scope: parsed.scope,
+    };
+}
+
+async function getArrangementDetailOrNullForCurrentMode(filename) {
+    return DEMO_MODE ? getDemoArrangementDetailOrNull(filename) : getArrangementOrNull(filename);
+}
+
+async function getBlockDetailOrNullForCurrentMode(filename) {
+    return DEMO_MODE ? getDemoBlockDetailOrNull(filename) : getBlockDetailOrNull(filename);
+}
+
 // --- Global State ---
 let currentPatternDisplayName = ''; // Store the display name for restoration
 let lastExportedData = null;
@@ -523,7 +545,7 @@ configureArrangementController({
     },
     clearArrangementRenameDebounceTimeout: () => { arrangementRenameDebounceTimeout = null; },
     getArrangementWorkspaceNameInput: () => document.getElementById('arrangementWorkspaceName'),
-    getArrangementOrNull: async (filename) => (DEMO_MODE ? getDemoArrangementDetailOrNull(filename) : getArrangementOrNull(filename)),
+    getArrangementOrNull: getArrangementDetailOrNullForCurrentMode,
     readUnsavedArrangementState,
     cloneArrangementState,
     clearArrangementWorkspacePlayheadVisuals,
@@ -634,7 +656,7 @@ configureArrangementExportContext({
     getDemoBlockSource: (filename) => demoBlockSourceByFile.get(filename),
     parseBlockSource,
     normalizeScope,
-    getBlockDetailOrNull,
+    getBlockDetailOrNull: getBlockDetailOrNullForCurrentMode,
     resolveTrackerStateChannelInstruments,
     updateInstrumentUsage,
     getDefragmentedInstruments: async () => {
@@ -674,7 +696,7 @@ configureArrangementPreviewEvents({
     resolveTrackerStateChannelInstruments,
     getBlocksLibraryCache: () => appState.blocksLibraryCache,
     setBlocksLibraryCache: (nextCache) => { appState.blocksLibraryCache = nextCache; },
-    getBlockDetailOrNull,
+    getBlockDetailOrNull: getBlockDetailOrNullForCurrentMode,
     setStatus,
     startArrangementPreview,
     stopArrangementPreview,
@@ -715,7 +737,7 @@ configureTrackerController({
     openTracker,
     openTrackerForEdit,
     getDefragmentedInstruments: async () => getDefragmentedInstruments(),
-    getBlockDetailOrNull,
+    getBlockDetailOrNull: getBlockDetailOrNullForCurrentMode,
     readUnsavedBlockTrackerState,
     undockTrackerModalFromWorkspace,
     logError: (...args) => console.error(...args),
@@ -803,7 +825,7 @@ configureBlockController({
     upsertPatternLayer: upsertPatternLayerShared,
     normalizePatternStack: normalizePatternStackShared,
     savePatternSource,
-    getBlockDetailOrNull,
+    getBlockDetailOrNull: getBlockDetailOrNullForCurrentMode,
     getDefragmentedInstruments: async () => getDefragmentedInstruments(),
     resolveTrackerStateChannelInstruments,
     previewTrackerStateOnce,
@@ -830,6 +852,8 @@ configureBlockLibrary({
     listBlocksOrEmpty,
     isDemoMode: () => DEMO_MODE,
     getDemoBlockSourceKeys: () => Array.from(demoBlockSourceByFile.keys()),
+    getDemoBlockSource: (filename) => demoBlockSourceByFile.get(filename),
+    parseBlockSource,
     deleteBlockFromLibrary,
     getBlocksFolderStateKey: () => BLOCKS_FOLDER_STATE_KEY,
     setStatus,
@@ -926,8 +950,8 @@ configureProjectExport({
     listArrangementsOrEmpty,
     getPatternSourceOrEmpty,
     getPatternMetaTextOrNull,
-    getBlockDetailOrNull,
-    getArrangementOrNull,
+    getBlockDetailOrNull: getBlockDetailOrNullForCurrentMode,
+    getArrangementOrNull: getArrangementDetailOrNullForCurrentMode,
     buildBlockSourceFromApi,
     buildArrangementSourceFromApi,
     getCurrentPatternFilename: () => appState.currentPatternFilename,
@@ -951,8 +975,8 @@ configureProjectImport({
     listBlocksOrEmpty,
     listArrangementsOrEmpty,
     getPatternSourceOrEmpty,
-    getBlockDetailOrNull,
-    getArrangementOrNull,
+    getBlockDetailOrNull: getBlockDetailOrNullForCurrentMode,
+    getArrangementOrNull: getArrangementDetailOrNullForCurrentMode,
     savePatternSource,
     saveBlockDetail,
     saveArrangement,
@@ -1484,7 +1508,7 @@ async function exportCurrentPattern(options = {}) {
 
 
 async function updateBlockScope(filename, scope) {
-    const detail = await getBlockDetailOrNull(filename);
+    const detail = await getBlockDetailOrNullForCurrentMode(filename);
     if (!detail) throw new Error('Failed to load block details');
     await saveBlockDetail(filename, {
         name: detail?.name || filename.replace(/\.js$/, ''),

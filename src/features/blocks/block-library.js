@@ -15,6 +15,7 @@ let deps = {
     getBlocksLibraryCache: () => [],
     getBlocksLibraryList: () => null,
     getCurrentArrangementFilename: () => null,
+    getDemoBlockSource: () => '',
     getDemoBlockSourceKeys: () => [],
     icons: {},
     isDemoMode: () => false,
@@ -22,6 +23,7 @@ let deps = {
     listBlocksOrEmpty: async () => [],
     logError: () => {},
     normalizeScope: (value) => (value === 'system' ? 'system' : 'user'),
+    parseBlockSource: () => ({ name: 'Block', description: '', pattern: '', trackerState: null, scope: 'user' }),
     renderArrangementWorkspace: () => {},
     renderTrackerWorkspace: () => {},
     setActiveArrangementBlockFilename: () => {},
@@ -248,12 +250,17 @@ export async function refreshBlocksLibrary() {
                 .map((block) => [block.filename, block])
         );
         const list = deps.isDemoMode()
-            ? deps.getDemoBlockSourceKeys().map((filename) => ({
-                filename,
-                name: decodeURIComponent(filename.replace(/\.js$/i, '')),
-                scope: 'system',
-                trackerState: null,
-            }))
+            ? deps.getDemoBlockSourceKeys().map((filename) => {
+                const parsed = deps.parseBlockSource(deps.getDemoBlockSource(filename) || '');
+                return {
+                    filename,
+                    name: parsed?.name || decodeURIComponent(filename.replace(/\.js$/i, '')),
+                    description: parsed?.description || '',
+                    pattern: parsed?.pattern || '',
+                    scope: deps.normalizeScope(parsed?.scope),
+                    trackerState: parsed?.trackerState ?? null,
+                };
+            })
             : await deps.listBlocksOrEmpty();
         const nextCache = (Array.isArray(list) ? list : []).map((block) => {
             const previous = previousBlocksByFilename.get(block?.filename);
