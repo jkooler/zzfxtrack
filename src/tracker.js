@@ -1652,6 +1652,7 @@ function buildMultitrackSnapshotSegment(segment) {
 
   const channelHeadersEl = document.createElement('div');
   channelHeadersEl.className = 'tracker-headers tracker-channels-header-inner multitrack-tracker-channel-headers';
+  const instrumentOptions = getTrackerInstrumentSelectList();
   for (let ch = 0; ch < channels; ch++) {
     const channelHeaderEl = document.createElement('div');
     channelHeaderEl.className = 'tracker-channel-header';
@@ -1665,7 +1666,7 @@ function buildMultitrackSnapshotSegment(segment) {
     defaultOpt.value = '';
     defaultOpt.textContent = 'Select instrument...';
     selectEl.appendChild(defaultOpt);
-    state.instruments.forEach((inst) => {
+    instrumentOptions.forEach((inst) => {
       const opt = document.createElement('option');
       opt.value = inst.id;
       opt.textContent = inst.name || inst.id;
@@ -1770,6 +1771,19 @@ function renderMultitrackGridAroundLiveSegment() {
   };
 }
 
+function getTrackerInstrumentSelectList() {
+  const instruments = Array.isArray(state.instruments) ? state.instruments : [];
+  const userInstruments = instruments
+    .filter((inst) => inst?.scope !== 'system')
+    .slice()
+    .reverse();
+  const systemInstruments = instruments
+    .filter((inst) => inst?.scope === 'system')
+    .slice()
+    .reverse();
+  return [...userInstruments, ...systemInstruments];
+}
+
 function renderGrid() {
   renderSingleGrid();
   elements.grid?.classList.toggle('tracker-grid-multitrack-mode', isMultitrackEditing());
@@ -1806,6 +1820,7 @@ function renderSingleGrid() {
 
   const channelsHeaderInner = document.createElement('div');
   channelsHeaderInner.className = 'tracker-headers tracker-channels-header-inner';
+  const instrumentOptions = getTrackerInstrumentSelectList();
 
   for (let ch = 0; ch < state.channels; ch++) {
     const headerEl = document.createElement('div');
@@ -1818,7 +1833,7 @@ function renderSingleGrid() {
     defaultOpt.value = '';
     defaultOpt.textContent = 'Select instrument...';
     selectEl.appendChild(defaultOpt);
-    state.instruments.forEach(inst => {
+    instrumentOptions.forEach(inst => {
       const opt = document.createElement('option');
       opt.value = inst.id;
       opt.textContent = inst.name || inst.id;

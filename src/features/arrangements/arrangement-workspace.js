@@ -678,6 +678,26 @@ export function renderArrangementWorkspace() {
     const blockByFilename = new Map(appState.blocksLibraryCache.map((b) => [b.filename, b]));
     const compareRowBlockFilenames = createRowBlockFilenameComparator(blockByFilename);
     const isCopyModifier = createCopyModifierDetector();
+    const restartPlayingRowIfCleared = (rowIndex) => {
+        if (!Number.isInteger(rowIndex)) return;
+        if (!deps.isArrangementPreviewPlaying()) return;
+        if (deps.getArrangementPreviewPlayingFilename() !== deps.getCurrentArrangementFilename()) return;
+        const playhead = deps.getArrangementWorkspacePlayhead();
+        if (playhead?.rowIndex !== rowIndex) return;
+        const nextState = deps.buildArrangementStatePayload();
+        const nextRow = nextState?.rows?.[rowIndex];
+        if (Array.isArray(nextRow?.blocks) && nextRow.blocks.length > 0) return;
+        deps.stopArrangementPreview();
+        deps.dispatchArrangementPreviewState({ playing: false });
+        deps.dispatchArrangementPreview({
+            arrangement: {
+                name: nextState?.name || appState.arrangementDraftState?.name,
+                arrangementState: nextState,
+            },
+            filename: deps.getCurrentArrangementFilename(),
+            startRowIndex: rowIndex,
+        });
+    };
 
     const shell = renderArrangementWorkspaceShell({
         pane,
@@ -828,6 +848,7 @@ export function renderArrangementWorkspace() {
                     deps.scheduleArrangementAutoSave();
                     deps.emitArrangementStateChanged({ removedFilename: filename });
                     deps.applyArrangementPreviewAfterBlockRemoved(filename);
+                    restartPlayingRowIfCleared(fromRowIndexChip);
                     await deps.saveCurrentArrangement();
                 }
             }
@@ -1189,6 +1210,7 @@ export function renderArrangementWorkspace() {
                         deps.scheduleArrangementAutoSave();
                         deps.emitArrangementStateChanged({ removedFilename: filename });
                         deps.applyArrangementPreviewAfterBlockRemoved(filename);
+                        restartPlayingRowIfCleared(rowIndex);
                         await deps.saveCurrentArrangement();
                     });
                     chipsEl.appendChild(chip);

@@ -2048,6 +2048,8 @@ async function initTrackerWithInstruments() {
         id: inst.strudelAlias,
         name: inst.strudelAlias,
         params: inst.params,
+        scope: inst.scope,
+        channel: inst.channel,
     }));
     
     initTracker(instrumentList);
@@ -2105,6 +2107,8 @@ function setupTrackerEventListeners() {
             id: inst.strudelAlias,
             name: inst.strudelAlias,
             params: inst.params,
+            scope: inst.scope,
+            channel: inst.channel,
         }));
 
         if (isTrackerOpen()) {
