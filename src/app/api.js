@@ -25,9 +25,48 @@ import {
 import { buildArrangementSourceFromApi, buildBlockSourceFromApi, parseArrangementSource, parseBlockSource } from '../features/project/bundle-utils.js';
 
 const DEMO_MODE = import.meta.env.MODE === 'demo';
+const demoPatternMetaModules = import.meta.glob('../../patterns/*.meta.json', {
+    import: 'default',
+    eager: true,
+});
+const demoPatternMetaByFile = new Map(
+    Object.entries(demoPatternMetaModules).map(([modulePath, payload]) => [
+        modulePath.split('/').pop().replace(/\.meta\.json$/i, '.js'),
+        payload,
+    ])
+);
 
 function buildApiError(action, response) {
     return new Error(`${action} (HTTP ${response.status})`);
+}
+
+function cloneJsonValue(value) {
+    return value == null ? null : JSON.parse(JSON.stringify(value));
+}
+
+function mergePatternMeta(base, override) {
+    if (!base && !override) return null;
+    const baseRecord = base && typeof base === 'object' && !Array.isArray(base) ? base : {};
+    const overrideRecord = override && typeof override === 'object' && !Array.isArray(override) ? override : {};
+    const mergedMetadata = {
+        ...((baseRecord.metadata && typeof baseRecord.metadata === 'object' && !Array.isArray(baseRecord.metadata)) ? baseRecord.metadata : {}),
+        ...((overrideRecord.metadata && typeof overrideRecord.metadata === 'object' && !Array.isArray(overrideRecord.metadata)) ? overrideRecord.metadata : {}),
+    };
+    const merged = {
+        ...baseRecord,
+        ...overrideRecord,
+    };
+    if (Object.keys(mergedMetadata).length) {
+        merged.metadata = mergedMetadata;
+    }
+    return cloneJsonValue(merged);
+}
+
+function getDemoPatternMetaOrNull(filename) {
+    return mergePatternMeta(
+        demoPatternMetaByFile.get(filename) || null,
+        getHostedPatternMetaOrNull(filename)
+    );
 }
 
 export async function listPatterns() {
@@ -119,7 +158,7 @@ export async function deletePatternByFilename(filename, extraHeaders = {}) {
 }
 
 export async function getPatternMetaOrNull(filename) {
-    if (DEMO_MODE) return getHostedPatternMetaOrNull(filename);
+    if (DEMO_MODE) return getDemoPatternMetaOrNull(filename);
     const res = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
     if (!res.ok) return null;
     return await res.json();
@@ -370,7 +409,7 @@ export async function updateSystemInstrumentsSourceFile(content) {
 
 export async function getPatternMetaTextOrNull(filename) {
     if (DEMO_MODE) {
-        const payload = getHostedPatternMetaOrNull(filename);
+        const payload = getDemoPatternMetaOrNull(filename);
         return payload ? JSON.stringify(payload, null, 2) : null;
     }
     const res = await fetch(`/api/pattern-meta/${encodeURIComponent(filename)}`);
